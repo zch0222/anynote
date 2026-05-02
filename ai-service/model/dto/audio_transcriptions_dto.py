@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from typing import Optional
 
 class AudioTranscriptionDTO(BaseModel):
     # 文件链接
@@ -7,9 +6,9 @@ class AudioTranscriptionDTO(BaseModel):
     # 模型
     model: str
     # 语言 ISO-639-1
-    language: Optional[str] = None
+    language: str | None = None
     # 提示词
-    prompt: Optional[str] = None
+    prompt: str | None = None
     # 格式，json, text， srt, verbose_json, vtt
-    response_format: Optional[str] = None
+    response_format: str | None = None
 

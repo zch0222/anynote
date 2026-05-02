@@ -15,31 +15,34 @@
     <name>anynote</name>
     <description>学习随记</description>
     <modules>
-        <module>anynote-common</module>
-        <module>anynote-modules</module>
-        <module>anynote-gateway</module>
-        <module>anynote-auth</module>
-        <module>anynote-api</module>
-        <module>anynote-admin</module>
+        <module>common</module>
+        <module>gateway</module>
+        <module>auth</module>
+        <module>api</module>
+        <module>system</module>
+        <module>note</module>
+        <module>file</module>
+        <module>ai</module>
+        <module>notify</module>
+        <module>job</module>
+        <module>bom</module>
     </modules>
     <properties>
         <anynote.version>0.0.1-SNAPSHOT</anynote.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <spring-boot.version>2.7.7</spring-boot.version>
-        <spring-cloud.version>2021.0.5</spring-cloud.version>
-        <spring-cloud-alibaba.version>2021.0.4.0</spring-cloud-alibaba.version>
-        <swagger.fox.version>3.0.0</swagger.fox.version>
-        <swagger.core.version>1.6.2</swagger.core.version>
+        <spring-boot.version>3.3.4</spring-boot.version>
+        <spring-cloud.version>2023.0.3</spring-cloud.version>
+        <spring-cloud-alibaba.version>2023.0.1.0</spring-cloud-alibaba.version>
+        <springdoc.version>2.3.0</springdoc.version>
         <commons.io.version>2.11.0</commons.io.version>
         <pagehelper.boot.version>1.4.6</pagehelper.boot.version>
         <fastjson.version>2.0.28</fastjson.version>
         <javax.validation.version>2.0.1.Final</javax.validation.version>
         <java-jwt.version>4.4.0</java-jwt.version>
-        <java.version>1.8</java.version>
+        <java.version>21</java.version>
         <druid.version>1.2.15</druid.version>
         <mbp.version>3.5.2</mbp.version>
-        <poi.version>4.1.2</poi.version>
         <feign.form.version>3.3.0</feign.form.version>
         <feign.form.spring.version>3.3.0</feign.form.spring.version>
         <bundle.huawei.obs.vsersion>3.23.9</bundle.huawei.obs.vsersion>
@@ -51,7 +54,7 @@
         <jakarta-json.version>2.0.1</jakarta-json.version>
         <java.diff.utils.version>4.12</java.diff.utils.version>
         <google.java.diff.utils.version>1.3.0</google.java.diff.utils.version>
-        <org.apache.poi.version>5.2.3</org.apache.poi.version>
+        <org.apache.poi.version>5.2.5</org.apache.poi.version>
         <commons.fileupload.version>1.5</commons.fileupload.version>
         <commons.codec.version>1.15</commons.codec.version>
         <spring-boot-admin.version>2.7.15</spring-boot-admin.version>

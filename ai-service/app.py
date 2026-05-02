@@ -29,7 +29,15 @@ async def lifespan(app: FastAPI):
     # Clean up the ML models and release the resources
     # ml_models.clear()
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    title="Anynote AI Service",
+    version="1.0.0",
+    description="Anynote LLM/RAG/Whisper 服务接口",
+    openapi_url="/v3/api-docs",
+    docs_url="/swagger-ui.html",
+    redoc_url="/redoc",
+)
 
 app.include_router(chat_router)
 app.include_router(rag_router)

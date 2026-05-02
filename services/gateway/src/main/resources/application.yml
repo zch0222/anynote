@@ -14,3 +14,22 @@
 #            - Path=/system/**
 #          filters:
 #            - StripPrefix=1
+# Springdoc OpenAPI - aggregate all services
+springdoc:
+  swagger-ui:
+    urls:
+      - name: auth
+        url: /auth/v3/api-docs
+      - name: system
+        url: /system/v3/api-docs
+      - name: note
+        url: /note/v3/api-docs
+      - name: file
+        url: /file/v3/api-docs
+      - name: ai
+        url: /ai/v3/api-docs
+      - name: notify
+        url: /notify/v3/api-docs
+    path: /swagger-ui.html
+  api-docs:
+    enabled: true

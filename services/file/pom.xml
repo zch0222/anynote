@@ -53,17 +53,8 @@
             <artifactId>anynote-common-rocketmq</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>com.anynote</groupId>
-            <artifactId>anynote-api-ai</artifactId>
-        </dependency>
-
-
-        <dependency>
-            <groupId>com.anynote</groupId>
-            <artifactId>anynote-api-note</artifactId>
-        </dependency>
-
+        <!-- TODO Phase 4: WhisperListener 中对 RemoteMoocService 的 Feign 调用
+             需要改为 RocketMQ 事件驱动，届时可彻底移除对 note/ai API 模块的依赖 -->
         <dependency>
             <groupId>com.anynote</groupId>
             <artifactId>anynote-common-redis</artifactId>

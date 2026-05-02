@@ -26,11 +26,13 @@ import org.springframework.web.multipart.commons.CommonsMultipartFile;
 import javax.annotation.Resource;
 import javax.validation.constraints.NotNull;
 import java.io.IOException;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * 文档 Controller
  * @author 称霸幼儿园
  */
+@Tag(name = "文档", description = "文档管理接口")
 @RestController
 @RequestMapping("/docs")
 @Validated

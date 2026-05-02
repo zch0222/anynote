@@ -14,11 +14,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.commons.CommonsMultipartFile;
 
 import javax.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * 文件Controller
  * @author 称霸幼儿园
  */
+@Tag(name = "文件", description = "文件上传下载接口")
 @RestController
 @RequestMapping("")
 @Validated

@@ -19,7 +19,9 @@ import reactor.core.publisher.Mono;
 import javax.annotation.Resource;
 import javax.validation.constraints.NotNull;
 import java.time.Duration;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "语音转文字", description = "Whisper语音转文字接口")
 @RestController
 @RequestMapping("whisper")
 @Slf4j

@@ -14,7 +14,9 @@ import reactor.core.publisher.Flux;
 
 import javax.annotation.Resource;
 import javax.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "通知", description = "用户通知相关接口")
 @RestController
 @RequestMapping("/notification")
 public class NotificationController {

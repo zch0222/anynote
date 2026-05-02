@@ -12,11 +12,13 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import java.util.List;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * 缓存管理
  * @author 称霸幼儿园
  */
+@Tag(name = "管理-缓存", description = "后台缓存管理接口")
 @RestController
 @RequestMapping("caches")
 public class ManageCacheController {

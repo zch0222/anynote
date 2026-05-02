@@ -9,11 +9,13 @@ import com.anynote.system.model.vo.AnnouncementVO;
 import com.anynote.system.service.SysAnnouncementService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * @author 称霸幼儿园
  */
 @RequestMapping("announcements")
+@Tag(name = "系统公告", description = "系统公告管理")
 @RestController
 public class SysAnnouncementController {
 

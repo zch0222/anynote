@@ -28,6 +28,7 @@ import javax.annotation.Resource;
 import javax.validation.constraints.NotNull;
 import java.util.Collections;
 import java.util.List;
+import io.swagger.v3.oas.annotations.tags.Tag;
 //import java.util.Collections;
 //import java.util.stream.Collectors;
 
@@ -35,6 +36,7 @@ import java.util.List;
  * 慕课 Controller
  * @author 称霸幼儿园
  */
+@Tag(name = "慕课", description = "慕课视频学习接口")
 @RestController
 @RequestMapping("/moocs")
 public class MoocController {
