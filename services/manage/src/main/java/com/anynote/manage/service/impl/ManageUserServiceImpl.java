@@ -16,7 +16,7 @@ import com.anynote.system.api.model.po.SysUser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * @author 称霸幼儿园

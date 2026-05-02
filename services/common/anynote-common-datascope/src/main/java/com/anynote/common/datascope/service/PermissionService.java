@@ -5,7 +5,7 @@ import com.anynote.system.api.RemoteSysPermissionRuleService;
 import com.anynote.system.api.model.po.SysPermissionRule;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 public interface PermissionService {
 

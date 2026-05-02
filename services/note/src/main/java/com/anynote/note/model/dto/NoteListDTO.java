@@ -4,8 +4,8 @@ import com.anynote.core.web.model.dto.PageDTO;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-import javax.validation.constraints.Max;
-import javax.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 
 /**
  * 笔记列表获取参数

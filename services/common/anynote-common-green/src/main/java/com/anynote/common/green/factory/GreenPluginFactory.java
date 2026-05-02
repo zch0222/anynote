@@ -12,7 +12,7 @@ import com.anynote.core.exception.BusinessException;
 import com.google.gson.Gson;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 @Component
 public class GreenPluginFactory {

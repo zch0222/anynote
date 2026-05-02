@@ -10,7 +10,7 @@ import com.anynote.manage.service.ManageCacheService;
 import com.anynote.system.api.model.bo.LoginUser;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.List;
 import io.swagger.v3.oas.annotations.tags.Tag;
 

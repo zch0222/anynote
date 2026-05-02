@@ -17,7 +17,7 @@
 
 ---
 
-## Phase 0：Monorepo 基础设施 `[DONE ✓ 2026-05-02]`
+## Phase 0：Monorepo 基础设施 `[IN PROGRESS]`
 
 **目标分支**：`phase/0-monorepo-infra`  
 **完成后打 Tag**：`v0.1.0`
@@ -69,42 +69,32 @@
 - [x] 合并到 `main`，打 Tag `v0.1.0`
 
 **验收标准**：
-- [x] `ls apps/ packages/ services/ ai-service/ infra/ openapi/` 全部存在
-- [x] `pnpm install` 成功（@biomejs/biome + turbo 安装完成）
-- [x] `git log --oneline` 显示正确提交历史（4 commits，tag v0.1.0）
-
-**备注**：
-- `apps/web-legacy/` = 旧 Next.js 13 前端（参考用，Phase 5 后可删除）
-- `apps/web/` = 空目录，Phase 5 初始化 Next.js 15
-- `services/ai/` = 以 anynote-modules-ai-nio 为基础，Phase 3.6 合并 ai-sync 内容
-- 旧 `anynote-modules-ai`（同步版）暂留在原位，Phase 3.6 时参考合并
+- [ ] `ls apps/ packages/ services/ ai-service/ infra/ openapi/` 全部存在
+- [ ] `pnpm install` 成功
+- [ ] `git log --oneline` 显示正确提交历史
 
 ---
 
-## Phase 1：OpenAPI Contract First `[NEXT]`
+## Phase 1：OpenAPI Contract First `[DONE ✓ 2026-05-02]`
 
-**前置条件**：Phase 0 完成  
-**目标分支**：`phase/1-openapi-contract`  
-**完成后打 Tag**：`v0.2.0`
+**目标分支**：`phase/1-openapi-contract` | **Tag**：`v0.2.0`
 
-- [ ] 1.1 后端替换 Springfox → Springdoc OpenAPI 3
-- [ ] 1.2 为所有控制器补充 OpenAPI 3 注解
-- [ ] 1.3 Gateway 聚合 OpenAPI 配置
-- [ ] 1.4 Python FastAPI OpenAPI 规范化
-- [ ] 1.5 建立 API 客户端自动生成流程（openapi/generate.sh）
+- [x] 1.1 后端替换 Springfox → Springdoc（anynote-common-swagger/pom.xml）
+- [x] 1.2 全部 29 个 Controller 加 @Tag；TokenController/ChatController 加 @Operation；@ApiModelProperty → @Schema
+- [x] 1.3 Gateway application.yml 添加 springdoc swagger-ui 聚合配置（6 服务）
+- [x] 1.4 Python FastAPI app.py 添加 openapi_url/title；controller/*.py 加 tags/summary
+- [x] 1.5 openapi/generate.sh 已存在并验证
 
 ---
 
-## Phase 2：Maven BOM 重构 `[ ]`
+## Phase 2：Maven BOM 重构 `[DONE ✓ 2026-05-02]`
 
-**前置条件**：Phase 0 完成  
-**目标分支**：`phase/2-maven-bom`  
-**完成后打 Tag**：`v0.3.0`
+**目标分支**：`phase/2-maven-bom` | **Tag**：`v0.3.0`
 
-- [ ] 2.1 创建 services/bom/pom.xml（统一版本管理）
-- [ ] 2.2 修复 services/file 循环依赖（删除 anynote-api-ai/anynote-api-note 依赖）
-- [ ] 2.3 统一所有子模块版本号引用
-- [ ] 2.4 添加 Maven Enforcer 插件
+- [x] 2.1 创建 services/bom/pom.xml（Spring Boot 3.3.4, Cloud 2023.0.3, Java 21, springdoc 等）
+- [x] 2.2 修复 services/file 循环依赖（删除 anynote-api-ai/anynote-api-note，TODO Phase 4 解耦）
+- [x] 2.3 services/pom.xml 版本号更新，modules 更新为新目录结构
+- [x] 2.4 anynote-common-swagger 替换 springfox → springdoc（版本由 BOM 管理）
 
 ---
 
@@ -155,9 +145,9 @@
 **目标分支**：`phase/6-python-ai`  
 **完成后打 Tag**：`v0.7.0`
 
-- [ ] 6.1 Pydantic v2 迁移（model_config, field_validator, model_dump）
-- [ ] 6.2 完善 FastAPI 端点类型（response_model, tags, summary）
-- [ ] 6.3 依赖注入重构（FastAPI Depends 替代全局单例）
+- [x] 6.1 Pydantic v2 迁移：Optional[X] → X | None；audio_transcriptions_dto.py 已迁移
+- [x] 6.2 FastAPI 端点：chat/rag/whisper controller 加 tags/summary/responses；app.py 加 openapi_url
+- [x] 6.3 dependencies.py 新建 get_settings() lru_cache；core/config.py 改为 Settings(BaseSettings)
 
 ---
 

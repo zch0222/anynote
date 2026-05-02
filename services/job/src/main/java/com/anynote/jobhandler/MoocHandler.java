@@ -7,7 +7,7 @@ import com.xxl.job.core.handler.annotation.XxlJob;
 import groovy.util.logging.Slf4j;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * 慕课任务执行器

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 
 @FeignClient(contextId = "remoteSysPermissionRuleService",
         value = ServiceNameConstants.SYSTEM_SERVICE, fallbackFactory = RemoteSysPermissionRuleFallbackFactory.class)

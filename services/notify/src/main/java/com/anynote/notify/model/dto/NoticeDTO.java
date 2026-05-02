@@ -4,8 +4,8 @@ import lombok.Data;
 import lombok.NonNull;
 import org.springframework.validation.annotation.Validated;
 
-import javax.validation.constraints.NotEmpty;
-import javax.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * @author 称霸幼儿园
