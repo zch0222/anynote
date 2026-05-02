@@ -147,12 +147,13 @@
 
 ---
 
-## Phase 7：OpenSpec 集成 `[ ]`
+## Phase 7：OpenSpec 集成 `[DONE ✓ 2026-05-02]`
 
 **前置条件**：Phase 1 完成  
 **目标分支**：`phase/7-openspec`  
 **完成后打 Tag**：`v1.0.0`
 
-- [ ] 7.1 初始化 .claude/openspec/ 目录结构
-- [ ] 7.2 创建 openapi/WORKFLOW.md（API-First 开发流程说明）
-- [ ] 7.3 创建 .claude/context/backend.md、frontend.md、api-contracts.md
+- [x] 7.1 初始化 .claude/openspec/ 目录结构（README.md + changes/.gitkeep）
+- [x] 7.2 创建 openapi/WORKFLOW.md（API-First 开发流程说明）
+- [x] 7.3 创建 .claude/context/backend.md、frontend.md、api-contracts.md
+- [x] 7.4 创建 AGENTS.md（Codex/OpenAI 格式，简体中文）
