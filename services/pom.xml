@@ -25,6 +25,7 @@
         <module>ai</module>
         <module>notify</module>
         <module>job</module>
+        <module>manage</module>
         <module>bom</module>
     </modules>
     <properties>

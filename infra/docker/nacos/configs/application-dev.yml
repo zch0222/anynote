@@ -2,8 +2,6 @@ spring:
   http:
     multipart:
       enabled: false
-  autoconfigure:
-    exclude: com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
