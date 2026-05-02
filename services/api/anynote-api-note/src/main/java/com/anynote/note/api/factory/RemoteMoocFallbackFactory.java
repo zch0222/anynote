@@ -1,6 +1,6 @@
 package com.anynote.note.api.factory;
 
-import com.anynote.core.exception.BusinessException;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.note.api.RemoteMoocService;
 import com.anynote.note.api.model.dto.MoocAsrInfoUpdateDTO;
@@ -19,14 +19,14 @@ public class RemoteMoocFallbackFactory implements FallbackFactory<RemoteMoocServ
         return new RemoteMoocService() {
             @Override
             public ResData<String> updateAsrInfo(MoocAsrInfoUpdateDTO moocAsrInfoUpdateDTO, String fromSource) {
-                throw new BusinessException("调用moocs/asr失败");
+                return ResData.error(ResCode.INNER_NOTE_SERVICE_ERROR);
             }
 
 
             @Override
             public ResData<MoocVideoItemInfoVO> getMoocVideoItemInfo(Long moocItemId, Long moocId,
                                                                      String fromSource, String accessToken) {
-                throw new BusinessException("调用moocs/videoItemInfo失败");
+                return ResData.error(ResCode.INNER_NOTE_SERVICE_ERROR);
             }
         };
     }

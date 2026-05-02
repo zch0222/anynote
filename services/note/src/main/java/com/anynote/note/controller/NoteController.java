@@ -87,7 +87,7 @@ public class NoteController {
     @GetMapping("list")
     public ResData<PageBean<Note>> getNoteInfoList(@NotNull(message = ErrorMessageConstants.PAGE_NULL) Integer page,
                                          @NotNull(message = ErrorMessageConstants.PAGE_SIZE_NULL) Integer pageSize) {
-        return null;
+        throw new BusinessException("暂未实现", ResCode.BUSINESS_ERROR);
     }
 
     @DataScope

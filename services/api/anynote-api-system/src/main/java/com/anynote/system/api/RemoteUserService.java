@@ -61,7 +61,7 @@ public interface RemoteUserService {
      * @param pageSize 页面容量
      * @return
      */
-    @GetMapping("user/manageList")
+    @GetMapping("user/list")
     public ResData<PageBean<SysUser>> getManageUserList(@RequestParam("page") Integer page,
                                                         @RequestParam("pageSize") Integer pageSize,
                                                         @RequestParam("username") String username);
@@ -69,9 +69,9 @@ public interface RemoteUserService {
     @PostMapping("user")
     public ResData<CreateResEntity> createUser(@RequestBody @Valid CreateUserDTO createUserDTO);
 
-    @PostMapping("user/banUser")
-    public ResData<String> banUser(@RequestBody @Validated BanUserDTO banUserDTO);
+    @PostMapping("user/{userId}/ban")
+    public ResData<String> banUser(@PathVariable("userId") Long userId);
 
-    @PostMapping("user/unBanUser")
-    public ResData<String> unBanUser(@RequestBody @Validated UnBanUserDTO unBanUserDTO);
+    @PostMapping("user/{userId}/unban")
+    public ResData<String> unBanUser(@PathVariable("userId") Long userId);
 }

@@ -1,10 +1,7 @@
 package com.anynote.file.api.factory;
 
-import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.ResUtil;
-import com.anynote.core.utils.StringUtils;
 import com.anynote.core.web.enums.ResCode;
-import com.anynote.core.web.model.bo.CreateResEntity;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.file.api.RemoteFileService;
 import com.anynote.file.api.model.bo.*;
@@ -50,35 +47,33 @@ public class RemoteFileFallbackFactory implements FallbackFactory<RemoteFileServ
 
             @Override
             public ResData<FilePO> completeHuaweiOBSUpload(CompleteUploadDTO completeUploadDTO) {
-                throw new BusinessException(ResCode.INNER_FILE_SERVICE_ERROR);
+                return ResData.error(ResCode.INNER_FILE_SERVICE_ERROR);
             }
 
             @Override
             public ResData<FilePO> getFileById(Long id, String fromSource) {
-                throw new BusinessException("获取文件失败");
+                return ResData.error(ResCode.INNER_FILE_SERVICE_ERROR);
             }
 
             @Override
             public ResData<OssSliceUploadTaskVO> createOssSliceUploadTask(OssSliceUploadTaskCreateDTO ossSliceUploadTaskCreateDTO) {
-                throw new BusinessException("创建分片任务失败");
+                return ResData.error(ResCode.INNER_FILE_SERVICE_ERROR);
             }
 
             @Override
             public ResData<String> downloadObject(DownloadObjectDTO downloadObjectDTO) {
-                throw new BusinessException(StringUtils.format("下载文件对象\"{}\"失败",
-                        downloadObjectDTO.getObjectName()));
+                return ResData.error(ResCode.INNER_FILE_SERVICE_ERROR);
             }
 
             @Override
             public ResData<String> downloadObject(DownloadObjectDTO downloadObjectDTO, String fromSource) {
-                throw new BusinessException(StringUtils.format("下载文件对象\"{}\"失败",
-                        downloadObjectDTO.getObjectName()));
+                return ResData.error(ResCode.INNER_FILE_SERVICE_ERROR);
             }
 
 
             @Override
             public ResData<String> readTextFile(String objectName, String fromSource) {
-                throw new BusinessException("调用readTextFile失败");
+                return ResData.error(ResCode.INNER_FILE_SERVICE_ERROR);
             }
         };
     }

@@ -5,7 +5,7 @@ import com.anynote.ai.api.model.bo.RagFileIndexReq;
 import com.anynote.ai.api.model.bo.RagFileIndexRes;
 import com.anynote.ai.api.model.bo.RagFileQueryReq;
 import com.anynote.ai.api.model.bo.RagFileQueryRes;
-import com.anynote.core.exception.BusinessException;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.ResData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.openfeign.FallbackFactory;
@@ -29,7 +29,7 @@ public class RemoteRagFallbackFactory implements FallbackFactory<RemoteRagServic
 
             @Override
             public ResData<RagFileIndexRes> indexFile(RagFileIndexReq ragFileIndexReq, String fromSource) {
-                throw new BusinessException("AI模块调用失败：索引建立失败");
+                return ResData.error(ResCode.INNER_SERVICE_ERROR);
             }
 //
 //            @Override

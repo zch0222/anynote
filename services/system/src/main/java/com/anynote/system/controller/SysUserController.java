@@ -44,7 +44,7 @@ public class SysUserController {
     private SysUserService sysUserService;
 
     @InnerAuth
-    @GetMapping("manageList")
+    @GetMapping("list")
     public ResData<PageBean<SysUser>> getManageUserList(@NotNull(message = "页码不能为空") Integer page,
                                                         @NotNull(message = "页面大小不能为空") Integer pageSize,
                                                         String username) {
@@ -139,16 +139,16 @@ public class SysUserController {
     }
 
     @InnerAuth
-    @PostMapping("banUser")
-    public ResData<String> banUser(@Validated @RequestBody BanUserDTO banUserDTO) {
-        sysUserService.banUser(banUserDTO.getUserId());
+    @PostMapping("{userId}/ban")
+    public ResData<String> banUser(@PathVariable @NotNull(message = "用户id不能为空") Long userId) {
+        sysUserService.banUser(userId);
         return ResUtil.success(Constants.SUCCESS_RES);
     }
 
     @InnerAuth
-    @PostMapping("unBanUser")
-    public ResData<String> unBanUser(@Validated @RequestBody UnBanUserDTO unBanUserDTO) {
-        sysUserService.unbanUser(unBanUserDTO.getUserId());
+    @PostMapping("{userId}/unban")
+    public ResData<String> unBanUser(@PathVariable @NotNull(message = "用户id不能为空") Long userId) {
+        sysUserService.unbanUser(userId);
         return ResUtil.success(Constants.SUCCESS_RES);
     }
 

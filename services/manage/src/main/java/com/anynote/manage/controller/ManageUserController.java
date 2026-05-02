@@ -56,14 +56,18 @@ public class ManageUserController {
         return ResUtil.success(manageUserService.updateSysUser(updateParam));
     }
 
-    @PostMapping("banUser")
-    public ResData<String> banUser(@Validated @RequestBody BanUserDTO banUserDTO) {
+    @PostMapping("{userId}/ban")
+    public ResData<String> banUser(@PathVariable @NotNull(message = "用户id不能为空") Long userId) {
+        BanUserDTO banUserDTO = new BanUserDTO();
+        banUserDTO.setUserId(userId);
         manageUserService.banUser(banUserDTO);
         return ResUtil.success(Constants.SUCCESS_RES);
     }
 
-    @PostMapping("unBanUser")
-    public ResData<String> unBanUser(@Validated @RequestBody UnBanUserDTO unBanUserDTO) {
+    @PostMapping("{userId}/unban")
+    public ResData<String> unBanUser(@PathVariable @NotNull(message = "用户id不能为空") Long userId) {
+        UnBanUserDTO unBanUserDTO = new UnBanUserDTO();
+        unBanUserDTO.setUserId(userId);
         manageUserService.unBanUser(unBanUserDTO);
         return ResUtil.success(Constants.SUCCESS_RES);
     }
