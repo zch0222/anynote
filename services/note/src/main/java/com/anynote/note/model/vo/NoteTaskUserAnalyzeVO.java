@@ -2,7 +2,7 @@ package com.anynote.note.model.vo;
 
 import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.note.model.po.NoteTaskAnalyzePO;
-import io.swagger.models.auth.In;
+
 import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

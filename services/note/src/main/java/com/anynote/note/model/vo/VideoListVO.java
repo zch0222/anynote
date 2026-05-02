@@ -1,6 +1,6 @@
 package com.anynote.note.model.vo;
 
-import com.alibaba.nacos.shaded.org.checkerframework.checker.units.qual.A;
+
 import com.anynote.note.api.model.po.Video;
 import com.anynote.note.api.model.po.VideoFolder;
 import lombok.AllArgsConstructor;

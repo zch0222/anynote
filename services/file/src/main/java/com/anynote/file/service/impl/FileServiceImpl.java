@@ -25,7 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.commons.CommonsMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
 import java.io.ByteArrayInputStream;
@@ -69,7 +69,7 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
 
 
     @Override
-    public FilePO upload(CommonsMultipartFile file, String path, Long userId, String uploadId, Integer source) {
+    public FilePO upload(MultipartFile file, String path, Long userId, String uploadId, Integer source) {
         ServletUtils.setRequestAttributes(RequestAttributesConstants.FILE_UPLOAD_ID_KEY, uploadId);
         String fileName = UUID.randomUUID().toString().replace("-", "") + "_" + file.getOriginalFilename();
         String url = filePluginFactory.huaweiFilePlugin()

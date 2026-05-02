@@ -1,6 +1,6 @@
 package com.anynote.note.model.bo;
 
-import io.swagger.models.auth.In;
+
 import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

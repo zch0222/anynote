@@ -11,7 +11,7 @@ import com.anynote.file.service.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.commons.CommonsMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,7 +31,7 @@ public class FileController {
 
     @InnerAuth
     @PostMapping
-    public ResData<FilePO> uploadFile(@RequestParam("file") @NotNull(message = "文件不能为空") CommonsMultipartFile file,
+    public ResData<FilePO> uploadFile(@RequestParam("file") @NotNull(message = "文件不能为空") MultipartFile file,
                                       @RequestParam("path") @NotNull(message = "文件路径不能为空") String path,
                                       @RequestParam("userId") @NotNull(message = "用户ID不能为空") Long userId,
                                       @RequestParam("uploadId") @NotNull(message = "上传ID不能为空") String uploadId,

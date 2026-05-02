@@ -21,7 +21,7 @@ import com.anynote.note.api.model.vo.DocVO;
 import com.anynote.note.service.DocService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.commons.CommonsMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotNull;
@@ -63,7 +63,7 @@ public class DocController {
 
     @Upload(value = {FileType.PDF}, max = 500)
     @PostMapping("pdfs")
-    public ResData<CreateResEntity> createPDF(@NotNull(message = "PDF文档不能为空") @RequestParam("pdf") CommonsMultipartFile pdf,
+    public ResData<CreateResEntity> createPDF(@NotNull(message = "PDF文档不能为空") @RequestParam("pdf") MultipartFile pdf,
                                               @NotNull(message = "知识库ID不能为空") @RequestParam("knowledgeBaseId") Long knowledgeBaseId,
                                               @NotNull(message = "文件上传ID不能为空") @RequestParam("uploadId") String uploadId) {
         return ResUtil.success(docService.createPDF(PDFCreateParam.PDFCreateParamBuilder()

@@ -17,7 +17,6 @@ import com.obs.services.exception.ObsException;
 import com.obs.services.model.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.commons.CommonsMultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -53,7 +52,7 @@ public class HuaweiFilePlugin implements FilePlugin {
     }
 
     @Override
-    public String multipartFileUpload(CommonsMultipartFile file, String path, String fileName) {
+    public String multipartFileUpload(MultipartFile file, String path, String fileName) {
         ObsClient obsClient = null;
         try {
             obsClient = this.buildObsClient();

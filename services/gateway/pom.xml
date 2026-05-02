@@ -45,6 +45,12 @@
             </exclusions>
         </dependency>
 
+        <!-- Reactive Spring Security (Gateway WebFlux) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
 
 
         <dependency>

@@ -1,6 +1,6 @@
 package com.anynote.note.model.dto;
 
-import io.swagger.models.auth.In;
+
 import lombok.Data;
 
 import jakarta.validation.constraints.Max;

@@ -1,7 +1,7 @@
 package com.anynote.note.model.vo;
 
 import com.anynote.core.web.model.bo.BaseEntity;
-import io.swagger.models.auth.In;
+
 import lombok.*;
 
 import java.util.Date;

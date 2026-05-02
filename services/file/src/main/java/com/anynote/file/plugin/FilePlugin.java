@@ -8,7 +8,6 @@ import com.anynote.file.api.model.bo.ObjectURL;
 import com.anynote.file.model.bo.OssObjectComposeResponse;
 import io.minio.errors.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.commons.CommonsMultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -36,7 +35,7 @@ public interface FilePlugin {
      * @param fileName 文件名称
      * @return 文件连接
      */
-    public String multipartFileUpload(CommonsMultipartFile file, String path, String fileName);
+    public String multipartFileUpload(MultipartFile file, String path, String fileName);
 
     /**
      * 获取对象存储预签名URL
