@@ -17,7 +17,6 @@
         <spring-cloud-alibaba.version>2023.0.3.4</spring-cloud-alibaba.version>
         <mybatis-plus.version>3.5.9</mybatis-plus.version>
         <springdoc.version>2.3.0</springdoc.version>
-        <elasticsearch.version>8.12.0</elasticsearch.version>
         <minio.version>8.5.12</minio.version>
         <rocketmq.client.version>5.1.4</rocketmq.client.version>
         <rocketmq.starter.version>2.3.5</rocketmq.starter.version>

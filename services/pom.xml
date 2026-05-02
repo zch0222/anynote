@@ -49,7 +49,6 @@
         <bundle.huawei.obs.vsersion>3.23.9</bundle.huawei.obs.vsersion>
         <commons-lang3.version>3.12.0</commons-lang3.version>
         <commons-fileupload.version>1.5</commons-fileupload.version>
-        <elasticsearch.java.versions>8.7.0</elasticsearch.java.versions>
         <rocketmq.client.version>5.1.4</rocketmq.client.version>
         <rocketmq.starter.version>2.3.5</rocketmq.starter.version>
         <jakarta-json.version>2.0.1</jakarta-json.version>
@@ -154,13 +153,6 @@
                 <groupId>org.apache.rocketmq</groupId>
                 <artifactId>rocketmq-spring-boot-starter</artifactId>
                 <version>${rocketmq.starter.version}</version>
-            </dependency>
-
-            <!-- https://mvnrepository.com/artifact/co.elastic.clients/elasticsearch-java -->
-            <dependency>
-                <groupId>co.elastic.clients</groupId>
-                <artifactId>elasticsearch-java</artifactId>
-                <version>${elasticsearch.java.versions}</version>
             </dependency>
 
             <dependency>
