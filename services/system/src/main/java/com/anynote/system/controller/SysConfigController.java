@@ -11,10 +11,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import java.util.List;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * @author 称霸幼儿园
  */
+@Tag(name = "系统配置", description = "系统配置管理接口")
 @RestController
 @RequestMapping("")
 public class SysConfigController {

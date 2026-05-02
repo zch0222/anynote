@@ -17,8 +17,10 @@ import reactor.core.scheduler.Schedulers;
 
 import javax.annotation.Resource;
 import java.util.List;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Slf4j
+@Tag(name = "LLM统计", description = "LLM调用统计接口")
 @RestController
 @RequestMapping("llmStatistics")
 public class LlmStatisticsController {

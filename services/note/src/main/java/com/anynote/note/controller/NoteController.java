@@ -36,11 +36,13 @@ import javax.validation.Valid;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  *
  * @author 称霸幼儿园
  */
+@Tag(name = "笔记", description = "笔记CRUD接口")
 @RestController
 @RequestMapping("/notes")
 @Validated

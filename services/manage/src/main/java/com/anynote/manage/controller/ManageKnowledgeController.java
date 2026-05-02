@@ -13,10 +13,12 @@ import com.anynote.core.utils.ResUtil;
 
 import javax.annotation.Resource;
 import javax.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * @author 称霸幼儿园
  */
+@Tag(name = "管理-知识库", description = "后台知识库管理接口")
 @RestController
 @RequestMapping("bases")
 @Validated

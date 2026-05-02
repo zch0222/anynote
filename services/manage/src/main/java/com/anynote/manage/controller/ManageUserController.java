@@ -15,11 +15,13 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * 管理用户
  * @author 称霸幼儿园
  */
+@Tag(name = "管理-用户", description = "后台用户管理接口")
 @RestController
 @RequestMapping("users")
 @Validated

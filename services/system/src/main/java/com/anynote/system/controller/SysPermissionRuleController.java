@@ -12,7 +12,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "权限规则", description = "权限规则管理接口")
 @RestController
 @RequestMapping("permissionRules")
 public class SysPermissionRuleController {

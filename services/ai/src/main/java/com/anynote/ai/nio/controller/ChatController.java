@@ -17,7 +17,8 @@ import com.anynote.core.utils.ResUtil;
 import com.anynote.core.utils.StringUtils;
 import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.core.web.model.bo.ResData;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.validation.annotation.Validated;
@@ -31,6 +32,7 @@ import javax.validation.Valid;
 /**
  * AI对话Controller
  */
+@Tag(name = "AI对话", description = "SSE流式AI对话接口")
 @RestController
 @RequestMapping("chat")
 @Slf4j
@@ -47,7 +49,7 @@ public class ChatController {
                 .flatMap(res -> Mono.just(ResUtil.success(Constants.SUCCESS_RES)));
     }
 
-    @ApiOperation("对话列表")
+    @Operation(summary = "对话列表")
     @GetMapping("conversations/list")
     public Mono<ResData<PageBean<ChatConversationInfoVO>>> getChatConversationList(@Valid ChatConversationListDTO chatConversationListDTO) {
         return chatService.getChatConversationList(chatConversationListDTO)
@@ -55,7 +57,7 @@ public class ChatController {
     }
 
 
-    @ApiOperation("根据id获取对话")
+    @Operation(summary = "根据id获取对话")
     @GetMapping(path = "conversations/{id}")
     public Mono<ResData<ChatConversationVO>> getChatConversationById(@PathVariable("id") Long id) {
 
@@ -65,7 +67,7 @@ public class ChatController {
                 .flatMap(chatConversation -> Mono.just(ResUtil.success(chatConversation)));
     }
 
-    @ApiOperation("更新对话")
+    @Operation(summary = "更新对话")
     @PatchMapping("conversations/{id}")
     public Mono<ResData<String>> updateChatConversation(@PathVariable("id") Long id,
                                                         @Valid @RequestBody ChatConversationUpdateDTO chatConversationUpdateDTO) {
@@ -87,7 +89,7 @@ public class ChatController {
      * @param chatCompletionsDTO 请求体，包含了用户提交的问题和其他参数
      * @return 表示响应数据流。每个数据项为一个ServerSentEvent对象，包含AI助手回答和一些问题元数据
      */
-    @ApiOperation("AI助手问答")
+    @Operation(summary = "AI助手问答（SSE流式）")
     @PostMapping("completions")
     public Flux<ServerSentEvent<ResData<ChatCompletionsVO>>> chatCompletions(@Valid @RequestBody ChatCompletionsDTO chatCompletionsDTO) {
         if (StringUtils.isNotNull(chatCompletionsDTO.getConversationId())) {

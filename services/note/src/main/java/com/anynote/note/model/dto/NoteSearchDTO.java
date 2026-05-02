@@ -1,6 +1,6 @@
 package com.anynote.note.model.dto;
 
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import javax.validation.constraints.Min;
@@ -13,7 +13,7 @@ import javax.validation.constraints.NotNull;
 @Data
 public class NoteSearchDTO {
 
-    @ApiModelProperty(value = "关键词")
+    @Schema(description = "关键词")
     @NotBlank(message = "关键词不能为空")
     private String keyword;
 

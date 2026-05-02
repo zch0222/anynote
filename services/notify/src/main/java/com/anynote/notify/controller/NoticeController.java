@@ -15,7 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
 import javax.annotation.Resource;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "公告", description = "系统公告接口")
 @RestController
 @RequestMapping("notices")
 public class NoticeController {

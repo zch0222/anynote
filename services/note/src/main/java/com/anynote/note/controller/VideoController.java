@@ -10,11 +10,13 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.validation.Valid;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * Video Controller
  * @author 称霸幼儿园
  */
+@Tag(name = "视频", description = "视频资源管理接口")
 @RestController
 @RequestMapping("videos")
 public class VideoController {

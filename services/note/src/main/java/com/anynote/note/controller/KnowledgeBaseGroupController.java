@@ -16,10 +16,12 @@ import org.springframework.web.bind.annotation.*;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 import java.util.List;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * @author 称霸幼儿园
  */
+@Tag(name = "知识库分组", description = "知识库分组管理")
 @RestController
 @RequestMapping("baseGroups")
 @Validated

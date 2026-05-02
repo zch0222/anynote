@@ -19,8 +19,10 @@ import reactor.core.scheduler.Schedulers;
 import javax.annotation.Resource;
 import java.util.List;
 import java.util.stream.Collectors;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Slf4j
+@Tag(name = "视频总结", description = "AI视频内容总结接口")
 @RestController
 @RequestMapping("moocVideoSummarizes")
 public class MoocVideoSummarizeController {
