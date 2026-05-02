@@ -111,15 +111,13 @@
 
 ---
 
-## Phase 4：服务层重构 `[ ]`
+## Phase 4：服务层重构 `[DONE ✓ 2026-05-02]`
 
-**前置条件**：Phase 3 完成  
-**目标分支**：`phase/4-service-refactor`  
-**完成后打 Tag**：`v0.5.0`
+**目标分支**：`phase/4-service-refactor` | **Tag**：`v0.5.0`
 
-- [ ] 4.1 统一异常处理（ErrorCode 枚举 + GlobalExceptionHandler）
-- [ ] 4.2 统一 REST 规范（/api/v1/* 路径标准化）
-- [ ] 4.3 服务间鉴权加固（HMAC 签名 InternalAuthInterceptor）
+- [x] 4.1 统一异常处理：修复 SpringWebfluxGlobalExceptionHandler 错误 import；NoteController/VideoController return null → throw；全部 FallbackFactory throw → return ResData.error()
+- [x] 4.2 统一 REST 规范：/user/manageList→/user/list；banUser/unBanUser→{userId}/ban/{userId}/unban（路径参数化）；更新 RemoteUserService Feign + ManageController
+- [x] 4.3 HMAC 签名：HmacUtils + SecurityConstants 常量；FeignRequestInterceptor 添加签名头；InnerAuthAspect 验证 HMAC；ContextWebFilter 存储请求头到 Reactor 上下文；InnerAuthWebfluxAspect @Around + Mono.deferContextual 重写
 
 ---
 
