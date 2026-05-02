@@ -1,0 +1,5 @@
+packages:
+  - "apps/web"
+  - "packages/*"
+  # apps/web-legacy 是旧 Next.js 13 前端，仅作参考，不纳入 workspace
+  # Phase 5 完成后可删除

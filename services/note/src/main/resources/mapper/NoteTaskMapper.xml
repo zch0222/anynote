@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.anynote.note.mapper.NoteTaskMapper">
+
+    <resultMap id="MemberNoteTaskDTOResult" type="com.anynote.note.model.dto.MemberNoteTaskDTO">
+        <id property="id" column="id"/>
+        <result property="taskName" column="task_name"/>
+        <result property="startTime" column="start_time"/>
+        <result property="endTime" column="end_time"/>
+        <result property="taskDescribe" column="task_describe"/>
+        <result property="knowledgeBaseId" column="knowledge_base_id"/>
+        <result property="status" column="status"/>
+        <result property="submissionNoteId" column="note_id"/>
+        <result property="submitTime" column="submit_time"/>
+        <result property="taskCreatorUsername" column="creator_username"/>
+        <result property="taskCreatorNickname" column="creator_nickname"/>
+        <result property="submissionStatus" column="submission_status"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <resultMap id="NoteOperationCountResult" type="com.anynote.note.api.model.bo.NoteOperationCount">
+        <result property="userId" column="user_id"/>
+        <result property="nickname" column="nickname"/>
+        <result property="noteId" column="note_id"/>
+        <result property="count" column="count"/>
+    </resultMap>
+
+    <!-- In your mapper XML file -->
+    <resultMap id="NoteTaskAnalyzePOResultMap" type="com.anynote.note.model.po.NoteTaskAnalyzePO">
+        <id property="noteTaskId" column="note_task_id" />
+        <id property="username" column="username" />
+        <result property="nickname" column="nickname" />
+        <result property="taskName" column="task_name" />
+        <result property="knowledgeBaseName" column="knowledge_base_name" />
+        <result property="noteId" column="note_id" />
+        <result property="editCount" column="edit_count" />
+    </resultMap>
+
+    <resultMap id="NoteTaskChartsPOResultMap" type="com.anynote.note.api.model.po.NoteTaskChartsPO">
+<!--        <id column="operation_id" property="operationId"/>-->
+<!--        <result column="note_task_id" property="noteTaskId" />-->
+        <result column="user_id" property="userId" />
+        <result column="note_id" property="noteId" />
+<!--        <result column="note_history_id" property="noteHistoryId" />-->
+<!--        <result column="note_edit_count" property="noteEditCount" />-->
+<!--        <result column="submit_time" property="submitTime" />-->
+<!--        <result column="status" property="status" />-->
+<!--        <result column="note_last_update_time" property="updateTime" />-->
+        <result column="username" property="username" />
+        <result column="nickname" property="nickname" />
+        <result column="edit_count" property="editCount" />
+<!--        <result column="operation_time" property="operationTime"/>-->
+    </resultMap>
+
+    <resultMap id="NoteTaskSubmissionTimePOResultMap" type="com.anynote.note.model.po.NoteTaskSubmissionTimePO">
+        <result property="earliestTime" column="earliest_time" />
+        <result property="latestTime" column="latest_time" />
+    </resultMap>
+
+
+    <select id="selectMemberNoteTaskList" resultMap="MemberNoteTaskDTOResult">
+<!--        SELECT DISTINCT-->
+<!--            n_note_task.id, n_note_task.task_name, n_note_task.start_time, n_note_task.end_time,-->
+<!--            n_note_task.knowledge_base_id, n_note_task.status, creator_user.username as creator_username,-->
+<!--            creator_user.nickname as creator_nickname, n_note_task.update_time, n_note_task_submission_record.note_id,-->
+<!--            n_note_task_submission_record.submit_time-->
+<!--        FROM-->
+<!--            n_note_task-->
+<!--        LEFT JOIN-->
+<!--            n_note_task_submission_record ON-->
+<!--                (n_note_task.id = n_note_task_submission_record.note_task_id-->
+<!--                AND-->
+<!--                n_note_task_submission_record.user_id = #{submitUserId})-->
+<!--        LEFT JOIN-->
+<!--            sys_user as creator_user ON n_note_task.create_by = creator_user.id-->
+<!--        LEFT JOIN-->
+<!--            n_knowledge_base ON n_note_task.knowledge_base_id = n_knowledge_base.id-->
+<!--        LEFT JOIN-->
+<!--            n_user_knowledge_base ON n_knowledge_base.id = n_user_knowledge_base.knowledge_base_id-->
+<!--        LEFT JOIN-->
+<!--            sys_user ON n_user_knowledge_base.user_id = sys_user.id-->
+<!--        WHERE-->
+<!--            n_note_task.is_delete = 0-->
+<!--        <if test="taskStatus ！= null">-->
+<!--            AND n_note_task.status = #{taskStatus}-->
+<!--        </if>-->
+<!--        <if test="id != null">-->
+<!--            AND n_note_task.knowledge_base_id = #{id}-->
+<!--        </if>-->
+<!--        AND-->
+<!--            sys_user.id = #{submitUserId};-->
+        SELECT DISTINCT
+            n_note_task.id, n_note_task.task_name, n_note_task.start_time, n_note_task.end_time, n_note_task.task_describe,
+            n_note_task.knowledge_base_id, n_note_task.status, n_note_task_submission_record.note_id,
+            n_note_task_submission_record.submit_time, sys_user.username as creator_username,
+            sys_user.nickname as creator_nickname, n_note_task.update_time, n_user_note_task.status as submission_status
+        FROM
+            n_note_task
+        LEFT JOIN
+            n_note_task_submission_record ON
+                (n_note_task.id = n_note_task_submission_record.note_task_id
+                    AND
+                n_note_task_submission_record.user_id = #{submitUserId} AND n_note_task_submission_record.status = 0)
+        LEFT JOIN
+                n_user_note_task ON (n_note_task.id = n_user_note_task.note_task_id AND n_user_note_task.user_id = #{submitUserId})
+        LEFT JOIN
+            sys_user ON n_note_task.create_by = sys_user.id
+        WHERE
+            n_note_task.is_delete = 0
+        <if test="noteTaskId != null">
+            AND n_note_task.id = #{noteTaskId}
+        </if>
+        <if test="id != null">
+            AND n_note_task.knowledge_base_id = #{id}
+        </if>
+    </select>
+
+    <select id="selectNoteOperationCount" resultMap="NoteOperationCountResult">
+        SELECT
+            COUNT(*) as count, n_note_task_submission_record.note_id, sys_user.nickname, sys_user.id as user_id
+        FROM
+            n_note_task_submission_record
+            LEFT JOIN
+            sys_user ON n_note_task_submission_record.user_id = sys_user.id
+            LEFT JOIN
+            n_note_operation_log ON n_note_task_submission_record.note_id = n_note_operation_log.note_id
+        WHERE
+            n_note_operation_log.operation_type = 1
+          AND
+            n_note_task_submission_record.note_task_id = #{noteTaskId}
+        GROUP BY n_note_task_submission_record.note_id, sys_user.nickname, sys_user.id;
+    </select>
+
+    <select id="selectNoteTaskAnalyze" resultMap="NoteTaskAnalyzePOResultMap">
+        SELECT
+            sys_user.username, sys_user.nickname, n_note_task.task_name, n_knowledge_base.name as knowledge_base_name,
+            note_task_id, n_note_task_submission_record.note_id,  COUNT(*) as edit_count
+        FROM
+            n_note_task_submission_record
+        LEFT JOIN
+            n_note_task ON n_note_task_submission_record.note_task_id = n_note_task.id
+        LEFT JOIN
+            n_knowledge_base ON n_note_task.knowledge_base_id = n_knowledge_base.id
+        LEFT JOIN
+            n_note_history ON n_note_task_submission_record.note_id = n_note_history.note_id
+        LEFT JOIN
+            sys_user ON n_note_task_submission_record.user_id = sys_user.id
+        LEFT JOIN
+            n_note ON n_note.id = n_note_task_submission_record.note_id
+        WHERE
+            n_knowledge_base.id = #{knowledgeBaseId}
+        <if test="userId != null">
+            AND
+            sys_user.id = #{userId}
+        </if>
+        GROUP BY
+            n_note_task_submission_record.user_id, note_task_id,
+            n_note_task_submission_record.note_id, n_knowledge_base.name, sys_user.nickname, sys_user.username,
+            n_note_task.task_name, n_knowledge_base.id
+    </select>
+
+    <select id="selectNoteTaskCharts" resultMap="NoteTaskChartsPOResultMap">
+        SELECT
+        sys_user.username, sys_user.nickname, sys_user.id as user_id, COUNT(*) as edit_count, n_note_task_submission_record.note_id
+        FROM
+        n_note_task_submission_record
+        LEFT JOIN
+        n_note_operation_log ON n_note_operation_log.note_id = n_note_task_submission_record.note_id
+        LEFT JOIN
+        sys_user ON sys_user.id = n_note_task_submission_record.user_id
+        WHERE
+        n_note_task_submission_record.note_task_id = #{noteTaskId}
+        AND
+        n_note_task_submission_record.status = 0
+        AND
+        n_note_operation_log.operation_time &gt;= #{startTime}
+        AND
+        n_note_operation_log.operation_time &lt;= #{endTime}
+        GROUP BY sys_user.id, sys_user.username, sys_user.nickname, n_note_task_submission_record.note_id;
+    </select>
+
+    <select id="selectNoteTaskSubmissionTime" resultMap="NoteTaskSubmissionTimePOResultMap">
+        SELECT
+            MIN(n_note_operation_log.operation_time) as earliest_time, MAX(n_note_operation_log.operation_time) as latest_time
+        FROM
+            n_note_task_submission_record
+        LEFT JOIN
+            n_note_operation_log ON n_note_operation_log.note_id = n_note_task_submission_record.note_id
+        WHERE
+            n_note_task_submission_record.note_task_id = #{noteTaskId};
+    </select>
+
+
+
+
+</mapper>

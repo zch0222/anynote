@@ -1,0 +1,13 @@
+.milkdown {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    overflow-y: auto;
+}
+
+[data-milkdown-root="true"] {
+    /* CSS样式 */
+    height: 100%;
+    width: 100%;
+    margin: 0;
+}
