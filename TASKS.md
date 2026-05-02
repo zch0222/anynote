@@ -17,7 +17,7 @@
 
 ---
 
-## Phase 0：Monorepo 基础设施 `[IN PROGRESS]`
+## Phase 0：Monorepo 基础设施 `[DONE ✓ 2026-05-02]`
 
 **目标分支**：`phase/0-monorepo-infra`  
 **完成后打 Tag**：`v0.1.0`
@@ -69,13 +69,19 @@
 - [x] 合并到 `main`，打 Tag `v0.1.0`
 
 **验收标准**：
-- [ ] `ls apps/ packages/ services/ ai-service/ infra/ openapi/` 全部存在
-- [ ] `pnpm install` 成功
-- [ ] `git log --oneline` 显示正确提交历史
+- [x] `ls apps/ packages/ services/ ai-service/ infra/ openapi/` 全部存在
+- [x] `pnpm install` 成功（@biomejs/biome + turbo 安装完成）
+- [x] `git log --oneline` 显示正确提交历史（4 commits，tag v0.1.0）
+
+**备注**：
+- `apps/web-legacy/` = 旧 Next.js 13 前端（参考用，Phase 5 后可删除）
+- `apps/web/` = 空目录，Phase 5 初始化 Next.js 15
+- `services/ai/` = 以 anynote-modules-ai-nio 为基础，Phase 3.6 合并 ai-sync 内容
+- 旧 `anynote-modules-ai`（同步版）暂留在原位，Phase 3.6 时参考合并
 
 ---
 
-## Phase 1：OpenAPI Contract First `[ ]`
+## Phase 1：OpenAPI Contract First `[NEXT]`
 
 **前置条件**：Phase 0 完成  
 **目标分支**：`phase/1-openapi-contract`  
