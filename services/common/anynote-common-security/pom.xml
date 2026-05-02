@@ -16,21 +16,10 @@
 <!--            <artifactId>spring-webmvc</artifactId>-->
 <!--        </dependency>-->
 
-        <!-- Pull in the exact Spring Security modules used by this shared library.
-             Downstream services currently exclude spring-boot-starter-security. -->
+        <!-- spring security 安全认证 -->
         <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-config</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-web</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-crypto</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
         <dependency>

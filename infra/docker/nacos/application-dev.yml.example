@@ -1,5 +1,7 @@
 # 复制到 docker/nacos/configs/application-dev.yml 后，可通过 nacos-init.sh 导入。
 spring:
+  autoconfigure:
+    exclude: com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
