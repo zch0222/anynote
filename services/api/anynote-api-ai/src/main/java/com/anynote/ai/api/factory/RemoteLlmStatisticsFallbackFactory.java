@@ -4,7 +4,7 @@ import com.anynote.ai.api.RemoteLlmStatisticsService;
 import com.anynote.ai.api.model.dto.LlmStatisticsCreateDTO;
 import com.anynote.ai.api.model.dto.LlmStatisticsQueryDTO;
 import com.anynote.ai.api.model.vo.StatisticsVO;
-import com.anynote.core.exception.BusinessException;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.ResData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.openfeign.FallbackFactory;
@@ -21,12 +21,12 @@ public class RemoteLlmStatisticsFallbackFactory implements FallbackFactory<Remot
         return new RemoteLlmStatisticsService() {
             @Override
             public ResData<Long> createLlmStatistics(String fromSource, LlmStatisticsCreateDTO llmStatisticsCreateDTO) {
-                throw new BusinessException("调用/aiNio/llmStatistics失败 GET");
+                return ResData.error(ResCode.INNER_SERVICE_ERROR);
             }
 
             @Override
             public ResData<List<StatisticsVO>> getLlmStatistics(String fromSource, LlmStatisticsQueryDTO llmStatisticsQueryDTO) {
-                throw new BusinessException("调用/aiNio/llmStatistics失败 POST");
+                return ResData.error(ResCode.INNER_SERVICE_ERROR);
             }
         };
     }

@@ -56,11 +56,11 @@ public class ManageUserServiceImpl implements ManageUserService {
 
     @Override
     public void banUser(BanUserDTO banUserDTO) {
-        RemoteResDataUtil.getResData(remoteUserService.banUser(banUserDTO));
+        RemoteResDataUtil.getResData(remoteUserService.banUser(banUserDTO.getUserId()));
     }
 
     @Override
     public void unBanUser(UnBanUserDTO unBanUserDTO) {
-        RemoteResDataUtil.getResData(remoteUserService.unBanUser(unBanUserDTO));
+        RemoteResDataUtil.getResData(remoteUserService.unBanUser(unBanUserDTO.getUserId()));
     }
 }

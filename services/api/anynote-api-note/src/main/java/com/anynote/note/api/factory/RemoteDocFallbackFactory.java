@@ -1,6 +1,6 @@
 package com.anynote.note.api.factory;
 
-import com.anynote.core.exception.BusinessException;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.note.api.RemoteDocService;
 import com.anynote.note.api.model.po.Doc;
@@ -20,18 +20,18 @@ public class RemoteDocFallbackFactory implements FallbackFactory<RemoteDocServic
 
             @Override
             public ResData<Doc> selectDocById(Long id) {
-                throw new BusinessException("远程获取doc失败");
+                return ResData.error(ResCode.INNER_NOTE_SERVICE_ERROR);
             }
 
             @Override
             public ResData<DocVO> getDoc(Long id) {
-                throw new BusinessException("获取文档信息失败");
+                return ResData.error(ResCode.INNER_NOTE_SERVICE_ERROR);
             }
 
 
             @Override
             public ResData<DocVO> getPublicDoc(Long id) {
-                throw new BusinessException("获取文档信息失败");
+                return ResData.error(ResCode.INNER_NOTE_SERVICE_ERROR);
             }
         };
     }
