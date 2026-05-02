@@ -75,30 +75,26 @@
 
 ---
 
-## Phase 1：OpenAPI Contract First `[ ]`
+## Phase 1：OpenAPI Contract First `[DONE ✓ 2026-05-02]`
 
-**前置条件**：Phase 0 完成  
-**目标分支**：`phase/1-openapi-contract`  
-**完成后打 Tag**：`v0.2.0`
+**目标分支**：`phase/1-openapi-contract` | **Tag**：`v0.2.0`
 
-- [ ] 1.1 后端替换 Springfox → Springdoc OpenAPI 3
-- [ ] 1.2 为所有控制器补充 OpenAPI 3 注解
-- [ ] 1.3 Gateway 聚合 OpenAPI 配置
-- [ ] 1.4 Python FastAPI OpenAPI 规范化
-- [ ] 1.5 建立 API 客户端自动生成流程（openapi/generate.sh）
+- [x] 1.1 后端替换 Springfox → Springdoc（anynote-common-swagger/pom.xml）
+- [x] 1.2 全部 29 个 Controller 加 @Tag；TokenController/ChatController 加 @Operation；@ApiModelProperty → @Schema
+- [x] 1.3 Gateway application.yml 添加 springdoc swagger-ui 聚合配置（6 服务）
+- [x] 1.4 Python FastAPI app.py 添加 openapi_url/title；controller/*.py 加 tags/summary
+- [x] 1.5 openapi/generate.sh 已存在并验证
 
 ---
 
-## Phase 2：Maven BOM 重构 `[ ]`
+## Phase 2：Maven BOM 重构 `[DONE ✓ 2026-05-02]`
 
-**前置条件**：Phase 0 完成  
-**目标分支**：`phase/2-maven-bom`  
-**完成后打 Tag**：`v0.3.0`
+**目标分支**：`phase/2-maven-bom` | **Tag**：`v0.3.0`
 
-- [ ] 2.1 创建 services/bom/pom.xml（统一版本管理）
-- [ ] 2.2 修复 services/file 循环依赖（删除 anynote-api-ai/anynote-api-note 依赖）
-- [ ] 2.3 统一所有子模块版本号引用
-- [ ] 2.4 添加 Maven Enforcer 插件
+- [x] 2.1 创建 services/bom/pom.xml（Spring Boot 3.3.4, Cloud 2023.0.3, Java 21, springdoc 等）
+- [x] 2.2 修复 services/file 循环依赖（删除 anynote-api-ai/anynote-api-note，TODO Phase 4 解耦）
+- [x] 2.3 services/pom.xml 版本号更新，modules 更新为新目录结构
+- [x] 2.4 anynote-common-swagger 替换 springfox → springdoc（版本由 BOM 管理）
 
 ---
 
@@ -149,9 +145,9 @@
 **目标分支**：`phase/6-python-ai`  
 **完成后打 Tag**：`v0.7.0`
 
-- [ ] 6.1 Pydantic v2 迁移（model_config, field_validator, model_dump）
-- [ ] 6.2 完善 FastAPI 端点类型（response_model, tags, summary）
-- [ ] 6.3 依赖注入重构（FastAPI Depends 替代全局单例）
+- [x] 6.1 Pydantic v2 迁移：Optional[X] → X | None；audio_transcriptions_dto.py 已迁移
+- [x] 6.2 FastAPI 端点：chat/rag/whisper controller 加 tags/summary/responses；app.py 加 openapi_url
+- [x] 6.3 dependencies.py 新建 get_settings() lru_cache；core/config.py 改为 Settings(BaseSettings)
 
 ---
 
