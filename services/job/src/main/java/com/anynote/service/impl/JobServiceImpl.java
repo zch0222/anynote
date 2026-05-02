@@ -4,7 +4,7 @@ import com.anynote.service.JobService;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 @Service
 public class JobServiceImpl implements JobService {

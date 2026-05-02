@@ -1,7 +1,7 @@
 package com.anynote.common.security.handler;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.validation.ConstraintViolationException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 
 import com.anynote.common.security.condition.SpringMvcCondition;
 import com.anynote.core.context.HttpContextHolder;

@@ -3,7 +3,7 @@ package com.anynote.note.model.bo;
 import com.anynote.note.model.dto.NoteTaskCreateDTO;
 import lombok.*;
 
-import javax.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotBlank;
 import java.util.Date;
 
 /**

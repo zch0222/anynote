@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
 
 @FeignClient(contextId = "remoteDocController",
         value = ServiceNameConstants.NOTE_SERVICE, fallbackFactory = RemoteDocFallbackFactory.class)

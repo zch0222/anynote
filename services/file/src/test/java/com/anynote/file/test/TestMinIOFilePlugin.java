@@ -5,7 +5,7 @@ import com.anynote.file.factory.FilePluginFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 @SpringBootTest
 public class TestMinIOFilePlugin {

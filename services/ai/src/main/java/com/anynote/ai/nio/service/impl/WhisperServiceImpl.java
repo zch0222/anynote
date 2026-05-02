@@ -46,7 +46,7 @@ import reactor.core.publisher.Mono;
 import com.google.gson.Gson;
 import reactor.core.scheduler.Schedulers;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.time.Duration;
 import java.util.Date;
 import java.util.concurrent.CompletableFuture;

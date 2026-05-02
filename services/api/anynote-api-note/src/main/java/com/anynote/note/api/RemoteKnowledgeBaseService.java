@@ -10,7 +10,7 @@ import com.anynote.note.api.model.po.UserKnowledgeBase;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.util.List;
 
 /**

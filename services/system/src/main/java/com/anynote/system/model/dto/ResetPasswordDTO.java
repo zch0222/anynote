@@ -2,7 +2,7 @@ package com.anynote.system.model.dto;
 
 import lombok.Data;
 
-import javax.validation.constraints.*;
+import jakarta.validation.constraints.*;
 
 @Data
 public class ResetPasswordDTO {
