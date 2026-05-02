@@ -29,6 +29,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
+// TODO Phase 4: remoteMoocService.updateAsrInfo() 改为发送 RocketMQ 事件，解除对 anynote-api-note 的直接依赖
 @Slf4j
 @Component
 @RocketMQMessageListener(topic = "${anynote.data.rocketmq.ai-chat-topic}",
