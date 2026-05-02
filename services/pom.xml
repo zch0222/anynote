@@ -51,7 +51,7 @@
         <commons-fileupload.version>1.5</commons-fileupload.version>
         <elasticsearch.java.versions>8.7.0</elasticsearch.java.versions>
         <rocketmq.client.version>5.1.4</rocketmq.client.version>
-        <rocketmq.starter.version>2.2.2</rocketmq.starter.version>
+        <rocketmq.starter.version>2.3.5</rocketmq.starter.version>
         <jakarta-json.version>2.0.1</jakarta-json.version>
         <java.diff.utils.version>4.12</java.diff.utils.version>
         <google.java.diff.utils.version>1.3.0</google.java.diff.utils.version>
