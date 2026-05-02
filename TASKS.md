@@ -100,6 +100,7 @@
 
 ## Phase 3：Spring Boot 3 升级 `[DONE ✓ 2026-05-02]`
 
+**前置条件**：Phase 2 完成  
 **目标分支**：`phase/3-spring-boot3` | **Tag**：`v0.4.0`
 
 - [x] 3.1 JDK 升级（maven-compiler-plugin release=21）
@@ -113,6 +114,7 @@
 
 ## Phase 4：服务层重构 `[DONE ✓ 2026-05-02]`
 
+**前置条件**：Phase 3 完成  
 **目标分支**：`phase/4-service-refactor` | **Tag**：`v0.5.0`
 
 - [x] 4.1 统一异常处理：修复 SpringWebfluxGlobalExceptionHandler 错误 import；NoteController/VideoController return null → throw；全部 FallbackFactory throw → return ResData.error()
@@ -135,11 +137,10 @@
 
 ---
 
-## Phase 6：Python AI 服务现代化 `[ ]`
+## Phase 6：Python AI 服务现代化 `[DONE ✓ 2026-05-02]`
 
 **前置条件**：Phase 0 完成  
-**目标分支**：`phase/6-python-ai`  
-**完成后打 Tag**：`v0.7.0`
+**目标分支**：`phase/6-python-ai` | **Tag**：`v0.7.0`
 
 - [x] 6.1 Pydantic v2 迁移：Optional[X] → X | None；audio_transcriptions_dto.py 已迁移
 - [x] 6.2 FastAPI 端点：chat/rag/whisper controller 加 tags/summary/responses；app.py 加 openapi_url
@@ -150,8 +151,7 @@
 ## Phase 7：OpenSpec 集成 `[DONE ✓ 2026-05-02]`
 
 **前置条件**：Phase 1 完成  
-**目标分支**：`phase/7-openspec`  
-**完成后打 Tag**：`v1.0.0`
+**目标分支**：`phase/7-openspec` | **Tag**：`v1.0.0`
 
 - [x] 7.1 初始化 .claude/openspec/ 目录结构（README.md + changes/.gitkeep）
 - [x] 7.2 创建 openapi/WORKFLOW.md（API-First 开发流程说明）
