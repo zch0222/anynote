@@ -1,0 +1,25 @@
+server:
+  port: 8091
+
+
+spring:
+  application:
+    name: anynote-system
+  profiles:
+    # 环境配置
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        # 服务注册地址
+        server-addr: localhost:8848
+        namespace: 0587fa28-1301-43db-a7a1-599c00fc3f70
+      config:
+        # 配置中心地址
+        server-addr: localhost:8848
+        # 配置文件格式
+        file-extension: yml
+        namespace: 0587fa28-1301-43db-a7a1-599c00fc3f70
+        # 共享配置
+        shared-configs:
+          - application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}

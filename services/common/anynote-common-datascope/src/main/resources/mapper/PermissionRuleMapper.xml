@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.anynote.common.datascope.mapper.PermissionRuleMapper">
+
+    <resultMap id="EntityPermissionPOResultMap" type="com.anynote.common.datascope.model.po.EntityPermissionPO">
+        <id property="entityId" column="entity_id" javaType="java.lang.Long"/>
+        <result property="createBy" column="create_by" javaType="java.lang.Long"/>
+        <result property="permissions" column="permissions" javaType="java.lang.String"/>
+        <collection property="knowledgeBaseIds" ofType="java.lang.Long" column="knowledge_base_id"/>
+    </resultMap>
+
+    <resultMap id="UserAssociatedEntityPermissionPOResultMap"
+               type="com.anynote.common.datascope.model.po.UserAssociatedEntityPermissionPO">
+        <!-- 联合主键 -->
+        <id property="entityId" column="entity_id"/>
+        <id property="userId" column="user_id"/>
+
+        <result property="permission" column="permission"/>
+        <result property="deleted" column="is_delete"/>
+    </resultMap>
+
+    <select id="selectEntityPermissionOneToOne" resultMap="EntityPermissionPOResultMap">
+        SELECT
+            ${entityIdFieldName} as entity_id, ${permissionFieldName} as permissions,
+            ${knowledgeBaseIdFieldName} as knowledge_base_id, create_by
+        FROM
+            ${entityTableName}
+        WHERE
+            is_delete = 0
+          AND
+            ${entityIdFieldName} = #{entityId};
+    </select>
+
+    <select id="selectEntityPermissionNToM" resultMap="EntityPermissionPOResultMap">
+
+    </select>
+
+    <select id="selectUserAssociatedPermission" resultMap="UserAssociatedEntityPermissionPOResultMap">
+        SELECT
+            entity_id, user_id, permission
+        FROM
+            ${userAssociatedTableName}
+        WHERE
+            is_delete = 0
+          AND
+            entity_id = #{entityId}
+          AND
+            user_id = #{userId}
+    </select>
+
+</mapper>

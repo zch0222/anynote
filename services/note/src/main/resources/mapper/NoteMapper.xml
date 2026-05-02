@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.anynote.note.mapper.NoteMapper">
+    <resultMap id="NoteResult" type="com.anynote.note.api.model.po.Note">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="noteTextId" column="note_text_id"/>
+        <result property="knowledgeBaseId" column="knowledge_base_id"/>
+        <result property="status" column="status"/>
+        <result property="data_scope" column="dataScope"/>
+        <result property="deleted" column="is_delete"/>
+        <result property="createBy"     column="create_by"    />
+        <result property="createTime"   column="create_time"  />
+        <result property="updateBy"     column="update_by"    />
+        <result property="updateTime"   column="update_time"  />
+        <result property="remark"       column="remark"       />
+        <result property="content" column="content"/>
+        <result property="knowledgeBaseName" column="knowledge_base_name"/>
+        <result property="submitTaskName" column="task_name"/>
+<!--        <association property="noteText" javaType="com.anynote.note.api.model.po.NoteText" -->
+<!--                     resultMap="NoteTextResult"/>-->
+    </resultMap>
+
+    <resultMap id="NoteInfoVOResult" type="com.anynote.note.model.vo.NoteInfoVO">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="noteTextId" column="note_text_id"/>
+        <result property="knowledgeBaseId" column="knowledge_base_id"/>
+        <result property="status" column="status"/>
+        <result property="data_scope" column="dataScope"/>
+        <result property="deleted" column="is_delete"/>
+        <result property="createBy"     column="create_by"    />
+        <result property="createTime"   column="create_time"  />
+        <result property="updateBy"     column="update_by"    />
+        <result property="updateTime"   column="update_time"  />
+        <result property="remark"       column="remark"       />
+        <result property="content" column="content"/>
+        <result property="knowledgeBaseName" column="knowledge_base_name"/>
+        <result property="creatorName" column="creator_name"/>
+    </resultMap>
+
+
+    <resultMap id="NoteInfoResult" type="com.anynote.note.api.model.po.Note">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="noteTextId" column="note_text_id"/>
+        <result property="knowledgeBaseId" column="knowledge_base_id"/>
+        <result property="status" column="status"/>
+        <result property="data_scope" column="dataScope"/>
+        <result property="deleted" column="is_delete"/>
+        <result property="createBy"     column="create_by"    />
+        <result property="createTime"   column="create_time"  />
+        <result property="updateBy"     column="update_by"    />
+        <result property="updateTime"   column="update_time"  />
+        <result property="remark"       column="remark"       />
+    </resultMap>
+
+
+    <resultMap id="NoteListResult" type="com.anynote.note.model.vo.NoteListVO">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="noteTextId" column="note_text_id"/>
+        <result property="knowledgeBaseId" column="knowledge_base_id"/>
+        <result property="knowledgeBaseName" column="knowledge_base_name"/>
+        <result property="status" column="status"/>
+        <result property="dataScope" column="data_scope"/>
+        <result property="deleted" column="is_delete"/>
+        <result property="createBy"     column="create_by"    />
+        <result property="createTime"   column="create_time"  />
+        <result property="updateBy"     column="update_by"    />
+        <result property="updateTime"   column="update_time"  />
+        <result property="remark"       column="remark"       />
+    </resultMap>
+    
+    <resultMap id="NoteTextResult" type="com.anynote.note.api.model.po.NoteText">
+        <id property="id" column="note_text_id"/>
+        <result property="content" column="content"/>
+    </resultMap>
+    
+    <select id="selectNoteInfoList" resultMap="NoteInfoResult">
+        SELECT
+            distinct
+            n_note.id, n_note.title, n_note.note_text_id, n_note.knowledge_base_id, n_note.status,
+            n_note.data_scope, n_note.is_delete, n_note.create_by, n_note.create_time,
+            n_note.update_by, n_note.update_time, n_note.remark
+        FROM
+            n_note
+        LEFT JOIN
+            n_knowledge_base ON n_note.knowledge_base_id = n_knowledge_base.id
+        LEFT JOIN
+            n_user_knowledge_base ON n_knowledge_base.id = n_user_knowledge_base.knowledge_base_id
+        LEFT JOIN
+            sys_user ON n_user_knowledge_base.user_id = sys_user.id
+        WHERE
+            n_note.is_delete = 0
+          <if test="id != null">
+              AND n_note.id = #{id}
+          </if>
+<!--          <if test="title != null and title != ''">-->
+<!--              AND n_note.title like concat('%', #{title}, '%')-->
+<!--          </if>-->
+          <if test="status != null">
+              AND n_note.status = #{status}
+          </if>
+          <if test="knowledgeBaseId != null">
+              AND n_note.knowledge_base_id = #{knowledgeBaseId}
+          </if>
+        <!-- 数据范围过滤 -->
+        ${params.dataScope}
+        <!-- 知识库内数据权限过滤 -->
+        ${params.noteDataScope}
+    </select>
+
+    <select id="selectNoteList" resultMap="NoteListResult">
+        SELECT DISTINCT
+            MAX(n_note_operation_log.operation_time) as latest_operation_time, n_note.id, n_note.title,
+            n_note.create_time, n_note.create_by, n_note.update_by, n_note.update_time,
+            n_note.knowledge_base_id, n_note.note_text_id, n_note.status, n_note.data_scope, n_knowledge_base.name as knowledge_base_name
+        FROM
+            n_note_operation_log
+        LEFT JOIN
+            n_note ON n_note.id = n_note_operation_log.note_id
+        LEFT JOIN
+            n_knowledge_base ON n_note.knowledge_base_id = n_knowledge_base.id
+        WHERE
+            n_note_operation_log.is_delete = 0
+          AND
+            n_note.is_delete = 0
+          <if test="operatorId != null">
+              AND n_note_operation_log.operator_id = #{operatorId}
+          </if>
+        <if test="status != null">
+            AND n_note.status = #{status}
+        </if>
+        <if test="knowledgeBaseId != null">
+            AND n_note.knowledge_base_id = #{knowledgeBaseId}
+        </if>
+        GROUP BY
+            n_note.id, n_note.title, n_note.create_time, n_note.create_by,
+            n_note.update_by, n_note.update_time, n_note.knowledge_base_id, n_note.note_text_id, n_note.status,
+            n_note.data_scope, n_knowledge_base.name;
+    </select>
+
+    <select id="selectNoteById" resultMap="NoteResult">
+        SELECT
+            n_note.id, n_note.title, n_note.note_text_id, n_note.knowledge_base_id, n_note.status,
+            n_note.create_by, n_note.create_time, n_note.update_by, n_note.update_time, n_note.remark,
+            n_note_text.content, n_knowledge_base.name as knowledge_base_name, n_note_task.task_name, n_note.data_scope,
+            n_note.is_delete
+        FROM
+            n_note
+        LEFT JOIN
+            n_note_text ON n_note.note_text_id = n_note_text.id
+        LEFT JOIN
+            n_knowledge_base ON n_note.knowledge_base_id = n_knowledge_base.id
+        LEFT JOIN
+            n_note_task_submission_record ON (n_note.id = n_note_task_submission_record.note_id AND n_note_task_submission_record.status = 0)
+        LEFT JOIN
+            n_note_task ON n_note_task_submission_record.note_task_id = n_note_task.id
+        WHERE
+            n_note.is_delete = 0
+          AND
+            n_note.status = 0
+          AND
+            n_note_text.is_delete = 0
+          AND
+            n_note.id = #{id}
+    </select>
+
+    <update id="updateNote">
+        UPDATE
+            n_note
+        SET
+            update_time = #{updateTime}, update_by = #{updateBy}
+        <if test="title != null and title != ''">
+            , n_note.title = #{title}
+        </if>
+        <if test="status != null">
+            , status = #{status}
+        </if>
+        <if test="dataScope != null">
+            , dataScope = #{dataScope}
+        </if>
+        <if test="permissions != null and permissions != ''">
+            , permissions = #{permissions}
+        </if>
+        <if test="deleted != null">
+            , is_delete = #{deleted}
+        </if>
+<!--        <if test="status != null">-->
+<!--            SET n_note.status = status-->
+<!--        </if>-->
+<!--        <if test="dataScope != null">-->
+<!--            SET n_note.data_scope = dataScope-->
+<!--        </if>-->
+        WHERE
+            n_note.is_delete = 0
+          AND
+            n_note.status = 0
+          AND
+            n_note.id = #{id}
+    </update>
+
+    <update id="updateContent">
+        UPDATE
+          n_note_text
+        SET
+            update_time = #{updateTime}, update_by = #{updateBy}
+        <if test="content != null and content != ''">
+            , content = #{content}
+        </if>
+        <if test="deleted != null">
+            , is_delete = #{deleted}
+        </if>
+        WHERE
+            is_delete = 0
+          AND
+            id = #{contentId}
+
+    </update>
+
+</mapper>
