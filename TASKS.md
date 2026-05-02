@@ -98,30 +98,28 @@
 
 ---
 
-## Phase 3：Spring Boot 3 升级 `[ ]`
+## Phase 3：Spring Boot 3 升级 `[DONE ✓ 2026-05-02]`
 
 **前置条件**：Phase 2 完成  
-**目标分支**：`phase/3-spring-boot3`  
-**完成后打 Tag**：`v0.4.0`
+**目标分支**：`phase/3-spring-boot3` | **Tag**：`v0.4.0`
 
-- [ ] 3.1 JDK 升级（pom.xml 设置 Java 21）
-- [ ] 3.2 javax → jakarta 命名空间批量替换
-- [ ] 3.3 Spring Security 6 配置迁移（SecurityConfig.java）
-- [ ] 3.4 MyBatis Plus 升级至 3.5.7
-- [ ] 3.5 Springfox 完全移除 & Springdoc 验证
-- [ ] 3.6 合并 ai + ai-nio → services/ai（以 ai-nio 为基础）
+- [x] 3.1 JDK 升级（maven-compiler-plugin release=21）
+- [x] 3.2 javax → jakarta 命名空间批量替换（276处，179文件）
+- [x] 3.3 Spring Security 6 配置迁移（gateway WebFlux + common MVC）
+- [x] 3.4 MyBatis Plus 3.5.7 — 无弃用 EntityWrapper API
+- [x] 3.5 Springfox 完全移除；SwaggerAutoConfiguration 重写为 Springdoc OpenAPI bean
+- [x] 3.6 合并 ai + ai-nio → services/ai（TranslateController/Service/Plugin/Factory）
 
 ---
 
-## Phase 4：服务层重构 `[ ]`
+## Phase 4：服务层重构 `[DONE ✓ 2026-05-02]`
 
 **前置条件**：Phase 3 完成  
-**目标分支**：`phase/4-service-refactor`  
-**完成后打 Tag**：`v0.5.0`
+**目标分支**：`phase/4-service-refactor` | **Tag**：`v0.5.0`
 
-- [ ] 4.1 统一异常处理（ErrorCode 枚举 + GlobalExceptionHandler）
-- [ ] 4.2 统一 REST 规范（/api/v1/* 路径标准化）
-- [ ] 4.3 服务间鉴权加固（HMAC 签名 InternalAuthInterceptor）
+- [x] 4.1 统一异常处理：修复 SpringWebfluxGlobalExceptionHandler 错误 import；NoteController/VideoController return null → throw；全部 FallbackFactory throw → return ResData.error()
+- [x] 4.2 统一 REST 规范：/user/manageList→/user/list；banUser/unBanUser→{userId}/ban/{userId}/unban（路径参数化）；更新 RemoteUserService Feign + ManageController
+- [x] 4.3 HMAC 签名：HmacUtils + SecurityConstants 常量；FeignRequestInterceptor 添加签名头；InnerAuthAspect 验证 HMAC；ContextWebFilter 存储请求头到 Reactor 上下文；InnerAuthWebfluxAspect @Around + Mono.deferContextual 重写
 
 ---
 
@@ -139,11 +137,10 @@
 
 ---
 
-## Phase 6：Python AI 服务现代化 `[ ]`
+## Phase 6：Python AI 服务现代化 `[DONE ✓ 2026-05-02]`
 
 **前置条件**：Phase 0 完成  
-**目标分支**：`phase/6-python-ai`  
-**完成后打 Tag**：`v0.7.0`
+**目标分支**：`phase/6-python-ai` | **Tag**：`v0.7.0`
 
 - [x] 6.1 Pydantic v2 迁移：Optional[X] → X | None；audio_transcriptions_dto.py 已迁移
 - [x] 6.2 FastAPI 端点：chat/rag/whisper controller 加 tags/summary/responses；app.py 加 openapi_url
@@ -151,12 +148,12 @@
 
 ---
 
-## Phase 7：OpenSpec 集成 `[ ]`
+## Phase 7：OpenSpec 集成 `[DONE ✓ 2026-05-02]`
 
 **前置条件**：Phase 1 完成  
-**目标分支**：`phase/7-openspec`  
-**完成后打 Tag**：`v1.0.0`
+**目标分支**：`phase/7-openspec` | **Tag**：`v1.0.0`
 
-- [ ] 7.1 初始化 .claude/openspec/ 目录结构
-- [ ] 7.2 创建 openapi/WORKFLOW.md（API-First 开发流程说明）
-- [ ] 7.3 创建 .claude/context/backend.md、frontend.md、api-contracts.md
+- [x] 7.1 初始化 .claude/openspec/ 目录结构（README.md + changes/.gitkeep）
+- [x] 7.2 创建 openapi/WORKFLOW.md（API-First 开发流程说明）
+- [x] 7.3 创建 .claude/context/backend.md、frontend.md、api-contracts.md
+- [x] 7.4 创建 AGENTS.md（Codex/OpenAI 格式，简体中文）
