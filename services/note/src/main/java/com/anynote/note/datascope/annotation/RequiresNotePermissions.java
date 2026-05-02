@@ -2,7 +2,6 @@ package com.anynote.note.datascope.annotation;
 
 import com.anynote.common.datascope.enums.Logical;
 import com.anynote.note.enums.NotePermissions;
-import kotlin.annotation.AnnotationRetention;
 
 import java.lang.annotation.*;
 
