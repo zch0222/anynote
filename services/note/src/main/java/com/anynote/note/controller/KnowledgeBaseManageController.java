@@ -18,7 +18,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
+@Tag(name = "知识库管理", description = "知识库管理员接口")
 @RestController
 @RequestMapping("/manage/bases")
 @Validated

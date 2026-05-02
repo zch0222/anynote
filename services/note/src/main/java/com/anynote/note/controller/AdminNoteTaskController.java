@@ -19,11 +19,13 @@ import org.springframework.web.bind.annotation.*;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 import java.util.List;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * 知识库管理员任务接口
  * @author 称霸幼儿园
  */
+@Tag(name = "管理员笔记任务", description = "管理员笔记任务接口")
 @RestController
 @RequestMapping("/admin/noteTasks")
 @Validated

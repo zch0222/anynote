@@ -17,9 +17,11 @@ import reactor.core.scheduler.Schedulers;
 import reactor.util.context.Context;
 
 import javax.annotation.Resource;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 
 @Slf4j
+@Tag(name = "RAG检索", description = "知识库RAG检索接口")
 @RestController
 @RequestMapping("/rag")
 public class RagController {

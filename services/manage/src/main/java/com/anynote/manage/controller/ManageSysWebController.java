@@ -13,11 +13,13 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.annotation.Resource;
 import java.util.Arrays;
 import java.util.Collections;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  *
  * @author 称霸幼儿园
  */
+@Tag(name = "管理-系统", description = "后台系统管理接口")
 @RestController
 @RequestMapping("sysWeb")
 public class ManageSysWebController {

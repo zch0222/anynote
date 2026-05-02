@@ -16,11 +16,13 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import java.util.Date;
 import java.util.List;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * API 用量统计
  * @author 称霸幼儿园
  */
+@Tag(name = "API统计", description = "系统API调用统计")
 @RestController
 @RequestMapping("apiStatistics")
 public class SysApiStatisticsController {

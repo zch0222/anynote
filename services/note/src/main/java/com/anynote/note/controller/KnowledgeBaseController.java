@@ -36,11 +36,13 @@ import javax.annotation.Resource;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 import java.util.List;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * @author 称霸幼儿园
  */
 @RequestMapping("/bases")
+@Tag(name = "知识库", description = "知识库CRUD接口")
 @RestController
 @Validated
 public class KnowledgeBaseController {
