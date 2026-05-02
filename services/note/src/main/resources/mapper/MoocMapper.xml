@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.anynote.note.mapper.MoocMapper">
+    <resultMap id="MoocListVOResultMap" type="com.anynote.note.model.vo.MoocListVO">
+        <!-- MoocListVO 的字段 -->
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="moocDescription" column="mooc_description"/>
+        <result property="dataScope" column="data_scope"/>
+        <result property="knowledgeBaseId" column="knowledge_base_id"/>
+        <result property="moocPermission" column="mooc_permission"/>
+        <result property="creatorUsername" column="creator_username"/>
+
+        <!-- 继承 BaseEntity 的字段 -->
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+
+    <resultMap id="MoocVOResultMap" type="com.anynote.note.model.vo.MoocVO">
+        <!-- 主键字段 -->
+        <id property="id" column="id" />
+
+        <!-- 普通字段映射 -->
+        <result property="title" column="title" />
+        <result property="cover" column="cover" />
+        <result property="moocDescription" column="mooc_description" />
+        <result property="dataScope" column="data_scope" />
+        <result property="knowledgeBaseId" column="knowledge_base_id" />
+        <result property="moocKnowledgeBaseName" column="mooc_knowledge_base_name" />
+        <result property="moocPermission" column="mooc_permission" />
+        <result property="userPermissions" column="user_permissions" />
+        <result property="creatorUsername" column="creator_username" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
+        <result property="remark" column="remark" />
+    </resultMap>
+    
+    <select id="getMoocList" resultMap="MoocListVOResultMap">
+        SELECT
+            n_mooc.id, n_mooc.title, n_mooc.cover, n_mooc.mooc_description, n_mooc.data_scope, n_mooc.knowledge_base_id,
+            n_mooc.permissions, creator_user.username as creator_username, n_mooc.is_delete, n_mooc.create_by, n_mooc.create_time,
+            n_mooc.update_by, n_mooc.update_time
+        FROM
+            n_mooc
+                LEFT JOIN
+            sys_user as creator_user ON creator_user.id = n_mooc.create_by
+        WHERE
+            n_mooc.knowledge_base_id = #{knowledgeBaseId}
+          AND
+            n_mooc.is_delete = 0
+        ${params.knowledgeBaseScope}
+    </select>
+
+
+    <select id="selectMoocById" resultMap="MoocVOResultMap">
+        SELECT
+            n_mooc.id, n_mooc.title, n_mooc.cover, n_mooc.mooc_description, n_mooc.data_scope, n_mooc.knowledge_base_id,
+            n_mooc.permissions as mooc_permission, creator_user.username as creator_username, n_mooc.is_delete, n_mooc.create_by, n_mooc.create_time,
+            n_mooc.update_by, n_mooc.update_time
+        FROM
+            n_mooc
+                LEFT JOIN
+            sys_user as creator_user ON creator_user.id = n_mooc.create_by
+        WHERE
+            n_mooc.id = #{moocId}
+          AND
+            n_mooc.is_delete = 0;
+    </select>
+
+    <select id="selectMoocIds" resultType="java.lang.Long">
+        SELECT
+            n_mooc.id
+        FROM
+            n_user_knowledge_base
+        INNER JOIN
+            n_mooc ON n_mooc.knowledge_base_id = n_user_knowledge_base.knowledge_base_id
+        WHERE
+            n_user_knowledge_base.user_id = #{userId}
+          AND
+            n_mooc.is_delete = 0
+          AND
+            (n_mooc.data_scope = 3 OR
+             n_mooc.create_by = #{userId} OR
+             (n_user_knowledge_base.permissions = 1 AND n_mooc.data_scope = 2));
+    </select>
+
+
+</mapper>

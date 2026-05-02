@@ -1,0 +1,18 @@
+{
+  "name": "anynote",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "format": "biome format --write .",
+    "check": "biome check --write .",
+    "openapi:generate": "bash openapi/generate.sh",
+    "services:build": "cd services && mvn clean install -DskipTests"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "turbo": "^2.3.0"
+  }
+}
