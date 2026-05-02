@@ -12,9 +12,9 @@ import com.anynote.system.api.model.po.SysUser;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
-import javax.validation.Valid;
-import javax.validation.constraints.NotNull;
+import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**

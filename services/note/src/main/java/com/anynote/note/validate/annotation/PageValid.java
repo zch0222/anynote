@@ -1,6 +1,6 @@
 package com.anynote.note.validate.annotation;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 import java.lang.annotation.*;
 
 /**

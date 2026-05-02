@@ -16,7 +16,7 @@ import com.anynote.system.api.model.po.SysConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * 文件插件工厂

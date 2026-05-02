@@ -33,7 +33,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 @Order(1)
 @Aspect

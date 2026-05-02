@@ -9,7 +9,7 @@ import com.anynote.manage.service.ManageCacheService;
 import com.anynote.system.api.model.bo.LoginUser;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

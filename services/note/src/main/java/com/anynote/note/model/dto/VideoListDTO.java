@@ -4,7 +4,7 @@ import com.anynote.core.web.model.dto.PageDTO;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
 
 
 @Data

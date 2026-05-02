@@ -4,7 +4,7 @@ import com.anynote.core.enums.ConfigEnum;
 import com.anynote.system.api.model.po.SysConfig;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 @Component
 public class ConfigService {

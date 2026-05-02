@@ -8,8 +8,8 @@ import com.anynote.note.model.vo.VideoListVO;
 import com.anynote.note.service.VideoService;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
-import javax.validation.Valid;
+import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**

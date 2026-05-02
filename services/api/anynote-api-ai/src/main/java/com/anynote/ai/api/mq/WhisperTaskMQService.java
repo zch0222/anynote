@@ -8,7 +8,7 @@ import com.google.gson.Gson;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * Whisper 任务消息队列

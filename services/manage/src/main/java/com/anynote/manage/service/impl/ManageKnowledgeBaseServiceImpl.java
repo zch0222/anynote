@@ -9,7 +9,7 @@ import com.anynote.note.api.RemoteKnowledgeBaseService;
 import com.anynote.note.api.model.dto.NoteKnowledgeBaseDTO;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * @author 称霸幼儿园

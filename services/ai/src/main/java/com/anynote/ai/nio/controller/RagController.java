@@ -16,7 +16,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.context.Context;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 

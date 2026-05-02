@@ -2,7 +2,7 @@ package com.anynote.ai.api.model.dto;
 
 import lombok.Data;
 
-import javax.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull;
 import java.util.Date;
 
 @Data
