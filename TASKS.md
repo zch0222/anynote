@@ -98,18 +98,16 @@
 
 ---
 
-## Phase 3：Spring Boot 3 升级 `[ ]`
+## Phase 3：Spring Boot 3 升级 `[DONE ✓ 2026-05-02]`
 
-**前置条件**：Phase 2 完成  
-**目标分支**：`phase/3-spring-boot3`  
-**完成后打 Tag**：`v0.4.0`
+**目标分支**：`phase/3-spring-boot3` | **Tag**：`v0.4.0`
 
-- [ ] 3.1 JDK 升级（pom.xml 设置 Java 21）
-- [ ] 3.2 javax → jakarta 命名空间批量替换
-- [ ] 3.3 Spring Security 6 配置迁移（SecurityConfig.java）
-- [ ] 3.4 MyBatis Plus 升级至 3.5.7
-- [ ] 3.5 Springfox 完全移除 & Springdoc 验证
-- [ ] 3.6 合并 ai + ai-nio → services/ai（以 ai-nio 为基础）
+- [x] 3.1 JDK 升级（maven-compiler-plugin release=21）
+- [x] 3.2 javax → jakarta 命名空间批量替换（276处，179文件）
+- [x] 3.3 Spring Security 6 配置迁移（gateway WebFlux + common MVC）
+- [x] 3.4 MyBatis Plus 3.5.7 — 无弃用 EntityWrapper API
+- [x] 3.5 Springfox 完全移除；SwaggerAutoConfiguration 重写为 Springdoc OpenAPI bean
+- [x] 3.6 合并 ai + ai-nio → services/ai（TranslateController/Service/Plugin/Factory）
 
 ---
 
