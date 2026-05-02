@@ -43,7 +43,7 @@
         <java-jwt.version>4.4.0</java-jwt.version>
         <java.version>21</java.version>
         <druid.version>1.2.15</druid.version>
-        <mbp.version>3.5.2</mbp.version>
+        <mbp.version>3.5.9</mbp.version>
         <feign.form.version>3.3.0</feign.form.version>
         <feign.form.spring.version>3.3.0</feign.form.spring.version>
         <bundle.huawei.obs.vsersion>3.23.9</bundle.huawei.obs.vsersion>
@@ -178,7 +178,7 @@
 
             <dependency>
                 <groupId>com.baomidou</groupId>
-                <artifactId>mybatis-plus-boot-starter</artifactId>
+                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
                 <version>${mbp.version}</version>
             </dependency>
     <!--        <dependency>-->
