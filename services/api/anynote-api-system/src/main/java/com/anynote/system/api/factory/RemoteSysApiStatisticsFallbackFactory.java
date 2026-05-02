@@ -1,7 +1,6 @@
 package com.anynote.system.api.factory;
 
-import com.anynote.core.exception.BusinessException;
-import com.anynote.core.utils.StringUtils;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.system.api.RemoteSysApiStatisticsService;
 import com.anynote.system.api.model.dto.ApiStatisticsCreateDTO;
@@ -23,28 +22,28 @@ public class RemoteSysApiStatisticsFallbackFactory implements FallbackFactory<Re
         return new RemoteSysApiStatisticsService() {
             @Override
             public ResData<Long> createApiStatistics(ApiStatisticsCreateDTO apiStatisticsCreateDTO) {
-                throw new BusinessException("调用/apiStatistics POST失败");
+                return ResData.error(ResCode.INNER_SYSTEM_SERVICE_ERROR);
             }
 
             @Override
             public ResData<Long> createApiStatistics(ApiStatisticsCreateDTO apiStatisticsCreateDTO, String fromSource) {
-                throw new BusinessException("调用/apiStatistics POST失败");
+                return ResData.error(ResCode.INNER_SYSTEM_SERVICE_ERROR);
             }
 
             @Override
             public ResData<String> increaseUsage(IncreaseApiUsageDTO increaseApiUsageDTO) {
-                throw new BusinessException("调用/apiStatistics/increaseUsage POST失败");
+                return ResData.error(ResCode.INNER_SYSTEM_SERVICE_ERROR);
             }
 
             @Override
             public ResData<String> increaseUsage(IncreaseApiUsageDTO increaseApiUsageDTO, String fromSource) {
-                throw new BusinessException("调用/apiStatistics/increaseUsage POST失败");
+                return ResData.error(ResCode.INNER_SYSTEM_SERVICE_ERROR);
             }
 
 
             @Override
             public ResData<List<SysApiStatisticsVO>> getSysApiStatistics(SysApiStatisticsListDTO sysApiStatisticsListDTO) {
-                throw new BusinessException("调用/apiStatistics GET失败");
+                return ResData.error(ResCode.INNER_SYSTEM_SERVICE_ERROR);
             }
         };
     }

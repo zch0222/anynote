@@ -41,14 +41,23 @@ public class ContextWebFilter implements WebFilter {
         HttpMethod method = exchange.getRequest().getMethod();
         URI uri = exchange.getRequest().getURI();
         InetSocketAddress ipAddress = exchange.getRequest().getRemoteAddress();
+        String fromSource = exchange.getRequest().getHeaders().getFirst(SecurityConstants.FROM_SOURCE);
+        String internalTimestamp = exchange.getRequest().getHeaders().getFirst(SecurityConstants.INTERNAL_TIMESTAMP);
+        String internalSign = exchange.getRequest().getHeaders().getFirst(SecurityConstants.INTERNAL_SIGN);
         if (StringUtils.isNotNull(accessToken)) {
             return chain.filter(exchange)
                     .contextWrite(ctx -> ctx.put(SecurityConstants.ACCESS_TOKEN, accessToken))
                     .contextWrite(ctx -> ctx.put(SecurityConstants.METHOD, method))
                     .contextWrite(ctx -> ctx.put(SecurityConstants.URI, uri))
                     .contextWrite(ctx -> ctx.put(SecurityConstants.IP_ADDRESS, ipAddress))
-                    .contextWrite(ctx -> ctx.put(SpringWebfluxContextConstants.LOGIN_USER, tokenUtil.getLoginUser(accessToken)));
+                    .contextWrite(ctx -> ctx.put(SpringWebfluxContextConstants.LOGIN_USER, tokenUtil.getLoginUser(accessToken)))
+                    .contextWrite(ctx -> ctx.put(SecurityConstants.FROM_SOURCE, fromSource != null ? fromSource : ""))
+                    .contextWrite(ctx -> ctx.put(SecurityConstants.INTERNAL_TIMESTAMP, internalTimestamp != null ? internalTimestamp : ""))
+                    .contextWrite(ctx -> ctx.put(SecurityConstants.INTERNAL_SIGN, internalSign != null ? internalSign : ""));
         }
-        return chain.filter(exchange);
+        return chain.filter(exchange)
+                .contextWrite(ctx -> ctx.put(SecurityConstants.FROM_SOURCE, fromSource != null ? fromSource : ""))
+                .contextWrite(ctx -> ctx.put(SecurityConstants.INTERNAL_TIMESTAMP, internalTimestamp != null ? internalTimestamp : ""))
+                .contextWrite(ctx -> ctx.put(SecurityConstants.INTERNAL_SIGN, internalSign != null ? internalSign : ""));
     }
 }

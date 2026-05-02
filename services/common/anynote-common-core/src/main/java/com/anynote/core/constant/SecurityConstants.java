@@ -27,6 +27,17 @@ public class SecurityConstants {
      */
     public static final String INNER = "inner";
 
+    /** 内部调用 HMAC-SHA256 签名头 */
+    public static final String INTERNAL_SIGN = "X-Internal-Sign";
+
+    /** 内部调用时间戳头（毫秒） */
+    public static final String INTERNAL_TIMESTAMP = "X-Internal-Timestamp";
+
+    /**
+     * 内部调用共享密钥（生产环境应从 Nacos 配置中心注入覆盖）
+     */
+    public static final String INTERNAL_SECRET = "anynote-internal-secret-change-in-prod";
+
     public static final String ACCESS_TOKEN = "accessToken";
 
     /**

@@ -3,12 +3,12 @@ package com.anynote.common.security.feign;
 import com.anynote.core.utils.ServletUtils;
 import com.anynote.core.constant.SecurityConstants;
 import com.anynote.core.utils.StringUtils;
+import com.anynote.core.utils.HmacUtils;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 import org.springframework.stereotype.Component;
 
 import jakarta.servlet.http.HttpServletRequest;
-import java.awt.*;
 import java.util.Map;
 
 /**
@@ -16,7 +16,7 @@ import java.util.Map;
  *
  * @author 称霸幼儿园
  */
-//@Component
+@Component
 public class FeignRequestInterceptor implements RequestInterceptor {
 
     @Override
@@ -52,6 +52,10 @@ public class FeignRequestInterceptor implements RequestInterceptor {
             }
 
             requestTemplate.header(SecurityConstants.FROM_SOURCE, SecurityConstants.INNER);
+            String timestamp = String.valueOf(System.currentTimeMillis());
+            requestTemplate.header(SecurityConstants.INTERNAL_TIMESTAMP, timestamp);
+            requestTemplate.header(SecurityConstants.INTERNAL_SIGN,
+                    HmacUtils.sign(SecurityConstants.INTERNAL_SECRET, timestamp));
 
 //            String contentType = headers.get(SecurityConstants.CONTENT_TYPE);
 //            if (StringUtils.isNotEmpty(contentType)) {

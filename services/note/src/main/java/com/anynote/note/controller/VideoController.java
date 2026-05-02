@@ -1,5 +1,7 @@
 package com.anynote.note.controller;
 
+import com.anynote.core.exception.BusinessException;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.file.api.model.bo.HuaweiOBSTemporarySignature;
 import com.anynote.note.model.bo.VideoQueryParam;
@@ -35,6 +37,6 @@ public class VideoController {
 
     @PostMapping("upload")
     public ResData<HuaweiOBSTemporarySignature> videoUploadTempLink() {
-        return null;
+        throw new BusinessException("暂未实现", ResCode.BUSINESS_ERROR);
     }
 }
