@@ -1,4 +1,5 @@
 com.anynote.common.security.config.SecurityConfig
+com.anynote.common.security.config.ReactiveSecurityConfig
 com.anynote.common.security.handler.GlobalExceptionHandler
 com.anynote.common.security.token.TokenUtil
 com.anynote.common.security.properties.JWTTokenProperties
