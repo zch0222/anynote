@@ -1,0 +1,13 @@
+# syntax=docker/dockerfile:1
+# Local-build image: expects pre-built JAR under ${MODULE}/target/*.jar
+# relative to the project root (build context is the project root).
+FROM eclipse-temurin:21-jre-alpine
+
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+ARG MODULE
+COPY ${MODULE}/target/*.jar app.jar
+
+ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS:--Xms256m -Xmx512m} -jar app.jar"]

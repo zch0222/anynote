@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+**/node_modules
+apps/
+packages/
+ai-service/
+docs/
+openapi/
+poslog/
+pnpm-lock.yaml
+**/.next/
+**/dist/
+# keep services/*/target/*.jar but skip source/test dirs
+services/**/src/
+services/**/test/
+infra/docker/mysql/
