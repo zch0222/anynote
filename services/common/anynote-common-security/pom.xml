@@ -9,6 +9,15 @@
     <artifactId>anynote-common-security</artifactId>
 
     <dependencies>
+        <dependency>
+            <groupId>com.anynote</groupId>
+            <artifactId>anynote-common-security-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.anynote</groupId>
+            <artifactId>anynote-common-security-servlet</artifactId>
+        </dependency>
 
         <!-- Spring Web -->
 <!--        <dependency>-->
@@ -16,10 +25,21 @@
 <!--            <artifactId>spring-webmvc</artifactId>-->
 <!--        </dependency>-->
 
-        <!-- spring security 安全认证 -->
+        <!-- Pull in the exact Spring Security modules used by this shared library.
+             Downstream services currently exclude spring-boot-starter-security. -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-config</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
         <dependency>
@@ -39,7 +59,7 @@
             <exclusions>
                 <exclusion>
                     <groupId>com.baomidou</groupId>
-                    <artifactId>mybatis-plus-boot-starter</artifactId>
+                    <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>

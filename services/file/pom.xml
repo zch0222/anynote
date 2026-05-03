@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.anynote</groupId>
-        <artifactId>anynote-modules</artifactId>
+        <artifactId>any-note</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>anynote-modules-file</artifactId>
@@ -57,7 +57,23 @@
              需要改为 RocketMQ 事件驱动，届时可彻底移除对 note/ai API 模块的依赖 -->
         <dependency>
             <groupId>com.anynote</groupId>
+            <artifactId>anynote-api-ai</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.anynote</groupId>
+            <artifactId>anynote-api-note</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.anynote</groupId>
             <artifactId>anynote-common-redis</artifactId>
+        </dependency>
+
+        <!-- WebClient (Reactive HTTP client, only the client lib, not the WebFlux server) -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
         </dependency>
 
         <dependency>
@@ -66,10 +82,10 @@
         </dependency>
 
 
-        <!-- https://mvnrepository.com/artifact/com.baomidou/mybatis-plus-boot-starter -->
+        <!-- https://mvnrepository.com/artifact/com.baomidou/mybatis-plus-spring-boot3-starter -->
         <dependency>
             <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
         </dependency>
 
         <dependency>

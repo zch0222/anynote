@@ -7,7 +7,7 @@ import com.anynote.note.model.bo.NoteQueryParam;
 import com.anynote.note.model.bo.NoteUpdateParam;
 import com.anynote.note.model.vo.NoteListVO;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.swagger.models.auth.In;
+
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;

@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.anynote</groupId>
-        <artifactId>anynote-modules</artifactId>
+        <artifactId>any-note</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>anynote-modules-ai-nio</artifactId>
@@ -56,10 +56,10 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- https://mvnrepository.com/artifact/com.baomidou/mybatis-plus-boot-starter -->
+        <!-- https://mvnrepository.com/artifact/com.baomidou/mybatis-plus-spring-boot3-starter -->
         <dependency>
             <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
         </dependency>
 
 <!--        <dependency>-->
