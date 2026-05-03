@@ -4,7 +4,7 @@ server:
 
 spring:
   config:
-    import: "nacos:application-dev.yml?group=DEFAULT_GROUP&refreshEnabled=true"
+    import: "optional:nacos:application-dev.yml?group=DEFAULT_GROUP&refreshEnabled=true,optional:nacos:${spring.application.name}-${spring.profiles.active}.yml?group=DEFAULT_GROUP&refreshEnabled=true"
   application:
     name: anynote-file
   profiles:
