@@ -34,7 +34,8 @@ x-app-environment: &app-environment
   AI_FASTAPI_ADDRESS: ${AI_FASTAPI_ADDRESS:-http://host.docker.internal:8000}
   ANYNOTE_AI_FASTAPI_ADDRESS: ${AI_FASTAPI_ADDRESS:-http://host.docker.internal:8000}
   XXL_JOB_ADMIN_ADDRESSES: http://xxl-job-admin:8080/xxl-job-admin
-  XXL_JOB_ADMIN_ACCESSTOKEN: default_token
+  XXL_JOB_ADMIN_ACCESSTOKEN: ${XXL_JOB_ADMIN_ACCESSTOKEN:-default_token}
+  JWT_SECRET: ${JWT_SECRET:-yxlm}
   XXL_JOB_ADMIN_TIMEOUT: 3
   XXL_JOB_EXECUTOR_LOGPATH: /tmp/xxl-job-logs/jobhandler
   XXL_JOB_EXECUTOR_LOGRETENTIONDAYS: 30

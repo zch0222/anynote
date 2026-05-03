@@ -257,7 +257,7 @@ services:
         --spring.datasource.url=jdbc:mysql://mysql:3306/${XXL_JOB_DB_NAME:-anynote_xxl_job}?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
         --spring.datasource.username=root
         --spring.datasource.password=${MYSQL_ROOT_PASSWORD:-AnynoteRoot123}
-        --xxl.job.accessToken=default_token
+        --xxl.job.accessToken=${XXL_JOB_ADMIN_ACCESSTOKEN:-default_token}
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${XXL_JOB_PORT:-10086}:8080"
