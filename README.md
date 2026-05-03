@@ -1,12 +1,12 @@
 # Anynote
 
-多模块学习笔记平台，Monorepo 架构。
+多模块学习笔记平台，支持笔记管理、知识库、AI 问答、文件存储、课程管理等功能。基于 Monorepo 架构，包含 Java 微服务后端、Next.js 前端和 Python AI 服务。
 
 | 技术栈 | 版本 |
 |--------|------|
 | Java · Spring Boot | 21 · 3.3.4 |
-| Spring Cloud / Alibaba | 2023.0.3 / 2023.0.1.0 |
-| Next.js · React · TypeScript | 15 · 19 · 5 |
+| Spring Cloud / Alibaba | 2023.0.3 / 2023.0.3.4 |
+| Next.js · React · TypeScript | 13.5 · 18 · 5 |
 | Python · FastAPI · LangChain | 3.x · 0.116 · 0.3 |
 
 ---
@@ -16,7 +16,7 @@
 ```
 anynote/
 ├── apps/
-│   └── web/                  前端 Next.js 15 应用
+│   └── web-legacy/           前端 Next.js 13.5 应用（当前活跃）
 ├── packages/
 │   ├── api-client/           自动生成的 TypeScript API 客户端（禁止手改）
 │   ├── ui/                   共享 React 组件库
@@ -36,13 +36,7 @@ anynote/
 │   └── bom/                  Maven BOM（统一版本管理）
 ├── ai-service/               Python FastAPI AI 服务（:8000）
 ├── infra/                    Docker Compose + SQL 初始化
-├── openapi/
-│   ├── generate.sh           API 客户端生成脚本
-│   ├── specs/                抓取的 OpenAPI JSON 规范
-│   └── WORKFLOW.md           API-First 开发流程
-└── .claude/
-    ├── context/              AI 编程助手上下文速查
-    └── openspec/             API 变更提案归档
+└── openapi/                  OpenAPI 规范与客户端生成脚本
 ```
 
 ---
@@ -53,10 +47,10 @@ anynote/
 
 ```bash
 docker compose -f infra/docker-compose-middleware.yaml up -d
-# 启动：MySQL · Redis · Nacos · Elasticsearch · MinIO · RocketMQ
+# 包含：MySQL · Redis · Nacos · Elasticsearch · MinIO · RocketMQ · Logstash · XXL-Job
 ```
 
-> Nacos 配置中心地址：`http://localhost:8848/nacos`（默认账密 nacos/nacos）
+> Nacos 配置中心：`http://localhost:8848/nacos`（默认账密 `nacos / nacos`）
 
 ### 2. 启动 Java 后端
 
@@ -64,7 +58,7 @@ docker compose -f infra/docker-compose-middleware.yaml up -d
 # 构建全部服务（首次或依赖变更时）
 cd services && mvn clean install -DskipTests
 
-# 各服务 IDEA / CLI 启动，或
+# 各服务 IDEA 启动，或通过 CLI
 cd services && mvn spring-boot:run -pl gateway
 ```
 
@@ -80,7 +74,7 @@ uvicorn app:app --reload --host 0.0.0.0 --port 8000
 
 ```bash
 pnpm install
-pnpm --filter web dev
+pnpm --filter web-legacy dev
 # 访问 http://localhost:3000
 ```
 
@@ -95,139 +89,35 @@ pnpm openapi:generate
 
 ## Docker 编排启动
 
-> 适用场景：本地完整集成测试、CI/CD 验证、不想在宿主机安装 Java/Python 环境。
+> 适用场景：本地完整集成测试、不想在宿主机安装 Java/Python 环境。
 
-### 前置要求
-
-- Docker >= 24 + Compose Plugin（`docker compose` 命令）
-- Maven（首次或代码变更时构建 JAR）
+**前置要求**：Docker >= 24 + Compose Plugin、Maven
 
 ### 1. 构建 Java 服务 JAR
 
 ```bash
-# 在项目根目录执行，构建全部后端服务（跳过测试）
 cd services && mvn clean package -DskipTests && cd ..
 ```
 
-> 输出位于各服务的 `target/*.jar`，Docker 镜像构建时直接 COPY。
-
-### 2. 启动中间件
+### 2. 启动全栈
 
 ```bash
-docker compose -f infra/docker-compose-middleware.yaml up -d
-```
-
-包含：MySQL · Redis · Nacos · Elasticsearch · RocketMQ (namesrv + broker) · MinIO · Logstash · XXL-Job Admin
-
-等待所有中间件健康（约 60–90 秒）：
-
-```bash
-docker compose -f infra/docker-compose-middleware.yaml ps
-# 所有服务 STATUS 应显示 healthy
-```
-
-Nacos 控制台：`http://localhost:8848/nacos`（账密：`nacos / nacos`）
-
-### 3. 启动全栈（中间件 + 后端服务）
-
-```bash
-# 首次或镜像需要更新时加 --build；之后直接 up -d 即可
+# 首次或代码变更时加 --build
 docker compose -f infra/docker-compose.yaml up -d --build
 ```
 
-此命令会同时启动中间件（若未运行）和以下 9 个后端服务：
+后端服务启动约需 60–120 秒（依赖 Nacos、Elasticsearch、RocketMQ 健康后才启动）。
 
-| 服务 | 容器名 | 端口 |
-|------|--------|------|
-| API 网关 | `anynote-gateway` | 8080 |
-| 认证服务 | `anynote-auth` | 8083 |
-| 系统服务 | `anynote-modules-system` | 8091 |
-| 笔记服务 | `anynote-modules-note` | 18091 |
-| 文件服务 | `anynote-modules-file` | 8095 |
-| AI SSE 服务 | `anynote-modules-ai-nio` | 9065 |
-| 管理后台 | `anynote-modules-manage` | 18092 |
-| 通知服务 | `anynote-modules-notify` | 9066 |
-| 定时任务 | `anynote-modules-job` | 8093 |
-
-> **启动时间**：后端服务依赖 Nacos、Elasticsearch、RocketMQ 全部健康后才启动，Spring Cloud 注册约需 60–120 秒，健康检查 `start_period` 配置为 600 秒。
-
-### 3.1 全部重新打包并重建后端服务
-
-适用于修改了多个 `services/*` 模块、公共依赖，或需要确保所有容器都使用最新 JAR 的场景。
+### 3. 验证健康状态
 
 ```bash
-# 先重新打包全部后端服务，再统一重建镜像并启动
-cd services && mvn clean package -DskipTests && cd ..
-docker compose -f infra/docker-compose.yaml up -d --build
-```
-
-如果希望分两步执行：
-
-```bash
-cd services && mvn clean package -DskipTests && cd ..
-docker compose -f infra/docker-compose.yaml build
-docker compose -f infra/docker-compose.yaml up -d
-```
-
-### 3.2 启动前端容器
-
-当前可容器化启动的前端位于 `apps/web-legacy/`，镜像构建时需要指定后端网关地址。
-
-```bash
-# 1) 配置前端访问的 API 网关地址
-cd apps/web-legacy
-cp .env.example .env
-
-# 本机浏览器访问容器前端时，通常使用宿主机网关地址
-# NEXT_PUBLIC_BASE_URL=http://127.0.0.1:8080
-```
-
-确认 `.env` 中至少包含：
-
-```dotenv
-NEXT_PUBLIC_BASE_URL=http://127.0.0.1:8080
-```
-
-启动前端容器：
-
-```bash
-# 首次或依赖/源码变更时加 --build
-docker compose up -d --build
-
-# 查看状态
-docker compose ps
-```
-
-访问：`http://localhost:3000`
-
-停止前端容器：
-
-```bash
-docker compose down
-```
-
-### 4. 验证健康状态
-
-```bash
-# 查看所有服务状态
 docker compose -f infra/docker-compose.yaml ps
+# 所有服务 STATUS 应显示 healthy
 
-# 单独检查某个服务的 actuator 健康端点（以网关为例）
 curl --noproxy '*' -fsS http://127.0.0.1:8080/actuator/health | jq .
 ```
 
-所有服务 `STATUS` 显示 `healthy` 即为就绪。
-
-### 5. 仅停止后端服务（保留中间件）
-
-```bash
-docker compose -f infra/docker-compose.yaml stop \
-  anynote-gateway anynote-auth anynote-modules-system \
-  anynote-modules-note anynote-modules-file anynote-modules-ai-nio \
-  anynote-modules-manage anynote-modules-notify anynote-modules-job
-```
-
-### 6. 全部停止并清理
+### 4. 停止与清理
 
 ```bash
 # 停止全部容器
@@ -237,32 +127,19 @@ docker compose -f infra/docker-compose.yaml down
 docker compose -f infra/docker-compose.yaml down -v
 ```
 
-### 环境变量覆盖
+### 环境变量
 
-在 `infra/` 目录下创建 `.env` 文件可覆盖默认值（均有合理默认，本地开发通常无需修改）：
+在 `infra/` 目录下创建 `.env` 文件可覆盖默认值：
 
 ```dotenv
-# 镜像前缀（默认 anynote）
 APP_IMAGE_PREFIX=anynote
-
-# Spring Profile（默认 dev）
 SPRING_PROFILES_ACTIVE=dev
-
-# Nacos 命名空间
 NACOS_NAMESPACE=0587fa28-1301-43db-a7a1-599c00fc3f70
-
-# 数据库
 MYSQL_DATABASE=anynote
 MYSQL_APP_USER=anynote
 MYSQL_APP_PASSWORD=Anynote*1832
-
-# Redis 密码（默认空）
 REDIS_PASSWORD=
-
-# Python AI 服务地址（宿主机运行时使用默认值即可）
 AI_FASTAPI_ADDRESS=http://host.docker.internal:8000
-
-# JVM 参数
 JAVA_OPTS=-Xms256m -Xmx512m
 ```
 
@@ -274,120 +151,27 @@ JAVA_OPTS=-Xms256m -Xmx512m
 |------|------|
 | `pnpm dev` | 启动全部前端应用（Turborepo） |
 | `pnpm build` | 构建全部前端应用 |
-| `pnpm check` | Biome 格式化 + lint（自动修复） |
+| `pnpm check` | Biome 格式化 + lint |
 | `pnpm openapi:generate` | 从后端 Swagger 生成 TypeScript 类型 |
-| `pnpm services:build` | 构建全部 Java 服务（跳过测试） |
 | `cd services && mvn clean install -pl note -am -DskipTests` | 构建单个 Java 服务及其依赖 |
 
 ---
 
-## Git 工作流
+## API 文档
 
-### 分支模型
-
-```
-main          ← 稳定发布分支，每个 Phase 完成后合并，打版本 Tag
-  └── dev     ← 集成分支，Feature/Phase 分支合并目标
-        └── phase/<n>-<描述>   ← 每个重构阶段的独立分支
-        └── feat/<描述>        ← 新功能分支
-        └── fix/<描述>         ← Bug 修复分支
-```
-
-**规则：**
-- 直接向 `main` 提交仅限 merge commit，不做 feature 开发
-- `dev` 保持可运行状态；`phase/*` / `feat/*` 分支允许 WIP 提交
-- 每个 Phase 完成流程：`phase/*` → `dev`（`--no-ff`）→ `main`（`--no-ff`）→ Tag
-
-### Commit 格式（Conventional Commits）
-
-```
-<type>(<scope>): <简短描述>
-
-[可选正文]
-
-[Co-Authored-By: ...]
-```
-
-| type | 用途 |
-|------|------|
-| `feat` | 新功能 |
-| `fix` | Bug 修复 |
-| `refactor` | 重构（不改变外部行为） |
-| `docs` | 文档变更 |
-| `chore` | 构建脚本、依赖、配置 |
-| `test` | 测试相关 |
-| `perf` | 性能优化 |
-
-**示例：**
-```
-feat(note): 添加知识库分享链接功能
-
-fix(gateway): 修复 CORS 预检请求 401 问题
-
-refactor(auth): JWT 刷新逻辑提取为独立 Service
-
-chore: merge phase/5-frontend-rewrite → dev
-```
-
-### 版本 Tag 规范
-
-| Tag | 对应 Phase |
-|-----|-----------|
-| `v0.1.0` | Phase 0 — Monorepo 基础设施 |
-| `v0.2.0` | Phase 1 — OpenAPI Contract First |
-| `v0.3.0` | Phase 2 — Maven BOM 重构 |
-| `v0.4.0` | Phase 3 — Spring Boot 3 升级 |
-| `v0.5.0` | Phase 4 — 服务层重构 |
-| `v0.6.0` | Phase 5 — 前端完全重写（待完成） |
-| `v0.7.0` | Phase 6 — Python AI 服务现代化 |
-| `v1.0.0` | Phase 7 — OpenSpec 集成 |
-
----
-
-## API 开发流程（API-First）
-
-1. 在 `.claude/openspec/changes/` 创建变更提案文档（`YYYY-MM-DD-<描述>.md`）
-2. 后端实现接口，Controller 加 `@Operation` 注解
-3. 运行 `pnpm openapi:generate` 更新 TypeScript 类型
-4. 前端基于生成类型实现调用
-
-详见 [`openapi/WORKFLOW.md`](openapi/WORKFLOW.md)。
-
-**Swagger UI 地址（本地）：**
+Swagger UI 地址（本地启动后访问）：
 
 | 服务 | 地址 |
 |------|------|
-| 聚合文档 | http://localhost:8080/swagger-ui.html |
+| 聚合文档（网关） | http://localhost:8080/swagger-ui.html |
 | 认证服务 | http://localhost:8083/swagger-ui.html |
 | 系统服务 | http://localhost:8091/swagger-ui.html |
 | 笔记服务 | http://localhost:18091/swagger-ui.html |
 | 文件服务 | http://localhost:8095/swagger-ui.html |
-| AI 服务  | http://localhost:9065/swagger-ui.html |
+| AI 服务 | http://localhost:9065/swagger-ui.html |
 | Python AI | http://localhost:8000/docs |
 
----
-
-## 代码规范
-
-### Java
-
-- 包结构：`com.anynote.<module>.{controller, service, service/impl, mapper, model/{po,dto,vo}, config}`
-- 响应统一用 `ResData<T>` 包装；`code="00000"` 为成功
-- Feign Fallback 一律 `return ResData.error(ResCode.INNER_*_SERVICE_ERROR)`，不抛异常
-- 内部服务间调用须通过 `@InnerAuth` 验证 HMAC-SHA256 签名
-
-### 前端
-
-- 数据获取：TanStack Query（`use<X>Query` / `use<X>Mutation`）
-- API 调用只使用 `packages/api-client/src/` 下生成的函数，禁止手写 fetch/axios
-- 样式只用 Tailwind CSS，不写内联 style
-- 服务端组件（RSC）优先；需要交互的组件加 `'use client'`
-
-### Python
-
-- 类型注解用 Pydantic v2（`X | None` 代替 `Optional[X]`）
-- 配置通过 `core/config.py` 的 `Settings(BaseSettings)` 读取环境变量
-- 每个端点加 `tags`、`summary`、`responses` 注解
+API 开发遵循 API-First 流程，详见 [`openapi/WORKFLOW.md`](openapi/WORKFLOW.md)。
 
 ---
 
@@ -406,11 +190,45 @@ chore: merge phase/5-frontend-rewrite → dev
 
 ---
 
-## AI 编程助手
+## Git 工作流
 
-本项目对 **Claude Code** 和 **Codex** 均有上下文支持：
+### 分支模型
 
-- `.claude/context/backend.md` — 后端架构速查
-- `.claude/context/frontend.md` — 前端架构速查
-- `.claude/context/api-contracts.md` — API 契约规范
-- `AGENTS.md` — Codex 格式完整项目上下文
+```
+main          ← 稳定发布分支，每个 Phase 完成后合并，打版本 Tag
+  └── dev     ← 集成分支，Feature/Phase 分支合并目标
+        └── phase/<n>-<描述>   ← 每个重构阶段的独立分支
+        └── feat/<描述>        ← 新功能分支
+        └── fix/<描述>         ← Bug 修复分支
+```
+
+**规则：**
+- 直接向 `main` 提交仅限 merge commit
+- `dev` 保持可运行状态
+- Phase 完成流程：`phase/*` → `dev`（`--no-ff`）→ `main`（`--no-ff`）→ Tag
+
+### Commit 格式（Conventional Commits）
+
+```
+<type>(<scope>): <简短描述>
+```
+
+| type | 用途 |
+|------|------|
+| `feat` | 新功能 |
+| `fix` | Bug 修复 |
+| `refactor` | 重构 |
+| `docs` | 文档变更 |
+| `chore` | 构建/配置 |
+| `test` | 测试 |
+| `perf` | 性能优化 |
+
+---
+
+## 参与贡献
+
+详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## License
+
+[MIT](LICENSE)
