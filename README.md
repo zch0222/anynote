@@ -169,6 +169,43 @@ docker compose -f infra/docker-compose.yaml build
 docker compose -f infra/docker-compose.yaml up -d
 ```
 
+### 3.2 启动前端容器
+
+当前可容器化启动的前端位于 `apps/web-legacy/`，镜像构建时需要指定后端网关地址。
+
+```bash
+# 1) 配置前端访问的 API 网关地址
+cd apps/web-legacy
+cp .env.example .env
+
+# 本机浏览器访问容器前端时，通常使用宿主机网关地址
+# NEXT_PUBLIC_BASE_URL=http://127.0.0.1:8080
+```
+
+确认 `.env` 中至少包含：
+
+```dotenv
+NEXT_PUBLIC_BASE_URL=http://127.0.0.1:8080
+```
+
+启动前端容器：
+
+```bash
+# 首次或依赖/源码变更时加 --build
+docker compose up -d --build
+
+# 查看状态
+docker compose ps
+```
+
+访问：`http://localhost:3000`
+
+停止前端容器：
+
+```bash
+docker compose down
+```
+
 ### 4. 验证健康状态
 
 ```bash
