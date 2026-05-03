@@ -125,6 +125,7 @@
 
 - [ ] 移除兼容模块 `anynote-common-security`：MVC 服务改为直接依赖 `anynote-common-security-servlet`，Reactive 服务改为直接依赖 `anynote-common-security-reactive`，共享/API 模块仅依赖 `anynote-common-security-core`。
 - [ ] 清理 `gateway` 数据源自动配置触发链：拆除 `anynote-common-redis -> anynote-api-system -> mybatis-plus` 的传递依赖，避免网关通过共享配置和 JDBC classpath 误创建 DataSource。
+- [ ] 拆分 Nacos 公共配置中的数据库配置：将 `application-dev.yml` 里的 `spring.datasource` / MyBatis Plus 配置迁移到仅数据库服务导入的独立配置，避免 `gateway` 等无数据库模块导入公共配置时触发 JDBC/Druid 绑定。
 
 ---
 
