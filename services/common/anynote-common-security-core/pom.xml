@@ -6,47 +6,13 @@
         <artifactId>anynote-common</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <artifactId>anynote-common-security</artifactId>
+    <artifactId>anynote-common-security-core</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>com.anynote</groupId>
-            <artifactId>anynote-common-security-core</artifactId>
+            <artifactId>anynote-common-core</artifactId>
         </dependency>
-
-        <dependency>
-            <groupId>com.anynote</groupId>
-            <artifactId>anynote-common-security-servlet</artifactId>
-        </dependency>
-
-        <!-- Spring Web -->
-<!--        <dependency>-->
-<!--            <groupId>org.springframework</groupId>-->
-<!--            <artifactId>spring-webmvc</artifactId>-->
-<!--        </dependency>-->
-
-        <!-- Pull in the exact Spring Security modules used by this shared library.
-             Downstream services currently exclude spring-boot-starter-security. -->
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-config</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-web</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-crypto</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>javax.validation</groupId>
-            <artifactId>validation-api</artifactId>
-        </dependency>
-
 
         <dependency>
             <groupId>com.anynote</groupId>
@@ -65,17 +31,18 @@
         </dependency>
 
         <dependency>
-            <groupId>com.anynote</groupId>
-            <artifactId>anynote-common-core</artifactId>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
-
-
-
-        <!-- JWT -->
         <dependency>
             <groupId>com.auth0</groupId>
             <artifactId>java-jwt</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
         </dependency>
     </dependencies>
 
@@ -90,5 +57,4 @@
             </plugin>
         </plugins>
     </build>
-
 </project>

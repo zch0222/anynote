@@ -269,6 +269,24 @@
 
             <dependency>
                 <groupId>com.anynote</groupId>
+                <artifactId>anynote-common-security-core</artifactId>
+                <version>${anynote.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.anynote</groupId>
+                <artifactId>anynote-common-security-servlet</artifactId>
+                <version>${anynote.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.anynote</groupId>
+                <artifactId>anynote-common-security-reactive</artifactId>
+                <version>${anynote.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.anynote</groupId>
                 <artifactId>anynote-common-security</artifactId>
                 <version>${anynote.version}</version>
             </dependency>

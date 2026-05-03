@@ -1,11 +1,6 @@
 package com.anynote.common.security.utils;
 
-import com.anynote.core.constant.SecurityConstants;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
-
-import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 权限工具类
@@ -13,16 +8,6 @@ import jakarta.servlet.http.HttpServletRequest;
  * @author 称霸幼儿园
  */
 public class SecurityUtils {
-
-    public static String getAccessToken() {
-        if (RequestContextHolder.getRequestAttributes() != null) {
-            HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
-            String accessToken = request.getHeader(SecurityConstants.ACCESS_TOKEN);
-            return accessToken;
-        }
-        return null;
-    }
-
 
     /**
      * 生成 BCryptPasswordEncoder 密码

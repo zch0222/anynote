@@ -5,7 +5,6 @@ import com.anynote.common.redis.enums.CachePrefixEnum;
 import com.anynote.common.redis.service.RedisService;
 import com.anynote.common.security.enums.SecurityEnum;
 import com.anynote.common.security.properties.JWTTokenProperties;
-import com.anynote.common.security.utils.SecurityUtils;
 import com.anynote.core.exception.auth.TokenException;
 import com.anynote.core.utils.StringUtils;
 import com.anynote.core.web.enums.ResCode;
@@ -38,10 +37,12 @@ public class TokenUtil {
     @Autowired
     private RedisService redisService;
 
+    @Autowired(required = false)
+    private AccessTokenProvider accessTokenProvider;
+
     /**
      * 生成Token
      * @param loginUser 用户信息
-     * @param longTerm 是否是长期token
      * @return 生成的Token
      */
     public Token createToken(LoginUser loginUser) {
@@ -62,7 +63,7 @@ public class TokenUtil {
     }
 
     public LoginUser getLoginUser() {
-        String accessToken = SecurityUtils.getAccessToken();
+        String accessToken = accessTokenProvider == null ? null : accessTokenProvider.getAccessToken();
         LoginUser loginUser = getLoginUser(accessToken);
         checkLoginUser(loginUser);
         return loginUser;

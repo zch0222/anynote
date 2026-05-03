@@ -121,6 +121,11 @@
 - [x] 4.2 统一 REST 规范：/user/manageList→/user/list；banUser/unBanUser→{userId}/ban/{userId}/unban（路径参数化）；更新 RemoteUserService Feign + ManageController
 - [x] 4.3 HMAC 签名：HmacUtils + SecurityConstants 常量；FeignRequestInterceptor 添加签名头；InnerAuthAspect 验证 HMAC；ContextWebFilter 存储请求头到 Reactor 上下文；InnerAuthWebfluxAspect @Around + Mono.deferContextual 重写
 
+### 后续待办：安全模块兼容层清理
+
+- [ ] 移除兼容模块 `anynote-common-security`：MVC 服务改为直接依赖 `anynote-common-security-servlet`，Reactive 服务改为直接依赖 `anynote-common-security-reactive`，共享/API 模块仅依赖 `anynote-common-security-core`。
+- [ ] 清理 `gateway` 数据源自动配置触发链：拆除 `anynote-common-redis -> anynote-api-system -> mybatis-plus` 的传递依赖，避免网关通过共享配置和 JDBC classpath 误创建 DataSource。
+
 ---
 
 ## Phase 5：前端完全重写 `[ ]`
