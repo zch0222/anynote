@@ -22,7 +22,7 @@ spring:
 anynote:
   jwt-setting:
     tokenExpireTime: 10080
-    secret: yxlm
+    secret: ${JWT_SECRET:yxlm}
   data:
     rocketmq:
       note-task-topic: note_task_topic

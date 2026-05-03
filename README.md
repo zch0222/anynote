@@ -43,6 +43,29 @@ anynote/
 
 ## 快速启动
 
+### 0. 配置环境变量
+
+```bash
+cp infra/.env.example infra/.env
+```
+
+用编辑器打开 `infra/.env`，**至少修改以下项**再启动：
+
+| 变量 | 说明 | 风险 |
+|------|------|------|
+| `JWT_SECRET` | JWT 签名密钥，默认 `yxlm`（4字符，极弱） | 认证绕过 |
+| `XXL_JOB_ADMIN_ACCESSTOKEN` | 任务调度器通信 Token | 任务执行权限 |
+| `MYSQL_ROOT_PASSWORD` | MySQL root 密码 | 数据库 |
+| `MYSQL_APP_PASSWORD` | 应用账户密码 | 数据库 |
+| `MINIO_ROOT_PASSWORD` | 对象存储密码 | 文件存储 |
+
+生成安全的随机密钥：
+```bash
+openssl rand -hex 32
+```
+
+> **注意**：默认值仅供本机开发使用，禁止在对外暴露的环境中使用默认值。
+
 ### 1. 启动中间件
 
 ```bash
