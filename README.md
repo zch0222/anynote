@@ -150,6 +150,36 @@ docker compose -f infra/docker-compose.yaml down
 docker compose -f infra/docker-compose.yaml down -v
 ```
 
+### 5. Nginx 反向代理（对外暴露）
+
+所有容器端口均绑定 `127.0.0.1`，不直接对外暴露。生产环境通过 Nginx 统一转发：
+
+```
+外网 443/80
+  └── Nginx
+        ├── /api/aiNio/  →  127.0.0.1:8080  （SSE，关闭缓冲）
+        ├── /api/        →  127.0.0.1:8080  （普通 API）
+        └── /            →  127.0.0.1:3000  （前端）
+```
+
+配置模板见 [`infra/nginx/nginx.conf`](infra/nginx/nginx.conf)，复制后替换域名和证书路径即可。
+
+**SSE 关键配置**（`/api/aiNio/` 路由，含 AI 流式对话和语音转写状态推送）：
+
+```nginx
+location /api/aiNio/ {
+    proxy_pass          http://127.0.0.1:8080;
+    proxy_buffering     off;       # 必须：关闭缓冲，否则 SSE 数据流被批量缓存
+    proxy_cache         off;
+    proxy_read_timeout  3600s;     # SSE 连接持续时间较长
+    proxy_http_version  1.1;
+    proxy_set_header    Connection '';
+    add_header          X-Accel-Buffering no always;
+}
+```
+
+---
+
 ### 环境变量
 
 在 `infra/` 目录下创建 `.env` 文件可覆盖默认值：
