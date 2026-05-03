@@ -93,6 +93,144 @@ pnpm openapi:generate
 
 ---
 
+## Docker 编排启动
+
+> 适用场景：本地完整集成测试、CI/CD 验证、不想在宿主机安装 Java/Python 环境。
+
+### 前置要求
+
+- Docker >= 24 + Compose Plugin（`docker compose` 命令）
+- Maven（首次或代码变更时构建 JAR）
+
+### 1. 构建 Java 服务 JAR
+
+```bash
+# 在项目根目录执行，构建全部后端服务（跳过测试）
+cd services && mvn clean package -DskipTests && cd ..
+```
+
+> 输出位于各服务的 `target/*.jar`，Docker 镜像构建时直接 COPY。
+
+### 2. 启动中间件
+
+```bash
+docker compose -f infra/docker-compose-middleware.yaml up -d
+```
+
+包含：MySQL · Redis · Nacos · Elasticsearch · RocketMQ (namesrv + broker) · MinIO · Logstash · XXL-Job Admin
+
+等待所有中间件健康（约 60–90 秒）：
+
+```bash
+docker compose -f infra/docker-compose-middleware.yaml ps
+# 所有服务 STATUS 应显示 healthy
+```
+
+Nacos 控制台：`http://localhost:8848/nacos`（账密：`nacos / nacos`）
+
+### 3. 启动全栈（中间件 + 后端服务）
+
+```bash
+# 首次或镜像需要更新时加 --build；之后直接 up -d 即可
+docker compose -f infra/docker-compose.yaml up -d --build
+```
+
+此命令会同时启动中间件（若未运行）和以下 9 个后端服务：
+
+| 服务 | 容器名 | 端口 |
+|------|--------|------|
+| API 网关 | `anynote-gateway` | 8080 |
+| 认证服务 | `anynote-auth` | 8083 |
+| 系统服务 | `anynote-modules-system` | 8091 |
+| 笔记服务 | `anynote-modules-note` | 18091 |
+| 文件服务 | `anynote-modules-file` | 8095 |
+| AI SSE 服务 | `anynote-modules-ai-nio` | 9065 |
+| 管理后台 | `anynote-modules-manage` | 18092 |
+| 通知服务 | `anynote-modules-notify` | 9066 |
+| 定时任务 | `anynote-modules-job` | 8093 |
+
+> **启动时间**：后端服务依赖 Nacos、Elasticsearch、RocketMQ 全部健康后才启动，Spring Cloud 注册约需 60–120 秒，健康检查 `start_period` 配置为 600 秒。
+
+### 3.1 全部重新打包并重建后端服务
+
+适用于修改了多个 `services/*` 模块、公共依赖，或需要确保所有容器都使用最新 JAR 的场景。
+
+```bash
+# 先重新打包全部后端服务，再统一重建镜像并启动
+cd services && mvn clean package -DskipTests && cd ..
+docker compose -f infra/docker-compose.yaml up -d --build
+```
+
+如果希望分两步执行：
+
+```bash
+cd services && mvn clean package -DskipTests && cd ..
+docker compose -f infra/docker-compose.yaml build
+docker compose -f infra/docker-compose.yaml up -d
+```
+
+### 4. 验证健康状态
+
+```bash
+# 查看所有服务状态
+docker compose -f infra/docker-compose.yaml ps
+
+# 单独检查某个服务的 actuator 健康端点（以网关为例）
+curl --noproxy '*' -fsS http://127.0.0.1:8080/actuator/health | jq .
+```
+
+所有服务 `STATUS` 显示 `healthy` 即为就绪。
+
+### 5. 仅停止后端服务（保留中间件）
+
+```bash
+docker compose -f infra/docker-compose.yaml stop \
+  anynote-gateway anynote-auth anynote-modules-system \
+  anynote-modules-note anynote-modules-file anynote-modules-ai-nio \
+  anynote-modules-manage anynote-modules-notify anynote-modules-job
+```
+
+### 6. 全部停止并清理
+
+```bash
+# 停止全部容器
+docker compose -f infra/docker-compose.yaml down
+
+# 同时删除数据卷（慎用，会清空 MySQL / ES / MinIO 数据）
+docker compose -f infra/docker-compose.yaml down -v
+```
+
+### 环境变量覆盖
+
+在 `infra/` 目录下创建 `.env` 文件可覆盖默认值（均有合理默认，本地开发通常无需修改）：
+
+```dotenv
+# 镜像前缀（默认 anynote）
+APP_IMAGE_PREFIX=anynote
+
+# Spring Profile（默认 dev）
+SPRING_PROFILES_ACTIVE=dev
+
+# Nacos 命名空间
+NACOS_NAMESPACE=0587fa28-1301-43db-a7a1-599c00fc3f70
+
+# 数据库
+MYSQL_DATABASE=anynote
+MYSQL_APP_USER=anynote
+MYSQL_APP_PASSWORD=Anynote*1832
+
+# Redis 密码（默认空）
+REDIS_PASSWORD=
+
+# Python AI 服务地址（宿主机运行时使用默认值即可）
+AI_FASTAPI_ADDRESS=http://host.docker.internal:8000
+
+# JVM 参数
+JAVA_OPTS=-Xms256m -Xmx512m
+```
+
+---
+
 ## 常用命令速查
 
 | 命令 | 说明 |
