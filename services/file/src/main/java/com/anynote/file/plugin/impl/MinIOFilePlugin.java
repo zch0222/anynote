@@ -20,7 +20,6 @@ import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.commons.CommonsMultipartFile;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -77,7 +76,7 @@ public class MinIOFilePlugin implements FilePlugin {
     }
 
     @Override
-    public String multipartFileUpload(CommonsMultipartFile file, String path, String fileName) {
+    public String multipartFileUpload(MultipartFile file, String path, String fileName) {
         return "";
     }
 

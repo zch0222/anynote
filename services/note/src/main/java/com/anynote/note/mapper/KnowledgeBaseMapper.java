@@ -5,7 +5,7 @@ import com.anynote.note.api.model.po.NoteKnowledgeBase;
 import com.anynote.note.model.bo.KnowledgeBaseQueryParam;
 import com.anynote.note.api.model.dto.NoteKnowledgeBaseDTO;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import io.swagger.models.auth.In;
+
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

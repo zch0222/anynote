@@ -9,7 +9,7 @@ import com.anynote.file.api.model.po.FilePO;
 import com.anynote.file.api.model.vo.*;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.multipart.commons.CommonsMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.util.List;
@@ -22,7 +22,7 @@ import java.util.Set;
 public interface FileService extends IService<FilePO> {
 
 
-    public FilePO upload(CommonsMultipartFile file, String path, Long userId, String uploadId, Integer source);
+    public FilePO upload(MultipartFile file, String path, Long userId, String uploadId, Integer source);
 
 
     public UploadProgress getFileUploadProgress(String uploadId);

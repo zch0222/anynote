@@ -120,7 +120,8 @@ services:
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
-      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      xpack.ml.enabled: "false"
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms384m -Xmx384m -XX:MaxDirectMemorySize=128m}
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${ELASTICSEARCH_PORT:-9200}:9200"
@@ -161,7 +162,7 @@ services:
     container_name: anynote-rocketmq-broker
     user: root
     environment:
-      JAVA_OPT_EXT: -Xms512m -Xmx512m -Xmn256m
+      JAVA_OPT_EXT: ${ROCKETMQ_BROKER_JAVA_OPT_EXT:--Xms256m -Xmx256m -Xmn128m -XX:MaxDirectMemorySize=128m}
       # broker 注册到 namesrv 的可达地址（brokerIP1）
       # 必须是其他容器/客户端能解析并连通的地址，默认走 docker service 名
       ROCKETMQ_BROKER_ADVERTISE_IP: ${ROCKETMQ_BROKER_ADVERTISE_IP:-rocketmq-broker}

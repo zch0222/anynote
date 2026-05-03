@@ -3,6 +3,8 @@ spring:
     url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:anynote}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
     username: ${MYSQL_APP_USER:anynote}
     password: ${MYSQL_APP_PASSWORD:Anynote*1832}
+  elasticsearch:
+    uris: http://${ELASTICSEARCH_HOST:elasticsearch}:${ELASTICSEARCH_PORT:9200}
   redis:
     host: ${REDIS_HOST:redis}
     port: ${REDIS_PORT:6379}

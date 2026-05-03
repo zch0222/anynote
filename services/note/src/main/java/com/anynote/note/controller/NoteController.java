@@ -4,6 +4,7 @@ import com.anynote.common.datascope.annotation.DataScope;
 import com.anynote.common.elasticsearch.model.EsNoteIndex;
 import com.anynote.common.elasticsearch.model.bo.SearchPageBean;
 import com.anynote.core.constant.ErrorMessageConstants;
+import com.anynote.core.exception.BusinessException;
 import com.anynote.core.exception.user.UserParamException;
 import com.anynote.core.utils.ResUtil;
 import com.anynote.core.utils.StringUtils;
