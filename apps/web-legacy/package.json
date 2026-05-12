@@ -48,7 +48,7 @@
     "echarts": "^5.4.3",
     "echarts-for-react": "^3.0.2",
     "esdk-obs-nodejs": "^3.23.11",
-    "framer-motion": "^10.16.12",
+    "framer-motion": "^10.18.0",
     "github-markdown-css": "^5.4.0",
     "js-cookie": "^3.0.5",
     "milkdown-plugin-shiki": "^0.1.1",
