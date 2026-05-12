@@ -183,14 +183,18 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 
 ## 提交与分支
 
-- 分支模型：`main`（保护）← `dev` ← `phase/N-*` / `fix/*` / `feat/*`
-- 不直接推 `main`，phase 合并到 `dev` 验收后再合 `main` 打 Tag（`v0.X.0`）
-- Commit 格式 Conventional Commits：`feat(note): ...` / `fix(gateway): ...` / `refactor(ai): ...` / `chore(bom): ...`
-- scope 取模块名（`gateway` / `auth` / `system` / `note` / `file` / `ai` / `notify` / `web` / `web-legacy` / `api-client` / `ai-service` / `bom` / `infra` / `openapi`）
-- 跨语言改动**不要混进同一个 commit**（一次只改一个 service 或一个 package）
-- **不要写 `Co-Authored-By` / `Co-authored-by` 等 trailer**（包括 AI 助手署名）。本项目所有提交保持单作者，不论是否由 Claude Code / Codex 协助生成。
+**Git 规约的单一来源是 [`README.md` 的「Git 工作流」节](./README.md#git-工作流)**。提交前请遵守该节定义的：
 
-## 禁止清单（速查）
+- 分支模型（`main` ← `dev` ← `phase/*` / `feat/*` / `fix/*` / `docs/*` / `chore/*`）
+- Conventional Commits 格式 + type/scope 取值
+- 提交粒度（一次只动一个 service / package，跨语言不混）
+- Commit message 约定（**禁止 `Co-Authored-By` trailer**，包含 AI 助手署名）
+- 版本 Tag 策略（`v0.X.0` 对应 Phase 完成点）
+- 禁止操作清单（不直接 push `main`、不 force push、不提交生成文件 等）
+
+## 禁止清单（代码与架构）
+
+> Git 操作禁忌见 [`README.md` Git 工作流 → 禁止操作清单](./README.md#git-工作流)。
 
 - ❌ 手改 `packages/api-client/src/` 下任何生成文件
 - ❌ Controller 用旧的 Springfox 注解（`@Api` / `@ApiOperation` / `@ApiModelProperty`）
@@ -200,6 +204,3 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - ❌ 新前端用 Milkdown / Wangeditor / Vditor / Muya（统一 TipTap）
 - ❌ 前端手写 fetch / axios 直调后端（必须走 `@anynote/api-client` + BFF 代理）
 - ❌ 前端把 token 写到 `document.cookie` / localStorage / sessionStorage（必须 httpOnly Cookie）
-- ❌ 跨语言混合 commit（Java 改动和前端改动分开提）
-- ❌ 直接 push `main` 或 force push
-- ❌ 在 commit message 中写 `Co-Authored-By:` trailer（包括 AI 助手署名）

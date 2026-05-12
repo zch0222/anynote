@@ -355,36 +355,146 @@ API 开发遵循 API-First 流程，详见 [`openapi/WORKFLOW.md`](openapi/WORKF
 
 ## Git 工作流
 
+> **本节是本项目 Git 规约的单一来源**。其他文档（`CLAUDE.md` 等）均引用本节，不另行维护。
+
 ### 分支模型
 
 ```
 main          ← 稳定发布分支，每个 Phase 完成后合并，打版本 Tag
-  └── dev     ← 集成分支，Feature/Phase 分支合并目标
-        └── phase/<n>-<描述>   ← 每个重构阶段的独立分支
-        └── feat/<描述>        ← 新功能分支
-        └── fix/<描述>         ← Bug 修复分支
+  └── dev     ← 集成分支，所有 topic 分支合并目标
+        ├── phase/<n>-<描述>   ← 每个重构阶段的独立分支
+        ├── feat/<描述>        ← 新功能分支
+        ├── fix/<描述>         ← Bug 修复分支
+        ├── docs/<描述>        ← 文档变更分支
+        └── chore/<描述>       ← 构建 / 依赖 / 配置变更分支
 ```
 
 **规则：**
-- 直接向 `main` 提交仅限 merge commit
-- `dev` 保持可运行状态
-- Phase 完成流程：`phase/*` → `dev`（`--no-ff`）→ `main`（`--no-ff`）→ Tag
+- `main` 受保护，**禁止直接 push、禁止 force push**；仅接受来自 `dev` 的 merge commit
+- `dev` 保持可运行状态；topic 分支生命周期短，合并后立即删除
+- Topic 分支均从 `dev` 切出；完成后 `--no-ff` 合并回 `dev`
+- Phase 完成流程：`phase/<n>` → `dev`（`--no-ff`）→ `main`（`--no-ff`）→ Tag
 
 ### Commit 格式（Conventional Commits）
 
 ```
-<type>(<scope>): <简短描述>
+<type>(<scope>): <简短描述（命令式、不超过 70 字符）>
+
+<可选 body：解释 why 与影响>
+<可选 footer：BREAKING CHANGE / Closes #issue>
 ```
+
+**type 取值**
 
 | type | 用途 |
 |------|------|
 | `feat` | 新功能 |
 | `fix` | Bug 修复 |
-| `refactor` | 重构 |
+| `refactor` | 重构（不改外部行为） |
 | `docs` | 文档变更 |
-| `chore` | 构建/配置 |
-| `test` | 测试 |
+| `chore` | 构建 / 依赖 / 目录调整 |
+| `test` | 新增或修改测试 |
 | `perf` | 性能优化 |
+| `ci` | CI / CD 配置 |
+
+**scope 取值**（对应模块或顶层目录）
+
+```
+后端服务：gateway · auth · system · note · file · ai · notify · job · manage
+共享：    bom · common · api
+前端：    web · web-legacy · api-client · ui
+Python：  ai-service
+基础设施：infra · openapi · docs
+```
+
+scope 可省略（如纯顶层文档变更），但有具体作用域时必须填。
+
+### 提交粒度
+
+- **一次 commit 只动一个 service 或一个 package**，跨语言改动**不要混进同一个 commit**（Java 改动和前端改动分开提）
+- 自动生成的文件（如 `packages/api-client/src/`）不提交，由 CI 生成
+- topic 分支内允许 WIP commit，合并到 `dev` 前用 `git rebase -i` 整理为清晰原子 commit
+
+### Commit Message 约定
+
+- **不写 `Co-Authored-By:` / `Co-authored-by:` trailer**——本项目所有 commit 保持单作者，无论是否由 AI 助手（Claude Code / Codex 等）协助生成
+- body / footer 解释 *why* 与影响，不重复 *what*（diff 已经表达 what）
+- 破坏性变更在 footer 写 `BREAKING CHANGE: <说明>`
+
+**示例**
+
+```bash
+git commit -m "refactor(note): migrate javax.* to jakarta.* namespace"
+git commit -m "feat(web): implement httpOnly cookie auth via BFF route"
+git commit -m "chore(bom): upgrade Spring Boot to 3.3.4, Spring Cloud to 2023.0.3"
+
+# 破坏性变更
+git commit -m "refactor(ai): merge ai + ai-nio into unified services/ai module
+
+BREAKING CHANGE: port changed from 9210 to 9065, update Nacos route config"
+```
+
+### 版本 Tag 策略
+
+`main` 每次合并对应一个 Phase 验收点，按语义化版本打 Tag：
+
+```
+v0.1.0 ← Phase 0 完成（Monorepo 基础设施）
+v0.2.0 ← Phase 1 完成（OpenAPI Contract）
+v0.3.0 ← Phase 2 完成（Maven BOM）
+v0.4.0 ← Phase 3 完成（Spring Boot 3 升级）
+v0.5.0 ← Phase 4 完成（服务层重构）
+v0.6.0 ← Phase 5 完成（前端重写）
+v0.7.0 ← Phase 6 完成（Python AI 现代化）
+v1.0.0 ← Phase 7 完成（全量验收）
+```
+
+非 Phase 节点的 `dev → main` 合并不强制打 Tag。打 Tag 命令：
+
+```bash
+git tag -a v0.X.0 -m "Phase X: <简短描述> complete"
+git push origin v0.X.0
+```
+
+### 日常工作流速查
+
+```bash
+# 1. 开始一个 topic
+git checkout dev && git pull --ff-only origin dev
+git checkout -b feat/<描述>          # 或 fix/* / docs/* / chore/* / phase/*
+
+# 2. 原子提交
+git add <具体文件>                    # 不用 git add . 或 -A
+git commit -m "feat(<scope>): ..."
+
+# 3. 中途同步 dev（多人协作时）
+git fetch origin && git rebase origin/dev
+
+# 4. 合并回 dev
+git checkout dev
+git merge --no-ff feat/<描述> -m "chore: merge feat/<描述> → dev"
+git push origin dev
+
+# 5. 清理 topic 分支
+git branch -d feat/<描述>
+git push origin --delete feat/<描述>   # 若已推送远端
+
+# 6. Phase 完成发布到 main
+git checkout main
+git merge --no-ff dev -m "release: v0.X.0 <Phase 描述> complete"
+git tag -a v0.X.0 -m "Phase X complete"
+git push origin main --tags
+```
+
+### 禁止操作清单
+
+- ❌ 直接 push `main` 或对 `main` 做 force push
+- ❌ 对已 push 的公共分支（`dev` / `main`）做 history 改写（`rebase`、`reset --hard`、`commit --amend`）
+- ❌ 跳过钩子（`--no-verify`）或绕过签名（`--no-gpg-sign`）
+- ❌ commit message 含 `Co-Authored-By:` trailer
+- ❌ 跨语言混合 commit（Java + 前端 / Python 改动放同一个 commit）
+- ❌ 用 `git add .` / `git add -A` 整目录批量暂存（容易混入 `.env`、构建产物）
+- ❌ 提交自动生成文件（`packages/api-client/src/*`、`*.class`、`target/`、`.next/`、`__pycache__/`）
 
 ---
 
