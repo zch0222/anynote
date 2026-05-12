@@ -9,11 +9,11 @@
 当前项目不是把全部鉴权都放在 Spring Security 过滤链里，而是分成了三层：
 
 1. 网关入口鉴权
-   - 入口在 [services/gateway/src/main/java/com/anynote/gateway/filter/AuthFilter.java](/Users/zch/code/anynote/anynote/services/gateway/src/main/java/com/anynote/gateway/filter/AuthFilter.java)
+   - 入口在 [services/gateway/src/main/java/com/anynote/gateway/filter/AuthFilter.java](../services/gateway/src/main/java/com/anynote/gateway/filter/AuthFilter.java)
    - 作用：
      - 白名单路径直接放行
      - 非白名单路径强制校验 `ACCESS_TOKEN`
-     - 通过 [TokenUtil.java](/Users/zch/code/anynote/anynote/services/common/anynote-common-security/src/main/java/com/anynote/common/security/token/TokenUtil.java) 解析 JWT 并回 Redis 取登录态
+     - 通过 [TokenUtil.java](../services/common/anynote-common-security-core/src/main/java/com/anynote/common/security/token/TokenUtil.java) 解析 JWT 并回 Redis 取登录态
      - 管理端 URL 再追加管理员角色校验
      - 将 `ACCESS_TOKEN`、`DETAILS_USER_ID` 透传到下游服务
 
@@ -30,9 +30,9 @@
 3. 内部服务调用校验
    - 主要依赖 `@InnerAuth`
    - Servlet 侧切面：
-     - [InnerAuthAspect.java](/Users/zch/code/anynote/anynote/services/common/anynote-common-security/src/main/java/com/anynote/common/security/aspect/InnerAuthAspect.java)
+     - [InnerAuthAspect.java](../services/common/anynote-common-security-servlet/src/main/java/com/anynote/common/security/aspect/InnerAuthAspect.java)
    - WebFlux 侧切面：
-     - [InnerAuthWebfluxAspect.java](/Users/zch/code/anynote/anynote/services/common/anynote-common-security/src/main/java/com/anynote/common/security/aspect/InnerAuthWebfluxAspect.java)
+     - [InnerAuthWebfluxAspect.java](../services/common/anynote-common-security-reactive/src/main/java/com/anynote/common/security/aspect/InnerAuthWebfluxAspect.java)
    - 作用：
      - 校验 `FROM_SOURCE=INNER`
      - 校验 HMAC 签名
@@ -43,7 +43,7 @@
 ### `SecurityConfig`
 
 文件：
-- [services/common/anynote-common-security/src/main/java/com/anynote/common/security/config/SecurityConfig.java](/Users/zch/code/anynote/anynote/services/common/anynote-common-security/src/main/java/com/anynote/common/security/config/SecurityConfig.java)
+- [services/common/anynote-common-security-servlet/src/main/java/com/anynote/common/security/config/SecurityConfig.java](../services/common/anynote-common-security-servlet/src/main/java/com/anynote/common/security/config/SecurityConfig.java)
 
 职责：
 - 仅在 Servlet/MVC 服务生效
@@ -58,7 +58,7 @@
 ### `ReactiveSecurityConfig`
 
 文件：
-- [services/common/anynote-common-security/src/main/java/com/anynote/common/security/config/ReactiveSecurityConfig.java](/Users/zch/code/anynote/anynote/services/common/anynote-common-security/src/main/java/com/anynote/common/security/config/ReactiveSecurityConfig.java)
+- [services/common/anynote-common-security-reactive/src/main/java/com/anynote/common/security/config/ReactiveSecurityConfig.java](../services/common/anynote-common-security-reactive/src/main/java/com/anynote/common/security/config/ReactiveSecurityConfig.java)
 
 职责：
 - 仅在 WebFlux 服务生效
@@ -74,7 +74,7 @@
 ### 网关自定义安全链
 
 文件：
-- [services/gateway/src/main/java/com/anynote/gateway/security/SecurityConfig.java](/Users/zch/code/anynote/anynote/services/gateway/src/main/java/com/anynote/gateway/security/SecurityConfig.java)
+- [services/gateway/src/main/java/com/anynote/gateway/security/SecurityConfig.java](../services/gateway/src/main/java/com/anynote/gateway/security/SecurityConfig.java)
 
 职责：
 - 给网关自己提供 `SecurityWebFilterChain`
@@ -93,7 +93,7 @@
 ### 文档聚合
 
 网关聚合了多个服务的 OpenAPI 文档：
-- [services/gateway/src/main/resources/application.yml](/Users/zch/code/anynote/anynote/services/gateway/src/main/resources/application.yml)
+- [services/gateway/src/main/resources/application.yml](../services/gateway/src/main/resources/application.yml)
 
 当前聚合服务包括：
 - `auth`
@@ -106,7 +106,7 @@
 ### 白名单
 
 白名单由 `security.ignore.whites` 提供：
-- [SecurityIgnoreProperties.java](/Users/zch/code/anynote/anynote/services/gateway/src/main/java/com/anynote/gateway/properties/SecurityIgnoreProperties.java)
+- [SecurityIgnoreProperties.java](../services/gateway/src/main/java/com/anynote/gateway/properties/SecurityIgnoreProperties.java)
 
 说明：
 - 白名单具体值不在仓库静态文件里，而是运行时配置
@@ -115,7 +115,7 @@
 ### 管理端 URL 限制
 
 管理端 URL 规则来自 `security.manage.urls`：
-- [AuthFilter.java](/Users/zch/code/anynote/anynote/services/gateway/src/main/java/com/anynote/gateway/filter/AuthFilter.java)
+- [AuthFilter.java](../services/gateway/src/main/java/com/anynote/gateway/filter/AuthFilter.java)
 
 说明：
 - 命中该规则的请求，即使 token 有效，也还要满足管理员角色校验
@@ -139,8 +139,8 @@
 ### gateway
 
 关键文件：
-- [AuthFilter.java](/Users/zch/code/anynote/anynote/services/gateway/src/main/java/com/anynote/gateway/filter/AuthFilter.java)
-- [SecurityConfig.java](/Users/zch/code/anynote/anynote/services/gateway/src/main/java/com/anynote/gateway/security/SecurityConfig.java)
+- [AuthFilter.java](../services/gateway/src/main/java/com/anynote/gateway/filter/AuthFilter.java)
+- [SecurityConfig.java](../services/gateway/src/main/java/com/anynote/gateway/security/SecurityConfig.java)
 
 特点：
 - Spring Security 链默认放行
@@ -150,8 +150,8 @@
 ### auth
 
 关键文件：
-- [TokenController.java](/Users/zch/code/anynote/anynote/services/auth/src/main/java/com/anynote/auth/controller/TokenController.java)
-- [TokenUtil.java](/Users/zch/code/anynote/anynote/services/common/anynote-common-security/src/main/java/com/anynote/common/security/token/TokenUtil.java)
+- [TokenController.java](../services/auth/src/main/java/com/anynote/auth/controller/TokenController.java)
+- [TokenUtil.java](../services/common/anynote-common-security-core/src/main/java/com/anynote/common/security/token/TokenUtil.java)
 
 特点：
 - 负责登录、发 token、刷新 token
@@ -160,9 +160,9 @@
 ### system
 
 关键文件：
-- [SysUserController.java](/Users/zch/code/anynote/anynote/services/system/src/main/java/com/anynote/system/controller/SysUserController.java)
-- [SysConfigController.java](/Users/zch/code/anynote/anynote/services/system/src/main/java/com/anynote/system/controller/SysConfigController.java)
-- [SysPermissionRuleController.java](/Users/zch/code/anynote/anynote/services/system/src/main/java/com/anynote/system/controller/SysPermissionRuleController.java)
+- [SysUserController.java](../services/system/src/main/java/com/anynote/system/controller/SysUserController.java)
+- [SysConfigController.java](../services/system/src/main/java/com/anynote/system/controller/SysConfigController.java)
+- [SysPermissionRuleController.java](../services/system/src/main/java/com/anynote/system/controller/SysPermissionRuleController.java)
 
 特点：
 - 多个内部接口显式使用 `@InnerAuth`
@@ -172,9 +172,9 @@
 ### note
 
 关键文件：
-- [KnowledgeBaseController.java](/Users/zch/code/anynote/anynote/services/note/src/main/java/com/anynote/note/controller/KnowledgeBaseController.java)
-- [DocController.java](/Users/zch/code/anynote/anynote/services/note/src/main/java/com/anynote/note/controller/DocController.java)
-- [MoocController.java](/Users/zch/code/anynote/anynote/services/note/src/main/java/com/anynote/note/controller/MoocController.java)
+- [KnowledgeBaseController.java](../services/note/src/main/java/com/anynote/note/controller/KnowledgeBaseController.java)
+- [DocController.java](../services/note/src/main/java/com/anynote/note/controller/DocController.java)
+- [MoocController.java](../services/note/src/main/java/com/anynote/note/controller/MoocController.java)
 
 特点：
 - 是权限切面最密集的服务之一
@@ -184,7 +184,7 @@
 ### file
 
 关键文件：
-- [FileController.java](/Users/zch/code/anynote/anynote/services/file/src/main/java/com/anynote/file/controller/FileController.java)
+- [FileController.java](../services/file/src/main/java/com/anynote/file/controller/FileController.java)
 
 特点：
 - 控制器中多个入口直接标注 `@InnerAuth`
@@ -194,9 +194,9 @@
 ### ai
 
 关键文件：
-- [ChatController.java](/Users/zch/code/anynote/anynote/services/ai/src/main/java/com/anynote/ai/nio/controller/ChatController.java)
-- [WhisperController.java](/Users/zch/code/anynote/anynote/services/ai/src/main/java/com/anynote/ai/nio/controller/WhisperController.java)
-- [ContextWebFilter.java](/Users/zch/code/anynote/anynote/services/common/anynote-common-security/src/main/java/com/anynote/common/security/filter/webflux/ContextWebFilter.java)
+- [ChatController.java](../services/ai/src/main/java/com/anynote/ai/nio/controller/ChatController.java)
+- [WhisperController.java](../services/ai/src/main/java/com/anynote/ai/nio/controller/WhisperController.java)
+- [ContextWebFilter.java](../services/common/anynote-common-security-reactive/src/main/java/com/anynote/common/security/filter/webflux/ContextWebFilter.java)
 
 特点：
 - 依赖 WebFlux 上下文传递 token 与用户信息
@@ -206,8 +206,8 @@
 ### notify
 
 关键文件：
-- [NoticeController.java](/Users/zch/code/anynote/anynote/services/notify/src/main/java/com/anynote/notify/controller/NoticeController.java)
-- [NotificationController.java](/Users/zch/code/anynote/anynote/services/notify/src/main/java/com/anynote/notify/controller/NotificationController.java)
+- [NoticeController.java](../services/notify/src/main/java/com/anynote/notify/controller/NoticeController.java)
+- [NotificationController.java](../services/notify/src/main/java/com/anynote/notify/controller/NotificationController.java)
 
 特点：
 - 当前 reactive 兜底安全链是 `permitAll`
@@ -216,7 +216,7 @@
 ### job
 
 关键文件：
-- [MoocJobController.java](/Users/zch/code/anynote/anynote/services/job/src/main/java/com/anynote/controller/MoocJobController.java)
+- [MoocJobController.java](../services/job/src/main/java/com/anynote/controller/MoocJobController.java)
 
 特点：
 - 更偏任务执行器，不应作为通用外部服务暴露
@@ -225,8 +225,8 @@
 ### manage
 
 关键文件：
-- [ManageUserController.java](/Users/zch/code/anynote/anynote/services/manage/src/main/java/com/anynote/manage/controller/ManageUserController.java)
-- [ManageCacheController.java](/Users/zch/code/anynote/anynote/services/manage/src/main/java/com/anynote/manage/controller/ManageCacheController.java)
+- [ManageUserController.java](../services/manage/src/main/java/com/anynote/manage/controller/ManageUserController.java)
+- [ManageCacheController.java](../services/manage/src/main/java/com/anynote/manage/controller/ManageCacheController.java)
 
 特点：
 - 当前“管理端鉴权”主要依赖网关 `security.manage.urls` 规则
