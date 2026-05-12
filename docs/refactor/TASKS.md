@@ -1,18 +1,18 @@
 # Anynote 重构任务进度清单
 
 > 更新时间：2026-05-02  
-> 执行依据：REFACTOR_PLAN.md  
-> 项目根目录：`/Users/zch/code/anynote/anynote`  
-> 源码位置：`/Users/zch/code/anynote/{Anynote-Cloud, anynote-next-web-dev, anynote-langchain}`
+> 执行依据：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md)  
+> 项目根目录：本仓库根（以下命令均假设在项目根执行）  
+> 历史源码位置：`Anynote-Cloud/` · `anynote-next-web-dev/` · `anynote-langchain/`（Phase 0 已迁入 `services/` · `apps/web-legacy/` · `ai-service/`）
 
 ---
 
 ## 会话中断恢复指引
 
-1. 打开 `/Users/zch/code/anynote/anynote/TASKS.md` 查看当前进度
+1. 打开 `docs/refactor/TASKS.md`（本文件）查看当前进度
 2. 找到最后一个 `[IN PROGRESS]` 或下一个 `[ ]` 任务
-3. 执行 `git -C /Users/zch/code/anynote/anynote log --oneline -10` 确认 git 状态
-4. 执行 `git -C /Users/zch/code/anynote/anynote branch -a` 确认当前分支
+3. 在项目根执行 `git log --oneline -10` 确认 git 状态
+4. 在项目根执行 `git branch -a` 确认当前分支
 5. 继续未完成的任务
 
 ---
@@ -23,7 +23,7 @@
 **完成后打 Tag**：`v0.1.0`
 
 ### 0-Git：仓库初始化
-- [x] 在 `/Users/zch/code/anynote/anynote` 执行 `git init`
+- [x] 在项目根执行 `git init`
 - [x] 创建根 `.gitignore`（覆盖 Java/Node/Python/IDE/生成文件）
 - [x] 提交 .gitignore 作为首个 commit（`main` 分支）
 - [x] 创建并切换到 `dev` 分支
