@@ -5,6 +5,7 @@ import com.anynote.file.api.model.bo.ObjectURL;
 import com.anynote.file.api.model.bo.UploadProgress;
 import com.anynote.file.api.model.dto.CompleteUploadDTO;
 import com.anynote.file.api.model.dto.DownloadObjectDTO;
+import com.anynote.file.api.model.dto.PresignPutUploadDTO;
 import com.anynote.file.api.model.po.FilePO;
 import com.anynote.file.api.model.vo.*;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -26,6 +27,13 @@ public interface FileService extends IService<FilePO> {
 
 
     public UploadProgress getFileUploadProgress(String uploadId);
+
+    /**
+     * 申请对象存储单文件直传 PUT 预签名 URL。前端拿到 URL 后直接对 OSS PUT 文件内容，
+     * 跳过后端字节流转发，适合大文件 / 图片场景。
+     * 当前实现仅支持 MinIO，HuaweiOBS 暂不支持（仍使用现有 createHuaweiOBSTemporarySignature）。
+     */
+    public PresignPutUploadVO presignPutUpload(PresignPutUploadDTO dto);
 
     public HuaweiOBSTemporarySignature createHuaweiOBSTemporarySignature(String path, String fileName,
                                                                          Long expireSeconds, String contentType,

@@ -13,6 +13,9 @@ import com.anynote.core.utils.file.FileUtils;
 import com.anynote.file.api.model.bo.*;
 import com.anynote.file.api.model.dto.CompleteUploadDTO;
 import com.anynote.file.api.model.dto.DownloadObjectDTO;
+import com.anynote.file.api.model.dto.PresignPutUploadDTO;
+import com.anynote.file.api.enums.OSSSignatureType;
+import com.anynote.file.enums.OssTypeEnum;
 import com.anynote.file.api.model.po.FilePO;
 import com.anynote.file.api.model.vo.*;
 import com.anynote.file.factory.FilePluginFactory;
@@ -100,6 +103,35 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
     @Override
     public UploadProgress getFileUploadProgress(String uploadId) {
         return redisService.getCacheObject(CacheConstants.FILE_UPLOAD_PROGRESS_KEY + uploadId);
+    }
+
+    @Override
+    public PresignPutUploadVO presignPutUpload(PresignPutUploadDTO dto) {
+        int expireSeconds = dto.getExpireSeconds() == null || dto.getExpireSeconds() <= 0
+                ? 3600
+                : dto.getExpireSeconds();
+        String path = dto.getPath().endsWith("/") ? dto.getPath() : dto.getPath() + "/";
+        String objectName = path + dto.getFileName();
+
+        FilePlugin filePlugin = filePluginFactory.filePlugin();
+        OssTypeEnum ossType = filePlugin.getPluginOssType();
+        if (ossType != OssTypeEnum.MIN_IO) {
+            throw new BusinessException("当前对象存储不支持单文件 PUT 直传（仅 MinIO 支持），请改用对应专用接口");
+        }
+
+        OSSSignature signature = filePlugin.getOssSignature(expireSeconds, objectName);
+        if (signature == null || signature.getCredentials() == null
+                || !(signature.getCredentials() instanceof MinIOSignatureData)) {
+            throw new BusinessException("生成预签名 URL 失败");
+        }
+        String uploadUrl = ((MinIOSignatureData) signature.getCredentials()).getUrl();
+
+        return PresignPutUploadVO.builder()
+                .ossType(ossType.name())
+                .uploadUrl(uploadUrl)
+                .objectName(objectName)
+                .expiresAtMs(System.currentTimeMillis() + expireSeconds * 1000L)
+                .build();
     }
 
     @Override
