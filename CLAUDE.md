@@ -37,11 +37,16 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 
 ### 开发环境启动（docker compose）
 
-**Git 规约和本节启动步骤的单一来源都在 [`README.md`](./README.md)，本文件只列要点 + 引用**，避免双份维护。具体步骤、`.env` / `.env.idea` 区别、健康检查清单详见 [`README.md` 的「Docker 编排启动」节](./README.md#docker-编排启动)。
+**Git 规约和本节启动步骤的单一来源都在 [`README.md`](./README.md)，本文件只列要点 + 引用**，避免双份维护。具体步骤详见：
+
+- 三种启动场景（A=Dev Docker / B=IDEA 混合 / C=生产部署）→ [`README.md` 的「启动指南」节](./README.md#启动指南)
+- 环境变量文件（`.env` / `.env.idea` / `.env.example` / `.env.idea.example`）的分工 → [「环境变量文件总览」](./README.md#环境变量文件总览必读)
+- 生产部署密码必改清单 / Nginx 反代 / 备份建议 → [「场景 C：生产部署」](./README.md#场景-c生产部署)
 
 要点速查（强制约束，**违反这些会踩坑**）：
 
-- **所有 `docker compose` 命令必须加 `--env-file=/dev/null`**。原因：`infra/.env.idea`（IDEA 在宿主机跑 Java 时用）含 `127.0.0.1` 类 host 覆盖；如果它被 compose 自动加载，`ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 广播错误地址，容器内 app 连不上 broker。
+- **dev 场景 `docker compose` 命令必须加 `--env-file=/dev/null`**。原因：`infra/.env.idea`（IDEA 在宿主机跑 Java 时用）含 `127.0.0.1` 类 host 覆盖；若被 compose 自动加载，`ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 广播错误地址，容器内 app 连不上 broker。
+- **prod 场景反向：必须读 `infra/.env`，不加 `--env-file=/dev/null`，也不带 `docker-compose.dev.yaml` override**（生产需要 `restart: on-failure:5` 自动恢复）。
 - **dev 全栈推荐命令**：
 
   ```bash
@@ -51,10 +56,7 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
     up -d --build
   ```
 
-  - `docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便日志排查；中间件保留原 restart 策略。
-- **环境变量文件分工**（详见 README 表格）：
-  - `infra/.env.example` → 拷贝为 `infra/.env`，供容器化全栈覆盖密码 / 镜像 tag。
-  - `infra/.env.idea.example` → 拷贝为 `infra/.env.idea`，**仅** IDEA / 宿主机跑 Java 时用，含 `127.0.0.1` 类 host 重定向；docker 命令绝不能读它。
+  `docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便日志排查；中间件保留原 restart 策略。
 - **OpenAPI / TS 客户端**：后端 Controller 改完跑 `pnpm openapi:generate`，必须把 `openapi/specs/*.json` 一并提交（baseline 入库）；CI `openapi-check.yml` 会对 baseline diff 阻断漂移。`packages/api-client/src/` 仍 gitignored，从 specs 派生。
 
 ### 单服务 / 单模块

@@ -41,116 +41,50 @@ anynote/
 
 ---
 
-## 快速启动
+## 启动指南
 
-### 0. 配置环境变量
+仓库支持三种启动方式，按使用频率列出。**先看 [环境变量文件总览](#环境变量文件总览必读)**，再挑场景。
 
-**本机开发**：默认值足够直接启动，可跳过本步；本节适用于生产 / 对外暴露环境。
+| 场景 | 适用 | 关键差异 |
+|------|------|---------|
+| [A. Dev Docker 全栈](#场景-adev-docker-全栈推荐日常使用) | 日常本机开发，最快 | `--env-file=/dev/null` + `docker-compose.dev.yaml` override |
+| [B. IDEA / 宿主机跑 Java](#场景-bidea--宿主机跑-java混合模式) | 想在 IDE 里 debug Java 服务 | 只起中间件，IDEA Run Config 接 `.env.idea` |
+| [C. 生产部署](#场景-c生产部署) | 对外暴露的环境 | 必须 `infra/.env` 配置真密码 + Nginx 终止 TLS |
 
-```bash
-cp infra/.env.example infra/.env
-```
-
-用编辑器打开 `infra/.env`，**至少修改以下项**再启动：
-
-| 变量 | 说明 | 风险 |
-|------|------|------|
-| `JWT_SECRET` | JWT 签名密钥，默认 `yxlm`（4字符，极弱） | 认证绕过 |
-| `XXL_JOB_ADMIN_ACCESSTOKEN` | 任务调度器通信 Token | 任务执行权限 |
-| `MYSQL_ROOT_PASSWORD` | MySQL root 密码 | 数据库 |
-| `MYSQL_APP_PASSWORD` | 应用账户密码 | 数据库 |
-| `MINIO_ROOT_PASSWORD` | 对象存储密码 | 文件存储 |
-
-生成安全的随机密钥：
-```bash
-openssl rand -hex 32
-```
-
-> **注意**：默认值仅供本机开发使用，禁止在对外暴露的环境中使用默认值。
-> **IDEA 本机跑 Java 时**用的是另一份 `infra/.env.idea`（含 `127.0.0.1` 类 host 覆盖），详见下文 "Docker 编排启动 → ⚠️ 必须先了解：环境变量文件的两种用途"。
-
-### 1. 启动中间件
-
-```bash
-docker compose --env-file=/dev/null -f infra/docker-compose-middleware.yaml up -d
-# 包含：MySQL · Redis · Nacos · Elasticsearch · MinIO · RocketMQ · Logstash · XXL-Job
-# --env-file=/dev/null：避免 infra/.env.idea 被误识别污染容器，详见下文 Docker 编排章节
-```
-
-> Nacos 配置中心：`http://localhost:8848/nacos`（默认账密 `nacos / nacos`）
-
-### 2. 启动 Java 后端
-
-```bash
-# 构建全部服务（首次或依赖变更时）
-cd services && mvn clean install -DskipTests
-
-# 各服务 IDEA 启动，或通过 CLI
-cd services && mvn spring-boot:run -pl gateway
-```
-
-### 3. 启动 Python AI 服务
-
-```bash
-cd ai-service
-pip install -r requirements.txt
-uvicorn app:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 4. 启动前端
-
-```bash
-pnpm install
-pnpm --filter web-legacy dev
-# 访问 http://localhost:3000
-```
-
-### 5. 更新 API 客户端类型（后端接口变更后）
-
-```bash
-# 需要后端已启动
-pnpm openapi:generate
-```
-
----
-
-## Docker 编排启动
-
-> 适用场景：本地完整集成测试、不想在宿主机安装 Java/Python 环境。
-
-**前置要求**：Docker >= 24 + Compose Plugin、Maven、pnpm
-
-### ⚠️ 必须先了解：环境变量文件的两种用途
+### 环境变量文件总览（必读）
 
 `infra/` 下的 `.env` 类文件按用途分为两套，**不要混用**：
 
-| 文件 | 用途 | 入库 | docker compose 是否读 |
+| 文件 | 用途 | 入库 | docker compose 默认会读？ |
 |------|------|:----:|:----:|
-| `infra/.env.example` | 部署 / 容器化全栈时覆盖密码、镜像 tag 等 | ✅ | ✅（拷贝为 `.env` 后自动加载） |
-| `infra/.env.idea.example` | **IDEA / 宿主机直接跑 Java** 时把中间件 host 改成 `127.0.0.1` | ✅ | ❌（手动 source 或 IDEA Run Config 加载） |
-| `infra/.env` | 你从 `.env.example` 拷贝出的本地实例（含密码） | ❌ | ✅ 自动 |
-| `infra/.env.idea` | 你从 `.env.idea.example` 拷贝出的 IDEA 实例（含 `127.0.0.1` 覆盖） | ❌ | **绝不能**——含 `127.0.0.1` 类 host，会污染容器 |
+| `infra/.env.example` | 容器化全栈部署时**覆盖密码、镜像 tag** | ✅ | ✅（拷贝为 `.env` 后自动加载） |
+| `infra/.env.idea.example` | **IDEA / 宿主机直接跑 Java** 时把中间件 host 改成 `127.0.0.1` | ✅ | ❌ |
+| `infra/.env` | 你从 `.env.example` 拷贝出的本地实例（含真密码） | ❌ | ✅ 自动 |
+| `infra/.env.idea` | 你从 `.env.idea.example` 拷贝出的 IDEA 实例（含 `127.0.0.1` host 覆盖） | ❌ | **绝不能**——含 `127.0.0.1` 类 host，会污染容器 |
 
-**踩坑提示**：`.env.idea` 不会被 docker compose 自动加载（文件名不是 `.env`），但如果你不慎把它重命名成 `.env`，里面的 `ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 容器向 namesrv 广播错误地址，结果就是其它容器内的 app 无法连接 broker，MQ listener 启动失败。所以 **dev 启动命令统一加 `--env-file=/dev/null`**，强制 compose 只使用 YAML 内置默认值。
+**踩坑提示**：`.env.idea` 文件名不是 `.env`，所以 docker compose 默认不会加载。但如果你不慎把它重命名成 `.env`，里面的 `ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 容器向 namesrv 广播错误地址，结果是其它容器内的 app 无法连接 broker，MQ listener 启动失败。
 
-### 1. 配置（可选）
+**强制约束**：
 
-如果默认密码足够本机用，**跳过这一步**直接看第 2 步。
+- **场景 A（dev）**：所有 `docker compose` 命令统一加 `--env-file=/dev/null`，强制 compose 只使用 YAML 内置默认值。
+- **场景 C（prod）**：必须读 `infra/.env`（含真密码），**不要加** `--env-file=/dev/null`。
 
-```bash
-# 仅当你想覆盖密码 / Nacos namespace / 镜像 tag 时
-cp infra/.env.example infra/.env
-$EDITOR infra/.env
-```
+---
 
-### 2. 构建 Java 服务 JAR
+### 场景 A：Dev Docker 全栈（推荐日常使用）
+
+> 不在宿主机装 Java / Python，所有服务全部跑在容器里；几分钟内拉起全栈。
+
+**前置**：Docker >= 24 + Compose Plugin、Maven、pnpm >= 9。
+
+#### A.1 构建 Java 服务 JAR
 
 ```bash
 pnpm services:build
 # 等价于：cd services && mvn clean install -DskipTests
 ```
 
-### 3. 启动全栈（推荐：dev override）
+#### A.2 启动全栈
 
 ```bash
 docker compose --env-file=/dev/null \
@@ -159,17 +93,18 @@ docker compose --env-file=/dev/null \
   up -d --build
 ```
 
-- `--env-file=/dev/null`：见上方"⚠️ 必须先了解"，强制 compose 忽略本地 `.env`，避免 IDEA 用 host 覆盖污染容器
-- `infra/docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便 `docker logs` 排查；中间件保留原 restart 策略
+- `--env-file=/dev/null`：强制 compose 忽略本地 `.env`，避免 IDEA 用 host 覆盖污染容器
+- `docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便 `docker logs` 排查；中间件保留原 restart 策略
 - `--build`：首次或代码变更时必带；后续仅起容器可省
 
 启动约需 60–120 秒。
 
-### 4. 验证健康状态
+#### A.3 验证健康状态
 
 ```bash
 # 容器状态
-docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml ps
+docker compose --env-file=/dev/null \
+  -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml ps
 # 所有服务 STATUS 应显示 healthy
 
 # 服务可用性
@@ -178,7 +113,7 @@ for port in 8080 8083 8091 18091 8095 9065 9066; do
 done
 ```
 
-### 5. 验证 OpenAPI 聚合
+#### A.4 验证 OpenAPI 聚合
 
 ```bash
 # 6 个 service spec 都应 > 2KB
@@ -192,29 +127,162 @@ pnpm openapi:generate
 pnpm --filter @anynote/api-client typecheck
 ```
 
-### 6. 停止与清理
+#### A.5 停止与清理
 
 ```bash
 # 停止全部容器（保留数据）
-docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml down
+docker compose --env-file=/dev/null \
+  -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml down
 
 # 同时删除数据卷（清空 MySQL / ES / MinIO / Nacos / RocketMQ store；慎用）
-docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml down -v
+docker compose --env-file=/dev/null \
+  -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml down -v
 ```
 
-### IDEA 本机开发（替代第 2-3 步）
+---
 
-如果你想在 IDEA 里逐个启动 Java 服务（而不是用容器跑 app），只起中间件即可：
+### 场景 B：IDEA / 宿主机跑 Java（混合模式）
+
+> 想在 IDEA 里逐个 debug Java 服务，中间件 / Python / 前端跑在本机便利环境里。
+
+#### B.1 准备 IDEA 用环境变量
 
 ```bash
-# 1. 只起中间件（注意仍要 --env-file=/dev/null）
-docker compose --env-file=/dev/null -f infra/docker-compose-middleware.yaml up -d
-
-# 2. 配置 IDEA Run Configuration 的 Environment Variables：
-#    选 "Load from file" → infra/.env.idea（先 cp infra/.env.idea.example infra/.env.idea）
+cp infra/.env.idea.example infra/.env.idea
+# 文件内容默认就够本机用；需要改 JWT_SECRET 等再编辑
 ```
 
-### 5. Nginx 反向代理（对外暴露）
+#### B.2 只起中间件
+
+```bash
+docker compose --env-file=/dev/null -f infra/docker-compose-middleware.yaml up -d
+# 包含：MySQL · Redis · Nacos · Elasticsearch · MinIO · RocketMQ · Logstash · XXL-Job
+```
+
+> Nacos 控制台：`http://localhost:8848/nacos`（账密 `nacos / nacos`）
+
+#### B.3 在 IDEA Run Configuration 接入 `.env.idea`
+
+每个 Spring 服务的 Run Configuration → Environment Variables → "Load from file" 选 `infra/.env.idea`，然后用 IDEA 启动 `gateway` / `auth` / `system` / `note` / `file` / `ai` / `notify` 主类。
+
+也可以走 shell：
+
+```bash
+set -a; . infra/.env.idea; set +a
+cd services && mvn spring-boot:run -pl gateway
+```
+
+#### B.4 启动 Python AI 服务
+
+```bash
+cd ai-service
+pip install -r requirements.txt
+uvicorn app:app --reload --host 0.0.0.0 --port 8000
+```
+
+#### B.5 启动前端
+
+```bash
+pnpm install
+pnpm --filter web-legacy dev
+# 访问 http://localhost:3000
+```
+
+#### B.6 更新 API 客户端类型（后端接口变更后）
+
+```bash
+pnpm openapi:generate    # 需要 gateway 已起
+pnpm --filter @anynote/api-client typecheck
+```
+
+---
+
+### 场景 C：生产部署
+
+> 对外暴露的环境。与 dev 的关键差异：**真密码 + 自动重启 + Nginx 终止 TLS**。**不**使用 `--env-file=/dev/null`，**不**使用 `docker-compose.dev.yaml` override。
+
+**前置**：Docker >= 24 + Compose Plugin、Maven（或预构建镜像）、Nginx、（可选）私有镜像 Registry。
+
+#### C.1 必修改的安全敏感变量
+
+| 变量 | 默认值（**不要**在生产使用） | 风险 |
+|------|------|------|
+| `JWT_SECRET` | `yxlm`（4 字符极弱） | 认证绕过 |
+| `MYSQL_ROOT_PASSWORD` | `AnynoteRoot123` | 数据库 root |
+| `MYSQL_APP_PASSWORD` | `Anynote*1832` | 应用账户 |
+| `MINIO_ROOT_PASSWORD` | `AnynoteMinio123` | 对象存储 |
+| `XXL_JOB_ADMIN_ACCESSTOKEN` | `default_token` | 任务调度 |
+| `REDIS_PASSWORD` | _(空)_，无认证 | 缓存读写 |
+| `NACOS_PASSWORD` | `nacos`（账密默认） | 配置中心 |
+
+随机密钥生成：`openssl rand -hex 32`。
+
+#### C.2 拷贝并填充 `infra/.env`
+
+```bash
+cp infra/.env.example infra/.env
+$EDITOR infra/.env
+# 至少替换上表所有变量；SPRING_PROFILES_ACTIVE 改为 prod（确保 Nacos 中已建对应 prod 命名空间）
+chmod 600 infra/.env
+```
+
+`infra/.env` 已在 `.gitignore` 内，确认不会被推送。
+
+#### C.3 构建或拉取镜像
+
+本仓库默认走"宿主机 build JAR → `infra/Dockerfile.local` 打镜像"模式：
+
+```bash
+pnpm services:build                                # 在 build 主机产 JAR
+docker compose -f infra/docker-compose.yaml build  # 打镜像；可推私有 registry
+```
+
+或使用预构建的远端镜像：把 `APP_IMAGE_PREFIX` 指向你的 registry，跳过 build。
+
+#### C.4 启动全栈
+
+```bash
+docker compose -f infra/docker-compose.yaml up -d
+# 注意：
+# - 不带 --env-file=/dev/null（需要读 infra/.env 中的真密码）
+# - 不带 docker-compose.dev.yaml override（保留 restart: on-failure:5）
+```
+
+启动约需 60–180 秒（生产 JVM 参数可能更大、ES 冷启动更慢）。
+
+#### C.5 Nacos 配置审查
+
+部署后立即检查 Nacos 中 `application-dev.yml` / `anynote-<svc>-dev.yml` 是否还残留 dev 占位值。生产建议：
+
+- 在 Nacos 新建 prod 命名空间，复制并修订 13 份 config（`infra/docker/nacos/configs/` 是 dev baseline，**不要**直接用于 prod）
+- 容器设置 `SPRING_PROFILES_ACTIVE=prod` 让服务加载 prod config
+- 关闭 Nacos 匿名访问：把 `infra/docker-compose-middleware.yaml` 中 `NACOS_AUTH_ENABLE` 改为 `true` 并在 Nacos 控制台改默认账密
+
+#### C.6 验证
+
+```bash
+docker compose -f infra/docker-compose.yaml ps
+# 9 个 app 容器 + 8 个中间件容器全部 healthy
+
+# 通过 Nginx 入口验证（替换为你的域名）
+curl -fsS https://api.example.com/actuator/health | jq .
+```
+
+#### C.7 数据持久化与备份
+
+生产数据卷（`docker volume ls --filter name=anynote`）：
+
+| 卷名 | 内容 | 备份建议 |
+|------|------|---------|
+| `anynote_mysql-data` | MySQL 全部数据 | 每日 `mysqldump` 异地存储 |
+| `anynote_minio-data` | 对象存储（用户上传文件） | 定期 `mc mirror` 同步到冷备 |
+| `anynote_elasticsearch-data` | 笔记搜索索引 | 可从 MySQL 重建，备份优先级低 |
+| `anynote_nacos-logs` | 配置中心运行日志 | 滚动归档 |
+| `anynote_rocketmq-broker-store` | 消息存储 | 接受消息丢失则可不备份 |
+
+⚠️ `down -v` 会删除上述全部卷——**生产环境绝不要在不备份的情况下执行 `down -v`**。
+
+#### C.8 Nginx 反向代理
 
 所有容器端口均绑定 `127.0.0.1`，不直接对外暴露。生产环境通过 Nginx 统一转发：
 
@@ -244,11 +312,11 @@ location /api/aiNio/ {
 
 ---
 
-### 环境变量
+## 环境变量参考
 
-所有变量均在 `infra/.env` 中设置（由 `infra/docker-compose-middleware.yaml` 和 `infra/docker-compose.yaml` 读取）。**dev 推荐用 `--env-file=/dev/null` 强制走 YAML 默认值**，避免与 `infra/.env.idea` 混淆（详见上文 "Docker 编排启动 → ⚠️ 必须先了解：环境变量文件的两种用途"）。未设置时使用括号内的默认值。
+所有变量均在 `infra/.env` 中设置（由 `infra/docker-compose-middleware.yaml` 与 `infra/docker-compose.yaml` 读取）。**dev 推荐用 `--env-file=/dev/null` 强制走 YAML 默认值**，避免与 `infra/.env.idea` 混淆（详见 [环境变量文件总览](#环境变量文件总览必读)）。未设置时使用括号内的默认值。
 
-#### 必须修改（安全敏感）
+### 必须修改（安全敏感）
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -258,7 +326,7 @@ location /api/aiNio/ {
 | `MINIO_ROOT_PASSWORD` | `AnynoteMinio123` | MinIO 对象存储密码 |
 | `XXL_JOB_ADMIN_ACCESSTOKEN` | `default_token` | XXL-Job 调度中心通信 Token |
 
-#### 应用运行配置
+### 应用运行配置
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -268,7 +336,7 @@ location /api/aiNio/ {
 | `APP_IMAGE_PREFIX` | `anynote` | Docker 镜像名前缀 |
 | `APP_DOCKERFILE` | `infra/Dockerfile.local` | 构建用 Dockerfile 路径 |
 
-#### 数据库（MySQL）
+### 数据库（MySQL）
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -278,14 +346,14 @@ location /api/aiNio/ {
 | `XXL_JOB_DB_NAME` | `anynote_xxl_job` | XXL-Job 数据库名 |
 | `MYSQL_PORT` | `3306` | 宿主机映射端口 |
 
-#### 缓存（Redis）
+### 缓存（Redis）
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `REDIS_PASSWORD` | _(空)_ | 留空禁用认证，非空时自动启用 `requirepass` |
 | `REDIS_PORT` | `6379` | 宿主机映射端口 |
 
-#### 配置中心（Nacos）
+### 配置中心（Nacos）
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -297,7 +365,7 @@ location /api/aiNio/ {
 | `NACOS_GRPC_PORT` | `9848` | gRPC 端口 |
 | `NACOS_RAFT_PORT` | `9849` | Raft 端口 |
 
-#### 对象存储（MinIO）
+### 对象存储（MinIO）
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -305,7 +373,7 @@ location /api/aiNio/ {
 | `MINIO_API_PORT` | `9000` | API 端口 |
 | `MINIO_CONSOLE_PORT` | `9001` | 控制台端口 |
 
-#### 消息队列（RocketMQ）
+### 消息队列（RocketMQ）
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -317,7 +385,7 @@ location /api/aiNio/ {
 | `ROCKETMQ_BROKER_ADVERTISE_IP` | `rocketmq-broker` | Broker 对外广播地址（容器间通信用服务名） |
 | `ROCKETMQ_BROKER_JAVA_OPT_EXT` | `-Xms256m -Xmx256m -Xmn128m -XX:MaxDirectMemorySize=128m` | Broker JVM 参数 |
 
-#### 搜索（Elasticsearch）与日志（Logstash）
+### 搜索（Elasticsearch）与日志（Logstash）
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
@@ -328,13 +396,13 @@ location /api/aiNio/ {
 | `LOGSTASH_BEATS_PORT` | `5044` | Logstash Beats 端口 |
 | `LOGSTASH_API_PORT` | `9600` | Logstash 监控 API 端口 |
 
-#### 任务调度（XXL-Job）
+### 任务调度（XXL-Job）
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `XXL_JOB_PORT` | `10086` | XXL-Job Admin 宿主机映射端口 |
 
-#### Java 服务宿主机端口（可选覆盖）
+### Java 服务宿主机端口（可选覆盖）
 
 | 变量 | 默认值 | 服务 |
 |------|--------|------|
@@ -348,7 +416,7 @@ location /api/aiNio/ {
 | `NOTIFY_PORT` | `9066` | 通知服务 |
 | `JOB_PORT` | `8093` | 定时任务执行器 |
 
-#### 中间件镜像版本（可选锁定）
+### 中间件镜像版本（可选锁定）
 
 | 变量 | 默认值 |
 |------|--------|
@@ -362,7 +430,7 @@ location /api/aiNio/ {
 | `XXL_JOB_ADMIN_VERSION` | `2.5.0` |
 | `CURL_VERSION` | `8.10.1` |
 
-#### 前端（`apps/web-legacy/.env`）
+### 前端（`apps/web-legacy/.env`）
 
 | 变量 | 示例值 | 说明 |
 |------|--------|------|
@@ -380,6 +448,9 @@ location /api/aiNio/ {
 | `pnpm build` | 构建全部前端应用 |
 | `pnpm check` | Biome 格式化 + lint |
 | `pnpm openapi:generate` | 从后端 Swagger 生成 TypeScript 类型 |
+| `pnpm openapi:check` | 生成 + 与 baseline diff（与 CI 同行为） |
+| `pnpm typecheck` | turbo typecheck（含 `@anynote/api-client`） |
+| `pnpm services:build` | = `cd services && mvn clean install -DskipTests` |
 | `cd services && mvn clean install -pl note -am -DskipTests` | 构建单个 Java 服务及其依赖 |
 
 ---
