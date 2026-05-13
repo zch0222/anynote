@@ -10,6 +10,12 @@
     <name>anynote-modules-notify</name>
     <dependencies>
 
+        <!-- Springdoc OpenAPI（servlet） -->
+        <dependency>
+            <groupId>com.anynote</groupId>
+            <artifactId>anynote-common-swagger</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>net.logstash.logback</groupId>
             <artifactId>logstash-logback-encoder</artifactId>
