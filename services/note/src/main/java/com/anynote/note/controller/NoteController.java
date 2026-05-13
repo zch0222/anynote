@@ -37,6 +37,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
@@ -61,6 +62,7 @@ public class NoteController {
     @Resource
     private NoteOperationLogService noteOperationLogService;
 
+    @Operation(summary = "分页查询当前用户的笔记列表", description = "可按 knowledgeBaseId 过滤")
     @GetMapping()
     public ResData<PageBean<NoteListVO>> getNoteList(@NotNull(message = "页码不能为空") @Min(value = 1, message = "页码错误")
                                                    Integer page,
@@ -106,6 +108,7 @@ public class NoteController {
         return ResUtil.success(noteService.getNotesByKnowledgeBaseId(queryParam));
     }
 
+    @Operation(summary = "按 ID 获取笔记详情")
     @GetMapping("{noteId}")
     public ResData<Note> getNoteById(@NotNull(message = "笔记id不能为空")
                                      @PathVariable Long noteId) {
@@ -139,6 +142,7 @@ public class NoteController {
      * @param noteId
      * @return
      */
+    @Operation(summary = "部分更新笔记", description = "支持标题、正文、知识库归属等字段；前端自动保存调用")
     @PatchMapping("{noteId}")
     public ResData<String> editNote(@NotNull(message = "笔记id不能为空") @PathVariable Long noteId,
                                     @RequestBody NoteEditDTO noteEditDTO) {
