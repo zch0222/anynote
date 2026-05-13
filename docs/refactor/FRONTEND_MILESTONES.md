@@ -88,7 +88,7 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 | GET `/note/notes` | `note /notes` | ✅ 本次补 `@Operation` |
 | GET `/note/notes/{id}` | `note /notes/{noteId}` | ✅ 本次补 `@Operation` |
 | PATCH `/note/notes/{id}` | `note /notes/{noteId}` | ✅ 本次补 `@Operation` |
-| POST `/file/files/presign` | **新增** `file /files/presign` | ✅ 本次新增端点 + DTO + VO + service 实现（MinIO） |
+| 浏览器直传文件（分片） | `file /ossSliceUploadTasks` + `file /getOssSliceUploadSignatures` | ✅ 已有完整实现，前端复用现有分片直传流程 |
 | POST `/file/upload` | `file /` (root POST) | ✅ 本次补 `@Operation` 并明确"内部接口" |
 | POST `/ai/v1/chat/completions` | `ai /chat/completions` | ✅ 已有注解 |
 | POST `/ai/v1/translate` | `ai /translate` | ✅ 已有注解 |
@@ -97,10 +97,7 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 - [x] `services/ai/.../RagController.java:63` `return null` → `throw new BusinessException(...)`
 - [x] `services/system/.../SysOrganizationController.java:30` `return null` → `throw new BusinessException(...)`
 - [x] 12 个端点的 `@Operation(summary, description)` 补齐（上表对应处）
-- [x] 新增 `file /files/presign` 端点：
-  - `services/api/anynote-api-file/.../dto/PresignPutUploadDTO.java`
-  - `services/api/anynote-api-file/.../vo/PresignPutUploadVO.java`
-  - `FileService#presignPutUpload(...)` + `FileServiceImpl` 实现（基于 `FilePlugin#getOssSignature`）
+- [x] 确认浏览器直传复用已有分片上传接口（`ossSliceUploadTasks` + `getOssSliceUploadSignatures`），无需新增 presign 端点
   - 当前仅 MinIO；HuaweiOBS 走原有 `/createHuaweiOBSTemporarySignature`，新接口会抛 `BusinessException` 提示走专用接口
 - [x] Springdoc info 块默认值通过 Nacos `application-dev.yml` 全局注入（title / version / license / contact）
 
