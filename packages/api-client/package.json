@@ -4,6 +4,11 @@
   "private": true,
   "main": "src/index.ts",
   "scripts": {
-    "generate": "bash ../../openapi/generate.sh"
+    "generate": "bash ../../openapi/generate.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@anynote/tsconfig": "workspace:*",
+    "typescript": "^5.6.3"
   }
 }

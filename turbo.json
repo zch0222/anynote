@@ -18,6 +18,9 @@
     "openapi:generate": {
       "dependsOn": [],
       "outputs": ["packages/api-client/src/**"]
+    },
+    "typecheck": {
+      "outputs": []
     }
   }
 }
