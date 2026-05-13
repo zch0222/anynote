@@ -31,7 +31,7 @@ public class FileController {
     private FileService fileService;
 
     @Operation(summary = "内部：服务端中转上传文件",
-            description = "由后端服务（非浏览器）通过 Feign 调用；浏览器单文件直传请使用 /files/presign")
+            description = "由后端服务（非浏览器）通过 Feign 调用；浏览器直传请使用 /ossSliceUploadTasks + /getOssSliceUploadSignatures 分片直传流程")
     @InnerAuth
     @PostMapping
     public ResData<FilePO> uploadFile(@RequestParam("file") @NotNull(message = "文件不能为空") MultipartFile file,
@@ -47,13 +47,6 @@ public class FileController {
     @GetMapping("progress/{uploadId}")
     public ResData<UploadProgress> getFileUploadProgress(@PathVariable("uploadId") String uploadId) {
         return ResUtil.success(fileService.getFileUploadProgress(uploadId));
-    }
-
-    @Operation(summary = "申请对象存储单文件直传 PUT 预签名 URL",
-            description = "用于浏览器端直传对象存储（绕开后端字节流），目前仅 MinIO 支持；Huawei OBS 请使用 createHuaweiOBSTemporarySignature")
-    @PostMapping("/files/presign")
-    public ResData<PresignPutUploadVO> presignPutUpload(@RequestBody @Validated PresignPutUploadDTO presignPutUploadDTO) {
-        return ResUtil.success(fileService.presignPutUpload(presignPutUploadDTO));
     }
 
     @InnerAuth
