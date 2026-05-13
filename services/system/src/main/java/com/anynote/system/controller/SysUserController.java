@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
@@ -114,6 +115,7 @@ public class SysUserController {
         return ResUtil.success(sysUserService.updateSysUser(sysUser));
     }
 
+    @Operation(summary = "获取当前登录用户信息", description = "前端登录态自检与初次拉取用户资料")
     @GetMapping("mine")
     public ResData<SysUser> getMyInfo() {
         return ResUtil.success(sysUserService.getMyUserInfo());
