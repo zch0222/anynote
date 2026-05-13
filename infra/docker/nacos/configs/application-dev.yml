@@ -74,3 +74,17 @@ management:
       base-path: /actuator
       exposure:
         include: '*'
+
+# Springdoc OpenAPI 全局 info 默认值（各服务可在 anynote-<svc>-dev.yml 内覆盖 title / description）
+swagger:
+  enabled: true
+  title: Anynote API
+  description: Anynote 平台后端 API 文档
+  version: 0.5.1
+  license: Apache 2.0
+  licenseUrl: https://www.apache.org/licenses/LICENSE-2.0
+  termsOfServiceUrl: https://github.com/zch0222/anynote
+  contact:
+    name: Anynote
+    url: https://github.com/zch0222/anynote
+    email: yxlmzch0222@outlook.com
