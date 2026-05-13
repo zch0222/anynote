@@ -47,6 +47,7 @@ public class TokenController {
         return ResData.success(new LoginDTO(loginUser));
     }
 
+    @Operation(summary = "健康探测", description = "返回 OK；运维与前端探活使用")
     @GetMapping("test")
     public ResData<String> test() {
         return ResData.success("OK");
