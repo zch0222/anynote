@@ -66,6 +66,43 @@ spring:
             - Path=/api/file/**
           filters:
             - StripPrefix=2
+        # ----- Springdoc OpenAPI 聚合路由（专供 /swagger-ui.html 与 pnpm openapi:generate）-----
+        - id: openapi-auth
+          uri: lb://anynote-auth
+          predicates:
+            - Path=/auth/v3/api-docs
+          filters:
+            - StripPrefix=1
+        - id: openapi-system
+          uri: lb://anynote-system
+          predicates:
+            - Path=/system/v3/api-docs
+          filters:
+            - StripPrefix=1
+        - id: openapi-note
+          uri: lb://anynote-note
+          predicates:
+            - Path=/note/v3/api-docs
+          filters:
+            - StripPrefix=1
+        - id: openapi-file
+          uri: lb://anynote-file
+          predicates:
+            - Path=/file/v3/api-docs
+          filters:
+            - StripPrefix=1
+        - id: openapi-ai
+          uri: lb://anynote-ai-nio
+          predicates:
+            - Path=/ai/v3/api-docs
+          filters:
+            - StripPrefix=1
+        - id: openapi-notify
+          uri: lb://anynote-notify
+          predicates:
+            - Path=/notify/v3/api-docs
+          filters:
+            - StripPrefix=1
 
 anynote:
   module:
@@ -89,6 +126,11 @@ security:
       - /api/auth/register
       - /auth/register
       - /*/v2/api-docs
+      - /*/v3/api-docs
+      - /v3/api-docs/**
+      - /swagger-ui.html
+      - /swagger-ui/**
+      - /webjars/**
       - /csrf
       - /api/note/docs/home
       - /api/note/docs/public/*
