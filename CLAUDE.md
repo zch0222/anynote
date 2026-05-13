@@ -35,23 +35,46 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 
 ## 常用命令
 
-### 启动顺序（本地全栈）
+### 开发环境启动（docker compose）
+
+**Git 规约和本节启动步骤的单一来源都在 [`README.md`](./README.md)，本文件只列要点 + 引用**，避免双份维护。具体步骤、`.env` / `.env.idea` 区别、健康检查清单详见 [`README.md` 的「Docker 编排启动」节](./README.md#docker-编排启动)。
+
+要点速查（强制约束，**违反这些会踩坑**）：
+
+- **所有 `docker compose` 命令必须加 `--env-file=/dev/null`**。原因：`infra/.env.idea`（IDEA 在宿主机跑 Java 时用）含 `127.0.0.1` 类 host 覆盖；如果它被 compose 自动加载，`ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 广播错误地址，容器内 app 连不上 broker。
+- **dev 全栈推荐命令**：
+
+  ```bash
+  docker compose --env-file=/dev/null \
+    -f infra/docker-compose.yaml \
+    -f infra/docker-compose.dev.yaml \
+    up -d --build
+  ```
+
+  - `docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便日志排查；中间件保留原 restart 策略。
+- **环境变量文件分工**（详见 README 表格）：
+  - `infra/.env.example` → 拷贝为 `infra/.env`，供容器化全栈覆盖密码 / 镜像 tag。
+  - `infra/.env.idea.example` → 拷贝为 `infra/.env.idea`，**仅** IDEA / 宿主机跑 Java 时用，含 `127.0.0.1` 类 host 重定向；docker 命令绝不能读它。
+- **OpenAPI / TS 客户端**：后端 Controller 改完跑 `pnpm openapi:generate`，必须把 `openapi/specs/*.json` 一并提交（baseline 入库）；CI `openapi-check.yml` 会对 baseline diff 阻断漂移。`packages/api-client/src/` 仍 gitignored，从 specs 派生。
+
+### 单服务 / 单模块
 
 ```bash
-# 1. 启动中间件（MySQL/Redis/Nacos/ES/MinIO/RocketMQ/Logstash/XXL-Job）
-docker compose -f infra/docker-compose-middleware.yaml up -d
+# Java 单服务（含依赖）
+cd services && mvn clean install -pl note -am -DskipTests
 
-# 2. 构建并启动 Java 后端（任选其一）
-cd services && mvn clean install -DskipTests
-docker compose -f infra/docker-compose.yaml up -d   # 容器化
-# 或 IDE 中分别启动 gateway/auth/system/note/file/ai/notify 主类
+# Java 单模块测试
+cd services && mvn test -pl note
+# Java 单测试类
+cd services/note && mvn test -Dtest=NoteServiceTest
 
-# 3. 启动 Python AI 服务
-cd ai-service && pip install -r requirements.txt && \
-  uvicorn app:app --reload --host 0.0.0.0 --port 8000
-
-# 4. 启动前端（目前是 legacy）
-cd apps/web-legacy && npm install && npm run dev
+# 仓库根脚本
+pnpm openapi:generate    # 从 Gateway 拉 spec → 生成 TS 客户端（需后端运行）
+pnpm openapi:check       # 生成 + 与 baseline diff（与 CI 同行为）
+pnpm typecheck           # turbo typecheck（含 @anynote/api-client）
+pnpm services:build      # = cd services && mvn clean install -DskipTests
+pnpm check               # Biome lint + format
+pnpm format              # Biome format only
 ```
 
 ### 单服务 / 单模块
@@ -180,6 +203,19 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `docs/refactor/REFACTOR_PLAN.md` / `FRONTEND_REFACTOR_PLAN.md` / `FRONTEND_MILESTONES.md` — 重构决策与执行计划
 - `docs/refactor/TASKS.md` — Phase 级进度与未完成项
 - `docs/backend-security-inventory.md` — 后端安全配置清单
+
+## 文档维护约定
+
+CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分散在 `README.md`、`docs/refactor/*`、`.claude/context/*` 等文件，本文件通过链接 / 路径引用它们。
+
+**修改或删除任何文档前的强制流程**：
+
+1. 在本仓库根全文搜索目标文件名是否被 `CLAUDE.md` 引用（`grep -n '<filename>' CLAUDE.md`），尤其检查"上下文文档导航"、"提交与分支"、"关键架构约束"、"开发环境启动" 几节。
+2. 若有引用：**必须同步修改 CLAUDE.md** 的对应位置（更新路径、改写概要、或移除指针）。**不允许出现 CLAUDE.md 指向已不存在 / 已重命名 / 已重写内容的悬空引用**。
+3. 跨文件重命名（如 `infra/.env` → `infra/.env.idea`）同样属于"修改文档"语义：先 `grep -rn 'old-path' CLAUDE.md README.md docs/ .claude/`，把所有相关引用一起改完再提交。
+4. 删除文档前确认它**没有**被 `CLAUDE.md` 引用；若有引用，先在 CLAUDE.md 里删掉对应行 / 用新文件替换，再提交"docs: remove ..."。
+
+该约定与"Git 提交粒度"不冲突——文档同步改动属于同一逻辑单元，**可以与触发它的代码 / 文档改动放在同一个 commit**（CLAUDE.md 改动 + 被引用文件改动 = 一个原子 commit），但跨语言 / 跨服务的代码部分仍要单独拆分。
 
 ## 提交与分支
 

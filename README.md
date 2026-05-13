@@ -45,6 +45,8 @@ anynote/
 
 ### 0. 配置环境变量
 
+**本机开发**：默认值足够直接启动，可跳过本步；本节适用于生产 / 对外暴露环境。
+
 ```bash
 cp infra/.env.example infra/.env
 ```
@@ -65,12 +67,14 @@ openssl rand -hex 32
 ```
 
 > **注意**：默认值仅供本机开发使用，禁止在对外暴露的环境中使用默认值。
+> **IDEA 本机跑 Java 时**用的是另一份 `infra/.env.idea`（含 `127.0.0.1` 类 host 覆盖），详见下文 "Docker 编排启动 → ⚠️ 必须先了解：环境变量文件的两种用途"。
 
 ### 1. 启动中间件
 
 ```bash
-docker compose -f infra/docker-compose-middleware.yaml up -d
+docker compose --env-file=/dev/null -f infra/docker-compose-middleware.yaml up -d
 # 包含：MySQL · Redis · Nacos · Elasticsearch · MinIO · RocketMQ · Logstash · XXL-Job
+# --env-file=/dev/null：避免 infra/.env.idea 被误识别污染容器，详见下文 Docker 编排章节
 ```
 
 > Nacos 配置中心：`http://localhost:8848/nacos`（默认账密 `nacos / nacos`）
@@ -114,40 +118,100 @@ pnpm openapi:generate
 
 > 适用场景：本地完整集成测试、不想在宿主机安装 Java/Python 环境。
 
-**前置要求**：Docker >= 24 + Compose Plugin、Maven
+**前置要求**：Docker >= 24 + Compose Plugin、Maven、pnpm
 
-### 1. 构建 Java 服务 JAR
+### ⚠️ 必须先了解：环境变量文件的两种用途
+
+`infra/` 下的 `.env` 类文件按用途分为两套，**不要混用**：
+
+| 文件 | 用途 | 入库 | docker compose 是否读 |
+|------|------|:----:|:----:|
+| `infra/.env.example` | 部署 / 容器化全栈时覆盖密码、镜像 tag 等 | ✅ | ✅（拷贝为 `.env` 后自动加载） |
+| `infra/.env.idea.example` | **IDEA / 宿主机直接跑 Java** 时把中间件 host 改成 `127.0.0.1` | ✅ | ❌（手动 source 或 IDEA Run Config 加载） |
+| `infra/.env` | 你从 `.env.example` 拷贝出的本地实例（含密码） | ❌ | ✅ 自动 |
+| `infra/.env.idea` | 你从 `.env.idea.example` 拷贝出的 IDEA 实例（含 `127.0.0.1` 覆盖） | ❌ | **绝不能**——含 `127.0.0.1` 类 host，会污染容器 |
+
+**踩坑提示**：`.env.idea` 不会被 docker compose 自动加载（文件名不是 `.env`），但如果你不慎把它重命名成 `.env`，里面的 `ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 容器向 namesrv 广播错误地址，结果就是其它容器内的 app 无法连接 broker，MQ listener 启动失败。所以 **dev 启动命令统一加 `--env-file=/dev/null`**，强制 compose 只使用 YAML 内置默认值。
+
+### 1. 配置（可选）
+
+如果默认密码足够本机用，**跳过这一步**直接看第 2 步。
 
 ```bash
-cd services && mvn clean package -DskipTests && cd ..
+# 仅当你想覆盖密码 / Nacos namespace / 镜像 tag 时
+cp infra/.env.example infra/.env
+$EDITOR infra/.env
 ```
 
-### 2. 启动全栈
+### 2. 构建 Java 服务 JAR
 
 ```bash
-# 首次或代码变更时加 --build
-docker compose -f infra/docker-compose.yaml up -d --build
+pnpm services:build
+# 等价于：cd services && mvn clean install -DskipTests
 ```
 
-后端服务启动约需 60–120 秒（依赖 Nacos、Elasticsearch、RocketMQ 健康后才启动）。
-
-### 3. 验证健康状态
+### 3. 启动全栈（推荐：dev override）
 
 ```bash
-docker compose -f infra/docker-compose.yaml ps
+docker compose --env-file=/dev/null \
+  -f infra/docker-compose.yaml \
+  -f infra/docker-compose.dev.yaml \
+  up -d --build
+```
+
+- `--env-file=/dev/null`：见上方"⚠️ 必须先了解"，强制 compose 忽略本地 `.env`，避免 IDEA 用 host 覆盖污染容器
+- `infra/docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便 `docker logs` 排查；中间件保留原 restart 策略
+- `--build`：首次或代码变更时必带；后续仅起容器可省
+
+启动约需 60–120 秒。
+
+### 4. 验证健康状态
+
+```bash
+# 容器状态
+docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml ps
 # 所有服务 STATUS 应显示 healthy
 
-curl --noproxy '*' -fsS http://127.0.0.1:8080/actuator/health | jq .
+# 服务可用性
+for port in 8080 8083 8091 18091 8095 9065 9066; do
+  curl --noproxy '*' -fsS -m 2 "http://127.0.0.1:$port/actuator/health" | jq -r '.status'
+done
 ```
 
-### 4. 停止与清理
+### 5. 验证 OpenAPI 聚合
 
 ```bash
-# 停止全部容器
-docker compose -f infra/docker-compose.yaml down
+# 6 个 service spec 都应 > 2KB
+for svc in auth system note file ai notify; do
+  size=$(curl --noproxy '*' -sf "http://127.0.0.1:8080/$svc/v3/api-docs" | wc -c)
+  echo "  $svc: $size bytes"
+done
 
-# 同时删除数据卷（慎用，会清空 MySQL / ES / MinIO 数据）
-docker compose -f infra/docker-compose.yaml down -v
+# 重新生成 TS 类型并验证类型检查
+pnpm openapi:generate
+pnpm --filter @anynote/api-client typecheck
+```
+
+### 6. 停止与清理
+
+```bash
+# 停止全部容器（保留数据）
+docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml down
+
+# 同时删除数据卷（清空 MySQL / ES / MinIO / Nacos / RocketMQ store；慎用）
+docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml down -v
+```
+
+### IDEA 本机开发（替代第 2-3 步）
+
+如果你想在 IDEA 里逐个启动 Java 服务（而不是用容器跑 app），只起中间件即可：
+
+```bash
+# 1. 只起中间件（注意仍要 --env-file=/dev/null）
+docker compose --env-file=/dev/null -f infra/docker-compose-middleware.yaml up -d
+
+# 2. 配置 IDEA Run Configuration 的 Environment Variables：
+#    选 "Load from file" → infra/.env.idea（先 cp infra/.env.idea.example infra/.env.idea）
 ```
 
 ### 5. Nginx 反向代理（对外暴露）
@@ -182,7 +246,7 @@ location /api/aiNio/ {
 
 ### 环境变量
 
-所有变量均在 `infra/.env` 中设置（由 `infra/docker-compose-middleware.yaml` 和 `infra/docker-compose.yaml` 读取）。未设置时使用括号内的默认值。
+所有变量均在 `infra/.env` 中设置（由 `infra/docker-compose-middleware.yaml` 和 `infra/docker-compose.yaml` 读取）。**dev 推荐用 `--env-file=/dev/null` 强制走 YAML 默认值**，避免与 `infra/.env.idea` 混淆（详见上文 "Docker 编排启动 → ⚠️ 必须先了解：环境变量文件的两种用途"）。未设置时使用括号内的默认值。
 
 #### 必须修改（安全敏感）
 
