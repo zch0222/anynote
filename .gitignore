@@ -36,7 +36,11 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+# IDEA / 本机 Java 跑（非容器）专用，含 127.0.0.1 类 host 覆盖，
+# 严禁被 docker compose 自动加载（docker 命令统一 --env-file=/dev/null）
+.env.idea
 !.env.example
+!.env.idea.example
 
 # ===== Generated =====
 # packages/api-client/src/ 是从 openapi/specs/*.json 完全派生的 TS 类型，每次 build 重新生成，
