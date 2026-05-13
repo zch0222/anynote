@@ -5,7 +5,9 @@ import com.anynote.ai.api.model.dto.DocQueryDTO;
 import com.anynote.ai.api.model.vo.DocQueryVO;
 import com.anynote.ai.nio.model.vo.AIChatVO;
 import com.anynote.ai.nio.service.RagService;
+import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.ResUtil;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.ResData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.Header;
@@ -60,7 +62,7 @@ public class RagController {
 
     @PostMapping("query/docs/v1")
     public Flux<ResData<DocQueryVO>> queryDocV1(@Validated @RequestBody DocQueryDTO docQueryDTO) {
-        return null;
+        throw new BusinessException("查询文档 RAG v1 暂未实现", ResCode.BUSINESS_ERROR);
     }
 
 }
