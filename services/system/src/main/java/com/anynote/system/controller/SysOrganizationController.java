@@ -1,6 +1,8 @@
 package com.anynote.system.controller;
 
 import com.anynote.common.security.annotation.InnerAuth;
+import com.anynote.core.exception.BusinessException;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.system.api.model.po.SysOrganization;
 import org.springframework.validation.annotation.Validated;
@@ -27,6 +29,6 @@ public class SysOrganizationController {
     @GetMapping("bases/info/{organizationId}")
     public ResData<SysOrganization> getOrganizationInfoByKnowledgeBaseId(@NotNull(message = "机构id不能为空")
                                                                              @PathVariable Long organizationId) {
-        return null;
+        throw new BusinessException("按知识库 ID 查询组织信息暂未实现", ResCode.BUSINESS_ERROR);
     }
 }

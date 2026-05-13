@@ -1,0 +1,31 @@
+name: ${COMPOSE_PROJECT_NAME:-anynote}
+
+# 开发用 override：禁用应用容器自动重启（启动失败直接看日志排查，不重试）。
+# 用法（务必加 --env-file=/dev/null，因为 ./.env 是给 IDEA 在宿主机跑 Java 服务用的，
+# 里面的 127.0.0.1 类 host 覆盖会污染容器环境，例如 ROCKETMQ_BROKER_ADVERTISE_IP）：
+#   docker compose --env-file=/dev/null -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
+# 仅覆盖 9 个 Spring 应用容器；中间件 restart / healthcheck 保留原值。
+
+x-app-dev: &app-dev
+  restart: "no"
+
+
+services:
+  anynote-gateway:
+    <<: *app-dev
+  anynote-auth:
+    <<: *app-dev
+  anynote-modules-system:
+    <<: *app-dev
+  anynote-modules-note:
+    <<: *app-dev
+  anynote-modules-file:
+    <<: *app-dev
+  anynote-modules-ai-nio:
+    <<: *app-dev
+  anynote-modules-manage:
+    <<: *app-dev
+  anynote-modules-notify:
+    <<: *app-dev
+  anynote-modules-job:
+    <<: *app-dev

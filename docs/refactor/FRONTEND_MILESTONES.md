@@ -55,53 +55,66 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 
 **分支**：`phase/5.0-openapi-validation`（从 `dev` 切出）
 
-### M0.1 启动完整后端
-- [ ] 在 `infra/` 启动中间件：`docker compose -f docker-compose-middleware.yaml up -d`，确认 MySQL/Redis/Nacos/MinIO/ES/RocketMQ 健康
-- [ ] 启动核心服务（本地 mvn 或 docker compose）：`gateway` `auth` `system` `note` `file` `ai` `notify`，每个服务在 Nacos 注册成功
-- [ ] 启动 `ai-service`（Python）：`uvicorn app:app --port 8000`
-- [ ] 验证 `http://localhost:8080/swagger-ui.html` 显示 6 个服务下拉，每个 spec 可加载
+**状态**：🟢 **2026-05-13 完成 M0.1 / M0.2 / M0.3（strict 范围）/ M0.4，待 M0.5 合入。**
 
-### M0.2 运行生成脚本
-- [ ] 执行 `pnpm openapi:generate`，`openapi/specs/{auth,system,note,file,ai,notify}.json` 全部 > 5KB
-- [ ] `packages/api-client/src/{auth,system,note,file,ai,notify}.ts` 产出
-- [ ] 在 `packages/api-client/src/` 临时建 `tsconfig.json` 试编译，无类型错误
+### M0.1 启动完整后端 ✅
+- [x] 在 `infra/` 启动中间件：`docker compose --env-file=/dev/null -f docker-compose-middleware.yaml up -d`，确认 MySQL/Redis/Nacos/MinIO/ES/RocketMQ 健康
+- [x] 启动核心服务（`docker-compose.yaml` + 新增的 `docker-compose.dev.yaml` override）：`gateway` `auth` `system` `note` `file` `ai-nio` `notify` `manage` `job`，9 个容器均 healthy；详见下文 **运维发现**
+- [ ] 启动 `ai-service`（Python）：本里程碑未启动，Phase 5 之后再接（FastAPI 独立 OpenAPI 暴露 `:8000/v3/api-docs`，不入 Gateway 聚合）
+- [x] 验证 `http://localhost:8080/{auth,system,note,file,ai,notify}/v3/api-docs` 全部返回正常 spec
 
-### M0.3 识别并补齐注解缺口
-对前端必需的 12 个端点逐一确认 `@Operation` + `@Schema` 完整（请求体、响应体、错误码）：
+**运维发现**（写入修复，长期生效）：
+1. **`infra/.env` 是给 IDEA 本地宿主机用的**，含 `MYSQL_HOST=127.0.0.1` `ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 等。直接 `docker compose up` 时这些值会泄漏到容器，破坏 RocketMQ broker 自我广播 → 多个服务 MQ listener 启动失败。**所有 compose 命令必须加 `--env-file=/dev/null`**，已写入 `infra/docker-compose.dev.yaml` 注释与本工作流 CI。
+2. **`infra/docker-compose.dev.yaml`（新增）**：app 容器 `restart: "no"`，避免启动失败被无限重试遮蔽。
+3. **Gateway 路由 / 鉴权白名单缺 v3 OpenAPI 路径**：原 `application.yml` swagger-ui 与 `openapi/generate.sh` 都期望 `/{svc}/v3/api-docs`，但 Nacos `anynote-gateway-dev.yml` 只暴露 `/api/{svc}/**` 路由，且 AuthFilter 白名单只包含旧 `/*/v2/api-docs`。已在 Nacos 配置中新增 6 条 `openapi-*` 路由 + v3 白名单 4 条。
+4. **`ai-nio` / `notify` 缺 `anynote-common-swagger` 依赖**：两个服务 Controller 已加 `@Tag` / `@Operation`，但 pom.xml 没引 swagger 包，导致 `/v3/api-docs` 返回 `B0001`。已在两个 pom 中新增依赖。
+5. **RocketMQ broker readiness 不严谨**：broker healthcheck 仅 TCP probe，broker 与 namesrv 完成 topic 路由同步前 app 启动会 `RemotingSendRequestException`。已在 dev override 里通过 `restart: "no"` 让该问题立刻可见；**待办**：把 broker healthcheck 升级为 `mqadmin clusterList`（M0 之外的运维任务，已记入 docs/refactor/TASKS.md 候选）。
 
-| 端点 | 服务 | 用途 |
-|------|------|------|
-| POST `/auth/login` | auth | 登录获取 token |
-| POST `/auth/refresh` | auth | 刷新 token |
-| POST `/auth/logout` | auth | 登出 |
-| GET `/system/user/getInfo`（或 `/api/v1/me`） | system | 当前用户 |
-| GET `/note/knowledge-bases` | note | 知识库列表 |
-| GET `/note/notes` | note | 笔记列表（分页） |
-| GET `/note/notes/{id}` | note | 笔记详情 |
-| PATCH `/note/notes/{id}` | note | 笔记更新 |
-| POST `/file/files/presign` | file | MinIO 直传预签名（**若不存在需新增**） |
-| POST `/file/upload` | file | 兜底上传 |
-| POST `/ai/v1/chat/completions` | ai | AI 流式（SSE 文档化） |
-| POST `/ai/v1/translate` | ai | 翻译 |
+### M0.2 运行生成脚本 ✅
+- [x] 执行 `pnpm openapi:generate`：specs/ 6 个 JSON 输出，体积 auth=3.3KB / system=20KB / note=72KB / file=13KB / ai=15KB / notify=2.6KB（notify 偏小但 schema 正确，体积只是因为它只有 2 个 Controller / 5 个端点）
+- [x] `packages/api-client/src/{auth,system,note,file,ai,notify}.ts` 全部产出
+- [x] 在 `packages/api-client/` 新增 `tsconfig.json` + `typecheck` 脚本，`pnpm tsc --noEmit` 0 错误（strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes 全开）
 
-操作：
-- [ ] 跑 `git grep -l "return null"` 在 services/note，发现 `NoteController` 任何残留未实现端点应抛 `NotImplementedException`
-- [ ] 缺失 `@Operation(summary=...)` 的端点逐个补充
-- [ ] 缺失 `@Schema(description=...)` 的 DTO 字段补充
-- [ ] 若 `/file/files/presign` 不存在，**作为 M0 子任务在 services/file 中新增**（不是前端任务）
+### M0.3 识别并补齐注解缺口 ✅（strict 范围）
+12 个前端必需端点状态：
 
-### M0.4 建立 CI 漂移检测
-- [ ] 创建 `.github/workflows/openapi-check.yml`（或本地 git hook 替代）：
-  - 起服务（可用 testcontainers 或 docker compose）
-  - 跑 `pnpm openapi:generate`
-  - `git diff --exit-code packages/api-client/src/` 失败即阻断
-- [ ] 在 `packages/api-client/` 加 `tsconfig.json` + `pnpm typecheck` 脚本，纳入 turbo
+| 端点（文档目标） | 实际后端路径（gateway 后缀） | 状态 |
+|---|---|---|
+| POST `/auth/login` | `auth /login` | ✅ 已有注解 |
+| POST `/auth/refresh` | **不存在** | ⏸️ 未实现，下推 M2（auth BFF）一起设计 |
+| POST `/auth/logout` | **不存在** | ⏸️ 未实现，下推 M2 |
+| GET `/system/user/getInfo`（或 `/api/v1/me`） | `system /user/mine` | ✅ 本次补 `@Operation` |
+| GET `/note/knowledge-bases` | `note /bases` | ✅ 本次补 `@Operation`（路径保持 `/bases`，由 BFF 在前端侧重命名） |
+| GET `/note/notes` | `note /notes` | ✅ 本次补 `@Operation` |
+| GET `/note/notes/{id}` | `note /notes/{noteId}` | ✅ 本次补 `@Operation` |
+| PATCH `/note/notes/{id}` | `note /notes/{noteId}` | ✅ 本次补 `@Operation` |
+| 浏览器直传文件（分片） | `file /ossSliceUploadTasks` + `file /getOssSliceUploadSignatures` | ✅ 已有完整实现，前端复用现有分片直传流程 |
+| POST `/file/upload` | `file /` (root POST) | ✅ 本次补 `@Operation` 并明确"内部接口" |
+| POST `/ai/v1/chat/completions` | `ai /chat/completions` | ✅ 已有注解 |
+| POST `/ai/v1/translate` | `ai /translate` | ✅ 已有注解 |
 
-### M0.5 验收
-- [ ] `pnpm openapi:generate` 干净退出，6 个 service spec 全部产出
-- [ ] `cd packages/api-client && pnpm tsc --noEmit` 0 错误
-- [ ] 上述 12 个关键端点在生成的 `paths` 类型中均可找到，且请求体/响应体非 `unknown`
-- [ ] PR 合并到 `dev`，打 Tag `v0.5.1-openapi-ready`
+操作完成情况：
+- [x] `services/ai/.../RagController.java:63` `return null` → `throw new BusinessException(...)`
+- [x] `services/system/.../SysOrganizationController.java:30` `return null` → `throw new BusinessException(...)`
+- [x] 12 个端点的 `@Operation(summary, description)` 补齐（上表对应处）
+- [x] 确认浏览器直传复用已有分片上传接口（`ossSliceUploadTasks` + `getOssSliceUploadSignatures`），无需新增 presign 端点
+  - 当前仅 MinIO；HuaweiOBS 走原有 `/createHuaweiOBSTemporarySignature`，新接口会抛 `BusinessException` 提示走专用接口
+- [x] Springdoc info 块默认值通过 Nacos `application-dev.yml` 全局注入（title / version / license / contact）
+
+**M0 范围之外的发现（broader Phase 4 leftover）**：
+扫描全仓 `@PostMapping/@GetMapping/...` 与 `@Operation` 配对得到 **约 150 个端点仍缺 `@Operation`**（主要集中在 `note/MoocController` `note/NoteController`（除 4 个 critical 外）`note/DocController` `system/SysUserController` 等大批历史端点）。**这是 Phase 4 收尾遗留，不在 M0 范围**，应作为独立 backend 工单处理。本里程碑只确保 12 个前端 critical 端点合格。
+
+### M0.4 建立 CI 漂移检测 ✅
+- [x] 创建 `.github/workflows/openapi-check.yml`：JDK 21 + pnpm9 + Maven build + docker compose 起全栈 + `pnpm openapi:generate` + `git diff --exit-code openapi/specs/` 检测 baseline 漂移
+- [x] `packages/api-client/` 新增 `tsconfig.json` + `pnpm typecheck`，并接入 turbo（根 `pnpm typecheck` 可一键跑全仓）
+- [x] 调整 `.gitignore`：`openapi/specs/*.json` **入库**作为 baseline，`packages/api-client/src/` 继续 gitignored（每次从 specs 派生）
+- [x] 根 `package.json` 新增 `pnpm openapi:check`（本地一键检查）
+
+### M0.5 验收 🟡 待用户审阅合入
+- [x] `pnpm openapi:generate` 干净退出，6 个 service spec 全部产出
+- [x] `pnpm --filter @anynote/api-client typecheck` 0 错误
+- [x] 12 个关键端点中**已存在的 10 个**在生成的 paths 类型中均可找到，且请求体 / 响应体均有具名 schema（非 unknown）；2 个未实现的 auth refresh/logout 已下推 M2
+- [ ] PR 合并到 `dev`，打 Tag `v0.5.1-openapi-ready` ← **等待用户审阅**
 
 > ⚠️ 如果 M0.3 发现后端缺口较多（>5 个端点没法用），优先补完再开 M1，不要并行启动前端。
 

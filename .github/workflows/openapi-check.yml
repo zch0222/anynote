@@ -1,0 +1,121 @@
+name: OpenAPI Drift Check
+
+# 目的：每当 Controller / DTO / VO 注解发生变化时，检测 openapi/specs/*.json baseline
+# 是否同步更新。若 PR 没有同步更新 baseline，CI fail；提示作者本地跑 `pnpm openapi:generate`
+# 然后将 specs 一并提交。
+#
+# 触发条件：services/** 或 openapi/** 变更的 PR。中间件/前端独立变更不触发。
+#
+# 触发逻辑参见 docs/refactor/FRONTEND_MILESTONES.md M0.4 与 openapi/WORKFLOW.md。
+
+on:
+  pull_request:
+    paths:
+      - 'services/**'
+      - 'openapi/**'
+      - 'packages/api-client/**'
+      - '.github/workflows/openapi-check.yml'
+  push:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'services/**'
+      - 'openapi/**'
+
+jobs:
+  openapi-drift:
+    name: Detect OpenAPI spec drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+          cache: maven
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install pnpm deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Maven build all services
+        run: |
+          cd services
+          mvn -B -T 1C clean install -DskipTests
+
+      - name: Bring up full stack
+        # 不读 infra/.env（那是给 IDEA 本地宿主机跑用的；容器内必须用 compose 默认值）
+        # 用 docker-compose.dev.yaml 关掉 restart 重试，启动失败立刻可见
+        run: |
+          cd infra
+          docker compose --env-file=/dev/null \
+            -f docker-compose.yaml -f docker-compose.dev.yaml \
+            up -d --build
+
+      - name: Wait for gateway and 6 services to become healthy
+        run: |
+          set -e
+          for port in 8080 8083 8091 18091 8095 9065 9066; do
+            echo "Waiting on $port..."
+            for i in $(seq 1 90); do
+              if curl -sf -m 2 http://127.0.0.1:$port/actuator/health > /dev/null; then
+                echo "  $port UP"
+                break
+              fi
+              if [ "$i" = "90" ]; then
+                echo "  $port FAILED to become healthy in 7.5 min"
+                docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml logs
+                exit 1
+              fi
+              sleep 5
+            done
+          done
+
+      - name: Regenerate OpenAPI specs and TS client
+        env:
+          GATEWAY_URL: http://localhost:8080
+        run: pnpm openapi:generate
+
+      - name: Type-check generated TS client
+        run: pnpm --filter @anynote/api-client typecheck
+
+      - name: Diff specs against baseline
+        run: |
+          if ! git diff --exit-code openapi/specs/; then
+            echo ""
+            echo "::error::OpenAPI spec drift detected. Run \`pnpm openapi:generate\` locally and commit the updated openapi/specs/*.json files."
+            exit 1
+          fi
+          echo "OpenAPI specs match baseline."
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          cd infra
+          docker compose --env-file=/dev/null \
+            -f docker-compose.yaml -f docker-compose.dev.yaml \
+            logs --no-color || true
+
+      - name: Tear down
+        if: always()
+        run: |
+          cd infra
+          docker compose --env-file=/dev/null \
+            -f docker-compose.yaml -f docker-compose.dev.yaml \
+            down -v || true

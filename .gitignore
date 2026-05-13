@@ -36,11 +36,18 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+# IDEA / 本机 Java 跑（非容器）专用，含 127.0.0.1 类 host 覆盖，
+# 严禁被 docker compose 自动加载（docker 命令统一 --env-file=/dev/null）
+.env.idea
 !.env.example
+!.env.idea.example
 
-# ===== Generated（不提交自动生成文件）=====
+# ===== Generated =====
+# packages/api-client/src/ 是从 openapi/specs/*.json 完全派生的 TS 类型，每次 build 重新生成，
+# 不入库。
 packages/api-client/src/
-openapi/specs/
+# 注意：openapi/specs/*.json 是 OpenAPI 契约 baseline，**入库**，由 CI 的漂移检测 diff
+# 是否与最新后端注解保持一致（详见 .github/workflows/openapi-check.yml 与 openapi/WORKFLOW.md）。
 
 # ===== Logs =====
 *.log

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.constraints.NotNull;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
@@ -29,6 +30,8 @@ public class FileController {
     @Autowired
     private FileService fileService;
 
+    @Operation(summary = "内部：服务端中转上传文件",
+            description = "由后端服务（非浏览器）通过 Feign 调用；浏览器直传请使用 /ossSliceUploadTasks + /getOssSliceUploadSignatures 分片直传流程")
     @InnerAuth
     @PostMapping
     public ResData<FilePO> uploadFile(@RequestParam("file") @NotNull(message = "文件不能为空") MultipartFile file,

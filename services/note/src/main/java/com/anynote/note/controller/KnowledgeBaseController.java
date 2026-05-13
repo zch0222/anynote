@@ -36,6 +36,7 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
@@ -118,6 +119,7 @@ public class KnowledgeBaseController {
     }
 
 
+    @Operation(summary = "分页查询当前用户的知识库列表", description = "按权限过滤；前端首屏与侧边栏共用")
     @GetMapping
     public ResData<PageBean<NoteKnowledgeBaseDTO>> getUsersKnowledgeBases(@NotNull(message = "页码不能为空") Integer page,
                                                                           @NotNull(message = "页面容量不能为空") Integer pageSize,
@@ -183,6 +185,7 @@ public class KnowledgeBaseController {
 //        return ResUtil.success(knowledgeBaseService.createKnowledgeBase(knowledgeBaseCreateParam));
 //    }
 
+    @Operation(summary = "按 ID 获取知识库详情")
     @DataScope(userAlias = "sys_user",
             organizationAlias = "sys_organization")
     @GetMapping("{id}")
