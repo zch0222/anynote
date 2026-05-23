@@ -21,7 +21,11 @@
       ".next",
       "dist",
       ".turbo",
-      "packages/api-client/src"
+      "packages/api-client/src",
+      "apps/web-legacy",
+      "apps/web/.next",
+      "apps/web/src/components/ui",
+      "openapi/specs"
     ]
   }
 }
