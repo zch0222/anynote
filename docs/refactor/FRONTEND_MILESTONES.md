@@ -110,11 +110,11 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 - [x] 调整 `.gitignore`：`openapi/specs/*.json` **入库**作为 baseline，`packages/api-client/src/` 继续 gitignored（每次从 specs 派生）
 - [x] 根 `package.json` 新增 `pnpm openapi:check`（本地一键检查）
 
-### M0.5 验收 🟡 待用户审阅合入
+### M0.5 验收 ✅
 - [x] `pnpm openapi:generate` 干净退出，6 个 service spec 全部产出
 - [x] `pnpm --filter @anynote/api-client typecheck` 0 错误
 - [x] 12 个关键端点中**已存在的 10 个**在生成的 paths 类型中均可找到，且请求体 / 响应体均有具名 schema（非 unknown）；2 个未实现的 auth refresh/logout 已下推 M2
-- [ ] PR 合并到 `dev`，打 Tag `v0.5.1-openapi-ready` ← **等待用户审阅**
+- [x] PR 合并到 `dev`（merge commit `dfe9360 chore: merge phase/5.0-openapi-validation → dev`）。Tag `v0.5.1-openapi-ready` 暂未打（与 M1 / M2 一起延后到 Phase 5 中段统一发版）
 
 > ⚠️ 如果 M0.3 发现后端缺口较多（>5 个端点没法用），优先补完再开 M1，不要并行启动前端。
 
@@ -126,16 +126,27 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 
 **分支**：`phase/5.1-skeleton`
 
-### M1.1 初始化 Next.js 15
-- [ ] 删除当前空 `apps/web/`（确认是空目录后），重新生成：
-  ```bash
-  cd apps && pnpm create next-app@latest web \
-    --typescript --tailwind --app --src-dir \
-    --import-alias "@/*" --no-eslint --turbo
-  ```
-- [ ] 校验 `apps/web/package.json` 加入 workspace（取消 `pnpm-workspace.yaml` 注释，确保 `apps/web` 已纳入）
+**状态**：🟢 **2026-05-23 完成 M1.1–M1.5，已合并 dev**（merge commit `c83a083 chore: merge phase/5.1-skeleton → dev`）。
 
-### M1.2 依赖安装
+### M1.1 初始化 Next.js 15 ✅
+- [x] 删除空 `apps/web/`，重新生成（**实际命令与原计划差异**：`@latest` → `@15` 锁定 v15（避免 Next.js 16 已发布造成大版本漂移）；`--turbo` → `--turbopack`（CLI flag 改名）；加 `--use-pnpm --yes`）：
+  ```bash
+  cd apps && pnpm create next-app@15 web \
+    --typescript --tailwind --app --src-dir \
+    --import-alias "@/*" --no-eslint --turbopack --use-pnpm --yes
+  ```
+- [x] `apps/web` 已在 `pnpm-workspace.yaml` 中纳入（之前已存在），`pnpm install` 顺利联通
+
+**实际产出版本**（2026-05-23 解析）：
+
+| 包 | 版本 | 备注 |
+|---|---|---|
+| `next` | 15.5.18 | 锁 v15（v16 已 GA 未升） |
+| `react` / `react-dom` | 19.1.0 | Next.js 15 默认 |
+| `tailwindcss` + `@tailwindcss/postcss` | 4.3.0 | **Tailwind v4**（影响 shadcn 选项） |
+| `typescript` | 5.9.3 | |
+
+### M1.2 依赖安装 ✅
 ```bash
 cd apps/web && pnpm add \
   @tanstack/react-query @tanstack/react-query-devtools \
@@ -145,28 +156,54 @@ cd apps/web && pnpm add \
   class-variance-authority clsx tailwind-merge lucide-react \
   @microsoft/fetch-event-source date-fns cmdk
 
-pnpm add -D @types/node vitest @vitest/ui @testing-library/react jsdom
+pnpm add -D vitest @vitest/ui @testing-library/react @testing-library/dom @testing-library/jest-dom jsdom
 ```
 
-### M1.3 shadcn/ui 初始化与首批组件
+**版本提醒（与训练截止时有大版本差异）**：
+- `zod ^4.4.3`（v3 → v4 破坏性变更，schema API 调整，错误格式从 `error.flatten()` 改为 `z.flattenError()`，写表单 schema 时注意）
+- `zustand ^5.0.13`
+- `ky ^2.0.2`
+- `lucide-react ^1.16.0`
+- `vitest ^4.1.7`
+
+### M1.3 shadcn/ui 初始化与首批组件 ✅
 ```bash
-pnpm dlx shadcn@latest init       # 选 New York + slate + CSS Variables
-pnpm dlx shadcn@latest add button input form dialog dropdown-menu \
+pnpm dlx shadcn@latest init -d --force
+# baseColor 默认 neutral，需手动改 components.json → "slate"，并按 Tailwind v4 slate palette 用 OKLCH 覆盖 src/app/globals.css 的 :root / .dark
+pnpm dlx shadcn@latest add button input dialog dropdown-menu \
   sheet sidebar avatar badge card table tabs tooltip skeleton sonner \
-  command separator scroll-area
+  command separator scroll-area --yes
+pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field 原语
 ```
 
-### M1.4 TypeScript / Biome / Turbo 配合
-- [ ] `apps/web/tsconfig.json` extends `packages/tsconfig/base.json`，开启 `strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes`
-- [ ] 根 `package.json` 加 `"typecheck": "turbo typecheck"`，子包加对应脚本
-- [ ] 把 `apps/web` 的 dev/build/lint 接到 turbo pipeline，验证 `pnpm dev` `pnpm build` `pnpm check` 全绿
-- [ ] `apps/web/src/lib/env.ts` 用 zod 校验环境变量（`NEXT_PUBLIC_*` 与服务端变量分离）
+**shadcn 2026 关键变更**（首次遇到，已踩；M5 / M6 沿用时注意）：
 
-### M1.5 验收
-- [ ] `pnpm dev` 在 3s 内启动，访问 `http://localhost:3000` 见默认页
-- [ ] `pnpm build` 成功，bundle 报告打印
-- [ ] `pnpm check` 无 warning
-- [ ] 合并到 `dev`
+| 旧（设计本文档时） | 新（2026） |
+|---|---|
+| `--style new-york / default` | `--preset base-nova`（CLI `-d` 默认；style 字段值为 `base-nova`） |
+| 依赖 `@radix-ui/react-*` 单包 | 改用 `@base-ui/react`（Radix 团队下一代统一库） |
+| 注册组件 `form` | **已弃用**，注册表返回空壳。改用 **`field`** 原语（FieldSet / FieldLabel / FieldDescription / FieldError / FieldGroup / Field / FieldTitle / FieldSeparator / FieldContent / FieldLegend），通过 `errors` 属性与 react-hook-form 直接配合 |
+| 纯 CLI | 附带 runtime 包 `shadcn`（提供 `shadcn/tailwind.css` 预设）和 `tw-animate-css`（动画扩展） |
+| CLI `--base-color slate` flag | 已移除；`-d` 强制写 `neutral`。要 slate 必须**手改 `components.json` + 手贴 OKLCH** |
+
+最终 `apps/web/src/components/ui/` 共 **21 个文件**：`avatar / badge / button / card / command / dialog / dropdown-menu / field / input-group / input / label / scroll-area / separator / sheet / sidebar / skeleton / sonner / table / tabs / textarea / tooltip`（`input-group` / `label` / `textarea` 是 shadcn 自动随依赖补齐）。
+
+### M1.4 TypeScript / Biome / Turbo 配合 ✅
+- [x] `apps/web/tsconfig.json` 改为 `extends "@anynote/tsconfig/base.json"`（自动启用 strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes），保留 Next.js 必需的 `jsx: preserve` / `plugins: [{name: next}]` / `paths` / `incremental` / `include`
+- [x] `@anynote/tsconfig` 加入 `apps/web` 的 devDeps（`workspace:*`）
+- [x] `apps/web/package.json` 增 `lint` / `typecheck` / `test` / `test:watch` 脚本；`turbo.json` 已有任务直接接入（根 `pnpm typecheck` / `pnpm check` / `pnpm build` 透传）
+- [x] `apps/web/src/lib/env.ts`：zod schema 分 `serverSchema`（`NODE_ENV` / `BACKEND_URL`）与 `clientSchema`（`NEXT_PUBLIC_APP_URL`），运行时 `isServer` 切换，失败时打印字段级 error 并抛出
+
+**额外踩坑 / 修复（写入文档以备后续踩）**：
+1. shadcn 生成的 `sonner.tsx:12` `theme as ToasterProps["theme"]` 在 `exactOptionalPropertyTypes` 下报错（`theme` 残留 `undefined`），已改为 `as NonNullable<ToasterProps["theme"]>`。后续 `shadcn add sonner` 重生时要重新修补。
+2. `pnpm check` 默认扫**全仓**，首次跑会误伤 `apps/web-legacy/` 的 243 个文件 + 6 个 `openapi/specs/*.json` baseline（baseline 是 single-line JSON，被 biome 格式化成多行会让 CI `git diff --exit-code` 永远红）。已在 `biome.json` `files.ignore` 追加 4 条：`apps/web-legacy` / `apps/web/.next` / `apps/web/src/components/ui`（vendored 代码，每次 `shadcn add` 会再次触发 5 个 lint error） / `openapi/specs`。
+
+### M1.5 验收 ✅
+- [x] `pnpm dev` 启动 **662 ms**（远小于 3s 目标），`HEAD /` 返回 200，首次编译 `/` 1.5s
+- [x] `pnpm build` 成功：5/5 静态页生成；`/` 5.43 kB，First Load JS 119 kB，shared 131 kB
+- [x] `pnpm check` 20 files / 0 fixes（全绿）
+- [x] `pnpm typecheck` turbo 跑 web + api-client 两包均通过
+- [x] 合并到 `dev`（`--no-ff` merge commit，与 M0 风格一致）；`phase/5.1-skeleton` 分支保留
 
 ---
 

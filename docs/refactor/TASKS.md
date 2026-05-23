@@ -129,17 +129,23 @@
 
 ---
 
-## Phase 5：前端完全重写 `[ ]`
+## Phase 5：前端完全重写 `[IN PROGRESS]`
 
 **前置条件**：Phase 1 完成  
-**目标分支**：`phase/5-frontend-rewrite`  
+**目标分支**：按里程碑拆分 `phase/5.0-openapi-validation` ... `phase/5.8-polish`（详见 [`FRONTEND_MILESTONES.md`](./FRONTEND_MILESTONES.md)）  
 **完成后打 Tag**：`v0.6.0`
 
-- [ ] 5.1 初始化 Next.js 15 项目（apps/web/ 替换）
-- [ ] 5.2 安装依赖（TanStack Query, Zustand, shadcn/ui 等）
-- [ ] 5.3 认证安全重构（BFF + httpOnly Cookie）
-- [ ] 5.4 TanStack Query 数据层（替换 Redux + SWR）
-- [ ] 5.5 编辑器集成（Milkdown 迁移，删除 Wangeditor）
+- [x] **M0** OpenAPI 集成验证（门禁） ✓ 2026-05-13 合并 dev（`dfe9360`）
+- [x] **M1** 前端骨架与工具链 ✓ 2026-05-23 合并 dev（`c83a083`）：5.1 + 5.2 完成
+  - [x] 5.1 初始化 Next.js 15 项目（apps/web/ 替换，next 15.5.18 + React 19.1 + Tailwind v4，锁 v15 未升 v16）
+  - [x] 5.2 安装依赖（TanStack Query 5.100, Zustand 5, RHF 7.76, Zod 4.4, shadcn 4.8 / 21 组件 / Field 替代废弃的 Form / 切到 @base-ui/react）
+- [ ] **M2** 认证 BFF + Cookie 安全（5.3 BFF + httpOnly Cookie）
+- [ ] **M3** API 客户端 + 查询层 + 代理（5.4 TanStack Query 数据层）
+- [ ] **M4** AppShell + 主题 + 命令面板
+- [ ] **M5** TipTap 编辑器核心（5.5 编辑器集成 — **统一 TipTap**，废弃 Milkdown / Wangeditor / Vditor / Muya）
+- [ ] **M6** 笔记业务页面
+- [ ] **M7** AI / PDF / Mooc / Tasks / Wikis
+- [ ] **M8** 协同 + 桌面 + 收尾
 
 ---
 

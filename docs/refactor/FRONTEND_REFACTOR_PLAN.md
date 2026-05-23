@@ -37,7 +37,7 @@
 运行时          Next.js 15 (App Router) + React 19 + Node 20 LTS
 语言            TypeScript 5.6（strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes）
 样式            Tailwind CSS 4 + CSS Variables（统一 light/dark token）
-UI 基础         shadcn/ui（Radix UI primitives + 源码内嵌）
+UI 基础         shadcn/ui v4.8+（base-nova 预设；底层 primitives 已从 @radix-ui/* 切到 @base-ui/react；Form 组件已弃用，改用 Field 原语 + react-hook-form）
 图标            lucide-react
 表单            react-hook-form + zod + @hookform/resolvers
 服务端状态      @tanstack/react-query v5 + @tanstack/react-query-devtools
@@ -697,7 +697,7 @@ TipTap 的 `AnynoteImage` 扩展接 `uploadFn`，粘贴 / 拖拽 / 工具栏插�
 - **表格**：用 `@tanstack/react-table`（headless）+ shadcn `Table`，比 AntD Table 更可控
 - **DatePicker**：`react-day-picker` + shadcn `Calendar`
 - **Select / Combobox**：shadcn `Select` + `Command`（cmdk）
-- **Tree（笔记目录）**：自研 + Radix `Collapsible`，配合 `@dnd-kit` 实现拖拽排序
+- **Tree（笔记目录）**：自研 + Base UI `Collapsible`（shadcn 2026 后已统一切到 `@base-ui/react`，不再用 `@radix-ui/*`），配合 `@dnd-kit` 实现拖拽排序
 - **保留 ECharts**：Mooc 模块图表，懒加载
 - **保留 ReactFlow**：AI Workflow 模块
 
