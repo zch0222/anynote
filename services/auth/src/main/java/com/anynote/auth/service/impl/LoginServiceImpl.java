@@ -175,6 +175,22 @@ public class LoginServiceImpl implements LoginService {
         return resLoginUser;
     }
 
+    @Override
+    public Token refresh(String refreshToken) {
+        if (StringUtils.isBlank(refreshToken)) {
+            throw new LoginException("refreshToken 不能为空");
+        }
+        return tokenUtil.refreshToken(refreshToken);
+    }
+
+    @Override
+    public void logout(String accessToken, String refreshToken) {
+        if (StringUtils.isBlank(accessToken)) {
+            throw new LoginException("accessToken 不能为空");
+        }
+        tokenUtil.logout(accessToken, refreshToken);
+    }
+
     public static void main(String[] args) {
         System.out.println(SecurityUtils.encryptPassword("123456"));
     }

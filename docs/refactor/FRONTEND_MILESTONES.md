@@ -211,31 +211,71 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 
 **目标**：登录全链路走通；浏览器侧无法读到 token；并发刷新无竞争。
 
-**分支**：`phase/5.2-auth-bff`
+**分支**：拆分为两段执行
+- **`phase/5.2a-auth-backend`**：后端补 refresh/logout 端点（不在原计划中，因 M0.3 已识别该缺口）
+- **`phase/5.2-auth-bff`**：前端 BFF + middleware + 登录页
+
+**状态**：🟡 进行中（2026-05-23 起）
+
+### 关键决策（开工前敲定）
+
+1. **Cookie 方案：2 件套 `at` + `rt`**（放弃原计划的 `sid`）
+   - 后端 Redis 已按 token 字符串本身做反查，不需要 sid 关联会话
+   - 两 cookie 均 `HttpOnly; Secure; SameSite=Strict; Path=/`
+   - CSRF 由 `SameSite=Strict` + Origin header 检查防御，不需要 CSRF 专用 cookie
+2. **环境变量命名**：与 `.claude/context/frontend.md` 对齐
+   - `INTERNAL_API_URL`（server-only，BFF → gateway，docker 内 `http://gateway:8080` 本地 `http://localhost:8080`）
+   - `NEXT_PUBLIC_APP_URL`（浏览器源）
+   - **不引入 `NEXTAUTH_SECRET`**——不用 next-auth，BFF 透传后端 JWT 不签名
+   - M1.4 写的 `BACKEND_URL` 在 M2.1 改名为 `INTERNAL_API_URL`
+3. **Refresh 契约**
+   - Input：`{ refreshToken: string }`
+   - Output：新 `Token`（access + refresh 同时旋转，旧 refresh 立即从 Redis 删除）
+   - 旧 accessToken 留待自然过期（实例已存于 Redis；攻击窗口至多到 TTL）
+4. **Logout 契约**
+   - Input：`{ accessToken, refreshToken? }`
+   - 服务端仅清当前会话 Redis 键（**单会话登出**），不动该用户其他端
+   - 幂等：token 失效/不存在时静默成功
+
+### M2.0 后端：补 /auth/refresh + /auth/logout ⚙️ 进行中
+
+**分支**：`phase/5.2a-auth-backend`
+
+- [x] `services/common/anynote-common-security-core/.../TokenUtil.java` 新增 `logout(at, rt)` 方法（per-session Redis 删键，幂等）
+  - 现有 `refreshToken(oldRefreshToken)` 已自带 access + refresh 旋转 + 旧 refresh 删除，直接复用
+- [x] `services/auth/.../model/dto/RefreshTokenDTO.java`、`LogoutDTO.java`（含 `@Schema` 注解）
+- [x] `services/auth/.../service/LoginService.java` 接口加 `refresh(rt) → Token` 与 `logout(at, rt)`
+- [x] `services/auth/.../service/impl/LoginServiceImpl.java` 实现两方法（参数校验 + 委托 TokenUtil）
+- [x] `services/auth/.../controller/TokenController.java` 暴露 `POST /refresh` 与 `POST /logout`，含 `@Operation` 注解
+- [x] `infra/docker/nacos/configs/anynote-gateway-dev.yml` 白名单加 `/api/auth/refresh` 与 `/api/auth/logout`（refresh 入口可能 access 已过期；logout 应允许任意状态）
+- [x] `mvn install -pl auth -am -DskipTests` 编译通过
+- [ ] **需用户启动 docker compose 全栈** → 跑 `pnpm openapi:generate` 重生 `openapi/specs/auth.json` 与 `packages/api-client/src/auth.ts`
+- [ ] 提交 commit + merge `phase/5.2a-auth-backend` → `dev`（之后再开 5.2-auth-bff）
 
 ### M2.1 BFF 路由
-- [ ] `src/app/api/auth/login/route.ts`：调用 `/auth/login` → 响应中 `Set-Cookie` 三件套（`at` / `rt` / `sid`）
+- [ ] 重命名 `apps/web/src/lib/env.ts` 中 `BACKEND_URL` → `INTERNAL_API_URL`
+- [ ] `src/app/api/auth/login/route.ts`：调用 `/api/auth/login` → 响应中 `Set-Cookie` 两件套（`at` / `rt`）
 - [ ] `src/app/api/auth/refresh/route.ts`：进程内 `Map<rt, Promise<void>>` 锁防并发
-- [ ] `src/app/api/auth/logout/route.ts`：清三件套 + 通知后端
-- [ ] `src/app/api/auth/me/route.ts`：转发 `/system/user/getInfo`，返回用户资料
-- [ ] `src/app/api/proxy/[...path]/route.ts`：所有业务请求经此，自动注入 `Authorization: Bearer ${at}` 并在过期时触发刷新
+- [ ] `src/app/api/auth/logout/route.ts`：清两件套 + 调后端 `/api/auth/logout`
+- [ ] `src/app/api/auth/me/route.ts`：转发 `/api/system/user/mine`，返回用户资料
+- [ ] `src/app/api/proxy/[...path]/route.ts`：所有业务请求经此，自动注入 `Authorization: Bearer ${at}` 并在过期时触发 refresh
 
 ### M2.2 中间件路由保护
 - [ ] `apps/web/src/middleware.ts`：未带 `at` cookie 的私有路由重定向到 `/login`
 - [ ] `matcher` 排除 `/login` `/register` `/api/auth/**` `/_next` 静态资源
 
 ### M2.3 登录 / 注册页
-- [ ] `(auth)/login/page.tsx`：react-hook-form + zod，提交到 `/api/auth/login`
-- [ ] `(auth)/register/page.tsx`：调 `/system/register`
+- [ ] `(auth)/login/page.tsx`：react-hook-form + zod + shadcn Field，提交到 `/api/auth/login`
+- [ ] `(auth)/register/page.tsx`：调 `/api/auth/register`（后端 register 直接登录返回 LoginDTO）
 - [ ] 错误吐司用 sonner
 - [ ] 登录成功 `router.push('/dashboard')`
 
 ### M2.4 验收
-- [ ] 登录后 DevTools → Application → Cookies：只有 `at` / `rt` / `sid`，HttpOnly 均为 ✓
+- [ ] 登录后 DevTools → Application → Cookies：只有 `at` / `rt`，HttpOnly 均为 ✓
 - [ ] DevTools → Application → LocalStorage / SessionStorage 全空
-- [ ] 手动让 `at` 提前过期（缩短 TTL 至 30s 测试），并发触发 10 个请求，只产生 1 次 `/auth/refresh` 调用
-- [ ] 登出后 cookies 三件套全部清空
-- [ ] 合并到 `dev`
+- [ ] 手动让 `at` 提前过期（缩短 TTL 至 30s 测试），并发触发 10 个请求，只产生 1 次 `/api/auth/refresh` 调用
+- [ ] 登出后 cookies 两件套全部清空
+- [ ] 合并 `phase/5.2-auth-bff` → `dev`
 
 ---
 
