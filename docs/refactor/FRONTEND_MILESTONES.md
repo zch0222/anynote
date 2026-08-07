@@ -1,9 +1,12 @@
 # Anynote 前端重构里程碑（可执行版）
 
-> 文档版本：v1.0 | 生成日期：2026-05-13
+> 文档版本：v1.1 | 生成日期：2026-05-13 | 最近核对：2026-08-07
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；Phase 5 未启动，`apps/web/` 为空，`packages/api-client/src/` 未生成
-> 主干分支：`dev`；本计划工作分支：`phase/5-frontend-rewrite`
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 已完成，M2 停在 M2.0，M3-M8 未启动**（逐里程碑状态见下方各节）
+> `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
+> 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
+>
+> ⚠️ **分支同步现状（2026-08-07 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点）。M1 的合并 commit `c83a083` 与 M2.0 的 `52cc74a` 只存在于 `phase/5.2a-auth-backend`（本地无 `dev` 分支，合并后未推送）。恢复推进前先把这条线推回 `origin/dev`。
 
 ---
 
@@ -40,7 +43,7 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 | **M2** | 认证 BFF + Cookie 安全 | 1.5 天 | M1 | `phase/5.2-auth-bff` | 中（auth 端点） |
 | **M3** | API 客户端 + 查询层 + 代理 | 1.5 天 | M0, M2 | `phase/5.3-api-layer` | ★★★ 主入口 |
 | **M4** | AppShell + 主题 + 命令面板 | 1 天 | M2 | `phase/5.4-app-shell` | 弱 |
-| **M5** | TipTap 编辑器核心 | 3-4 天 | M1（可与 M2-M4 并行） | `phase/5.5-tiptap-core` | 中（文件上传 presign） |
+| **M5** | TipTap 编辑器核心 | 3-4 天 | M1（可与 M2-M4 并行） | `phase/5.5-tiptap-core` | 中（文件分片直传） |
 | **M6** | 笔记业务页面 | 2-3 天 | M3, M5 | `phase/5.6-notes` | 强（笔记 CRUD） |
 | **M7** | AI / PDF / Mooc / Tasks / Wikis | 3-4 天 | M3, M5 | `phase/5.7-features` | 强（AI SSE / chat-pdf） |
 | **M8** | 协同 + 桌面 + 收尾 | 2 天 | M6, M7 | `phase/5.8-polish` | 弱 |
@@ -387,9 +390,17 @@ cd apps/web && pnpm add \
 - [ ] `styles/tiptap.css`：基于 `@tailwindcss/typography` 的 `.prose` 风格 + 暗色覆盖 + 节点专属样式
 
 ### M5.3 图片上传集成
-- [ ] `lib/editor/upload.ts`：调 `/api/v1/files/presign`（M0.3 已确认存在）→ PUT 到 MinIO → 返回 publicUrl
+
+> ⚠️ **不存在 `/files/presign` 端点**。M0 期间曾新增（`a305f5a`）又整体 revert（`cafee8c`）；浏览器直传统一复用 file 服务既有的分片直传流程（M0.3 表格已确认）。下列路径为 Gateway 路由前缀 `/api/file/**`，前端实际经 BFF 代理走 `/api/proxy/file/*`。
+
+- [ ] `lib/editor/upload.ts`：走 file 服务分片直传五步
+  1. `POST /api/file/ossSliceUploadTasks` 建任务 → 返回 `uploadId` / `chunkSize` / `totalChunk` / `finishedChunks`（`hash` 命中即秒传，`finishedChunks` 支持断点续传）
+  2. `POST /api/file/getOssSliceUploadSignatures` 按 `chunkIndexList` 换分片签名（`OSSSignature.type` = `MIN_IO` / `HUAWEI_OBS`）
+  3. 浏览器按签名直接 PUT 各分片到 OSS
+  4. `POST /api/file/markOssSliceUploadSignatures` 标记已完成分片
+  5. `POST /api/file/composeOssSliceUploadObject` 合并 → 返回 `fileId` / `objectName` / `hash`；再用 `GET /api/file/public/byObjectName` 换可访问 URL（`ObjectURL.url` + `expireTime`，**非永久公开 URL，注意过期处理**）
 - [ ] `AnynoteImage` 扩展接 `uploadFn`，支持工具栏插入 / 粘贴 / 拖拽 三种入口
-- [ ] 大文件分片：复用 file 服务现有分片端点（若有），否则单文件上限 50MB
+- [ ] 分片大小由后端返回的 `chunkSize` 决定，前端不再自定单文件上限；进度可选用 `GET /api/file/progress/{uploadId}`，任务详情用 `GET /api/file/ossSliceUploadTask/{uploadId}`
 
 ### M5.4 代码高亮（Shiki）
 - [ ] `lib/editor/shiki.ts`：`createHighlighterCoreSync` 单例，懒加载语言
@@ -528,9 +539,9 @@ cd apps/web && pnpm add \
 
 | 里程碑 | 后端动作 | 触发条件 |
 |--------|--------|---------|
-| M0 | 补齐前端必需的 12 个端点 `@Operation` / `@Schema`；若 `/files/presign` 不存在则新增 | 强制 |
+| M0 | 补齐前端必需的 12 个端点 `@Operation` / `@Schema`（结论：**不新增 presign 端点**，浏览器直传复用既有分片上传流程） | 强制 |
 | M3 | CI workflow 接入；后端 PR 改动 Controller 时跑 spec 生成 + diff | 持续 |
-| M5 | 确认 `/files/presign` 返回 PUT URL + 公共可读 URL；MinIO bucket CORS 放通前端域名 | 强制 |
+| M5 | 无需新增端点（复用 `ossSliceUploadTasks` 分片直传链路）；MinIO bucket CORS 需放通前端域名，确保浏览器可直接 PUT 分片 | 强制 |
 | M6 | 笔记 CRUD 必须返回完整字段（标题 / 内容 / updatedAt / version），用于乐观更新 | 强制 |
 | M7 | AI SSE 端点在 OpenAPI 标注 `produces: text/event-stream` + 错误码 schema | 建议 |
 | M7 | 工作流 / PDF 端点契约稳定 | 建议 |

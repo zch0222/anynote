@@ -567,18 +567,50 @@ export const AnynoteCallout = Node.create({
 
 ### 6.5 图片 / 文件上传
 
-**直传 MinIO 预签名 URL**，前端 → BFF 获取签名 → 直接 PUT 到 MinIO，避免业务服务转发大文件。
+**浏览器分片直传**，前端 → BFF 换分片签名 → 直接 PUT 到 OSS，避免业务服务转发大文件。
+
+> ⚠️ **没有 `/files/presign` 这类单次预签名端点**。Phase 5 M0 期间曾新增又整体 revert（`a305f5a` → `cafee8c`），结论是复用 file 服务既有的分片直传链路（建任务 → 换签名 → PUT 分片 → 标记 → 合并 → 取 URL）。`OSSSignature.type` 区分 `MIN_IO` / `HUAWEI_OBS`，两种后端共用同一套流程。
 
 ```ts
-// lib/editor/upload.ts
+// lib/editor/upload.ts —— fileApi 的 baseUrl 为 '/api/proxy/file'（见 M3.2）
 export async function uploadImage(file: File): Promise<string> {
-  const { data } = await api.POST('/api/v1/files/presign', {
-    body: { filename: file.name, contentType: file.type, size: file.size },
+  const hash = await sha256(file);
+
+  // 1. 建任务：hash 命中即秒传，finishedChunks 用于断点续传
+  const { data: task } = await fileApi.POST('/ossSliceUploadTasks', {
+    body: { path: 'note-image', fileName: file.name, hash, fileSize: file.size, contentType: file.type, source: SOURCE_NOTE },
   });
-  await fetch(data!.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
-  return data!.publicUrl;
+  const { uploadId, chunkSize, totalChunk, finishedChunks = [] } = task!.data!;
+
+  const pending = Array.from({ length: totalChunk }, (_, i) => i).filter((i) => !finishedChunks.includes(i));
+
+  if (pending.length > 0) {
+    // 2. 按分片索引换签名
+    const { data: sig } = await fileApi.POST('/getOssSliceUploadSignatures', {
+      body: { uploadId, chunkIndexList: pending },
+    });
+
+    // 3. 浏览器直接 PUT 各分片 → 4. 标记完成
+    for (const { index, signature } of sig!.data!.signatures) {
+      const chunk = file.slice(index * chunkSize, (index + 1) * chunkSize);
+      await putChunk(signature, chunk); // 按 signature.type 区分 MinIO / OBS 的 PUT 细节
+      await fileApi.POST('/markOssSliceUploadSignatures', { body: { uploadId, chunkIndexList: [index] } });
+    }
+  }
+
+  // 5. 合并 → 取可访问 URL
+  const { data: composed } = await fileApi.POST('/composeOssSliceUploadObject', { body: { uploadId } });
+  const { data: url } = await fileApi.GET('/public/byObjectName', {
+    params: { query: { objectName: composed!.data!.objectName } },
+  });
+  return url!.data!.url; // 注意：带 expireTime，不是永久公开 URL
 }
 ```
+
+**两个必须处理的约束**：
+
+1. `GET /public/byObjectName` 返回的 URL **带 `expireTime`**，不能直接当作永久地址写进 Markdown。笔记正文应存 `objectName`，渲染时再换取时效 URL；或由后端提供稳定跳转地址。
+2. MinIO bucket 的 CORS 必须放通前端域名，否则浏览器 PUT 分片会被拦截。
 
 TipTap 的 `AnynoteImage` 扩展接 `uploadFn`，粘贴 / 拖拽 / 工具栏插入统一走这条路径。
 

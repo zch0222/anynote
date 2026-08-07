@@ -23,15 +23,17 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | Phase | 内容 | 状态 |
 |-------|------|------|
 | 0 | Monorepo 基础设施 | ✅ v0.1.0 |
-| 1 | OpenAPI Contract First（Springdoc + 29 Controller 注解 + Gateway 聚合） | ✅ v0.2.0 — **但 `pnpm openapi:generate` 从未实际跑成功过；`openapi/specs/` 与 `packages/api-client/src/` 均空** |
+| 1 | OpenAPI Contract First（Springdoc + 29 Controller 注解 + Gateway 聚合） | ✅ v0.2.0 — Phase 5 M0 已端到端验证通过，`openapi/specs/*.json` 6 份 baseline 入库；`packages/api-client/src/` 仍 gitignored，本地需跑一次 `pnpm openapi:generate` 派生 |
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🔴 **未启动**，`apps/web/` 为空，里程碑见 `docs/refactor/FRONTEND_MILESTONES.md` |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中** — M0（OpenAPI 门禁）/ M1（Next.js 15 + shadcn 骨架）已完成，M2 停在 M2.0（后端 `/auth/refresh` + `/logout` 已实现未合并），M3-M8 未启动。里程碑见 `docs/refactor/FRONTEND_MILESTONES.md` |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
-**当前分支**：`fix/minio-exception`（与 `dev` 有少量未合并改动）。`main` 是发布分支，日常合并目标是 `dev`。
+**当前分支**：`phase/5.2a-auth-backend`。`main` 是发布分支，日常合并目标是 `dev`。
+
+⚠️ **分支同步现状（2026-08-07 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点），本地无 `dev` 分支。M1 的合并 commit `c83a083` 与 M2.0 的 `52cc74a` 共 5 个 commit 只存在于 `phase/5.2a-auth-backend`，尚未推回 `origin/dev`。动 Phase 5 相关代码前先确认这条线的落点。
 
 ## 常用命令
 

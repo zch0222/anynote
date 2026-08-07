@@ -1389,7 +1389,7 @@ main
       ├── phase/2-maven-bom
       ├── phase/3-spring-boot3
       ├── phase/4-service-refactor
-      ├── phase/5-frontend-rewrite
+      ├── phase/5.0-openapi-validation … phase/5.8-polish（Phase 5 按里程碑拆分，见 FRONTEND_MILESTONES.md）
       ├── phase/6-python-ai
       └── fix/description
 ```
