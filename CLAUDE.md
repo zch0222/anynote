@@ -145,6 +145,55 @@ pnpm format              # Biome format only
 - **路由注解**：每个端点写 `tags`、`summary`、`responses`，确保 `/v3/api-docs` 输出可被前端类型生成消费
 - **依赖注入**：用 FastAPI `Depends(...)`，不要在模块顶层用全局单例
 
+## 测试要求（强制）
+
+**前后端任何代码改动完成后都必须附带单元测试，没有测试的改动不算完成，不允许提交。**
+
+### 覆盖范围
+
+| 必须写单测 | 可豁免 |
+|---|---|
+| Service / ServiceImpl 的业务逻辑（分支、边界、异常路径） | 纯 DTO / VO / PO（无逻辑的 getter/setter） |
+| 工具类、校验器、序列化 / 反序列化 | MyBatis Mapper 接口（无自定义 SQL 逻辑时） |
+| 前端 hooks（`use*Query` / `use*Mutation` / 自定义 hook） | 生成代码（`packages/api-client/src/`、`components/ui/` 的 shadcn 原件） |
+| 前端纯函数（`lib/**`、序列化、格式化） | 纯展示型 RSC（无状态无分支） |
+| BFF Route Handler（cookie 设置、鉴权转发、refresh 并发） | 配置文件、常量表 |
+| Python service 层与 Pydantic 校验逻辑 | |
+
+**Bug 修复必须先写复现该 bug 的失败用例，再改代码**——否则无法证明修好了。
+
+### 各栈约定
+
+**Java**：JUnit 5 + Mockito。放 `services/<svc>/src/test/java/com/anynote/<module>/`，命名 `<被测类>Test`。
+
+- **默认写纯单测**：`@ExtendWith(MockitoExtension.class)` + `@Mock` 打桩依赖，不连数据库 / Nacos / Redis
+- `@SpringBootTest` 只在确实要验证 Spring 装配时用。它需要完整中间件才能跑，**不能作为默认选择**（现存的 `PermissionServiceTest` / `FileServiceTest` 就是这种，本地起不了中间件时跑不动）
+- Feign 调用一律 mock；不要在单测里打真实服务
+
+**前端**：Vitest + Testing Library。测试与被测文件同目录放 `__tests__/`，或同名 `*.test.ts(x)`。
+
+- hooks 用 `@testing-library/react` 的 `renderHook`，外面套 `QueryClientProvider`（每个用例新建 `QueryClient`，`retry: false`）
+- 网络层打桩到 `openapi-fetch` 客户端，不要 mock 全局 `fetch`
+- Route Handler 直接调用导出的 `POST` / `GET` 函数并断言 `Set-Cookie`，不起真实 server
+
+**Python**：pytest。放 `ai-service/tests/`，命名 `test_<模块>.py`；依赖用 FastAPI `dependency_overrides` 替换，不打真实 LLM。
+
+### 运行
+
+```bash
+cd services && mvn test -pl <module>    # Java 单模块
+pnpm --filter web test                  # 前端（vitest run）
+```
+
+> ⚠️ **当前基建缺口（2026-08-07 核对，这条约束在补齐前无法真正执行）**：
+> 1. `spring-boot-starter-test` 只在 `note` / `file` / `system` / `notify` / `common-core` 的 pom 里，**`auth` / `gateway` / `ai` / `job` / `manage` 没有**，这 5 个服务现在连测试都写不了
+> 2. 全仓只有 2 个真实 Java 测试类，且都是需要中间件的 `@SpringBootTest`
+> 3. `apps/web` 装了 vitest 但**没有 `vitest.config.ts` 和 setup 文件**，jsdom 环境与 jest-dom matcher 未配置
+> 4. `turbo.json` 没有 `test` 任务，根目录 `pnpm test` 不存在
+> 5. `pnpm services:build` 与 CI `openapi-check.yml` 均用 `-DskipTests`；CI 从不跑任何测试
+>
+> 补齐这 5 项之前，本节属于"目标态约束"。**新写的代码仍按上述要求附测试**，遇到缺依赖的服务先补 pom。
+
 ## REST API 命名规范
 
 - 路径用名词，不用动词：`POST /user/{id}/ban` 而非 `POST /banUser`
@@ -244,3 +293,6 @@ CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分�
 - ❌ 新前端用 Milkdown / Wangeditor / Vditor / Muya（统一 TipTap）
 - ❌ 前端手写 fetch / axios 直调后端（必须走 `@anynote/api-client` + BFF 代理）
 - ❌ 前端把 token 写到 `document.cookie` / localStorage / sessionStorage（必须 httpOnly Cookie）
+- ❌ 新增 / 修改 Service、工具类、前端 hook、BFF Route Handler 后不写单元测试就提交（见[「测试要求」](#测试要求强制)）
+- ❌ 只为凑覆盖率写"调一次断言不报错"的空测试；断言必须覆盖实际业务分支与异常路径
+- ❌ 修 bug 时不先写复现用例直接改代码
