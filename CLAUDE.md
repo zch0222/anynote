@@ -181,17 +181,21 @@ pnpm format              # Biome format only
 ### 运行
 
 ```bash
-pnpm test                               # 全仓前端测试（turbo）
-pnpm --filter web test                  # 仅 apps/web
-cd services && mvn test -pl <module>    # Java 单模块（纯单测）
-cd services && mvn clean test           # Java 全部模块
+pnpm test                                  # 全仓前端测试（turbo）
+pnpm --filter web test                     # 仅 apps/web
+cd services && mvn clean test              # Java 全部模块
+cd services && mvn test -pl <module> -am   # Java 单模块（纯单测）
 ```
 
-**集成测试（`@Tag("integration")`）默认被跳过**——`services/pom.xml` 的 surefire 配了 `excludedGroups=integration`，因为这些用例需要 MySQL / Redis / Nacos / RocketMQ。起好中间件后单独跑：
+**`-am` 不能省**：模块间靠 `com.anynote:*` SNAPSHOT 互相依赖，若本地 `~/.m2` 没装过这些产物，`mvn test -pl <module>` 会直接卡在依赖解析失败。
+
+**集成测试（`@Tag("integration")`）默认被跳过**——`services/pom.xml` 的 surefire 配了 `excludedGroups=${test.excluded.groups}`（默认 `integration`），因为这些用例需要 MySQL / Redis / Nacos / RocketMQ。起好中间件后单独跑：
 
 ```bash
-cd services && mvn test -pl <module> -DexcludedGroups=
+cd services && mvn test -pl <module> -am -Dtest.excluded.groups=
 ```
+
+> 该排除项走属性而非在 `<configuration>` 里写死：插件配置的字面值优先级高于 `-D` 用户属性，写死的话命令行永远放不开（踩过）。
 
 **写 `@SpringBootTest` 就必须加 `@Tag("integration")`**，否则它会混进默认单测流程，在没有中间件的 CI 上必然失败。
 
