@@ -33,6 +33,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <spring-boot.version>3.3.4</spring-boot.version>
+        <maven-surefire.version>3.2.5</maven-surefire.version>
         <spring-cloud.version>2023.0.3</spring-cloud.version>
         <spring-cloud-alibaba.version>2023.0.3.4</spring-cloud-alibaba.version>
         <springdoc.version>2.3.0</springdoc.version>
@@ -489,6 +490,20 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire.version}</version>
+                <configuration>
+                    <!--
+                        默认只跑纯单测（Mockito，不依赖外部环境）。
+                        标了 @Tag("integration") 的用例需要 MySQL / Redis / Nacos / RocketMQ 才能跑，
+                        本地起好中间件后用以下命令单独执行：
+                            mvn test -pl <module> -DexcludedGroups=
+                    -->
+                    <excludedGroups>integration</excludedGroups>
                 </configuration>
             </plugin>
         </plugins>
