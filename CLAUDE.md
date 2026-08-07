@@ -178,32 +178,17 @@ pnpm format              # Biome format only
 
 **Python**：pytest。放 `ai-service/tests/`，命名 `test_<模块>.py`；依赖用 FastAPI `dependency_overrides` 替换，不打真实 LLM。
 
-### 运行
+### 单测 / 集成测试的划分（强制）
 
-```bash
-pnpm test                                  # 全仓前端测试（turbo）
-pnpm --filter web test                     # 仅 apps/web
-cd services && mvn clean test              # Java 全部模块
-cd services && mvn test -pl <module> -am   # Java 单模块（纯单测）
-```
+**新写 `@SpringBootTest` 必须同时加 `@Tag("integration")`**，否则会混进默认单测流程，在没有中间件的 CI 上必然失败。父 pom 的 surefire 默认排除该 tag。
 
-**`-am` 不能省**：模块间靠 `com.anynote:*` SNAPSHOT 互相依赖，若本地 `~/.m2` 没装过这些产物，`mvn test -pl <module>` 会直接卡在依赖解析失败。
+> 该排除项走 `${test.excluded.groups}` 属性而非在 `<configuration>` 里写死：插件配置的字面值优先级高于 `-D` 用户属性，写死的话命令行永远放不开。
 
-**集成测试（`@Tag("integration")`）默认被跳过**——`services/pom.xml` 的 surefire 配了 `excludedGroups=${test.excluded.groups}`（默认 `integration`），因为这些用例需要 MySQL / Redis / Nacos / RocketMQ。起好中间件后单独跑：
+### 运行与 CI
 
-```bash
-cd services && mvn test -pl <module> -am -Dtest.excluded.groups=
-```
+**测试栈、目录约定、运行命令、CI 配置的单一来源是 [`README.md` 的「测试」节](./README.md#测试)**，本节只保留约束，不重复命令。
 
-> 该排除项走属性而非在 `<configuration>` 里写死：插件配置的字面值优先级高于 `-D` 用户属性，写死的话命令行永远放不开（踩过）。
-
-**写 `@SpringBootTest` 就必须加 `@Tag("integration")`**，否则它会混进默认单测流程，在没有中间件的 CI 上必然失败。
-
-### CI
-
-`.github/workflows/test.yml` 在所有 PR 与 `dev` / `main` push 上跑两个并行 job：Java 纯单测（`mvn clean test`）与前端 vitest。两者都不需要 docker 全栈，与重量级的 `openapi-check.yml` 分开，保证 PR 快速反馈。
-
-> 注意 `pnpm services:build` 仍是 `-DskipTests`（它只负责产物构建，测试由 `test.yml` 单独把关）。
+> 注意 `pnpm services:build` 仍是 `-DskipTests`（它只负责产物构建，测试由 `.github/workflows/test.yml` 单独把关）。
 
 ## REST API 命名规范
 
