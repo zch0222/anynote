@@ -181,18 +181,25 @@ pnpm format              # Biome format only
 ### 运行
 
 ```bash
-cd services && mvn test -pl <module>    # Java 单模块
-pnpm --filter web test                  # 前端（vitest run）
+pnpm test                               # 全仓前端测试（turbo）
+pnpm --filter web test                  # 仅 apps/web
+cd services && mvn test -pl <module>    # Java 单模块（纯单测）
+cd services && mvn clean test           # Java 全部模块
 ```
 
-> ⚠️ **当前基建缺口（2026-08-07 核对，这条约束在补齐前无法真正执行）**：
-> 1. `spring-boot-starter-test` 只在 `note` / `file` / `system` / `notify` / `common-core` 的 pom 里，**`auth` / `gateway` / `ai` / `job` / `manage` 没有**，这 5 个服务现在连测试都写不了
-> 2. 全仓只有 2 个真实 Java 测试类，且都是需要中间件的 `@SpringBootTest`
-> 3. `apps/web` 装了 vitest 但**没有 `vitest.config.ts` 和 setup 文件**，jsdom 环境与 jest-dom matcher 未配置
-> 4. `turbo.json` 没有 `test` 任务，根目录 `pnpm test` 不存在
-> 5. `pnpm services:build` 与 CI `openapi-check.yml` 均用 `-DskipTests`；CI 从不跑任何测试
->
-> 补齐这 5 项之前，本节属于"目标态约束"。**新写的代码仍按上述要求附测试**，遇到缺依赖的服务先补 pom。
+**集成测试（`@Tag("integration")`）默认被跳过**——`services/pom.xml` 的 surefire 配了 `excludedGroups=integration`，因为这些用例需要 MySQL / Redis / Nacos / RocketMQ。起好中间件后单独跑：
+
+```bash
+cd services && mvn test -pl <module> -DexcludedGroups=
+```
+
+**写 `@SpringBootTest` 就必须加 `@Tag("integration")`**，否则它会混进默认单测流程，在没有中间件的 CI 上必然失败。
+
+### CI
+
+`.github/workflows/test.yml` 在所有 PR 与 `dev` / `main` push 上跑两个并行 job：Java 纯单测（`mvn clean test`）与前端 vitest。两者都不需要 docker 全栈，与重量级的 `openapi-check.yml` 分开，保证 PR 快速反馈。
+
+> 注意 `pnpm services:build` 仍是 `-DskipTests`（它只负责产物构建，测试由 `test.yml` 单独把关）。
 
 ## REST API 命名规范
 
