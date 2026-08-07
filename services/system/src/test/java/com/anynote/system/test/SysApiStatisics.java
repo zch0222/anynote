@@ -2,6 +2,7 @@ package com.anynote.system.test;
 
 import com.anynote.system.api.model.po.SysApiStatisticsPO;
 import com.anynote.system.service.SysApiStatisticsService;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -14,6 +15,12 @@ import java.util.Date;
 import java.util.List;
 import java.util.Random;
 
+/**
+ * 集成测试：需要 MySQL / Nacos 就绪才能运行（会真实写入统计数据）。
+ * 默认被 surefire 的 excludedGroups=integration 跳过，
+ * 起好中间件后用 mvn test -pl system -am -Dtest.excluded.groups= 单独执行。
+ */
+@Tag("integration")
 @SpringBootTest
 public class SysApiStatisics {
 

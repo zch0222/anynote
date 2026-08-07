@@ -23,7 +23,7 @@ import java.util.Map;
 /**
  * 集成测试：需要 Redis / RocketMQ / Nacos 就绪才能运行。
  * 默认被 surefire 的 excludedGroups=integration 跳过，
- * 起好中间件后用 mvn test -pl notify -DexcludedGroups= 单独执行。
+ * 起好中间件后用 mvn test -pl notify -am -Dtest.excluded.groups= 单独执行。
  */
 @Slf4j
 @Tag("integration")

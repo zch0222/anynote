@@ -17,7 +17,7 @@ import java.util.Set;
 /**
  * 集成测试：需要 MinIO / MySQL / Nacos 就绪才能运行。
  * 默认被 surefire 的 excludedGroups=integration 跳过，
- * 起好中间件后用 mvn test -pl file -DexcludedGroups= 单独执行。
+ * 起好中间件后用 mvn test -pl file -am -Dtest.excluded.groups= 单独执行。
  */
 @Tag("integration")
 @SpringBootTest

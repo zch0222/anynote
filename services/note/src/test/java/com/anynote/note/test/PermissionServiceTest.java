@@ -17,7 +17,7 @@ import jakarta.annotation.Resource;
 /**
  * 集成测试：需要 MySQL / Redis / Nacos 等中间件就绪才能运行。
  * 默认被 surefire 的 excludedGroups=integration 跳过，
- * 起好中间件后用 mvn test -pl note -DexcludedGroups= 单独执行。
+ * 起好中间件后用 mvn test -pl note -am -Dtest.excluded.groups= 单独执行。
  */
 @Slf4j
 @Tag("integration")
