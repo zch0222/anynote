@@ -11,6 +11,7 @@
     "openapi:generate": "bash openapi/generate.sh",
     "openapi:check": "pnpm openapi:generate && git diff --exit-code openapi/specs/",
     "typecheck": "turbo typecheck",
+    "test": "turbo test",
     "services:build": "cd services && mvn clean install -DskipTests"
   },
   "devDependencies": {
