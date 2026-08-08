@@ -2,12 +2,14 @@
 
 > 文档版本：v1.2 | 生成日期：2026-05-13 | 最近核对：2026-08-08
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 已完成，M2 仅后端代码落地（M2.0 未收尾），M2.1-M2.4 与 M3-M8 未启动**（逐里程碑状态见下方各节）
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 已完成，M2 后端（M2.0）已收尾，M2.1-M2.4 与 M3-M8 未启动**（逐里程碑状态见下方各节）
 > 完成度参考：9 个里程碑完成 2 个；按工期估算 14-19 天中约完成 2 天，**Phase 5 约 15%**
 > `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
 > 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
 >
-> ⚠️ **契约漂移（2026-08-08 核对，阻塞项）**：`services/auth/.../TokenController.java:67,74` 已实现 `refresh` / `logout`，但 `openapi/specs/auth.json` baseline 仍只有 `/login` `/register` `/resetPassword` `/test` 四条路径。后端代码与 baseline 已不一致，CI `openapi-check.yml` 的 `git diff --exit-code openapi/specs/` 必红。**必须起全栈跑一次 `pnpm openapi:generate` 补齐**，见 M2.0 未打勾项。
+> ✅ **契约漂移已修复（2026-08-08）**：起全栈跑 `pnpm openapi:generate` 后，`openapi/specs/auth.json` 从 4 条路径补齐到 6 条（新增 `/refresh` `/logout`，以及 `RefreshTokenDTO` / `LogoutDTO` 两个 schema）。M2.1 的阻塞随之解除。
+>
+> ⛔ **新发现（2026-08-08）：漂移门禁本身不可用 —— `servers[0].url` 是容器运行时 IP**。6 份 spec 的 `.servers[0].url` 都是 springdoc 按请求上下文写入的容器 IP（如 `http://172.19.0.11:8083`），Docker 每次起栈重新分配。CI `openapi-check.yml` 是**裸 `git diff --exit-code openapi/specs/`，无任何归一化**，所以**任何一次 CI 运行都会因 IP 变化而红，与 API 是否真的改动无关**。这是 M0.4 建门禁时就存在的缺陷（旧 baseline 里同样是 IP），不是本次引入。修复方案见 §6。
 >
 > ⚠️ **分支同步现状（2026-08-08 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点，本地无 `dev` 分支）。`phase/5.2a-auth-backend` 已**领先 origin/dev 17 个 commit**：M1 线 3 个（`f2336a7` / `a7f9443` / 合并点 `c83a083`）+ M1/M2.0 文档与实现 2 个（`94fcb00` / `52cc74a`）+ 2026-08-07 起的测试基础设施 12 个（见 §1.1）。恢复推进前先把这条线推回 `origin/dev`。
 
@@ -265,7 +267,7 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
    - 服务端仅清当前会话 Redis 键（**单会话登出**），不动该用户其他端
    - 幂等：token 失效/不存在时静默成功
 
-### M2.0 后端：补 /auth/refresh + /auth/logout ⚙️ 进行中（代码完成，收尾未做）
+### M2.0 后端：补 /auth/refresh + /auth/logout 🟢 代码与 spec 已完成（仅剩合并）
 
 **分支**：`phase/5.2a-auth-backend`
 
@@ -279,15 +281,16 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 - [x] `mvn install -pl auth -am -DskipTests` 编译通过
 - [x] 提交 commit `52cc74a feat(auth): add /refresh + /logout endpoints (Phase 5 M2.0)`
 - [x] 单测覆盖：`LoginServiceImplTest` / `TokenUtilTest`（随 §1.1 的 `1bd2237` 补齐）
-- [ ] ⚠️ **阻塞项 — 契约漂移未修**：需启动 docker compose 全栈 → 跑 `pnpm openapi:generate` 重生 `openapi/specs/auth.json` 与 `packages/api-client/src/auth.ts`
-  - 2026-08-08 核对：`auth.json` 仍只有 `/login` `/register` `/resetPassword` `/test` 四条路径，**`/refresh` 与 `/logout` 不在 baseline 里**
-  - 后果一：CI `openapi-check.yml` 必红（`git diff --exit-code openapi/specs/`）
-  - 后果二：M2.1 的 BFF 路由拿不到 `@anynote/api-client` 里的 refresh/logout 类型，**M2.1 实质被此项阻塞**
-- [ ] merge `phase/5.2a-auth-backend` → `dev` 并推回 `origin/dev`（当前领先 17 个 commit，之后再开 5.2-auth-bff）
+- [x] **契约漂移已修（2026-08-08）**：起全栈（`docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml up -d --build`）→ 跑 `pnpm openapi:generate` 重生 `openapi/specs/auth.json` 与 `packages/api-client/src/auth.ts`
+  - `auth.json` 4 条路径 → 6 条：新增 `/refresh` `/logout`；`components.schemas` 新增 `RefreshTokenDTO` / `LogoutDTO`（共 +36 个键）
+  - 6 份 spec 全部校验通过（可解析 + paths 非空）：ai 16 / auth 6 / file 13 / note 60 / notify 2 / system 23
+  - `notify.json` 的 `info` 块（contact / license / description）由空值变为 Nacos `application-dev.yml` 注入的全局值，与其余 5 份收敛一致 —— 属预期修正
+  - **M2.1 的阻塞就此解除**
+- [ ] merge `phase/5.2a-auth-backend` → `dev` 并推回 `origin/dev`（当前领先 17 个 commit，之后再开 5.2-auth-bff）—— 用户手动操作
 
 ### M2.1 BFF 路由
 
-> ⛔ **被 M2.0 阻塞**：refresh/logout 的 TS 类型还没进 `@anynote/api-client`，先补完 M2.0 的 spec 重生再开工。
+> ✅ **阻塞已解除（2026-08-08）**：`packages/api-client/src/auth.ts` 已含 `/refresh` `/logout` 的 typed paths，可直接开工。注意该目录 gitignored，换机器后需先跑一次 `pnpm openapi:generate`（要求后端在跑）。
 
 - [ ] 重命名 `apps/web/src/lib/env.ts` 中 `BACKEND_URL` → `INTERNAL_API_URL`（2026-08-08 核对：`env.ts:5` 仍是 `BACKEND_URL`，未改）
 - [ ] `src/app/api/auth/login/route.ts`：调用 `/api/auth/login` → 响应中 `Set-Cookie` 两件套（`at` / `rt`）
@@ -634,4 +637,46 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 4. merge `phase/5.2a-auth-backend` → `dev`，**推回 `origin/dev`**（消化掉当前 17 个 commit 的落差；本地无 `dev` 分支，需先 `git checkout -b dev origin/dev`）
 5. 切 `phase/5.2-auth-bff`，按 M2.1 → M2.4 推进；每个 Route Handler 必须附带单测（断言 `Set-Cookie`，见 CLAUDE.md「测试要求」）
 
+> 第 1-3 步已于 2026-08-08 完成，见 M2.0。第 4 步由用户手动执行。
+
 **里程碑口径的剩余量**：M2 剩 M2.1-M2.4，M3-M8 整体未启动，约 12-17 工作日。
+
+---
+
+## 6. 漂移门禁缺陷：`servers[0].url` 是容器运行时 IP（待修）
+
+**2026-08-08 发现**。M0.4 建立的 CI 漂移门禁**从未真正可用**，原因不在 API 本身。
+
+### 现象
+
+springdoc 会按请求上下文把服务地址写进 spec 的 `servers[0].url`，在 docker 里这就是**容器运行时 IP**。对比本次重生与旧 baseline：
+
+| spec | 旧 baseline | 本次重生 |
+|---|---|---|
+| `auth.json` | `http://172.19.0.11:8083` | `http://172.19.0.16:8083` |
+| `system.json` | `http://172.19.0.14:8091` | `http://172.19.0.15:8091` |
+| `note.json` | `http://172.19.0.16:18091` | `http://172.19.0.20:18091` |
+| `file.json` | `http://172.19.0.18:8095` | `http://172.19.0.11:8095` |
+| `ai.json` | `http://172.19.0.19:9065` | `http://172.19.0.14:9065` |
+
+Docker 每次起栈按启动顺序重新分配这些 IP，**没有任何稳定性保证**。
+
+### 后果
+
+`.github/workflows/openapi-check.yml` 的判定是裸 diff，无归一化：
+
+```yaml
+- name: Diff specs against baseline
+  run: |
+    if ! git diff --exit-code openapi/specs/; then
+```
+
+所以**每次 CI 运行都会因 IP 变动而红**，与 Controller 是否真的改动无关。门禁一旦"总是红"，就等于没有门禁——这正是 §4 风险表里"CI 漂移检查频繁误报"那一行，只是根因当时没定位到。
+
+### 修复方案（择一，未实施）
+
+1. **生成时剥离 `servers`（推荐）**：`openapi/generate.sh` 在写盘前删掉 `.servers`。类型生成不需要它（`openapi-typescript` 只吃 `paths` / `components`），前端按 M3.2 用 `baseUrl: '/api/proxy'`，运行时也不读它。改动最小且彻底。
+2. **归一化为固定值**：把 `servers[0].url` 重写成 `http://localhost:8080/<svc>`，保留字段语义。
+3. **在 Nacos 里显式配置 springdoc `servers`**：从源头固定，但要动 6 份配置，且 IDEA 混合场景下地址不同。
+
+> ⚠️ 无论选哪个，实施时都会**一次性重写全部 6 份 baseline**，该 commit 的 diff 会很大但只有一次；之后 baseline 才真正稳定，门禁才开始有意义。
