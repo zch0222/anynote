@@ -272,6 +272,7 @@ CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分�
 
 - 分支模型（`main` ← `dev` ← `phase/*` / `feat/*` / `fix/*` / `docs/*` / `chore/*`）
 - Conventional Commits 格式 + type/scope 取值
+- **Commit message 一律用中文**撰写描述与 body（`type` / `scope` 保持英文，技术名词保留原文）
 - 提交粒度（一次只动一个 service / package，跨语言不混）
 - Commit message 约定（**禁止 `Co-Authored-By` trailer**，包含 AI 助手署名）
 - 版本 Tag 策略（`v0.X.0` 对应 Phase 完成点）
@@ -292,3 +293,4 @@ CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分�
 - ❌ 新增 / 修改 Service、工具类、前端 hook、BFF Route Handler 后不写单元测试就提交（见[「测试要求」](#测试要求强制)）
 - ❌ 只为凑覆盖率写"调一次断言不报错"的空测试；断言必须覆盖实际业务分支与异常路径
 - ❌ 修 bug 时不先写复现用例直接改代码
+- ❌ 用英文写 commit message 的描述与 body（`type` / `scope` 除外，见[「提交与分支」](#提交与分支)）

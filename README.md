@@ -583,11 +583,13 @@ main          ← 稳定发布分支，每个 Phase 完成后合并，打版本 
 ### Commit 格式（Conventional Commits）
 
 ```
-<type>(<scope>): <简短描述（命令式、不超过 70 字符）>
+<type>(<scope>): <简短描述（中文、不超过 50 字）>
 
-<可选 body：解释 why 与影响>
+<可选 body：中文，解释 why 与影响>
 <可选 footer：BREAKING CHANGE / Closes #issue>
 ```
+
+**描述与 body 一律用中文**。`type` / `scope` 是格式标识，保持英文小写；技术名词（类名、方法名、依赖名、配置项、命令）保留原文不翻译。
 
 **type 取值**
 
@@ -622,6 +624,7 @@ scope 可省略（如纯顶层文档变更），但有具体作用域时必须�
 
 ### Commit Message 约定
 
+- **一律使用中文撰写**描述与 body；`type` / `scope` 保持英文小写，技术名词保留原文
 - **不写 `Co-Authored-By:` / `Co-authored-by:` trailer**——本项目所有 commit 保持单作者，无论是否由 AI 助手（Claude Code / Codex 等）协助生成
 - body / footer 解释 *why* 与影响，不重复 *what*（diff 已经表达 what）
 - 破坏性变更在 footer 写 `BREAKING CHANGE: <说明>`
@@ -629,14 +632,15 @@ scope 可省略（如纯顶层文档变更），但有具体作用域时必须�
 **示例**
 
 ```bash
-git commit -m "refactor(note): migrate javax.* to jakarta.* namespace"
-git commit -m "feat(web): implement httpOnly cookie auth via BFF route"
-git commit -m "chore(bom): upgrade Spring Boot to 3.3.4, Spring Cloud to 2023.0.3"
+git commit -m "refactor(note): 将 javax.* 命名空间迁移到 jakarta.*"
+git commit -m "feat(web): 通过 BFF 路由实现 httpOnly cookie 认证"
+git commit -m "chore(bom): 升级 Spring Boot 至 3.3.4、Spring Cloud 至 2023.0.3"
+git commit -m "test(auth): 补充 TokenUtil 的 refresh 与 logout 单元测试"
 
 # 破坏性变更
-git commit -m "refactor(ai): merge ai + ai-nio into unified services/ai module
+git commit -m "refactor(ai): 合并 ai 与 ai-nio 为统一的 services/ai 模块
 
-BREAKING CHANGE: port changed from 9210 to 9065, update Nacos route config"
+BREAKING CHANGE: 端口由 9210 改为 9065，需同步更新 Nacos 路由配置"
 ```
 
 ### 版本 Tag 策略
