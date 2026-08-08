@@ -643,9 +643,9 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 
 ---
 
-## 6. 漂移门禁缺陷：`servers[0].url` 是容器运行时 IP（待修）
+## 6. 漂移门禁缺陷：`servers[0].url` 是容器运行时 IP ✅ 已修复（2026-08-08）
 
-**2026-08-08 发现**。M0.4 建立的 CI 漂移门禁**从未真正可用**，原因不在 API 本身。
+**2026-08-08 发现并修复**。M0.4 建立的 CI 漂移门禁此前**从未真正可用**，原因不在 API 本身。
 
 ### 现象
 
@@ -673,10 +673,36 @@ Docker 每次起栈按启动顺序重新分配这些 IP，**没有任何稳定�
 
 所以**每次 CI 运行都会因 IP 变动而红**，与 Controller 是否真的改动无关。门禁一旦"总是红"，就等于没有门禁——这正是 §4 风险表里"CI 漂移检查频繁误报"那一行，只是根因当时没定位到。
 
-### 修复方案（择一，未实施）
+### 采用的修复：生成时剥离 `servers`
 
-1. **生成时剥离 `servers`（推荐）**：`openapi/generate.sh` 在写盘前删掉 `.servers`。类型生成不需要它（`openapi-typescript` 只吃 `paths` / `components`），前端按 M3.2 用 `baseUrl: '/api/proxy'`，运行时也不读它。改动最小且彻底。
-2. **归一化为固定值**：把 `servers[0].url` 重写成 `http://localhost:8080/<svc>`，保留字段语义。
-3. **在 Nacos 里显式配置 springdoc `servers`**：从源头固定，但要动 6 份配置，且 IDEA 混合场景下地址不同。
+`openapi/generate.sh` 在写盘前删掉 `.servers`。类型生成不需要它（实测生成的 6 份 TS 里 `servers` 出现 **0 次**，`openapi-typescript` 只产出 `paths` / `webhooks` / `components` / `$defs` / `operations`），前端按 M3.2 用 `baseUrl: '/api/proxy'`，运行时也不读它。
 
-> ⚠️ 无论选哪个，实施时都会**一次性重写全部 6 份 baseline**，该 commit 的 diff 会很大但只有一次；之后 baseline 才真正稳定，门禁才开始有意义。
+> 备选方案（未采用）：把 `servers[0].url` 归一化成固定值；或在 Nacos 里显式配置 springdoc `servers`（要动 6 份配置，且 IDEA 混合场景地址不同）。
+
+### 顺带修掉的第二个 bug：`>` 重定向截断 baseline
+
+原写法 `curl -sf "$URL" > "$SPECS_DIR/$svc.json"` 里，**shell 会在 exec curl 之前就以 `O_TRUNC` 打开目标文件**，所以服务没起来时原 baseline 当场被清空。更隐蔽的是：本仓库业务错误也是 HTTP 200（靠 `ResData.code` 区分），`curl -f` 只拦非 2xx，**拦不住网关返回 `{"code":"B0001"}` 却被当成 spec 写进 baseline** —— M0.1 运维发现第 4 条（`ai-nio` / `notify` 缺 `anynote-common-swagger` 依赖导致 `/v3/api-docs` 返回 `B0001`）正是这个场景。
+
+由于 baseline 是单行 JSON，72KB 的 `note.json` 塌成一行错误对象后，`git diff --stat` 显示 `2 +-`，与一次无害改动**完全无法区分**。
+
+现在改为：先落 `mktemp` → 结构校验通过才覆盖 baseline → 任一服务失败则脚本非零退出（不再"假装成功"）。
+
+### 落地内容
+
+| 文件 | 作用 |
+|---|---|
+| `openapi/normalize-spec.mjs` | 纯函数：剥离 `servers`、校验是否 OpenAPI 文档、识别 ResData 错误体、递归排序 key |
+| `openapi/normalize-cli.mjs` | 薄 CLI，失败时不触碰输出文件 |
+| `openapi/__tests__/normalize-spec.test.mjs` | 20 个单测 |
+| `openapi/package.json` | `openapi/` 成为 workspace 包 `@anynote/openapi-tools`，接入 `pnpm test` |
+| `openapi/generate.sh` | fetch 循环重写 |
+
+`sortKeysDeep` 递归排序对象 key（数组顺序是语义的一部分，保持不动），消除 springdoc 可能的 key 顺序抖动。因为 baseline 是单行 JSON，排序在 git 眼里不增加任何 diff 噪声。
+
+### 验证
+
+- **换 IP 端到端验证**：`docker compose down`（保留数据卷）+ `up -d` 后 9 个容器有 8 个 IP 变化（auth `.16→.17`、file `.11→.16`、system `.15→.13`、notify `.17→.20` 等），重生的 6 份 spec 与重启前**逐字节一致**（md5 全等）
+- 20 个单测通过，含"同一 spec 换容器 IP 后输出相同"这条直接针对根因的用例
+- `pnpm check` / `pnpm typecheck` / `pnpm test` 全绿
+
+> 本次一次性重写了全部 6 份 baseline（剥离 `servers` + key 排序），该 commit diff 较大但只有一次；此后 baseline 才真正稳定，门禁开始有意义。
