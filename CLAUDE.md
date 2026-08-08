@@ -27,13 +27,15 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中** — M0（OpenAPI 门禁）/ M1（Next.js 15 + shadcn 骨架）已完成，M2 停在 M2.0（后端 `/auth/refresh` + `/logout` 已实现未合并），M3-M8 未启动。里程碑见 `docs/refactor/FRONTEND_MILESTONES.md` |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中（约 15%）** — M0（OpenAPI 门禁）/ M1（Next.js 15 + shadcn 骨架）已完成；M2 仅 M2.0 后端代码落地且未收尾（`/auth/refresh` + `/logout` 已实现但 **spec baseline 未重生、未合并**），M2.1-M2.4 与 M3-M8 未启动。里程碑见 `docs/refactor/FRONTEND_MILESTONES.md` |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
 **当前分支**：`phase/5.2a-auth-backend`。`main` 是发布分支，日常合并目标是 `dev`。
 
-⚠️ **分支同步现状（2026-08-07 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点），本地无 `dev` 分支。M1 的合并 commit `c83a083` 与 M2.0 的 `52cc74a` 共 5 个 commit 只存在于 `phase/5.2a-auth-backend`，尚未推回 `origin/dev`。动 Phase 5 相关代码前先确认这条线的落点。
+⚠️ **分支同步现状（2026-08-08 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点），本地无 `dev` 分支。`phase/5.2a-auth-backend` 已**领先 `origin/dev` 17 个 commit**（M1 线 3 个 + M1/M2.0 实现与文档 2 个 + 2026-08-07 起的测试基础设施 12 个），尚未推回。动 Phase 5 相关代码前先确认这条线的落点。
+
+⚠️ **契约漂移（阻塞 Phase 5 M2.1）**：`services/auth/.../TokenController.java` 已实现 `refresh` / `logout`，但 `openapi/specs/auth.json` baseline 未重生（仍只有 4 条路径），CI `openapi-check.yml` 会红。需起全栈跑 `pnpm openapi:generate` 修复。
 
 ## 常用命令
 

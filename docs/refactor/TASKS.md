@@ -139,7 +139,10 @@
 - [x] **M1** 前端骨架与工具链 ✓ 2026-05-23 合并 dev（`c83a083`）：5.1 + 5.2 完成
   - [x] 5.1 初始化 Next.js 15 项目（apps/web/ 替换，next 15.5.18 + React 19.1 + Tailwind v4，锁 v15 未升 v16）
   - [x] 5.2 安装依赖（TanStack Query 5.100, Zustand 5, RHF 7.76, Zod 4.4, shadcn 4.8 / 21 组件 / Field 替代废弃的 Form / 切到 @base-ui/react）
-- [ ] **M2** 认证 BFF + Cookie 安全（5.3 BFF + httpOnly Cookie）
+- [ ] **M2** 认证 BFF + Cookie 安全（5.3 BFF + httpOnly Cookie）🟡 进行中
+  - [x] M2.0 后端补 `/auth/refresh` + `/auth/logout`：代码已落地（`52cc74a`），单测已补（`LoginServiceImplTest` / `TokenUtilTest`）
+  - [ ] M2.0 收尾 ⚠️ **阻塞中**：`openapi/specs/auth.json` baseline 未重生（缺 `/refresh` `/logout`，CI `openapi-check.yml` 必红）；`phase/5.2a-auth-backend` 未合并回 `origin/dev`（领先 17 个 commit）
+  - [ ] M2.1-M2.4 前端 BFF / middleware / 登录页：**未启动**（`apps/web/src/app/` 仅有 layout + page + globals.css）
 - [ ] **M3** API 客户端 + 查询层 + 代理（5.4 TanStack Query 数据层）
 - [ ] **M4** AppShell + 主题 + 命令面板
 - [ ] **M5** TipTap 编辑器核心（5.5 编辑器集成 — **统一 TipTap**，废弃 Milkdown / Wangeditor / Vditor / Muya）

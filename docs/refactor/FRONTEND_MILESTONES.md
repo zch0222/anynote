@@ -1,12 +1,15 @@
 # Anynote 前端重构里程碑（可执行版）
 
-> 文档版本：v1.1 | 生成日期：2026-05-13 | 最近核对：2026-08-07
+> 文档版本：v1.2 | 生成日期：2026-05-13 | 最近核对：2026-08-08
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 已完成，M2 停在 M2.0，M3-M8 未启动**（逐里程碑状态见下方各节）
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 已完成，M2 仅后端代码落地（M2.0 未收尾），M2.1-M2.4 与 M3-M8 未启动**（逐里程碑状态见下方各节）
+> 完成度参考：9 个里程碑完成 2 个；按工期估算 14-19 天中约完成 2 天，**Phase 5 约 15%**
 > `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
 > 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
 >
-> ⚠️ **分支同步现状（2026-08-07 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点）。M1 的合并 commit `c83a083` 与 M2.0 的 `52cc74a` 只存在于 `phase/5.2a-auth-backend`（本地无 `dev` 分支，合并后未推送）。恢复推进前先把这条线推回 `origin/dev`。
+> ⚠️ **契约漂移（2026-08-08 核对，阻塞项）**：`services/auth/.../TokenController.java:67,74` 已实现 `refresh` / `logout`，但 `openapi/specs/auth.json` baseline 仍只有 `/login` `/register` `/resetPassword` `/test` 四条路径。后端代码与 baseline 已不一致，CI `openapi-check.yml` 的 `git diff --exit-code openapi/specs/` 必红。**必须起全栈跑一次 `pnpm openapi:generate` 补齐**，见 M2.0 未打勾项。
+>
+> ⚠️ **分支同步现状（2026-08-08 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点，本地无 `dev` 分支）。`phase/5.2a-auth-backend` 已**领先 origin/dev 17 个 commit**：M1 线 3 个（`f2336a7` / `a7f9443` / 合并点 `c83a083`）+ M1/M2.0 文档与实现 2 个（`94fcb00` / `52cc74a`）+ 2026-08-07 起的测试基础设施 12 个（见 §1.1）。恢复推进前先把这条线推回 `origin/dev`。
 
 ---
 
@@ -49,6 +52,27 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 | **M8** | 协同 + 桌面 + 收尾 | 2 天 | M6, M7 | `phase/5.8-polish` | 弱 |
 
 **总工期估算**：14-19 工作日（约 3-4 周），与 REFACTOR_PLAN 中 Phase 5 估算 5-7 天的差异来自 TipTap 切换 + 完整业务页面迁移成本。
+
+### 1.1 计划外已完成的工作（不属于任何里程碑）
+
+2026-08-07 / 08-08 在 `phase/5.2a-auth-backend` 上插入了一轮**测试基础设施建设**，共 12 个 commit。这批工作不在 M0-M8 任何里程碑范围内，但已成为后续所有里程碑的**强制前提**（CLAUDE.md 与 README 已把"改动必带单测"写成硬约束），故在此登记，避免下次核对进度时对不上账。
+
+| commit | 内容 |
+|---|---|
+| `d1a4e46` | 修正本文档 presign 悬空引用 + 同步 Phase 5 状态 |
+| `b46ce18` | CLAUDE.md 新增「测试要求（强制）」章节：前后端改动必须附带单测 |
+| `7356f6a` | 打通全部 Java 模块的单测能力（surefire + JUnit 5 + Mockito） |
+| `1778108` | `apps/web` 接入 vitest + jsdom + RTL，提供 QueryClientProvider 测试工具 |
+| `f17b271` | `turbo.json` 加 `test` 任务，根 `pnpm test` 透传 |
+| `b33c93f` | 新增 `.github/workflows/test.yml`：每个 PR 跑 Java + 前端单测 |
+| `747fde2` | README 用实际命令替换测试基建缺口警告 |
+| `937b2d2` | 修复集成测试排除项：改走 `${test.excluded.groups}` 属性，命令行才放得开 |
+| `1bd2237` | 补 token / password / HMAC 单测（`TokenUtilTest` / `LoginServiceImplTest` / `PasswordServiceImplTest` / `HmacUtilsTest` / `SecurityUtilsTest` / `StringUtilsTest`） |
+| `584277c` | README 修正集成测试命令并说明 `-am` 要求 |
+| `939ac33` | README 补充单测架构说明 |
+| `7b90761` | 约定 commit message 一律用中文 |
+
+**对后续里程碑的影响**：M2.1 起每个 BFF Route Handler、每个 `use*Query` / `use*Mutation` hook 都必须带单测才算完成（见 CLAUDE.md「测试要求」表）。`1bd2237` 中的 `LoginServiceImplTest` 已覆盖 M2.0 新增的 `refresh` / `logout` 业务分支。
 
 ---
 
@@ -218,7 +242,8 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 - **`phase/5.2a-auth-backend`**：后端补 refresh/logout 端点（不在原计划中，因 M0.3 已识别该缺口）
 - **`phase/5.2-auth-bff`**：前端 BFF + middleware + 登录页
 
-**状态**：🟡 进行中（2026-05-23 起）
+**状态**：🟡 进行中（2026-05-23 起）—— **2026-08-08 核对：只有 M2.0 的后端代码落地，且 M2.0 本身未收尾；M2.1-M2.4 前端零进度**。
+`apps/web/src/app/` 下当前仅 `layout.tsx` / `page.tsx` / `globals.css` / `favicon.ico`，无 `api/auth/**` BFF 路由、无 `middleware.ts`、无登录页、无 `features/` 与 `stores/` 目录。
 
 ### 关键决策（开工前敲定）
 
@@ -240,7 +265,7 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
    - 服务端仅清当前会话 Redis 键（**单会话登出**），不动该用户其他端
    - 幂等：token 失效/不存在时静默成功
 
-### M2.0 后端：补 /auth/refresh + /auth/logout ⚙️ 进行中
+### M2.0 后端：补 /auth/refresh + /auth/logout ⚙️ 进行中（代码完成，收尾未做）
 
 **分支**：`phase/5.2a-auth-backend`
 
@@ -252,11 +277,19 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 - [x] `services/auth/.../controller/TokenController.java` 暴露 `POST /refresh` 与 `POST /logout`，含 `@Operation` 注解
 - [x] `infra/docker/nacos/configs/anynote-gateway-dev.yml` 白名单加 `/api/auth/refresh` 与 `/api/auth/logout`（refresh 入口可能 access 已过期；logout 应允许任意状态）
 - [x] `mvn install -pl auth -am -DskipTests` 编译通过
-- [ ] **需用户启动 docker compose 全栈** → 跑 `pnpm openapi:generate` 重生 `openapi/specs/auth.json` 与 `packages/api-client/src/auth.ts`
-- [ ] 提交 commit + merge `phase/5.2a-auth-backend` → `dev`（之后再开 5.2-auth-bff）
+- [x] 提交 commit `52cc74a feat(auth): add /refresh + /logout endpoints (Phase 5 M2.0)`
+- [x] 单测覆盖：`LoginServiceImplTest` / `TokenUtilTest`（随 §1.1 的 `1bd2237` 补齐）
+- [ ] ⚠️ **阻塞项 — 契约漂移未修**：需启动 docker compose 全栈 → 跑 `pnpm openapi:generate` 重生 `openapi/specs/auth.json` 与 `packages/api-client/src/auth.ts`
+  - 2026-08-08 核对：`auth.json` 仍只有 `/login` `/register` `/resetPassword` `/test` 四条路径，**`/refresh` 与 `/logout` 不在 baseline 里**
+  - 后果一：CI `openapi-check.yml` 必红（`git diff --exit-code openapi/specs/`）
+  - 后果二：M2.1 的 BFF 路由拿不到 `@anynote/api-client` 里的 refresh/logout 类型，**M2.1 实质被此项阻塞**
+- [ ] merge `phase/5.2a-auth-backend` → `dev` 并推回 `origin/dev`（当前领先 17 个 commit，之后再开 5.2-auth-bff）
 
 ### M2.1 BFF 路由
-- [ ] 重命名 `apps/web/src/lib/env.ts` 中 `BACKEND_URL` → `INTERNAL_API_URL`
+
+> ⛔ **被 M2.0 阻塞**：refresh/logout 的 TS 类型还没进 `@anynote/api-client`，先补完 M2.0 的 spec 重生再开工。
+
+- [ ] 重命名 `apps/web/src/lib/env.ts` 中 `BACKEND_URL` → `INTERNAL_API_URL`（2026-08-08 核对：`env.ts:5` 仍是 `BACKEND_URL`，未改）
 - [ ] `src/app/api/auth/login/route.ts`：调用 `/api/auth/login` → 响应中 `Set-Cookie` 两件套（`at` / `rt`）
 - [ ] `src/app/api/auth/refresh/route.ts`：进程内 `Map<rt, Promise<void>>` 锁防并发
 - [ ] `src/app/api/auth/logout/route.ts`：清两件套 + 调后端 `/api/auth/logout`
@@ -579,14 +612,26 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 
 ---
 
-## 5. 立即可执行的下一步
+## 5. 立即可执行的下一步（2026-08-08 更新）
 
-1. `git checkout dev && git pull` 同步主线
-2. `git checkout -b phase/5.0-openapi-validation`
-3. 启动 `docker compose -f infra/docker-compose-middleware.yaml up -d`
-4. 启动各后端服务（参考 `docs/` 中已有启动指南）
-5. 跑 `pnpm openapi:generate`，把第一份输出 commit 进 `openapi/specs/`（仅作快照基线，后续 gitignore）
-6. 按 M0.3 表格逐端点检查注解，缺一个补一个
-7. M0 通过 → 切 M1 分支，开始前端骨架
+> 上一版本此处仍是 M0 开工步骤（切 `phase/5.0-openapi-validation`、跑首次生成），M0/M1 早已完成，已整节重写。
 
-**预计本周（W1）可推进到 M2 中段**。
+**当前唯一卡点是 M2.0 收尾**，顺序不能颠倒——M2.1 需要 refresh/logout 的生成类型：
+
+1. 起全栈（dev 场景，注意 `--env-file=/dev/null`）：
+
+   ```bash
+   docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml up -d --build
+   ```
+
+2. 重生 spec 与客户端，确认 `auth.json` 出现 `/refresh` 与 `/logout`：
+
+   ```bash
+   pnpm openapi:generate
+   ```
+
+3. 提交 `openapi/specs/auth.json`（baseline 必须入库），本地跑 `pnpm openapi:check` 确认与 CI 同行为
+4. merge `phase/5.2a-auth-backend` → `dev`，**推回 `origin/dev`**（消化掉当前 17 个 commit 的落差；本地无 `dev` 分支，需先 `git checkout -b dev origin/dev`）
+5. 切 `phase/5.2-auth-bff`，按 M2.1 → M2.4 推进；每个 Route Handler 必须附带单测（断言 `Set-Cookie`，见 CLAUDE.md「测试要求」）
+
+**里程碑口径的剩余量**：M2 剩 M2.1-M2.4，M3-M8 整体未启动，约 12-17 工作日。
