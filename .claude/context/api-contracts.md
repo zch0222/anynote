@@ -79,13 +79,16 @@ interface PageResult<T> {
 
 | 头名称                  | 来源              | 用途                                    |
 |-------------------------|-------------------|-----------------------------------------|
-| `Authorization`         | 客户端            | Bearer token（仅到 Gateway，之后被替换） |
+| `Authorization`         | BFF / 外部客户端 | 私有路由唯一入口：`Bearer <token>`；Gateway 校验后移除 |
+| `accessToken`           | Gateway 注入 / 内部 Feign | 已验证的原始 token；不接受为 Gateway 外部认证入口 |
 | `user_id`               | Gateway 注入      | 已认证用户 ID，服务直接读取             |
 | `from-source: inner`    | Feign 拦截器      | 标记内部调用                            |
 | `X-Internal-Timestamp`  | Feign 拦截器      | 毫秒时间戳（HMAC 防重放）               |
 | `X-Internal-Sign`       | Feign 拦截器      | HMAC-SHA256 签名                        |
 
 ---
+
+**2026-09-08 已确认的不兼容变更**：Gateway 不再兼容外部 `accessToken` 请求头，也不从 Cookie / query 取认证凭据。内部身份传递与 token DTO 字段保留。OpenAPI 安全方案使用 `type: http`、`scheme: bearer`、`bearerFormat: JWT`；旧前端尚未迁移，私有请求会失败。详见 [变更记录](../openspec/changes/2026-09-08-gateway-bearer-only.md)。
 
 ## API 变更流程
 
@@ -101,5 +104,5 @@ interface PageResult<T> {
 ## 版本控制
 
 - 当前所有接口使用 `/` 根路径（无版本前缀），通过 Nacos 路由区分环境
-- 破坏性变更（删除字段、修改语义）须在变更文案中标注 `[Breaking Change]`，并保证向后兼容过渡期（≥1 个迭代）
+- 破坏性变更（删除字段、修改语义）须在变更文案中标注 `[Breaking Change]`，默认保留向后兼容过渡期（≥1 个迭代）；2026-09-08 Gateway 仅 Bearer 变更按用户明确要求取消旧头兼容，例外范围见对应变更记录。
 - 新增字段可直接上线，前端做防御性取值（`data?.field ?? defaultValue`）

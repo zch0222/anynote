@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) and Codex (via AGENT
 Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turborepo + Maven multi-module 编排：
 
 - `services/` — Java 21 · Spring Boot 3.3.4 · Spring Cloud 2023.0.3（9 个微服务 + Feign API 模块 + common 共享库 + BOM）
-- `apps/web/` — Next.js 15 · React 19（**Phase 5 重写中，当前为空目录骨架**）
+- `apps/web/` — Next.js 15 · React 19（**Phase 5 重写中，M1 骨架与工具链已完成，首页仍是默认模板**）
 - `apps/web-legacy/` — Next.js 13.5（**旧前端，仍是当前用户访问的版本**，Phase 5 验收后才删）
 - `ai-service/` — Python 3 · FastAPI · LangChain 0.3 · Pydantic v2
 - `packages/api-client/` — `pnpm openapi:generate` 产出的 TS 客户端（**不要手改**，`src/` 已 gitignore）
@@ -27,15 +27,15 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中（约 15%）** — M0（OpenAPI 门禁）/ M1（Next.js 15 + shadcn 骨架）已完成；M2 仅 M2.0 后端代码落地且未收尾（`/auth/refresh` + `/logout` 已实现但 **spec baseline 未重生、未合并**），M2.1-M2.4 与 M3-M8 未启动。里程碑见 `docs/refactor/FRONTEND_MILESTONES.md` |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中（约 15%，沿用原工期口径）** — M0 / M1 / M2.0 已完成。2026-09-08 按用户确认完成 Gateway 仅 Bearer 改造、单测与六份 spec 更新；BFF 尚无实现；刷新触发与异常处理细节尚未明确，局部刷新锁模型仅作为待评估风险，不再将缓存调整列为开工前置；M3-M8 未启动。详见 `docs/refactor/FRONTEND_MILESTONES.md` M2.1 |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
-**当前分支**：`phase/5.2a-auth-backend`。`main` 是发布分支，日常合并目标是 `dev`。
+**当前分支（2026-09-08 核对）**：`phase/5.2-auth-bff`。`main` 是发布分支，日常合并目标是 `dev`。
 
-⚠️ **分支同步现状（2026-08-08 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点），本地无 `dev` 分支。`phase/5.2a-auth-backend` 已**领先 `origin/dev` 17 个 commit**（M1 线 3 个 + M1/M2.0 实现与文档 2 个 + 2026-08-07 起的测试基础设施 12 个），尚未推回。动 Phase 5 相关代码前先确认这条线的落点。
+**分支落点（2026-09-08 核对）**：M2.0 已通过 `3865a2f` 合并到 `dev`。当前 `phase/5.2-auth-bff` 新增 Gateway 提交 `57bf8b3`、OpenAPI 与 baseline 提交 `216a930`；本次未合并到 `dev` 或 `main`。
 
-⚠️ **契约漂移（阻塞 Phase 5 M2.1）**：`services/auth/.../TokenController.java` 已实现 `refresh` / `logout`，但 `openapi/specs/auth.json` baseline 未重生（仍只有 4 条路径），CI `openapi-check.yml` 会红。需起全栈跑 `pnpm openapi:generate` 修复。
+**认证契约（2026-09-08 用户确认并实现）**：Gateway 的外部私有请求仅接受 `Authorization: Bearer <token>`，取消旧 `accessToken` 请求头兼容；内部服务仍使用 Gateway 注入的已验证 `accessToken`。OpenAPI 已改为 HTTP Bearer/JWT，六份 baseline 已重生。旧前端尚未迁移，切换后的私有请求会失败。**刷新方案审查状态**：文档仅给出 `isExpiringSoon(at)` 等示意，完整触发、重试和失败处理规则尚未明确。此前对局部锁算法的模型分析仅记为待评估风险，撤回将 5 秒缓存调整列为开工前置的结论；未更改原 BFF 方案。详见 `docs/refactor/FRONTEND_MILESTONES.md` M2.1 与 `.claude/openspec/changes/2026-09-08-gateway-bearer-only.md`。
 
 ## 常用命令
 
@@ -101,7 +101,7 @@ pnpm check               # Biome lint + format
 pnpm format              # Biome format only
 ```
 
-> `apps/web` 启动命令（`pnpm --filter web dev` 等）要在 Phase 5 M1 完成后才有效，现阶段不可用。
+> M1 已完成，`pnpm --filter web dev` 等启动命令已可用；历史验收结果见 `docs/refactor/FRONTEND_MILESTONES.md` M1.5。
 
 ## 后端服务一览
 
@@ -246,7 +246,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 
 - `.claude/context/backend.md` — 服务端口表、模块依赖、包结构、ResCode 速查
 - `.claude/context/frontend.md` — 前端目录、Query Key 工厂、BFF 认证流程
-- `.claude/context/api-contracts.md` — API 契约详细规范
+- `.claude/context/api-contracts.md` — API 契约详细规范，含 Gateway 外部仅 Bearer 与内部身份头边界
 - `openapi/WORKFLOW.md` — API-First 开发步骤
 - `.claude/openspec/README.md` — OpenSpec 使用说明
 - `.claude/openspec/changes/` — API 变更提案归档
