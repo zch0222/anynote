@@ -73,6 +73,7 @@
             <artifactId>anynote-api-ai</artifactId>
         </dependency>
 
+
     </dependencies>
 
     <properties>

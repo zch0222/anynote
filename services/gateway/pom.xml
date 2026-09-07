@@ -81,6 +81,14 @@
 <!--            <artifactId>springfox-swagger2</artifactId>-->
 <!--            <version>${swagger.fox.version}</version>-->
 <!--        </dependency>-->
+
+
+        <!-- Reactive 服务用 StepVerifier 断言 Mono / Flux -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <properties>

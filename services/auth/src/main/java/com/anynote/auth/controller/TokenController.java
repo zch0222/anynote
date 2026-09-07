@@ -2,6 +2,8 @@ package com.anynote.auth.controller;
 
 import com.anynote.auth.model.dto.LoginDTO;
 import com.anynote.auth.model.dto.LoginRequestDTO;
+import com.anynote.auth.model.dto.LogoutDTO;
+import com.anynote.auth.model.dto.RefreshTokenDTO;
 import com.anynote.auth.model.dto.RegisterDTO;
 import com.anynote.auth.model.dto.ResetPasswordDTO;
 import com.anynote.auth.service.LoginService;
@@ -10,6 +12,7 @@ import com.anynote.common.security.utils.SecurityUtils;
 import com.anynote.core.utils.ResUtil;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.system.api.model.bo.LoginUser;
+import com.anynote.system.api.model.bo.Token;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +60,21 @@ public class TokenController {
     @PostMapping("register")
     public ResData<LoginDTO> register(@RequestBody @Valid RegisterDTO registerDTO) {
         return ResUtil.success(new LoginDTO(loginService.register(registerDTO)));
+    }
+
+    @Operation(summary = "刷新 Token",
+            description = "使用 refreshToken 换取新的 access + refresh 对，旧 refreshToken 立即失效。供 BFF 在 accessToken 过期时调用。")
+    @PostMapping("refresh")
+    public ResData<Token> refresh(@RequestBody @Valid RefreshTokenDTO refreshTokenDTO) {
+        return ResData.success(loginService.refresh(refreshTokenDTO.getRefreshToken()));
+    }
+
+    @Operation(summary = "登出",
+            description = "清除当前会话 accessToken / refreshToken 的 Redis 缓存。幂等：token 已过期或不存在时静默成功。")
+    @PostMapping("logout")
+    public ResData<Void> logout(@RequestBody @Valid LogoutDTO logoutDTO) {
+        loginService.logout(logoutDTO.getAccessToken(), logoutDTO.getRefreshToken());
+        return ResData.success(null);
     }
 
 //    public static void main(String[] args) {

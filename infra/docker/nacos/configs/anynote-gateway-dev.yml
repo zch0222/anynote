@@ -124,6 +124,8 @@ security:
       - /auth/logout
       - /api/auth/login
       - /api/auth/register
+      - /api/auth/refresh
+      - /api/auth/logout
       - /auth/register
       - /*/v2/api-docs
       - /*/v3/api-docs

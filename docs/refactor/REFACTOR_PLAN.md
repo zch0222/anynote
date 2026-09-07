@@ -877,6 +877,8 @@ HTTP 方法语义：
 
 #### 5.1 初始化 Next.js 15 项目
 
+> ⚠️ **以下命令为本文档撰写时的设想，实际执行已在 M1 落地，命令与依赖清单与本节有差异**（CLI flag 改名、`shadcn-ui` → `shadcn`、`form` 已弃用 → `field`、底层 primitive `@radix-ui/*` → `@base-ui/react`、移除 axios 仅留 ky 等）。**实际命令、版本号、踩坑记录见 [`FRONTEND_MILESTONES.md` M1 节](./FRONTEND_MILESTONES.md#m1前端骨架与工具链)。** 本节保留作为历史决策记录。
+
 ```
 [CLAUDE CODE] 在 apps/web/ 初始化新项目（替换旧 anynote-next-web-dev 内容）：
 
@@ -1387,7 +1389,7 @@ main
       ├── phase/2-maven-bom
       ├── phase/3-spring-boot3
       ├── phase/4-service-refactor
-      ├── phase/5-frontend-rewrite
+      ├── phase/5.0-openapi-validation … phase/5.8-polish（Phase 5 按里程碑拆分，见 FRONTEND_MILESTONES.md）
       ├── phase/6-python-ai
       └── fix/description
 ```

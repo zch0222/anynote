@@ -4,6 +4,7 @@ import com.anynote.file.api.model.vo.OssSliceUploadSignatureVO;
 import com.anynote.file.api.model.vo.OssSliceUploadTaskVO;
 import com.anynote.file.service.FileService;
 import com.google.gson.Gson;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -13,6 +14,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 集成测试：需要 MinIO / MySQL / Nacos 就绪才能运行。
+ * 默认被 surefire 的 excludedGroups=integration 跳过，
+ * 起好中间件后用 mvn test -pl file -am -Dtest.excluded.groups= 单独执行。
+ */
+@Tag("integration")
 @SpringBootTest
 public class FileServiceTest {
 

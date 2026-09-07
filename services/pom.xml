@@ -33,6 +33,13 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <spring-boot.version>3.3.4</spring-boot.version>
+        <maven-surefire.version>3.2.5</maven-surefire.version>
+        <!--
+            默认排除的 JUnit 5 tag。必须走属性而非在 <configuration> 里写死：
+            插件配置里的字面值优先级高于 -D 用户属性，写死就再也没法从命令行放开。
+            跑集成测试：mvn test -pl <module> -am -Dtest.excluded.groups=
+        -->
+        <test.excluded.groups>integration</test.excluded.groups>
         <spring-cloud.version>2023.0.3</spring-cloud.version>
         <spring-cloud-alibaba.version>2023.0.3.4</spring-cloud-alibaba.version>
         <springdoc.version>2.3.0</springdoc.version>
@@ -466,6 +473,19 @@
         </dependencies>
     </dependencyManagement>
 
+    <!--
+        所有模块共享的测试依赖，无需逐个模块声明。
+        spring-boot-starter-test 自带 JUnit 5 + Mockito（含 mockito-junit-jupiter）
+        + AssertJ + Hamcrest + spring-test，纯单测与 @SpringBootTest 都够用。
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
     <build>
         <plugins>
             <plugin>
@@ -489,6 +509,20 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire.version}</version>
+                <configuration>
+                    <!--
+                        默认只跑纯单测（Mockito，不依赖外部环境）。
+                        标了 @Tag("integration") 的用例需要 MySQL / Redis / Nacos / RocketMQ 才能跑，
+                        本地起好中间件后用以下命令单独执行：
+                            mvn test -pl <module> -am -Dtest.excluded.groups=
+                    -->
+                    <excludedGroups>${test.excluded.groups}</excludedGroups>
                 </configuration>
             </plugin>
         </plugins>

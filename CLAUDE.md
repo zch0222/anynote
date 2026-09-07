@@ -23,15 +23,19 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | Phase | 内容 | 状态 |
 |-------|------|------|
 | 0 | Monorepo 基础设施 | ✅ v0.1.0 |
-| 1 | OpenAPI Contract First（Springdoc + 29 Controller 注解 + Gateway 聚合） | ✅ v0.2.0 — **但 `pnpm openapi:generate` 从未实际跑成功过；`openapi/specs/` 与 `packages/api-client/src/` 均空** |
+| 1 | OpenAPI Contract First（Springdoc + 29 Controller 注解 + Gateway 聚合） | ✅ v0.2.0 — Phase 5 M0 已端到端验证通过，`openapi/specs/*.json` 6 份 baseline 入库；`packages/api-client/src/` 仍 gitignored，本地需跑一次 `pnpm openapi:generate` 派生 |
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🔴 **未启动**，`apps/web/` 为空，里程碑见 `docs/refactor/FRONTEND_MILESTONES.md` |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中（约 15%）** — M0（OpenAPI 门禁）/ M1（Next.js 15 + shadcn 骨架）已完成；M2 仅 M2.0 后端代码落地且未收尾（`/auth/refresh` + `/logout` 已实现但 **spec baseline 未重生、未合并**），M2.1-M2.4 与 M3-M8 未启动。里程碑见 `docs/refactor/FRONTEND_MILESTONES.md` |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
-**当前分支**：`fix/minio-exception`（与 `dev` 有少量未合并改动）。`main` 是发布分支，日常合并目标是 `dev`。
+**当前分支**：`phase/5.2a-auth-backend`。`main` 是发布分支，日常合并目标是 `dev`。
+
+⚠️ **分支同步现状（2026-08-08 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点），本地无 `dev` 分支。`phase/5.2a-auth-backend` 已**领先 `origin/dev` 17 个 commit**（M1 线 3 个 + M1/M2.0 实现与文档 2 个 + 2026-08-07 起的测试基础设施 12 个），尚未推回。动 Phase 5 相关代码前先确认这条线的落点。
+
+⚠️ **契约漂移（阻塞 Phase 5 M2.1）**：`services/auth/.../TokenController.java` 已实现 `refresh` / `logout`，但 `openapi/specs/auth.json` baseline 未重生（仍只有 4 条路径），CI `openapi-check.yml` 会红。需起全栈跑 `pnpm openapi:generate` 修复。
 
 ## 常用命令
 
@@ -143,6 +147,51 @@ pnpm format              # Biome format only
 - **路由注解**：每个端点写 `tags`、`summary`、`responses`，确保 `/v3/api-docs` 输出可被前端类型生成消费
 - **依赖注入**：用 FastAPI `Depends(...)`，不要在模块顶层用全局单例
 
+## 测试要求（强制）
+
+**前后端任何代码改动完成后都必须附带单元测试，没有测试的改动不算完成，不允许提交。**
+
+### 覆盖范围
+
+| 必须写单测 | 可豁免 |
+|---|---|
+| Service / ServiceImpl 的业务逻辑（分支、边界、异常路径） | 纯 DTO / VO / PO（无逻辑的 getter/setter） |
+| 工具类、校验器、序列化 / 反序列化 | MyBatis Mapper 接口（无自定义 SQL 逻辑时） |
+| 前端 hooks（`use*Query` / `use*Mutation` / 自定义 hook） | 生成代码（`packages/api-client/src/`、`components/ui/` 的 shadcn 原件） |
+| 前端纯函数（`lib/**`、序列化、格式化） | 纯展示型 RSC（无状态无分支） |
+| BFF Route Handler（cookie 设置、鉴权转发、refresh 并发） | 配置文件、常量表 |
+| Python service 层与 Pydantic 校验逻辑 | |
+
+**Bug 修复必须先写复现该 bug 的失败用例，再改代码**——否则无法证明修好了。
+
+### 各栈约定
+
+**Java**：JUnit 5 + Mockito。放 `services/<svc>/src/test/java/com/anynote/<module>/`，命名 `<被测类>Test`。
+
+- **默认写纯单测**：`@ExtendWith(MockitoExtension.class)` + `@Mock` 打桩依赖，不连数据库 / Nacos / Redis
+- `@SpringBootTest` 只在确实要验证 Spring 装配时用。它需要完整中间件才能跑，**不能作为默认选择**（现存的 `PermissionServiceTest` / `FileServiceTest` 就是这种，本地起不了中间件时跑不动）
+- Feign 调用一律 mock；不要在单测里打真实服务
+
+**前端**：Vitest + Testing Library。测试与被测文件同目录放 `__tests__/`，或同名 `*.test.ts(x)`。
+
+- hooks 用 `@testing-library/react` 的 `renderHook`，外面套 `QueryClientProvider`（每个用例新建 `QueryClient`，`retry: false`）
+- 网络层打桩到 `openapi-fetch` 客户端，不要 mock 全局 `fetch`
+- Route Handler 直接调用导出的 `POST` / `GET` 函数并断言 `Set-Cookie`，不起真实 server
+
+**Python**：pytest。放 `ai-service/tests/`，命名 `test_<模块>.py`；依赖用 FastAPI `dependency_overrides` 替换，不打真实 LLM。
+
+### 单测 / 集成测试的划分（强制）
+
+**新写 `@SpringBootTest` 必须同时加 `@Tag("integration")`**，否则会混进默认单测流程，在没有中间件的 CI 上必然失败。父 pom 的 surefire 默认排除该 tag。
+
+> 该排除项走 `${test.excluded.groups}` 属性而非在 `<configuration>` 里写死：插件配置的字面值优先级高于 `-D` 用户属性，写死的话命令行永远放不开。
+
+### 运行与 CI
+
+**测试栈、目录约定、运行命令、CI 配置的单一来源是 [`README.md` 的「测试」节](./README.md#测试)**，本节只保留约束，不重复命令。
+
+> 注意 `pnpm services:build` 仍是 `-DskipTests`（它只负责产物构建，测试由 `.github/workflows/test.yml` 单独把关）。
+
 ## REST API 命名规范
 
 - 路径用名词，不用动词：`POST /user/{id}/ban` 而非 `POST /banUser`
@@ -225,6 +274,7 @@ CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分�
 
 - 分支模型（`main` ← `dev` ← `phase/*` / `feat/*` / `fix/*` / `docs/*` / `chore/*`）
 - Conventional Commits 格式 + type/scope 取值
+- **Commit message 一律用中文**撰写描述与 body（`type` / `scope` 保持英文，技术名词保留原文）
 - 提交粒度（一次只动一个 service / package，跨语言不混）
 - Commit message 约定（**禁止 `Co-Authored-By` trailer**，包含 AI 助手署名）
 - 版本 Tag 策略（`v0.X.0` 对应 Phase 完成点）
@@ -242,3 +292,7 @@ CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分�
 - ❌ 新前端用 Milkdown / Wangeditor / Vditor / Muya（统一 TipTap）
 - ❌ 前端手写 fetch / axios 直调后端（必须走 `@anynote/api-client` + BFF 代理）
 - ❌ 前端把 token 写到 `document.cookie` / localStorage / sessionStorage（必须 httpOnly Cookie）
+- ❌ 新增 / 修改 Service、工具类、前端 hook、BFF Route Handler 后不写单元测试就提交（见[「测试要求」](#测试要求强制)）
+- ❌ 只为凑覆盖率写"调一次断言不报错"的空测试；断言必须覆盖实际业务分支与异常路径
+- ❌ 修 bug 时不先写复现用例直接改代码
+- ❌ 用英文写 commit message 的描述与 body（`type` / `scope` 除外，见[「提交与分支」](#提交与分支)）

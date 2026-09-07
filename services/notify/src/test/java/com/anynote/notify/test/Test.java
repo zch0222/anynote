@@ -7,6 +7,7 @@ import com.anynote.common.rocketmq.tags.NotifyTagsEnum;
 import com.google.gson.Gson;
 import lombok.extern.slf4j.Slf4j;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,7 +20,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 集成测试：需要 Redis / RocketMQ / Nacos 就绪才能运行。
+ * 默认被 surefire 的 excludedGroups=integration 跳过，
+ * 起好中间件后用 mvn test -pl notify -am -Dtest.excluded.groups= 单独执行。
+ */
 @Slf4j
+@Tag("integration")
 @ExtendWith(SpringExtension.class)
 @SpringBootTest
 public class Test {

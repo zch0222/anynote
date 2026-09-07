@@ -102,12 +102,35 @@ public class TokenUtil {
 
 
     /**
-     * 删除用户的所有token
+     * 删除用户的所有token（多端全部登出）
      * @param username
      */
     public void removeTokens(String username) {
         redisService.deleteObjects(CachePrefixEnum.ACCESS_TOKEN.getPrefix(username));
         redisService.deleteObjects(CachePrefixEnum.REFRESH_TOKEN.getPrefix(username));
+    }
+
+    /**
+     * 单会话登出：仅清理传入的 accessToken / refreshToken，对其他端不影响。
+     * 当 token 已过期或非法时静默忽略（登出语义应幂等）。
+     * @param accessToken 当前会话 accessToken
+     * @param refreshToken 当前会话 refreshToken（可选）
+     */
+    public void logout(String accessToken, String refreshToken) {
+        if (StringUtils.isNotEmpty(accessToken)) {
+            LoginUser atUser = authToken(accessToken);
+            if (atUser != null) {
+                redisService.deleteObject(
+                        CachePrefixEnum.ACCESS_TOKEN.getPrefix(atUser.getUsername()) + accessToken);
+            }
+        }
+        if (StringUtils.isNotEmpty(refreshToken)) {
+            LoginUser rtUser = authToken(refreshToken);
+            if (rtUser != null) {
+                redisService.deleteObject(
+                        CachePrefixEnum.REFRESH_TOKEN.getPrefix(rtUser.getUsername()) + refreshToken);
+            }
+        }
     }
 
 

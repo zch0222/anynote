@@ -452,6 +452,76 @@ location /api/aiNio/ {
 | `pnpm typecheck` | turbo typecheck（含 `@anynote/api-client`） |
 | `pnpm services:build` | = `cd services && mvn clean install -DskipTests` |
 | `cd services && mvn clean install -pl note -am -DskipTests` | 构建单个 Java 服务及其依赖 |
+| `pnpm test` | 全仓前端测试（Turborepo） |
+| `cd services && mvn clean test` | 全部 Java 模块单测 |
+
+---
+
+## 测试
+
+### 技术栈
+
+| 层 | 框架 | 测试位置 |
+|----|------|---------|
+| Java | JUnit 5 + Mockito + AssertJ（由 `spring-boot-starter-test` 提供） | `services/<module>/src/test/java/com/anynote/<module>/` |
+| Java（Reactive） | 额外 `reactor-test`（StepVerifier） | `gateway` / `ai` |
+| 前端 | Vitest + Testing Library + jsdom | `apps/web/src/**/__tests__/` 或同名 `*.test.ts(x)` |
+
+`spring-boot-starter-test` 在父 pom [`services/pom.xml`](services/pom.xml) 的 `<dependencies>` 中统一声明，所有模块自动继承，新增模块无需改 pom。
+
+### 单测与集成测试的划分
+
+Java 测试按 JUnit 5 tag 分两类：
+
+| 类型 | 标记 | 依赖 | 默认是否执行 |
+|------|------|------|------------|
+| 纯单测 | 无 | 仅 Mockito 打桩，不连外部服务 | ✅ 是（CI 每个 PR 都跑） |
+| 集成测试 | `@Tag("integration")` | MySQL / Redis / Nacos / RocketMQ / MinIO | ❌ 否（surefire 默认排除） |
+
+排除规则在父 pom：`<excludedGroups>${test.excluded.groups}</excludedGroups>`，属性默认值为 `integration`。
+
+> **新写 `@SpringBootTest` 必须同时加 `@Tag("integration")`**，否则会混入默认单测流程，在没有中间件的 CI 上必然失败。
+
+### 运行
+
+```bash
+# 前端
+pnpm test                                   # 全仓（Turborepo）
+pnpm --filter web test                      # 仅 apps/web
+pnpm --filter web test:watch                # watch 模式
+
+# Java 单测
+cd services && mvn clean test               # 全部模块
+cd services && mvn test -pl auth -am        # 单模块
+
+# Java 集成测试（需先起中间件，见「场景 B」）
+cd services && mvn test -pl file -am -Dtest.excluded.groups=
+```
+
+> `-pl <module>` 必须搭配 `-am`：模块间通过 `com.anynote:*` SNAPSHOT 互相依赖，本地 `~/.m2` 未安装过这些产物时会直接卡在依赖解析失败。
+
+### 前端测试基建
+
+| 文件 | 作用 |
+|------|------|
+| [`apps/web/vitest.config.ts`](apps/web/vitest.config.ts) | jsdom 环境、`@` 别名、JSX transform；排除 vendored 的 `src/components/ui` |
+| [`apps/web/vitest.setup.ts`](apps/web/vitest.setup.ts) | 注册 jest-dom matcher 与用例间 DOM cleanup |
+| [`apps/web/src/test/render.tsx`](apps/web/src/test/render.tsx) | `renderWithProviders` / `renderHookWithProviders` / `createTestQueryClient`，测 TanStack Query hook 用这套包装 |
+
+### CI
+
+[`.github/workflows/test.yml`](.github/workflows/test.yml) 在所有 PR 与 `dev` / `main` push 上跑两个并行 job：
+
+| Job | 命令 | 说明 |
+|-----|------|------|
+| `java` | `mvn clean test` | 集成测试被自动排除，无需 docker 全栈；失败时上传 surefire 报告 |
+| `web` | `pnpm test` | vitest 跑在 jsdom 中，不依赖后端 |
+
+与 [`openapi-check.yml`](.github/workflows/openapi-check.yml) 分开：后者需要起全栈、耗时长，仅在 `services/**` 或 `openapi/**` 变更时触发。
+
+### 覆盖要求
+
+代码改动必须附带单元测试，必测 / 可豁免范围与各栈写法约定见 [`CLAUDE.md` 的「测试要求」节](./CLAUDE.md#测试要求强制)。
 
 ---
 
@@ -513,11 +583,13 @@ main          ← 稳定发布分支，每个 Phase 完成后合并，打版本 
 ### Commit 格式（Conventional Commits）
 
 ```
-<type>(<scope>): <简短描述（命令式、不超过 70 字符）>
+<type>(<scope>): <简短描述（中文、不超过 50 字）>
 
-<可选 body：解释 why 与影响>
+<可选 body：中文，解释 why 与影响>
 <可选 footer：BREAKING CHANGE / Closes #issue>
 ```
+
+**描述与 body 一律用中文**。`type` / `scope` 是格式标识，保持英文小写；技术名词（类名、方法名、依赖名、配置项、命令）保留原文不翻译。
 
 **type 取值**
 
@@ -552,6 +624,7 @@ scope 可省略（如纯顶层文档变更），但有具体作用域时必须�
 
 ### Commit Message 约定
 
+- **一律使用中文撰写**描述与 body；`type` / `scope` 保持英文小写，技术名词保留原文
 - **不写 `Co-Authored-By:` / `Co-authored-by:` trailer**——本项目所有 commit 保持单作者，无论是否由 AI 助手（Claude Code / Codex 等）协助生成
 - body / footer 解释 *why* 与影响，不重复 *what*（diff 已经表达 what）
 - 破坏性变更在 footer 写 `BREAKING CHANGE: <说明>`
@@ -559,14 +632,15 @@ scope 可省略（如纯顶层文档变更），但有具体作用域时必须�
 **示例**
 
 ```bash
-git commit -m "refactor(note): migrate javax.* to jakarta.* namespace"
-git commit -m "feat(web): implement httpOnly cookie auth via BFF route"
-git commit -m "chore(bom): upgrade Spring Boot to 3.3.4, Spring Cloud to 2023.0.3"
+git commit -m "refactor(note): 将 javax.* 命名空间迁移到 jakarta.*"
+git commit -m "feat(web): 通过 BFF 路由实现 httpOnly cookie 认证"
+git commit -m "chore(bom): 升级 Spring Boot 至 3.3.4、Spring Cloud 至 2023.0.3"
+git commit -m "test(auth): 补充 TokenUtil 的 refresh 与 logout 单元测试"
 
 # 破坏性变更
-git commit -m "refactor(ai): merge ai + ai-nio into unified services/ai module
+git commit -m "refactor(ai): 合并 ai 与 ai-nio 为统一的 services/ai 模块
 
-BREAKING CHANGE: port changed from 9210 to 9065, update Nacos route config"
+BREAKING CHANGE: 端口由 9210 改为 9065，需同步更新 Nacos 路由配置"
 ```
 
 ### 版本 Tag 策略

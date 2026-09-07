@@ -1,9 +1,17 @@
 # Anynote 前端重构里程碑（可执行版）
 
-> 文档版本：v1.0 | 生成日期：2026-05-13
+> 文档版本：v1.2 | 生成日期：2026-05-13 | 最近核对：2026-08-08
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；Phase 5 未启动，`apps/web/` 为空，`packages/api-client/src/` 未生成
-> 主干分支：`dev`；本计划工作分支：`phase/5-frontend-rewrite`
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 已完成，M2 后端（M2.0）已收尾，M2.1-M2.4 与 M3-M8 未启动**（逐里程碑状态见下方各节）
+> 完成度参考：9 个里程碑完成 2 个；按工期估算 14-19 天中约完成 2 天，**Phase 5 约 15%**
+> `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
+> 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
+>
+> ✅ **契约漂移已修复（2026-08-08）**：起全栈跑 `pnpm openapi:generate` 后，`openapi/specs/auth.json` 从 4 条路径补齐到 6 条（新增 `/refresh` `/logout`，以及 `RefreshTokenDTO` / `LogoutDTO` 两个 schema）。M2.1 的阻塞随之解除。
+>
+> ⛔ **新发现（2026-08-08）：漂移门禁本身不可用 —— `servers[0].url` 是容器运行时 IP**。6 份 spec 的 `.servers[0].url` 都是 springdoc 按请求上下文写入的容器 IP（如 `http://172.19.0.11:8083`），Docker 每次起栈重新分配。CI `openapi-check.yml` 是**裸 `git diff --exit-code openapi/specs/`，无任何归一化**，所以**任何一次 CI 运行都会因 IP 变化而红，与 API 是否真的改动无关**。这是 M0.4 建门禁时就存在的缺陷（旧 baseline 里同样是 IP），不是本次引入。修复方案见 §6。
+>
+> ⚠️ **分支同步现状（2026-08-08 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点，本地无 `dev` 分支）。`phase/5.2a-auth-backend` 已**领先 origin/dev 17 个 commit**：M1 线 3 个（`f2336a7` / `a7f9443` / 合并点 `c83a083`）+ M1/M2.0 文档与实现 2 个（`94fcb00` / `52cc74a`）+ 2026-08-07 起的测试基础设施 12 个（见 §1.1）。恢复推进前先把这条线推回 `origin/dev`。
 
 ---
 
@@ -40,12 +48,33 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 | **M2** | 认证 BFF + Cookie 安全 | 1.5 天 | M1 | `phase/5.2-auth-bff` | 中（auth 端点） |
 | **M3** | API 客户端 + 查询层 + 代理 | 1.5 天 | M0, M2 | `phase/5.3-api-layer` | ★★★ 主入口 |
 | **M4** | AppShell + 主题 + 命令面板 | 1 天 | M2 | `phase/5.4-app-shell` | 弱 |
-| **M5** | TipTap 编辑器核心 | 3-4 天 | M1（可与 M2-M4 并行） | `phase/5.5-tiptap-core` | 中（文件上传 presign） |
+| **M5** | TipTap 编辑器核心 | 3-4 天 | M1（可与 M2-M4 并行） | `phase/5.5-tiptap-core` | 中（文件分片直传） |
 | **M6** | 笔记业务页面 | 2-3 天 | M3, M5 | `phase/5.6-notes` | 强（笔记 CRUD） |
 | **M7** | AI / PDF / Mooc / Tasks / Wikis | 3-4 天 | M3, M5 | `phase/5.7-features` | 强（AI SSE / chat-pdf） |
 | **M8** | 协同 + 桌面 + 收尾 | 2 天 | M6, M7 | `phase/5.8-polish` | 弱 |
 
 **总工期估算**：14-19 工作日（约 3-4 周），与 REFACTOR_PLAN 中 Phase 5 估算 5-7 天的差异来自 TipTap 切换 + 完整业务页面迁移成本。
+
+### 1.1 计划外已完成的工作（不属于任何里程碑）
+
+2026-08-07 / 08-08 在 `phase/5.2a-auth-backend` 上插入了一轮**测试基础设施建设**，共 12 个 commit。这批工作不在 M0-M8 任何里程碑范围内，但已成为后续所有里程碑的**强制前提**（CLAUDE.md 与 README 已把"改动必带单测"写成硬约束），故在此登记，避免下次核对进度时对不上账。
+
+| commit | 内容 |
+|---|---|
+| `d1a4e46` | 修正本文档 presign 悬空引用 + 同步 Phase 5 状态 |
+| `b46ce18` | CLAUDE.md 新增「测试要求（强制）」章节：前后端改动必须附带单测 |
+| `7356f6a` | 打通全部 Java 模块的单测能力（surefire + JUnit 5 + Mockito） |
+| `1778108` | `apps/web` 接入 vitest + jsdom + RTL，提供 QueryClientProvider 测试工具 |
+| `f17b271` | `turbo.json` 加 `test` 任务，根 `pnpm test` 透传 |
+| `b33c93f` | 新增 `.github/workflows/test.yml`：每个 PR 跑 Java + 前端单测 |
+| `747fde2` | README 用实际命令替换测试基建缺口警告 |
+| `937b2d2` | 修复集成测试排除项：改走 `${test.excluded.groups}` 属性，命令行才放得开 |
+| `1bd2237` | 补 token / password / HMAC 单测（`TokenUtilTest` / `LoginServiceImplTest` / `PasswordServiceImplTest` / `HmacUtilsTest` / `SecurityUtilsTest` / `StringUtilsTest`） |
+| `584277c` | README 修正集成测试命令并说明 `-am` 要求 |
+| `939ac33` | README 补充单测架构说明 |
+| `7b90761` | 约定 commit message 一律用中文 |
+
+**对后续里程碑的影响**：M2.1 起每个 BFF Route Handler、每个 `use*Query` / `use*Mutation` hook 都必须带单测才算完成（见 CLAUDE.md「测试要求」表）。`1bd2237` 中的 `LoginServiceImplTest` 已覆盖 M2.0 新增的 `refresh` / `logout` 业务分支。
 
 ---
 
@@ -110,11 +139,11 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 - [x] 调整 `.gitignore`：`openapi/specs/*.json` **入库**作为 baseline，`packages/api-client/src/` 继续 gitignored（每次从 specs 派生）
 - [x] 根 `package.json` 新增 `pnpm openapi:check`（本地一键检查）
 
-### M0.5 验收 🟡 待用户审阅合入
+### M0.5 验收 ✅
 - [x] `pnpm openapi:generate` 干净退出，6 个 service spec 全部产出
 - [x] `pnpm --filter @anynote/api-client typecheck` 0 错误
 - [x] 12 个关键端点中**已存在的 10 个**在生成的 paths 类型中均可找到，且请求体 / 响应体均有具名 schema（非 unknown）；2 个未实现的 auth refresh/logout 已下推 M2
-- [ ] PR 合并到 `dev`，打 Tag `v0.5.1-openapi-ready` ← **等待用户审阅**
+- [x] PR 合并到 `dev`（merge commit `dfe9360 chore: merge phase/5.0-openapi-validation → dev`）。Tag `v0.5.1-openapi-ready` 暂未打（与 M1 / M2 一起延后到 Phase 5 中段统一发版）
 
 > ⚠️ 如果 M0.3 发现后端缺口较多（>5 个端点没法用），优先补完再开 M1，不要并行启动前端。
 
@@ -126,16 +155,27 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 
 **分支**：`phase/5.1-skeleton`
 
-### M1.1 初始化 Next.js 15
-- [ ] 删除当前空 `apps/web/`（确认是空目录后），重新生成：
-  ```bash
-  cd apps && pnpm create next-app@latest web \
-    --typescript --tailwind --app --src-dir \
-    --import-alias "@/*" --no-eslint --turbo
-  ```
-- [ ] 校验 `apps/web/package.json` 加入 workspace（取消 `pnpm-workspace.yaml` 注释，确保 `apps/web` 已纳入）
+**状态**：🟢 **2026-05-23 完成 M1.1–M1.5，已合并 dev**（merge commit `c83a083 chore: merge phase/5.1-skeleton → dev`）。
 
-### M1.2 依赖安装
+### M1.1 初始化 Next.js 15 ✅
+- [x] 删除空 `apps/web/`，重新生成（**实际命令与原计划差异**：`@latest` → `@15` 锁定 v15（避免 Next.js 16 已发布造成大版本漂移）；`--turbo` → `--turbopack`（CLI flag 改名）；加 `--use-pnpm --yes`）：
+  ```bash
+  cd apps && pnpm create next-app@15 web \
+    --typescript --tailwind --app --src-dir \
+    --import-alias "@/*" --no-eslint --turbopack --use-pnpm --yes
+  ```
+- [x] `apps/web` 已在 `pnpm-workspace.yaml` 中纳入（之前已存在），`pnpm install` 顺利联通
+
+**实际产出版本**（2026-05-23 解析）：
+
+| 包 | 版本 | 备注 |
+|---|---|---|
+| `next` | 15.5.18 | 锁 v15（v16 已 GA 未升） |
+| `react` / `react-dom` | 19.1.0 | Next.js 15 默认 |
+| `tailwindcss` + `@tailwindcss/postcss` | 4.3.0 | **Tailwind v4**（影响 shadcn 选项） |
+| `typescript` | 5.9.3 | |
+
+### M1.2 依赖安装 ✅
 ```bash
 cd apps/web && pnpm add \
   @tanstack/react-query @tanstack/react-query-devtools \
@@ -145,28 +185,54 @@ cd apps/web && pnpm add \
   class-variance-authority clsx tailwind-merge lucide-react \
   @microsoft/fetch-event-source date-fns cmdk
 
-pnpm add -D @types/node vitest @vitest/ui @testing-library/react jsdom
+pnpm add -D vitest @vitest/ui @testing-library/react @testing-library/dom @testing-library/jest-dom jsdom
 ```
 
-### M1.3 shadcn/ui 初始化与首批组件
+**版本提醒（与训练截止时有大版本差异）**：
+- `zod ^4.4.3`（v3 → v4 破坏性变更，schema API 调整，错误格式从 `error.flatten()` 改为 `z.flattenError()`，写表单 schema 时注意）
+- `zustand ^5.0.13`
+- `ky ^2.0.2`
+- `lucide-react ^1.16.0`
+- `vitest ^4.1.7`
+
+### M1.3 shadcn/ui 初始化与首批组件 ✅
 ```bash
-pnpm dlx shadcn@latest init       # 选 New York + slate + CSS Variables
-pnpm dlx shadcn@latest add button input form dialog dropdown-menu \
+pnpm dlx shadcn@latest init -d --force
+# baseColor 默认 neutral，需手动改 components.json → "slate"，并按 Tailwind v4 slate palette 用 OKLCH 覆盖 src/app/globals.css 的 :root / .dark
+pnpm dlx shadcn@latest add button input dialog dropdown-menu \
   sheet sidebar avatar badge card table tabs tooltip skeleton sonner \
-  command separator scroll-area
+  command separator scroll-area --yes
+pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field 原语
 ```
 
-### M1.4 TypeScript / Biome / Turbo 配合
-- [ ] `apps/web/tsconfig.json` extends `packages/tsconfig/base.json`，开启 `strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes`
-- [ ] 根 `package.json` 加 `"typecheck": "turbo typecheck"`，子包加对应脚本
-- [ ] 把 `apps/web` 的 dev/build/lint 接到 turbo pipeline，验证 `pnpm dev` `pnpm build` `pnpm check` 全绿
-- [ ] `apps/web/src/lib/env.ts` 用 zod 校验环境变量（`NEXT_PUBLIC_*` 与服务端变量分离）
+**shadcn 2026 关键变更**（首次遇到，已踩；M5 / M6 沿用时注意）：
 
-### M1.5 验收
-- [ ] `pnpm dev` 在 3s 内启动，访问 `http://localhost:3000` 见默认页
-- [ ] `pnpm build` 成功，bundle 报告打印
-- [ ] `pnpm check` 无 warning
-- [ ] 合并到 `dev`
+| 旧（设计本文档时） | 新（2026） |
+|---|---|
+| `--style new-york / default` | `--preset base-nova`（CLI `-d` 默认；style 字段值为 `base-nova`） |
+| 依赖 `@radix-ui/react-*` 单包 | 改用 `@base-ui/react`（Radix 团队下一代统一库） |
+| 注册组件 `form` | **已弃用**，注册表返回空壳。改用 **`field`** 原语（FieldSet / FieldLabel / FieldDescription / FieldError / FieldGroup / Field / FieldTitle / FieldSeparator / FieldContent / FieldLegend），通过 `errors` 属性与 react-hook-form 直接配合 |
+| 纯 CLI | 附带 runtime 包 `shadcn`（提供 `shadcn/tailwind.css` 预设）和 `tw-animate-css`（动画扩展） |
+| CLI `--base-color slate` flag | 已移除；`-d` 强制写 `neutral`。要 slate 必须**手改 `components.json` + 手贴 OKLCH** |
+
+最终 `apps/web/src/components/ui/` 共 **21 个文件**：`avatar / badge / button / card / command / dialog / dropdown-menu / field / input-group / input / label / scroll-area / separator / sheet / sidebar / skeleton / sonner / table / tabs / textarea / tooltip`（`input-group` / `label` / `textarea` 是 shadcn 自动随依赖补齐）。
+
+### M1.4 TypeScript / Biome / Turbo 配合 ✅
+- [x] `apps/web/tsconfig.json` 改为 `extends "@anynote/tsconfig/base.json"`（自动启用 strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes），保留 Next.js 必需的 `jsx: preserve` / `plugins: [{name: next}]` / `paths` / `incremental` / `include`
+- [x] `@anynote/tsconfig` 加入 `apps/web` 的 devDeps（`workspace:*`）
+- [x] `apps/web/package.json` 增 `lint` / `typecheck` / `test` / `test:watch` 脚本；`turbo.json` 已有任务直接接入（根 `pnpm typecheck` / `pnpm check` / `pnpm build` 透传）
+- [x] `apps/web/src/lib/env.ts`：zod schema 分 `serverSchema`（`NODE_ENV` / `BACKEND_URL`）与 `clientSchema`（`NEXT_PUBLIC_APP_URL`），运行时 `isServer` 切换，失败时打印字段级 error 并抛出
+
+**额外踩坑 / 修复（写入文档以备后续踩）**：
+1. shadcn 生成的 `sonner.tsx:12` `theme as ToasterProps["theme"]` 在 `exactOptionalPropertyTypes` 下报错（`theme` 残留 `undefined`），已改为 `as NonNullable<ToasterProps["theme"]>`。后续 `shadcn add sonner` 重生时要重新修补。
+2. `pnpm check` 默认扫**全仓**，首次跑会误伤 `apps/web-legacy/` 的 243 个文件 + 6 个 `openapi/specs/*.json` baseline（baseline 是 single-line JSON，被 biome 格式化成多行会让 CI `git diff --exit-code` 永远红）。已在 `biome.json` `files.ignore` 追加 4 条：`apps/web-legacy` / `apps/web/.next` / `apps/web/src/components/ui`（vendored 代码，每次 `shadcn add` 会再次触发 5 个 lint error） / `openapi/specs`。
+
+### M1.5 验收 ✅
+- [x] `pnpm dev` 启动 **662 ms**（远小于 3s 目标），`HEAD /` 返回 200，首次编译 `/` 1.5s
+- [x] `pnpm build` 成功：5/5 静态页生成；`/` 5.43 kB，First Load JS 119 kB，shared 131 kB
+- [x] `pnpm check` 20 files / 0 fixes（全绿）
+- [x] `pnpm typecheck` turbo 跑 web + api-client 两包均通过
+- [x] 合并到 `dev`（`--no-ff` merge commit，与 M0 风格一致）；`phase/5.1-skeleton` 分支保留
 
 ---
 
@@ -174,31 +240,81 @@ pnpm dlx shadcn@latest add button input form dialog dropdown-menu \
 
 **目标**：登录全链路走通；浏览器侧无法读到 token；并发刷新无竞争。
 
-**分支**：`phase/5.2-auth-bff`
+**分支**：拆分为两段执行
+- **`phase/5.2a-auth-backend`**：后端补 refresh/logout 端点（不在原计划中，因 M0.3 已识别该缺口）
+- **`phase/5.2-auth-bff`**：前端 BFF + middleware + 登录页
+
+**状态**：🟡 进行中（2026-05-23 起）—— **2026-08-08 核对：只有 M2.0 的后端代码落地，且 M2.0 本身未收尾；M2.1-M2.4 前端零进度**。
+`apps/web/src/app/` 下当前仅 `layout.tsx` / `page.tsx` / `globals.css` / `favicon.ico`，无 `api/auth/**` BFF 路由、无 `middleware.ts`、无登录页、无 `features/` 与 `stores/` 目录。
+
+### 关键决策（开工前敲定）
+
+1. **Cookie 方案：2 件套 `at` + `rt`**（放弃原计划的 `sid`）
+   - 后端 Redis 已按 token 字符串本身做反查，不需要 sid 关联会话
+   - 两 cookie 均 `HttpOnly; Secure; SameSite=Strict; Path=/`
+   - CSRF 由 `SameSite=Strict` + Origin header 检查防御，不需要 CSRF 专用 cookie
+2. **环境变量命名**：与 `.claude/context/frontend.md` 对齐
+   - `INTERNAL_API_URL`（server-only，BFF → gateway，docker 内 `http://gateway:8080` 本地 `http://localhost:8080`）
+   - `NEXT_PUBLIC_APP_URL`（浏览器源）
+   - **不引入 `NEXTAUTH_SECRET`**——不用 next-auth，BFF 透传后端 JWT 不签名
+   - M1.4 写的 `BACKEND_URL` 在 M2.1 改名为 `INTERNAL_API_URL`
+3. **Refresh 契约**
+   - Input：`{ refreshToken: string }`
+   - Output：新 `Token`（access + refresh 同时旋转，旧 refresh 立即从 Redis 删除）
+   - 旧 accessToken 留待自然过期（实例已存于 Redis；攻击窗口至多到 TTL）
+4. **Logout 契约**
+   - Input：`{ accessToken, refreshToken? }`
+   - 服务端仅清当前会话 Redis 键（**单会话登出**），不动该用户其他端
+   - 幂等：token 失效/不存在时静默成功
+
+### M2.0 后端：补 /auth/refresh + /auth/logout 🟢 代码与 spec 已完成（仅剩合并）
+
+**分支**：`phase/5.2a-auth-backend`
+
+- [x] `services/common/anynote-common-security-core/.../TokenUtil.java` 新增 `logout(at, rt)` 方法（per-session Redis 删键，幂等）
+  - 现有 `refreshToken(oldRefreshToken)` 已自带 access + refresh 旋转 + 旧 refresh 删除，直接复用
+- [x] `services/auth/.../model/dto/RefreshTokenDTO.java`、`LogoutDTO.java`（含 `@Schema` 注解）
+- [x] `services/auth/.../service/LoginService.java` 接口加 `refresh(rt) → Token` 与 `logout(at, rt)`
+- [x] `services/auth/.../service/impl/LoginServiceImpl.java` 实现两方法（参数校验 + 委托 TokenUtil）
+- [x] `services/auth/.../controller/TokenController.java` 暴露 `POST /refresh` 与 `POST /logout`，含 `@Operation` 注解
+- [x] `infra/docker/nacos/configs/anynote-gateway-dev.yml` 白名单加 `/api/auth/refresh` 与 `/api/auth/logout`（refresh 入口可能 access 已过期；logout 应允许任意状态）
+- [x] `mvn install -pl auth -am -DskipTests` 编译通过
+- [x] 提交 commit `52cc74a feat(auth): add /refresh + /logout endpoints (Phase 5 M2.0)`
+- [x] 单测覆盖：`LoginServiceImplTest` / `TokenUtilTest`（随 §1.1 的 `1bd2237` 补齐）
+- [x] **契约漂移已修（2026-08-08）**：起全栈（`docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml up -d --build`）→ 跑 `pnpm openapi:generate` 重生 `openapi/specs/auth.json` 与 `packages/api-client/src/auth.ts`
+  - `auth.json` 4 条路径 → 6 条：新增 `/refresh` `/logout`；`components.schemas` 新增 `RefreshTokenDTO` / `LogoutDTO`（共 +36 个键）
+  - 6 份 spec 全部校验通过（可解析 + paths 非空）：ai 16 / auth 6 / file 13 / note 60 / notify 2 / system 23
+  - `notify.json` 的 `info` 块（contact / license / description）由空值变为 Nacos `application-dev.yml` 注入的全局值，与其余 5 份收敛一致 —— 属预期修正
+  - **M2.1 的阻塞就此解除**
+- [ ] merge `phase/5.2a-auth-backend` → `dev` 并推回 `origin/dev`（当前领先 17 个 commit，之后再开 5.2-auth-bff）—— 用户手动操作
 
 ### M2.1 BFF 路由
-- [ ] `src/app/api/auth/login/route.ts`：调用 `/auth/login` → 响应中 `Set-Cookie` 三件套（`at` / `rt` / `sid`）
+
+> ✅ **阻塞已解除（2026-08-08）**：`packages/api-client/src/auth.ts` 已含 `/refresh` `/logout` 的 typed paths，可直接开工。注意该目录 gitignored，换机器后需先跑一次 `pnpm openapi:generate`（要求后端在跑）。
+
+- [ ] 重命名 `apps/web/src/lib/env.ts` 中 `BACKEND_URL` → `INTERNAL_API_URL`（2026-08-08 核对：`env.ts:5` 仍是 `BACKEND_URL`，未改）
+- [ ] `src/app/api/auth/login/route.ts`：调用 `/api/auth/login` → 响应中 `Set-Cookie` 两件套（`at` / `rt`）
 - [ ] `src/app/api/auth/refresh/route.ts`：进程内 `Map<rt, Promise<void>>` 锁防并发
-- [ ] `src/app/api/auth/logout/route.ts`：清三件套 + 通知后端
-- [ ] `src/app/api/auth/me/route.ts`：转发 `/system/user/getInfo`，返回用户资料
-- [ ] `src/app/api/proxy/[...path]/route.ts`：所有业务请求经此，自动注入 `Authorization: Bearer ${at}` 并在过期时触发刷新
+- [ ] `src/app/api/auth/logout/route.ts`：清两件套 + 调后端 `/api/auth/logout`
+- [ ] `src/app/api/auth/me/route.ts`：转发 `/api/system/user/mine`，返回用户资料
+- [ ] `src/app/api/proxy/[...path]/route.ts`：所有业务请求经此，自动注入 `Authorization: Bearer ${at}` 并在过期时触发 refresh
 
 ### M2.2 中间件路由保护
 - [ ] `apps/web/src/middleware.ts`：未带 `at` cookie 的私有路由重定向到 `/login`
 - [ ] `matcher` 排除 `/login` `/register` `/api/auth/**` `/_next` 静态资源
 
 ### M2.3 登录 / 注册页
-- [ ] `(auth)/login/page.tsx`：react-hook-form + zod，提交到 `/api/auth/login`
-- [ ] `(auth)/register/page.tsx`：调 `/system/register`
+- [ ] `(auth)/login/page.tsx`：react-hook-form + zod + shadcn Field，提交到 `/api/auth/login`
+- [ ] `(auth)/register/page.tsx`：调 `/api/auth/register`（后端 register 直接登录返回 LoginDTO）
 - [ ] 错误吐司用 sonner
 - [ ] 登录成功 `router.push('/dashboard')`
 
 ### M2.4 验收
-- [ ] 登录后 DevTools → Application → Cookies：只有 `at` / `rt` / `sid`，HttpOnly 均为 ✓
+- [ ] 登录后 DevTools → Application → Cookies：只有 `at` / `rt`，HttpOnly 均为 ✓
 - [ ] DevTools → Application → LocalStorage / SessionStorage 全空
-- [ ] 手动让 `at` 提前过期（缩短 TTL 至 30s 测试），并发触发 10 个请求，只产生 1 次 `/auth/refresh` 调用
-- [ ] 登出后 cookies 三件套全部清空
-- [ ] 合并到 `dev`
+- [ ] 手动让 `at` 提前过期（缩短 TTL 至 30s 测试），并发触发 10 个请求，只产生 1 次 `/api/auth/refresh` 调用
+- [ ] 登出后 cookies 两件套全部清空
+- [ ] 合并 `phase/5.2-auth-bff` → `dev`
 
 ---
 
@@ -310,9 +426,17 @@ cd apps/web && pnpm add \
 - [ ] `styles/tiptap.css`：基于 `@tailwindcss/typography` 的 `.prose` 风格 + 暗色覆盖 + 节点专属样式
 
 ### M5.3 图片上传集成
-- [ ] `lib/editor/upload.ts`：调 `/api/v1/files/presign`（M0.3 已确认存在）→ PUT 到 MinIO → 返回 publicUrl
+
+> ⚠️ **不存在 `/files/presign` 端点**。M0 期间曾新增（`a305f5a`）又整体 revert（`cafee8c`）；浏览器直传统一复用 file 服务既有的分片直传流程（M0.3 表格已确认）。下列路径为 Gateway 路由前缀 `/api/file/**`，前端实际经 BFF 代理走 `/api/proxy/file/*`。
+
+- [ ] `lib/editor/upload.ts`：走 file 服务分片直传五步
+  1. `POST /api/file/ossSliceUploadTasks` 建任务 → 返回 `uploadId` / `chunkSize` / `totalChunk` / `finishedChunks`（`hash` 命中即秒传，`finishedChunks` 支持断点续传）
+  2. `POST /api/file/getOssSliceUploadSignatures` 按 `chunkIndexList` 换分片签名（`OSSSignature.type` = `MIN_IO` / `HUAWEI_OBS`）
+  3. 浏览器按签名直接 PUT 各分片到 OSS
+  4. `POST /api/file/markOssSliceUploadSignatures` 标记已完成分片
+  5. `POST /api/file/composeOssSliceUploadObject` 合并 → 返回 `fileId` / `objectName` / `hash`；再用 `GET /api/file/public/byObjectName` 换可访问 URL（`ObjectURL.url` + `expireTime`，**非永久公开 URL，注意过期处理**）
 - [ ] `AnynoteImage` 扩展接 `uploadFn`，支持工具栏插入 / 粘贴 / 拖拽 三种入口
-- [ ] 大文件分片：复用 file 服务现有分片端点（若有），否则单文件上限 50MB
+- [ ] 分片大小由后端返回的 `chunkSize` 决定，前端不再自定单文件上限；进度可选用 `GET /api/file/progress/{uploadId}`，任务详情用 `GET /api/file/ossSliceUploadTask/{uploadId}`
 
 ### M5.4 代码高亮（Shiki）
 - [ ] `lib/editor/shiki.ts`：`createHighlighterCoreSync` 单例，懒加载语言
@@ -451,9 +575,9 @@ cd apps/web && pnpm add \
 
 | 里程碑 | 后端动作 | 触发条件 |
 |--------|--------|---------|
-| M0 | 补齐前端必需的 12 个端点 `@Operation` / `@Schema`；若 `/files/presign` 不存在则新增 | 强制 |
+| M0 | 补齐前端必需的 12 个端点 `@Operation` / `@Schema`（结论：**不新增 presign 端点**，浏览器直传复用既有分片上传流程） | 强制 |
 | M3 | CI workflow 接入；后端 PR 改动 Controller 时跑 spec 生成 + diff | 持续 |
-| M5 | 确认 `/files/presign` 返回 PUT URL + 公共可读 URL；MinIO bucket CORS 放通前端域名 | 强制 |
+| M5 | 无需新增端点（复用 `ossSliceUploadTasks` 分片直传链路）；MinIO bucket CORS 需放通前端域名，确保浏览器可直接 PUT 分片 | 强制 |
 | M6 | 笔记 CRUD 必须返回完整字段（标题 / 内容 / updatedAt / version），用于乐观更新 | 强制 |
 | M7 | AI SSE 端点在 OpenAPI 标注 `produces: text/event-stream` + 错误码 schema | 建议 |
 | M7 | 工作流 / PDF 端点契约稳定 | 建议 |
@@ -491,14 +615,94 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 
 ---
 
-## 5. 立即可执行的下一步
+## 5. 立即可执行的下一步（2026-08-08 更新）
 
-1. `git checkout dev && git pull` 同步主线
-2. `git checkout -b phase/5.0-openapi-validation`
-3. 启动 `docker compose -f infra/docker-compose-middleware.yaml up -d`
-4. 启动各后端服务（参考 `docs/` 中已有启动指南）
-5. 跑 `pnpm openapi:generate`，把第一份输出 commit 进 `openapi/specs/`（仅作快照基线，后续 gitignore）
-6. 按 M0.3 表格逐端点检查注解，缺一个补一个
-7. M0 通过 → 切 M1 分支，开始前端骨架
+> 上一版本此处仍是 M0 开工步骤（切 `phase/5.0-openapi-validation`、跑首次生成），M0/M1 早已完成，已整节重写。
 
-**预计本周（W1）可推进到 M2 中段**。
+**当前唯一卡点是 M2.0 收尾**，顺序不能颠倒——M2.1 需要 refresh/logout 的生成类型：
+
+1. 起全栈（dev 场景，注意 `--env-file=/dev/null`）：
+
+   ```bash
+   docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml up -d --build
+   ```
+
+2. 重生 spec 与客户端，确认 `auth.json` 出现 `/refresh` 与 `/logout`：
+
+   ```bash
+   pnpm openapi:generate
+   ```
+
+3. 提交 `openapi/specs/auth.json`（baseline 必须入库），本地跑 `pnpm openapi:check` 确认与 CI 同行为
+4. merge `phase/5.2a-auth-backend` → `dev`，**推回 `origin/dev`**（消化掉当前 17 个 commit 的落差；本地无 `dev` 分支，需先 `git checkout -b dev origin/dev`）
+5. 切 `phase/5.2-auth-bff`，按 M2.1 → M2.4 推进；每个 Route Handler 必须附带单测（断言 `Set-Cookie`，见 CLAUDE.md「测试要求」）
+
+> 第 1-3 步已于 2026-08-08 完成，见 M2.0。第 4 步由用户手动执行。
+
+**里程碑口径的剩余量**：M2 剩 M2.1-M2.4，M3-M8 整体未启动，约 12-17 工作日。
+
+---
+
+## 6. 漂移门禁缺陷：`servers[0].url` 是容器运行时 IP ✅ 已修复（2026-08-08）
+
+**2026-08-08 发现并修复**。M0.4 建立的 CI 漂移门禁此前**从未真正可用**，原因不在 API 本身。
+
+### 现象
+
+springdoc 会按请求上下文把服务地址写进 spec 的 `servers[0].url`，在 docker 里这就是**容器运行时 IP**。对比本次重生与旧 baseline：
+
+| spec | 旧 baseline | 本次重生 |
+|---|---|---|
+| `auth.json` | `http://172.19.0.11:8083` | `http://172.19.0.16:8083` |
+| `system.json` | `http://172.19.0.14:8091` | `http://172.19.0.15:8091` |
+| `note.json` | `http://172.19.0.16:18091` | `http://172.19.0.20:18091` |
+| `file.json` | `http://172.19.0.18:8095` | `http://172.19.0.11:8095` |
+| `ai.json` | `http://172.19.0.19:9065` | `http://172.19.0.14:9065` |
+
+Docker 每次起栈按启动顺序重新分配这些 IP，**没有任何稳定性保证**。
+
+### 后果
+
+`.github/workflows/openapi-check.yml` 的判定是裸 diff，无归一化：
+
+```yaml
+- name: Diff specs against baseline
+  run: |
+    if ! git diff --exit-code openapi/specs/; then
+```
+
+所以**每次 CI 运行都会因 IP 变动而红**，与 Controller 是否真的改动无关。门禁一旦"总是红"，就等于没有门禁——这正是 §4 风险表里"CI 漂移检查频繁误报"那一行，只是根因当时没定位到。
+
+### 采用的修复：生成时剥离 `servers`
+
+`openapi/generate.sh` 在写盘前删掉 `.servers`。类型生成不需要它（实测生成的 6 份 TS 里 `servers` 出现 **0 次**，`openapi-typescript` 只产出 `paths` / `webhooks` / `components` / `$defs` / `operations`），前端按 M3.2 用 `baseUrl: '/api/proxy'`，运行时也不读它。
+
+> 备选方案（未采用）：把 `servers[0].url` 归一化成固定值；或在 Nacos 里显式配置 springdoc `servers`（要动 6 份配置，且 IDEA 混合场景地址不同）。
+
+### 顺带修掉的第二个 bug：`>` 重定向截断 baseline
+
+原写法 `curl -sf "$URL" > "$SPECS_DIR/$svc.json"` 里，**shell 会在 exec curl 之前就以 `O_TRUNC` 打开目标文件**，所以服务没起来时原 baseline 当场被清空。更隐蔽的是：本仓库业务错误也是 HTTP 200（靠 `ResData.code` 区分），`curl -f` 只拦非 2xx，**拦不住网关返回 `{"code":"B0001"}` 却被当成 spec 写进 baseline** —— M0.1 运维发现第 4 条（`ai-nio` / `notify` 缺 `anynote-common-swagger` 依赖导致 `/v3/api-docs` 返回 `B0001`）正是这个场景。
+
+由于 baseline 是单行 JSON，72KB 的 `note.json` 塌成一行错误对象后，`git diff --stat` 显示 `2 +-`，与一次无害改动**完全无法区分**。
+
+现在改为：先落 `mktemp` → 结构校验通过才覆盖 baseline → 任一服务失败则脚本非零退出（不再"假装成功"）。
+
+### 落地内容
+
+| 文件 | 作用 |
+|---|---|
+| `openapi/normalize-spec.mjs` | 纯函数：剥离 `servers`、校验是否 OpenAPI 文档、识别 ResData 错误体、递归排序 key |
+| `openapi/normalize-cli.mjs` | 薄 CLI，失败时不触碰输出文件 |
+| `openapi/__tests__/normalize-spec.test.mjs` | 20 个单测 |
+| `openapi/package.json` | `openapi/` 成为 workspace 包 `@anynote/openapi-tools`，接入 `pnpm test` |
+| `openapi/generate.sh` | fetch 循环重写 |
+
+`sortKeysDeep` 递归排序对象 key（数组顺序是语义的一部分，保持不动），消除 springdoc 可能的 key 顺序抖动。因为 baseline 是单行 JSON，排序在 git 眼里不增加任何 diff 噪声。
+
+### 验证
+
+- **换 IP 端到端验证**：`docker compose down`（保留数据卷）+ `up -d` 后 9 个容器有 8 个 IP 变化（auth `.16→.17`、file `.11→.16`、system `.15→.13`、notify `.17→.20` 等），重生的 6 份 spec 与重启前**逐字节一致**（md5 全等）
+- 20 个单测通过，含"同一 spec 换容器 IP 后输出相同"这条直接针对根因的用例
+- `pnpm check` / `pnpm typecheck` / `pnpm test` 全绿
+
+> 本次一次性重写了全部 6 份 baseline（剥离 `servers` + key 排序），该 commit diff 较大但只有一次；此后 baseline 才真正稳定，门禁开始有意义。
