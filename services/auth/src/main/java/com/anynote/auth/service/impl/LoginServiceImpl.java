@@ -185,8 +185,8 @@ public class LoginServiceImpl implements LoginService {
 
     @Override
     public void logout(String accessToken, String refreshToken) {
-        if (StringUtils.isBlank(accessToken)) {
-            throw new LoginException("accessToken 不能为空");
+        if (StringUtils.isAllBlank(accessToken, refreshToken)) {
+            throw new LoginException("accessToken 与 refreshToken 至少提供一个非空白值");
         }
         tokenUtil.logout(accessToken, refreshToken);
     }

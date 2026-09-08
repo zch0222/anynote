@@ -70,7 +70,7 @@ public class TokenController {
     }
 
     @Operation(summary = "登出",
-            description = "清除当前会话 accessToken / refreshToken 的 Redis 缓存。幂等：token 已过期或不存在时静默成功。")
+            description = "accessToken 与 refreshToken 至少提供一个非空白值；允许仅凭 refreshToken 登出。仅清除所提供 token 的 Redis 缓存，不影响其他会话。幂等：token 已过期或不存在时静默成功。")
     @PostMapping("logout")
     public ResData<Void> logout(@RequestBody @Valid LogoutDTO logoutDTO) {
         loginService.logout(logoutDTO.getAccessToken(), logoutDTO.getRefreshToken());
