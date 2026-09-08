@@ -489,6 +489,7 @@ Java 测试按 JUnit 5 tag 分两类：
 pnpm test                                   # 全仓（Turborepo）
 pnpm --filter web test                      # 仅 apps/web
 pnpm --filter web test:watch                # watch 模式
+pnpm --filter web test:integration:auth     # 真实本地认证链路（需先启动生产前端与后端）
 
 # Java 单测
 cd services && mvn clean test               # 全部模块
@@ -499,6 +500,8 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 ```
 
 > `-pl <module>` 必须搭配 `-am`：模块间通过 `com.anynote:*` SNAPSHOT 互相依赖，本地 `~/.m2` 未安装过这些产物时会直接卡在依赖解析失败。
+
+认证集成测试单独使用 `apps/web/vitest.auth-integration.config.ts`，不会进入默认 `pnpm test` 或无中间件的 CI。先启动本地 Gateway/Auth/System/Redis，再执行 `pnpm --filter web build` 和 `pnpm --filter web start`；测试固定访问 `http://localhost:3000` 与 `http://localhost:8080`。每次创建一个随机 `e2e` 前缀的本地测试账号，结束时撤销创建的会话，账号记录保留；不要用于生产环境。覆盖注册、登录、Cookie 属性、Origin 校验、Bearer、路由保护与两种登出路径。浏览器页面交互和刷新并发验收另行执行。
 
 ### 前端测试基建
 

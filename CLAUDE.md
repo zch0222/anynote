@@ -27,15 +27,17 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中（约 15%，沿用原工期口径）** — M0 / M1 / M2.0 已完成。2026-09-08 按用户确认完成 Gateway 仅 Bearer 改造、单测与六份 spec 更新；BFF 尚无实现；刷新触发与异常处理细节尚未明确，局部刷新锁模型仅作为待评估风险，不再将缓存调整列为开工前置；M3-M8 未启动。详见 `docs/refactor/FRONTEND_MILESTONES.md` M2.1 |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中（约 15%，沿用原工期口径）** — M0 / M1 / M2.0 已完成；M2.1 独立认证 BFF、M2.2 与 M2.3 已实现。2026-09-09 权限恢复后：136 个 Java 单测、149 个前端单测、20 个 OpenAPI 单测、8 个真实认证集成测试、生产构建与原始契约生成通过；已修复默认 LogoutFilter 截获。刷新按用户确认暂缓，M2.4 未完成；M3-M8 未启动。本地 auth 容器已换新 JAR，但缓存镜像重建仍受 Docker Hub 超时影响。详见 `docs/refactor/FRONTEND_MILESTONES.md` §5；集成测试命令见 README「测试」 |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
-**当前分支（2026-09-08 核对）**：`phase/5.2-auth-bff`。`main` 是发布分支，日常合并目标是 `dev`。
+**当前分支（2026-09-09 核对）**：`phase/5.2-auth-bff`。`main` 是发布分支，日常合并目标是 `dev`。
 
-**分支落点（2026-09-08 核对）**：M2.0 已通过 `3865a2f` 合并到 `dev`。当前 `phase/5.2-auth-bff` 新增 Gateway 提交 `57bf8b3`、OpenAPI 与 baseline 提交 `216a930`；本次未合并到 `dev` 或 `main`。
+**分支落点（2026-09-09 核对）**：M2.0 已通过 `3865a2f` 合并到 `dev`。当前 `phase/5.2-auth-bff` 含 Gateway/Bearer 前置提交，以及本轮 common/auth/OpenAPI/web 五笔代码提交（`1a4d217` … `bcfb053`），详情见里程碑 §5；未合并到 `dev` 或 `main`，未推送远端。
 
-**认证契约（2026-09-08 用户确认并实现）**：Gateway 的外部私有请求仅接受 `Authorization: Bearer <token>`，取消旧 `accessToken` 请求头兼容；内部服务仍使用 Gateway 注入的已验证 `accessToken`。OpenAPI 已改为 HTTP Bearer/JWT，六份 baseline 已重生。旧前端尚未迁移，切换后的私有请求会失败。**刷新方案审查状态**：文档仅给出 `isExpiringSoon(at)` 等示意，完整触发、重试和失败处理规则尚未明确。此前对局部锁算法的模型分析仅记为待评估风险，撤回将 5 秒缓存调整列为开工前置的结论；未更改原 BFF 方案。详见 `docs/refactor/FRONTEND_MILESTONES.md` M2.1 与 `.claude/openspec/changes/2026-09-08-gateway-bearer-only.md`。
+**认证契约（2026-09-08 用户确认并实现）**：Gateway 的外部私有请求仅接受 `Authorization: Bearer <token>`，取消旧 `accessToken` 请求头兼容；内部服务仍使用 Gateway 注入的已验证 `accessToken`。OpenAPI 已改为 HTTP Bearer/JWT，六份 baseline 已重生。旧前端尚未迁移，切换后的私有请求会失败。**刷新方案审查状态**：完整触发、重试和失败处理规则尚未明确；2026-09-08 用户明确“暂缓刷新，先完成独立任务”，提前 60 秒刷新等讨论建议未获采纳。局部锁风险不作为必须调整方案的结论；保留原 BFF 方案。详见 `docs/refactor/FRONTEND_MILESTONES.md` M2.1 与 `.claude/openspec/changes/2026-09-08-gateway-bearer-only.md`。
+
+**M2.1 登出契约补充（2026-09-08 用户确认）**：允许 `{ accessToken?, refreshToken? }`，至少一个非空白；仅 `rt` 时撤销该 refreshToken，不扩大到其他会话。已核对真实 Springdoc 契约并同步 OpenAPI 与 BFF；M2.3 页面与测试也已完成，完整验收仍待补齐。详见 `.claude/openspec/changes/2026-09-08-logout-refresh-token-only.md` 和 `docs/refactor/FRONTEND_MILESTONES.md` §5。
 
 ## 常用命令
 
