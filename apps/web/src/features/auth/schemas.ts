@@ -24,3 +24,19 @@ export const registerSchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
+
+// /api/auth/me 的响应 data；BFF 已做服务端白名单，这里只校验前端用到的字段。
+export const meProfileSchema = z.object({
+  id: z.number().nullish(),
+  username: z.string().nullish(),
+  nickname: z.string().nullish(),
+  avatar: z.string().nullish(),
+  role: z
+    .looseObject({
+      roleKey: z.string().optional(),
+      roleName: z.string().optional(),
+    })
+    .nullish(),
+});
+
+export type MeProfile = z.infer<typeof meProfileSchema>;

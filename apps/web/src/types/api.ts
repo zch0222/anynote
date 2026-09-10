@@ -1,0 +1,22 @@
+// 各服务生成契约的聚合出口：业务代码从这里引用类型，避免散落的深路径 import。
+export type { components as AiComponents, paths as AiPaths } from "@anynote/api-client/src/ai";
+export type {
+  components as AuthComponents,
+  paths as AuthPaths,
+} from "@anynote/api-client/src/auth";
+export type {
+  components as FileComponents,
+  paths as FilePaths,
+} from "@anynote/api-client/src/file";
+export type {
+  components as NoteComponents,
+  paths as NotePaths,
+} from "@anynote/api-client/src/note";
+export type {
+  components as NotifyComponents,
+  paths as NotifyPaths,
+} from "@anynote/api-client/src/notify";
+export type {
+  components as SystemComponents,
+  paths as SystemPaths,
+} from "@anynote/api-client/src/system";
