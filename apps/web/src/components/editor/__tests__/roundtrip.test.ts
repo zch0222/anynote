@@ -13,9 +13,10 @@ function roundTrip(markdown: string, preset: PresetName = "full"): string {
   return output;
 }
 
-/** 序列化结果末尾的换行不稳定（表格结尾会多一个 `\n`），文件也以换行结尾：统一裁掉再比较。 */
+/** 序列化结果末尾的换行不稳定（表格结尾会多一个 `\n`），文件也以换行结尾：统一裁掉再比较。
+ * 另外把 CRLF 归一成 LF：Windows 上 autocrlf 检出会把 fixture 变成 CRLF，与序列化输出（LF）比较时必须先拉平。 */
 function normalize(markdown: string): string {
-  return markdown.replace(/\n+$/, "");
+  return markdown.replace(/\r\n/g, "\n").replace(/\n+$/, "");
 }
 
 /** 断言 markdown 精确往返（忽略文档末尾空行）。 */
