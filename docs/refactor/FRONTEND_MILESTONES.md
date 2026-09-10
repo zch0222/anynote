@@ -2,7 +2,7 @@
 
 > 文档版本：v1.4 | 生成日期：2026-05-13 | 最近核对：2026-09-10（M2.4 浏览器验收通过；M3 API 层/查询层/dashboard 雏形完成并经浏览器验证，182 个单测全绿）
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2.0 已完成；M2 实现与验收全部通过（浏览器端 Cookie/Storage 核验、并发刷新、登录登出全链路），仅剩合并 `dev`；M3 API 客户端/查询层/dashboard 雏形完成并通过单测与浏览器验证，仅剩合并 `dev`；M4-M8 未启动**。
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2.0 已完成；M2、M3 实现与验收通过，合并 `dev` 暂缓；M4 AppShell / 主题 / 命令面板已完成并通过 Docker 后端集成测试和 Codex 浏览器验收，尚未合并 `dev`；M5-M8 未启动**。
 > 完成度参考：9 个里程碑完成 2 个，M2 与 M3 代码及验收完成（各剩一次合并）；按工期估算 14-19 天中约完成 5 天，**Phase 5 约 30%**
 > `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
 > 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
@@ -388,32 +388,38 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 
 **目标**：主工作区布局可用，所有页面有归宿。
 
-**分支**：`phase/5.4-app-shell`
+**分支**：`phase/5.4-app-shell`（2026-09-10 从 `phase/5.3-api-layer` 叠出，延续 M2 / M3 暂不合并的安排）
+
+**状态**：🟢 实现与验收通过（2026-09-10），合并 `dev` 暂缓。
 
 ### M4.1 路由组结构
-- [ ] `(workspace)/layout.tsx`：左侧栏 + 顶栏 + 内容区
-- [ ] 路由占位：`dashboard` `notes` `docs` `ai/chat` `ai/workflow` `ai/pdf` `mooc` `tasks` `wikis` `settings/[...slug]`，全部用 shadcn `Skeleton` 占位
+- [x] `(workspace)/layout.tsx`：左侧栏 + 顶栏 + 内容区；公共 `WorkspaceSession` 处理加载、失败重试与 BFF 返回 401 后跳转登录
+- [x] 路由占位：`dashboard` `notes` `docs` `ai/chat` `ai/workflow` `ai/pdf` `mooc` `tasks` `wikis` `settings/[...slug]`，全部用 shadcn `Skeleton` 占位；dashboard 保留用户昵称欢迎语
+- [x] `/` 重定向 `/dashboard`；`/settings` 重定向 `/settings/profile`；`/notes/new` 提供新建入口占位，实际编辑和保存随 M5 / M6 接入
 
 ### M4.2 组件
-- [ ] `components/layout/app-sidebar.tsx`：基于 shadcn `Sidebar`，含可折叠分组
-- [ ] `components/layout/app-header.tsx`：面包屑 + 用户菜单 + 主题切换 + 命令面板触发
-- [ ] `components/layout/command-palette.tsx`：基于 cmdk，注册路由跳转 / 创建笔记 / 切换主题等动作
-- [ ] `components/layout/user-menu.tsx`：avatar + 登出 + 设置
+- [x] `components/layout/app-sidebar.tsx`：基于 shadcn `Sidebar`，含可折叠分组、当前路由高亮、图标折叠态和移动抽屉（跳转后自动关闭）
+- [x] `components/layout/app-header.tsx`：面包屑 + 用户菜单 + 主题切换 + 命令面板触发
+- [x] `components/layout/command-palette.tsx`：基于 cmdk，注册路由跳转 / 创建笔记入口 / 三种主题动作；搜索、方向键、Enter、Esc、无结果提示与自动聚焦可用
+- [x] `components/layout/user-menu.tsx`：avatar + 登出 + 设置；登出调用同源 BFF，成功后取消查询并清空 QueryClient，失败提示可重试
 
 ### M4.3 主题
-- [ ] `next-themes` 接入 `attribute="class" enableSystem`
-- [ ] `styles/globals.css` 定义 shadcn token 双套（light / dark）
-- [ ] 主题切换无 flash（验证 SSR `<html>` 类注入）
+- [x] 复用 M3 全局 `next-themes`（`attribute="class" enableSystem disableTransitionOnChange`）
+- [x] 复用已有 `src/app/globals.css` light / dark token；不另建 `styles/globals.css`
+- [x] 主题切换与刷新时未观察到闪白或水合警告；浏览器核验 `<html>` 为 `light` / `dark`，页面包含 next-themes 首屏主题脚本。跟随系统与当前 `prefers-color-scheme: dark` 一致；未修改操作系统偏好来模拟实时切换
 
 ### M4.4 状态
-- [ ] `stores/ui-store.ts`：sidebar 开关 + 命令面板状态，persist 仅持久化 sidebar
-- [ ] 热键：`Cmd+K` 开命令面板（`use-hotkey` 自定义 hook）
+- [x] `stores/ui-store.ts`：sidebar 开关 + 命令面板状态，persist 仅持久化 sidebar；显式挂载后恢复、读写白名单与非法值回退，命令面板状态不落盘。移除 shadcn Sidebar 原件的额外 `sidebar_state` Cookie 写入；主题偏好仍由 next-themes 独立保存
+- [x] 热键：`Cmd+K` / `Ctrl+K` 切换命令面板（`use-hotkey` 自定义 hook）；过滤输入法组合、长按与额外修饰键，卸载后清理监听
 
 ### M4.5 验收
-- [ ] 9 个主路由可点击跳转，骨架正确
-- [ ] 暗色 / 亮色 / 跟随系统三模式切换无视觉异常
-- [ ] `Cmd+K` 命令面板可用
-- [ ] 合并到 `dev`
+- [x] 9 个主导航路由 + 设置（共 10 个入口）在 Codex In-app Browser 逐一点击验证，页面标题和骨架正确；创建笔记命令到 `/notes/new`
+- [x] 暗色 / 亮色 / 跟随系统三模式切换、刷新恢复正常；桌面 1440×900 与移动 375×812 / 默认 425px 检查通过，无横向溢出
+- [x] `Cmd+K` / `Ctrl+K`、搜索 PDF 后 Enter 跳转、Esc 关闭、主题动作、新建入口均通过浏览器实测；侧栏折叠后刷新仍为 collapsed
+- [x] 210 个前端单测（本次新增 28 个）、TypeScript、Biome、生产构建通过；现有 Docker 后端 + 新 `next start` 生产前端的 14 个认证 / 代理集成用例通过
+- [x] 修正 `web lint` 的工作目录：先回仓库根再执行 Biome，使根配置里的 `apps/web/src/components/ui` 排除规则生效；避免误检查 vendored shadcn 原件
+- [x] 浏览器真实注册 → dashboard 昵称 → 导航 → 用户菜单设置 → 登出 → `/notes` 被重定向 `/login`；本次浏览器控制台无 error / warn。临时账号 `m4ui09101441` 保留，已通过登出撤销该浏览器会话
+- [ ] 合并到 `dev`（延续 M2 / M3 暂缓安排）
 
 ---
 
@@ -643,7 +649,7 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 
 M2.0 已于 2026-09-07 合并 `dev`（`3865a2f`）。当前分支 `phase/5.2-auth-bff` 已完成用户确认的 Gateway 仅 Bearer 前置改造，以及 OpenAPI 安全方案、测试和六份 baseline 更新；代码提交分别为 `57bf8b3` 和 `216a930`。
 
-**当前执行位置**：M2 已全部验收（含浏览器端 M2.4），合并 `dev` 按用户指示暂缓。M3 于 2026-09-10 在 `phase/5.3-api-layer`（自 `phase/5.2-auth-bff` 叠出）完成：`pnpm openapi:generate` 零漂移；`types/api.ts` 聚合导出、`lib/api/openapi.ts` 分域代理 client、`lib/api/errors.ts` ApiError、全局 `providers.tsx`、`features/auth/use-me.ts` + query-keys、dashboard 雏形页、CI spec-diff 增强。单测 182 个全绿（新增 use-me 4 个、query key 1 个、dashboard 3 个），typecheck / Biome / build 通过；浏览器实测登录后 dashboard 渲染昵称、登出后回登录页。M4-M8 未启动。
+**当前执行位置**：M2 已全部验收（含浏览器端 M2.4），合并 `dev` 按用户指示暂缓。M3 于 2026-09-10 在 `phase/5.3-api-layer`（自 `phase/5.2-auth-bff` 叠出）完成：`pnpm openapi:generate` 零漂移；`types/api.ts` 聚合导出、`lib/api/openapi.ts` 分域代理 client、`lib/api/errors.ts` ApiError、全局 `providers.tsx`、`features/auth/use-me.ts` + query-keys、dashboard 雏形页、CI spec-diff 增强。单测 182 个全绿（新增 use-me 4 个、query key 1 个、dashboard 3 个），typecheck / Biome / build 通过；浏览器实测登录后 dashboard 渲染昵称、登出后回登录页。M4 于同日继续完成 AppShell、主题和命令面板，并通过单测、Docker 后端集成测试与 Codex 浏览器验证（详见 M4.5）；M5-M8 未启动。
 
 **2026-09-10 本轮验证与发现**：
 - 实现：`src/lib/auth/refresh.ts`（单飞刷新，锁挂进程级 `globalThis`）、`src/app/api/auth/refresh|me/route.ts`、`src/app/api/proxy/[...path]/route.ts`、`backend.ts` 增 `systemClient`。BFF 三处 catch 增加 `console.error` 服务端日志（此前异常被静默吞掉，本轮定位 502 全靠日志补齐）。
