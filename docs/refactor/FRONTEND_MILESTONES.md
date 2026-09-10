@@ -1,9 +1,9 @@
 # Anynote 前端重构里程碑（可执行版）
 
-> 文档版本：v1.4 | 生成日期：2026-05-13 | 最近核对：2026-09-10（refresh/me/代理 BFF 完成；Docker 真实栈端到端 14 个集成测试通过，含 10 并发仅 1 次刷新）
+> 文档版本：v1.4 | 生成日期：2026-05-13 | 最近核对：2026-09-10（M2.4 浏览器验收通过；M3 API 层/查询层/dashboard 雏形完成并经浏览器验证，182 个单测全绿）
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2.0 已完成；M2.1 全部 BFF 路由（登录/注册/登出/refresh/me/通用代理）、M2.2 路由保护与 M2.3 页面已实现并通过单测与真实链路集成测试；M2.4 验收全部通过（含浏览器端 Cookie/Storage 核验与并发刷新），仅剩合并 `dev`；M3-M8 未启动**。
-> 完成度参考：9 个里程碑完成 2 个，M2 代码与自动化验收完成（仅剩合并）；按工期估算 14-19 天中约完成 3.5 天，**Phase 5 约 25%**
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2.0 已完成；M2 实现与验收全部通过（浏览器端 Cookie/Storage 核验、并发刷新、登录登出全链路），仅剩合并 `dev`；M3 API 客户端/查询层/dashboard 雏形完成并通过单测与浏览器验证，仅剩合并 `dev`；M4-M8 未启动**。
+> 完成度参考：9 个里程碑完成 2 个，M2 与 M3 代码及验收完成（各剩一次合并）；按工期估算 14-19 天中约完成 5 天，**Phase 5 约 30%**
 > `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
 > 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
 >
@@ -349,41 +349,38 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 
 **目标**：业务页面调用 API 全部走类型安全路径；本里程碑产出后续所有页面的基础设施。
 
-**分支**：`phase/5.3-api-layer`
+**分支**：`phase/5.3-api-layer`（2026-09-10 从 `phase/5.2-auth-bff` 切出——M2 按用户指示暂不合并，M3 依赖其代理路由，故在其上叠分支）
+
+**状态**：🟢 代码与验证完成（2026-09-10），仅剩合并 `dev`
 
 ### M3.1 OpenAPI 类型整合
-- [ ] 跑 `pnpm openapi:generate` 确认 `packages/api-client/src/` 最新
-- [ ] `apps/web/src/types/api.ts` 重导出聚合类型：
-  ```ts
-  export type { paths as AuthPaths } from '@anynote/api-client/src/auth';
-  export type { paths as NotePaths } from '@anynote/api-client/src/note';
-  // ...
-  ```
-- [ ] 把 `packages/api-client/src/` 加入根 `.gitignore`（CI 必跑生成验证）
+- [x] 跑 `pnpm openapi:generate` 确认 `packages/api-client/src/` 最新（真实 Gateway 拉取 6 份 spec，baseline 零漂移）
+- [x] `apps/web/src/types/api.ts` 重导出聚合类型（6 个域的 `paths` / `components` 全部聚合）
+- [x] 把 `packages/api-client/src/` 加入根 `.gitignore`（M0.4 已完成，本次核对仍然生效）
 
 ### M3.2 openapi-fetch 实例
-- [ ] `src/lib/api/openapi.ts`：为每个域创建 typed client，`baseUrl: '/api/proxy'`，`credentials: 'include'`
-- [ ] `src/lib/api/errors.ts`：统一 `ApiError` 类，含 `code` `message` `traceId`
-- [ ] 401 自动经由 BFF 处理（前端无需特别逻辑）
+- [x] `src/lib/api/openapi.ts`：为每个域创建 typed client，`credentials: 'same-origin'`（与登录 mutation 现有约定一致）。**与原计划的差异**：`baseUrl` 用分域前缀 `/api/proxy/<svc>` 而非统一的 `/api/proxy`——各服务 spec 的路径相互冲突（如 note 与 system 都有根级路径），统一前缀会让类型与真实路由对不上
+- [x] `src/lib/api/errors.ts`：统一 `ApiError` 类（`status` / `code` / `traceId`，traceId 透传网关 `x-trace-id` 响应头如存在）+ `unwrapEnvelope` 信封拆包助手
+- [x] 401 自动经由 BFF 处理（前端无需特别逻辑；dashboard 页对"BFF 刷新后仍 401"的场景兜底 `router.replace('/login')`）
 
 ### M3.3 TanStack Query 接入
-- [ ] `src/app/providers.tsx`：`QueryClientProvider` + Devtools + ThemeProvider + Toaster + TooltipProvider
-- [ ] `QueryClient` 默认配置：`staleTime: 60_000` `retry: 1` `refetchOnWindowFocus: false`
-- [ ] `src/features/auth/use-me.ts`：第一个 hook，验证类型链路
+- [x] `src/app/providers.tsx`：`QueryClientProvider` + Devtools（仅 dev）+ ThemeProvider（next-themes，`attribute="class" enableSystem`）+ Toaster + TooltipProvider；根布局接入并 `suppressHydrationWarning`；(auth) 路由组改为复用全局 Provider，原 `AuthProvider` 删除
+- [x] `QueryClient` 默认配置：`staleTime: 60_000` `retry: 1` `refetchOnWindowFocus: false`
+- [x] `src/features/auth/use-me.ts`：第一个 hook，验证类型链路（me 为 BFF 自有端点，走 `unwrapEnvelope` + zod 白名单；4 个单测覆盖成功/401/格式异常/数据异常）
 
 ### M3.4 Query Keys 工厂
-- [ ] 在每个 `features/<domain>/query-keys.ts` 定义层级 key
-- [ ] 编写 `features/_keys.test.ts`（vitest）验证 key 稳定性
+- [x] 在每个 `features/<domain>/query-keys.ts` 定义层级 key（auth 域先行：`["auth"]` / `["auth","me"]`；其余域随各自 feature 落地时补充）
+- [x] 编写 `features/_keys.test.ts`（vitest）验证 key 稳定性（含前缀关系断言）
 
 ### M3.5 CI 漂移门禁加固
-- [ ] M0.4 的 workflow 增加：失败时打印 spec diff，方便定位
-- [ ] 本地 `git pre-push` hook（可选）跑 `pnpm openapi:generate && git diff --exit-code`
+- [x] M0.4 的 workflow 增加：失败时打印 spec diff，方便定位（baseline 单行 JSON 裸 diff 不可读，两侧经 `jq` 展开后 `diff -u`，每文件截断 300 行）
+- [ ] 本地 `git pre-push` hook（可选）——未做：需要引入 husky/lefthook 等钩子管理，收益有限，留待后续统一处理
 
 ### M3.6 验收
-- [ ] `useMe()` 在 dashboard 雏形页拉到用户资料并渲染昵称
-- [ ] 调用未授权端点，BFF 自动刷新或重定向到登录
-- [ ] `pnpm typecheck` 0 错误
-- [ ] 合并到 `dev`
+- [x] `useMe()` 在 dashboard 雏形页拉到用户资料并渲染昵称（浏览器实测登录后 `/dashboard` 显示"欢迎回来，浏览器验收"；组件级 3 个单测覆盖昵称渲染/401 回退/非 401 错误停留）
+- [x] 调用未授权端点，BFF 自动刷新或重定向到登录（M2 集成测试覆盖自动刷新；浏览器实测登出后访问 `/dashboard` 被拦回 `/login`；401 兜底由组件单测覆盖）
+- [x] `pnpm typecheck` 0 错误（web 与 api-client 均通过；Biome 47 文件无问题；`pnpm build` 10 路由成功；单测 182 个全绿）
+- [ ] 合并到 `dev`（按用户指示暂缓，与 M2 一并处理）
 
 ---
 
@@ -646,7 +643,7 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 
 M2.0 已于 2026-09-07 合并 `dev`（`3865a2f`）。当前分支 `phase/5.2-auth-bff` 已完成用户确认的 Gateway 仅 Bearer 前置改造，以及 OpenAPI 安全方案、测试和六份 baseline 更新；代码提交分别为 `57bf8b3` 和 `216a930`。
 
-**当前执行位置**：M2.1 的 refresh / me / 通用代理已于 2026-09-10 实现并通过全部自动化验证；M2 代码与自动化验收完成，剩 M2.4 浏览器面板人工检查与合并 `dev`。M3-M8 未启动，原工期口径未重估。
+**当前执行位置**：M2 已全部验收（含浏览器端 M2.4），合并 `dev` 按用户指示暂缓。M3 于 2026-09-10 在 `phase/5.3-api-layer`（自 `phase/5.2-auth-bff` 叠出）完成：`pnpm openapi:generate` 零漂移；`types/api.ts` 聚合导出、`lib/api/openapi.ts` 分域代理 client、`lib/api/errors.ts` ApiError、全局 `providers.tsx`、`features/auth/use-me.ts` + query-keys、dashboard 雏形页、CI spec-diff 增强。单测 182 个全绿（新增 use-me 4 个、query key 1 个、dashboard 3 个），typecheck / Biome / build 通过；浏览器实测登录后 dashboard 渲染昵称、登出后回登录页。M4-M8 未启动。
 
 **2026-09-10 本轮验证与发现**：
 - 实现：`src/lib/auth/refresh.ts`（单飞刷新，锁挂进程级 `globalThis`）、`src/app/api/auth/refresh|me/route.ts`、`src/app/api/proxy/[...path]/route.ts`、`backend.ts` 增 `systemClient`。BFF 三处 catch 增加 `console.error` 服务端日志（此前异常被静默吞掉，本轮定位 502 全靠日志补齐）。
