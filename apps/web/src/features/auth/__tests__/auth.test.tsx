@@ -1,8 +1,8 @@
 import AuthLayout from "@/app/(auth)/layout";
 import LoginPage from "@/app/(auth)/login/page";
 import RegisterPage from "@/app/(auth)/register/page";
-import { renderHookWithProviders } from "@/test/render";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { renderHookWithProviders, renderWithProviders } from "@/test/render";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import createClient from "openapi-fetch";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,7 +81,7 @@ describe.each([
   { label: "注册", Page: RegisterPage, submitLabel: "注册并登录", path: "/register" },
 ])("$label 页面", ({ label, Page, submitLabel, path }) => {
   function show() {
-    render(
+    renderWithProviders(
       <AuthLayout>
         <Page />
       </AuthLayout>,
@@ -152,7 +152,7 @@ describe.each([
 
 it("注册发送昵称、可选邮箱以及后端约定的性别值（0 男 / 1 女）", async () => {
   post.mockResolvedValue(upstream());
-  render(
+  renderWithProviders(
     <AuthLayout>
       <RegisterPage />
     </AuthLayout>,

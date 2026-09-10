@@ -100,6 +100,15 @@ jobs:
           if ! git diff --exit-code openapi/specs/; then
             echo ""
             echo "::error::OpenAPI spec drift detected. Run \`pnpm openapi:generate\` locally and commit the updated openapi/specs/*.json files."
+            echo ""
+            echo "===== Spec drift detail (pretty-printed, <=300 lines per file) ====="
+            # baseline 是单行 JSON，裸 diff 不可读；两侧都用 jq 展开后再对比
+            for f in $(git diff --name-only openapi/specs/); do
+              echo "----- $f -----"
+              git show "HEAD:$f" | jq . > /tmp/spec-old.json 2>/dev/null || echo '(baseline missing or invalid JSON)'
+              jq . "$f" > /tmp/spec-new.json 2>/dev/null || echo '(regenerated spec invalid JSON)'
+              diff -u /tmp/spec-old.json /tmp/spec-new.json | head -300 || true
+            done
             exit 1
           fi
           echo "OpenAPI specs match baseline."
