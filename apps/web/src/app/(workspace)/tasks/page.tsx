@@ -1,5 +1,5 @@
-import { WorkspacePlaceholder } from "@/components/layout/workspace-placeholder";
+import { TasksPage } from "@/features/tasks/components/tasks-page";
 
 export default function Page() {
-  return <WorkspacePlaceholder title="任务" description="把想法拆成行动，让计划逐步实现。" />;
+  return <TasksPage />;
 }
