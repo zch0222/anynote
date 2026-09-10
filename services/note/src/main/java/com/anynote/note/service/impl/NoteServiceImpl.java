@@ -17,6 +17,7 @@ import com.anynote.core.constant.Constants;
 import com.anynote.core.constant.FileConstants;
 import com.anynote.core.constant.HuaweiOBSConstants;
 import com.anynote.core.exception.BusinessException;
+import com.anynote.core.exception.auth.AuthException;
 import com.anynote.core.exception.user.UserParamException;
 import com.anynote.core.utils.RemoteResDataUtil;
 import com.anynote.core.utils.StringUtils;
@@ -42,10 +43,12 @@ import com.anynote.note.mapper.NoteTextMapper;
 import com.anynote.note.model.bo.*;
 import com.anynote.note.model.dto.NoteSearchDTO;
 import com.anynote.note.model.vo.NoteListVO;
+import com.anynote.note.model.vo.NoteSaveResultVO;
 import com.anynote.note.service.KnowledgeBaseService;
 import com.anynote.note.service.NoteImageService;
 import com.anynote.note.service.NoteService;
 import com.anynote.note.utils.MarkdownUtil;
+import com.anynote.note.utils.NoteVersionUtil;
 import com.anynote.system.api.model.bo.LoginUser;
 import com.anynote.system.api.model.po.SysUser;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -310,12 +313,36 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
     @Transactional(rollbackFor = Exception.class)
     @RequiresNotePermissions(NotePermissions.EDIT)
     @Override
-    public String editNote(NoteUpdateParam updateParam) {
+    public NoteSaveResultVO editNote(NoteUpdateParam updateParam) {
         LoginUser loginUser = tokenUtil.getLoginUser();
-        updateParam.setUpdateTime(new Date());
+        // n_note.update_time 是秒级 datetime：先截断到整秒再写，返回的 version 才能和下次读回来的值精确相等，
+        // 否则毫秒尾数会让紧接着的第二次保存被误判成冲突
+        Date updateTime = new Date(System.currentTimeMillis() / 1000L * 1000L);
+        updateParam.setUpdateTime(updateTime);
         Note oldNote = this.baseMapper.selectNoteById(NoteQueryParam.builder()
                 .id(updateParam.getId())
                 .build());
+        if (StringUtils.isNull(oldNote)) {
+            throw new UserParamException("笔记不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND);
+        }
+        // 冲突检测放在任何写入之前：版本过期时不落库、不发索引与编辑日志消息
+        if (NoteVersionUtil.isStale(updateParam.getVersion(), NoteVersionUtil.toVersion(oldNote.getUpdateTime()))) {
+            throw new BusinessException("笔记已被其他会话更新，请刷新后重试", ResCode.RESOURCE_VERSION_CONFLICT);
+        }
+        // 移动到别的知识库：@RequiresNotePermissions 只校验了源笔记，目标知识库必须单独校验，
+        // 否则可以把笔记塞进任何一个只知道 id 的知识库
+        if (StringUtils.isNotNull(updateParam.getKnowledgeBaseId())
+                && !updateParam.getKnowledgeBaseId().equals(oldNote.getKnowledgeBaseId())) {
+            Integer targetPermissions = knowledgeBaseService.getUserKnowledgeBasePermissions(
+                    loginUser.getSysUser().getId(), updateParam.getKnowledgeBaseId());
+            if (StringUtils.isNull(targetPermissions)
+                    || targetPermissions > KnowledgeBasePermissions.EDIT.getValue()) {
+                throw new AuthException("没有权限移动笔记到目标知识库", ResCode.UNAUTHORIZED_ERROR);
+            }
+        } else {
+            // 与当前归属相同时不下发 knowledge_base_id，避免无谓的列更新
+            updateParam.setKnowledgeBaseId(null);
+        }
         Integer count = this.baseMapper.updateNote(updateParam);
         if (count != 1) {
             throw new BusinessException("更新笔记失败", ResCode.USER_ERROR);
@@ -335,7 +362,8 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
                 .id(updateParam.getId())
                 .title(StringUtils.isNotNull(updateParam.getTitle()) ? updateParam.getTitle() : oldNote.getTitle())
                 .noteTextId(oldNote.getNoteTextId())
-                .knowledgeBaseId(oldNote.getKnowledgeBaseId())
+                .knowledgeBaseId(StringUtils.isNotNull(updateParam.getKnowledgeBaseId())
+                        ? updateParam.getKnowledgeBaseId() : oldNote.getKnowledgeBaseId())
                 .status(oldNote.getStatus())
                 .dataScope(oldNote.getDataScope())
                 .permissions(oldNote.getPermissions())
@@ -357,7 +385,13 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
                 .date(new Date())
                 .userId(loginUser.getSysUser().getId())
                 .build()), RocketmqSendCallbackBuilder.commonCallback());
-        return Constants.SUCCESS_RES;
+        return NoteSaveResultVO.builder()
+                .id(updateParam.getId())
+                .title(currentNote.getTitle())
+                .content(currentNote.getContent())
+                .updateTime(updateTime)
+                .version(NoteVersionUtil.toVersion(updateTime))
+                .build();
     }
 
     @RequiresNotePermissions(NotePermissions.EDIT)

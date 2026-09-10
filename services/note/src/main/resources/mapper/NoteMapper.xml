@@ -177,6 +177,9 @@
         <if test="title != null and title != ''">
             , n_note.title = #{title}
         </if>
+        <if test="knowledgeBaseId != null">
+            , knowledge_base_id = #{knowledgeBaseId}
+        </if>
         <if test="status != null">
             , status = #{status}
         </if>
