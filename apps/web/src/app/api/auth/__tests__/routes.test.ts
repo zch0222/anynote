@@ -76,11 +76,17 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("BFF 服务端客户端", () => {
-  it("使用 Gateway auth 前缀并禁用缓存及重定向", async () => {
+  it("使用 Gateway 各服务前缀并禁用缓存及重定向", async () => {
     vi.resetModules();
     await import("@/lib/auth/backend");
-    expect(createClient).toHaveBeenCalledExactlyOnceWith({
+    expect(createClient).toHaveBeenCalledTimes(2);
+    expect(createClient).toHaveBeenNthCalledWith(1, {
       baseUrl: "http://gateway:8080/api/auth",
+      cache: "no-store",
+      redirect: "error",
+    });
+    expect(createClient).toHaveBeenNthCalledWith(2, {
+      baseUrl: "http://gateway:8080/api/system",
       cache: "no-store",
       redirect: "error",
     });
