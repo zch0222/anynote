@@ -1,6 +1,6 @@
 # Anynote 重构任务进度清单
 
-> 更新时间：2026-09-08（本次核对 Phase 5；其他 Phase 沿用原记录）
+> 更新时间：2026-09-10（本次核对 Phase 5 的 M5；其他 Phase 沿用原记录）
 > 执行依据：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md)  
 > 项目根目录：本仓库根（以下命令均假设在项目根执行）  
 > 历史源码位置：`Anynote-Cloud/` · `anynote-next-web-dev/` · `anynote-langchain/`（Phase 0 已迁入 `services/` · `apps/web-legacy/` · `ai-service/`）
@@ -146,7 +146,7 @@
   - [x] M2.1-M2.4 前端 BFF / middleware / 登录页与刷新：2026-09-10 完成验收，包含真实 Cookie、并发刷新及浏览器登录登出，详见 `FRONTEND_MILESTONES.md` M2 与 §5。
 - [ ] **M3** API 客户端 + 查询层 + 代理（5.4 TanStack Query 数据层）——2026-09-10 实现与验收通过，合并 `dev` 暂缓
 - [ ] **M4** AppShell + 主题 + 命令面板——2026-09-10 实现与验收通过，分支 `phase/5.4-app-shell`；210 前端单测、14 Docker 后端集成用例、生产构建与 Codex 浏览器验证通过，合并 `dev` 暂缓。详细范围见 `FRONTEND_MILESTONES.md` M4（业务内容仍为 Skeleton，占位新建入口待 M5 / M6 接入）
-- [ ] **M5** TipTap 编辑器核心（5.5 编辑器集成 — **统一 TipTap**，废弃 Milkdown / Wangeditor / Vditor / Muya）
+- [ ] **M5** TipTap 编辑器核心（5.5 编辑器集成 — **统一 TipTap**，废弃 Milkdown / Wangeditor / Vditor / Muya）——2026-09-10 实现与浏览器验收通过，分支 `phase/5.5-tiptap-core`（自 `phase/5.4-app-shell` 叠出）；285 前端单测、编辑器主 chunk 211.3 KB gzip、三预设浏览器实测通过；图片分片直传第 1 步被后端 `@InnerAuth` 阻塞，合并 `dev` 暂缓。详见 `FRONTEND_MILESTONES.md` M5 / M5.10
 - [ ] **M6** 笔记业务页面
 - [ ] **M7** AI / PDF / Mooc / Tasks / Wikis
 - [ ] **M8** 协同 + 桌面 + 收尾
