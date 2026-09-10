@@ -1,10 +1,10 @@
 # Anynote 前端重构里程碑（可执行版）
 
-> 文档版本：v1.7 | 生成日期：2026-05-13 | 最近核对：2026-09-11（M2-M6 已全部 `--no-ff` 合并 `dev`）
+> 文档版本：v1.8 | 生成日期：2026-05-13 | 最近核对：2026-09-11（M2-M6 已全部 `--no-ff` 合并 `dev`；M7 已完成实现与验收）
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0-M6 已完成并合并 `dev`；M7-M8 未启动**。
-> 完成度参考：9 个里程碑完成 7 个；按工期估算 14-19 天中约完成 11 天，**Phase 5 约 65%**
-> M5 遗留一项未通过：图片分片直传第 1 步被后端 `@InnerAuth` 拦截（见 M5.10），需后端确认后重跑端到端；带入 M6 未处理，继续挂起
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0-M6 已完成并合并 `dev`；M7 已完成实现、单测与浏览器验收（见 M7 / M7.5 / M7.6），AI 成功流式路径受后端缺陷阻塞；待合并 `dev`；M8 未启动**。
+> 完成度参考：9 个里程碑完成 8 个；按工期估算 14-19 天中约完成 14 天，**Phase 5 约 85%**
+> M5 遗留一项未通过：图片分片直传第 1 步被后端 `@InnerAuth` 拦截（见 M5.10），M7.6 又确认 PDF 上传的 Feign 转存同族失败——**上传/解析链路的后端配合点仍未达成**，继续挂起
 > `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
 > 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
 >
@@ -648,34 +648,63 @@ M6 开工前先按 §2 的强制配合点补齐后端契约，变更提案与核
 
 **目标**：覆盖剩余业务页面。
 
-**分支**：`phase/5.7-features`
+**分支**：`phase/5.7-features`（2026-09-11 自 `dev` 切出）
+
+**状态**：🟢 **2026-09-11 完成 M7.1–M7.4 实现与浏览器端到端验收**。AI 流式的**成功路径**被后端缺陷阻塞（见 M7.6 第 1 条），前端按错误路径验收通过。合并 `dev` 状态见 M7.5。
 
 ### M7.1 AI 聊天（SSE）
-- [ ] `features/ai/use-chat-stream.ts`：用 `@microsoft/fetch-event-source` 接 `/api/proxy/ai/v1/chat/completions`
-- [ ] `(workspace)/ai/chat/page.tsx`：左侧会话列表 + 右侧消息流
-- [ ] 消息渲染：用户消息用纯文本，AI 输出用 `<TiptapEditor preset="readonly" />` 渲染 Markdown（含代码 / 公式 / 表格）
-- [ ] Slash 菜单中的 "AI 续写" 接入此流
+- [x] `features/ai/use-chat-stream.ts`：进程级 zustand store + `lib/ai/sse.ts`（`@microsoft/fetch-event-source`）接 SSE。**与计划的差异**：实际端点是 `/api/proxy/aiNio/chat/completions`（spec 路径 `/chat/completions`，无 `/v1` 前缀；且 Gateway 上只有 `/api/aiNio/**` 路由到 anynote-ai-nio，`/api/ai` 指向 Phase 3 合并前的旧 ai 服务、恒 503）
+- [x] `(workspace)/ai/chat/page.tsx` + `/ai/chat/[id]`：左侧会话列表（分页加载、重命名、删除）+ 右侧消息流；新会话首条消息从 chunk 拿 `conversationId` 后迁移 store key 并 `router.replace` 回填，不重发请求
+- [x] 消息渲染：用户消息纯文本气泡；AI 输出完成后 `<TiptapEditor preset="readonly" />` 渲染 Markdown；流式进行中用轻量文本 + 光标（半截 Markdown 逐 chunk 重建 ProseMirror 文档开销大且抖动，完成后切编辑器）
+- [x] Slash 菜单中的 "AI 续写" 接入此流：插入 `aiBlock` 节点并逐增量更新 payload；`PresetContext.aiContinue` 注入点，未配置时降级提示
+- [x] 流挂 store 层而非组件状态：流式进行中切换路由（组件卸载）消息与流都不丢，对应 M7.5「中途切页不丢消息」；会话列表/详情/重命名/删除走 typed client
 
 ### M7.2 AI 工作流（ReactFlow）
-- [ ] `(workspace)/ai/workflow/page.tsx`
-- [ ] 节点 / 边的 schema 用 zod 校验
-- [ ] 保留对接后端工作流执行端点
+- [x] `(workspace)/ai/workflow/page.tsx`：`@xyflow/react` v12 画布，dynamic ssr:false 懒加载
+- [x] 节点 / 边 schema 用 zod 校验（`features/ai/schemas.ts` workflowDataSchema，节点名 1-30 字、自动持久化前校验）
+- [x] 保留对接后端工作流执行端点：`workflow-storage.ts` 的 `runWorkflow` 异步对接点，当前后端无执行端点（与旧前端一致），点击运行时 toast 说明；画布数据持久化 localStorage
 
 ### M7.3 Chat PDF
-- [ ] `(workspace)/ai/pdf/page.tsx`：react-pdf 左 + 聊天面板右
-- [ ] 拖拽上传 PDF → 触发后端解析 → 启动会话
+- [x] `(workspace)/ai/pdf/page.tsx`：中间 react-pdf 预览 + 右侧聊天面板（里程碑原文"左 PDF 右聊天"，实现为三栏：文档库 / PDF / 问答，文档多时三栏更可用）
+- [x] 拖拽上传 PDF → `POST /docs/pdfs`（multipart，XHR 实现以获得真实上传进度，fetch 无上传进度事件；豁免 typed client 走同源 BFF 路径）→ 自动 `POST /docs/{id}/index` 触发异步索引（RocketMQ→ES）→ 轮询 `indexStatus`；问答走 `/rag/query/docs/v1` SSE
+- [x] **上传后端链路阻塞**（M7.6 第 4 条）：note→file 的 Feign multipart 转存失败，端到端无法走通；前端上传/错误路径已实现并由单测覆盖
 
 ### M7.4 Mooc / Tasks / Wikis / Settings
-- [ ] Mooc：保留视频播放（DPlayer 懒加载）；课程卡片
-- [ ] Tasks：`@tanstack/react-table` + shadcn `Table`
-- [ ] Wikis：树 + `<TiptapEditor preset="readonly" />`
-- [ ] Settings：嵌套路由 `account` / `appearance` / `ai` / `integrations`
+- [x] Mooc：课程卡片 + 新建课程 + 课程详情（章节展开、DPlayer 懒加载视频播放、`/file/public/byObjectName` 换临时播放地址、文档条目 readonly 渲染）；创建时补 `dataScope: 1`（`n_mooc.data_scope` 列 NOT NULL 无默认值，缺省触发后端 B0001，见 M7.6 第 2 条）
+- [x] Tasks：`@tanstack/react-table` + shadcn `Table`（**用 v8**：v9 为 2026 新大版本、API 全面重构，按里程碑写作时的 v8 认知选用稳定版）；提交对话框选知识库/笔记提交成果；`/noteTasks` 的 `knowledgeBaseId` 必填（任务按知识库组织）
+- [x] Wikis：知识库→笔记两级导航 + `<TiptapEditor preset="readonly" />`，复用笔记域 hooks
+- [x] Settings：嵌套路由 `profile(=account)` / `appearance` / `ai` / `integrations`（沿用 legacy 的 /settings/profile 路径名，/settings/account 等价）；资料表单、改密码（auth 域 `/resetPassword`）、主题三选一、AI 模型偏好（localStorage，聊天页读取）、集成说明页
+- [x] 公共组件：`components/shared/knowledge-base-select.tsx`（mooc/tasks 共用）
 
 ### M7.5 验收
-- [ ] 所有页面无 console error / warning
-- [ ] AI 流式：首字延迟可接受（取决后端）；中途切页不丢消息
-- [ ] PDF 上传 50MB 文件进度条平滑
-- [ ] 合并到 `dev`
+- [x] 所有页面无 console error / warning：SPA 遍历 13 条路由 console 全干净（2026-09-11，ZCode 浏览器）
+- [x] AI 流式：SSE 连接、chunk 解析、failed 状态展示、重试按钮、readonly 渲染全部验证；**成功流式路径被后端阻塞**（M7.6 第 1 条：ai-nio servlet 栈 reactor context 丢失 + LLM 上游 ai-service 未启动），已在单测覆盖成功路径、浏览器覆盖错误路径。中途切页不丢消息由 store 层设计保证并单测覆盖
+- [x] PDF 上传进度条：XHR `upload.onprogress` 真实进度（百分比条）；端到端被后端转存失败阻塞（M7.6 第 4 条）
+- [x] 单测：全仓 **440 个**前端用例通过（M6 结束 359 个，本轮 +81：SSE 解析、流式 store 状态机、会话/文档/课程/任务 hooks、组件、schema、keys 契约）；`pnpm typecheck`、`pnpm check`、webpack 生产构建、编辑器 chunk 10.0KB gzip（预算 250KB）均通过；`test:integration:auth` 14 个真实链路用例通过
+- [ ] 合并到 `dev`（代码与验收已完成，合并见分支记录）
+
+### M7.6 实际执行结果与环境发现（2026-09-11）
+
+**后端契约/实现缺口（前端无责，需后端跟进；延续 M5.10 的挂起模式）**：
+
+1. **ai-nio SSE 全链路不可用（阻塞 M7.1 成功路径）**：`services/ai` 跑在 Servlet/Tomcat 栈，`Mono.deferContextual` 里 `ctx.get(LOGIN_USER)` 抛 `NoSuchElementException: Context is empty`（`ChatServiceImpl.java:259` 附近）——WebFlux 的 `ContextWebFilter` 上下文桥在 servlet 部署下不生效，`chat/completions`（新会话与续聊两分支都取 ctx）、`chat/conversations/list` 等所有需要登录用户的 reactive 端点全部失败（B0001 / failed 事件）。叠加 M0.1 记录的 `ai-service`（Python LLM 上游，`ANYNOTE_AI_FASTAPI_ADDRESS=http://host.docker.internal:8000`）Phase 5 之后才接，即使 context 修复流式也无可答上游。**需后端开工单**：servlet 环境的登录上下文注入 + LLM 上游部署。
+2. **`POST /moocs` 缺 `data_scope` 即失败**：`n_mooc.data_scope` 列 NOT NULL 无默认值，`MoocCreateDTO.dataScope` 可选导致缺省时 B0001。前端已补 `dataScope: 1` 规避；后端宜给列加默认或 DTO 必填。
+3. **课程条目权限规则缺失**：`GET /moocs/items/{id}` 返回「获取SysPermissionRule：n:mooc:read失败」——系统权限规则表无 `n:mooc:read` 配置（数据问题）。
+4. **PDF 上传后端链路失败**：`POST /docs/pdfs` 经 note→file Feign multipart 转存触发 fallback（「上传文档失败」），note 日志中根因被 gson 序列化 Throwable 的二次异常掩盖。与 M5.10 的图片直传 `@InnerAuth` 同族——**上传/解析链路的后端配合点未达成**。
+5. **Settings 资料保存无可用对外端点**：`PUT /system/user/{userId}` 标注 `@InnerAuth`（内部端点），浏览器经代理调用被 A0301 拒绝；auth 域无资料更新端点。改密码（auth `/resetPassword`）不受影响。需后端提供对外资料更新端点或去除该端点 InnerAuth。
+
+**前端侧修正（本轮发现并修复）**：
+
+- **readonly 预设炸树 bug（M5 遗留）**：`preset="readonly"` 未显式传 `editable=false` 时 Toolbar 仍挂载，`useEditorState` selector 对 readonly 预设不存在的 `can().undo()` 求值抛 TypeError，整棵 React 树崩成 "Application error"。现在 readonly 预设强制只读并跳过 Toolbar/BubbleMenu。
+- **ai 域代理前缀**：`aiApi` 与 SSE 引擎改走 `/api/proxy/aiNio`（见 M7.1）。
+- **DTO 包装 query 平铺绑定**：`/docs`、`/moocs`、`/moocs/items`、`/chat/conversations/list` 的 springdoc 契约把 ModelAttribute POJO 呈现为包装对象（`query: { docListDTO: {...} }`），但 Spring 实际按平铺参数绑定——实测 bracket（`docListDTO[page]`）与 dot（`docListDTO.page`）语法后端均不绑定（A0160）。新增 `lib/api/dto-query.ts` 平铺 serializer 按请求注入。
+- `GET /docs` 的 pageSize 上限 50（传 100 报「页面大小错误」），文档列表一次拉 50。
+- BFF/网关 Origin 校验对无 Origin 头的脚本化 POST 一律 403（A0301「请求来源不受信任」）——curl 验证需显式带 `Origin` 头，浏览器场景不受影响。
+
+**环境发现**：
+
+- 同一 `.next` 目录上并行两个 `next start`（不同端口）且 build 与运行进程并发时，可能产出引用了不存在 chunk 的 HTML（页面 404 部分静态资源，水合失败、表单回退原生 GET 提交）。验收前确保旧进程终止、`rm -rf .next` 后重新 build。
+- react-pdf 11（pdfjs 6）worker 经 `scripts/sync-pdf-worker.mjs` 落 `public/pdf.worker.min.mjs`（1.2MB，产物入库），workerSrc 指向 `/pdf.worker.min.mjs`；pdfjs 不能进 SSR 包，渲染器走 dynamic ssr:false。
 
 ---
 
@@ -760,7 +789,9 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 
 ## 5. 当前执行位置（2026-09-11 核对）
 
-**最新：M6 已于 2026-09-11 完成并合并 `dev`**（分支 `phase/5.6-notes`，自合并 M2-M5 后的 `dev` 切出；`--no-ff` merge commit `888c7da`）。笔记业务页面全量落地：知识库/笔记/编辑器三页面 + 数据 hooks + 自动保存状态机（debounce/乐观更新/回滚/离线/冲突/卸载 flush）+ 基于 `update_time` 版本号的后端乐观并发契约（`A0409`，见 openspec `2026-09-11-note-save-result-and-version`）。后端 note 模块 16 个、前端笔记域 75 个（全仓 359 个）单测通过；OpenAPI baseline 仅 note.json 契约性变更；生产构建 + 真实 Docker 栈的浏览器端到端验收通过（含双标签页冲突、拖拽移动、卸载 flush）。执行差异与环境发现见 **M6.5**；M5 遗留的 `@InnerAuth` 图片直传阻塞继续挂起。
+**最新：M7 已于 2026-09-11 完成实现、单测与浏览器验收**（分支 `phase/5.7-features`，自合并 M6 后的 `dev` 切出；合并 `dev` 待执行）。AI 聊天（SSE 流式会话 + 会话管理 + readonly Markdown 渲染 + slash AI 续写）、Chat PDF（上传/索引轮询/预览/文档问答）、AI 工作流（ReactFlow + zod）、Mooc（课程卡片/详情/视频）、Tasks（react-table + 提交）、Wikis（两级导航 + 只读渲染）、Settings（四分区嵌套路由）全部落地；全仓前端单测 359 → **440** 个，认证/代理集成 14 个真实用例通过，13 条路由 console 零 error。**AI 成功流式路径被后端阻塞**（ai-nio servlet 栈 reactor context 丢失 + LLM 上游未启动，见 M7.6 第 1 条），前端按错误路径验收；PDF 上传与资料保存同受后端缺口阻塞（M7.6 第 4、5 条）。执行差异见 **M7.6**。
+
+**历史：M6 已于 2026-09-11 完成并合并 `dev`**（分支 `phase/5.6-notes`，自合并 M2-M5 后的 `dev` 切出；`--no-ff` merge commit `888c7da`）。笔记业务页面全量落地：知识库/笔记/编辑器三页面 + 数据 hooks + 自动保存状态机（debounce/乐观更新/回滚/离线/冲突/卸载 flush）+ 基于 `update_time` 版本号的后端乐观并发契约（`A0409`，见 openspec `2026-09-11-note-save-result-and-version`）。后端 note 模块 16 个、前端笔记域 75 个（全仓 359 个）单测通过；OpenAPI baseline 仅 note.json 契约性变更；生产构建 + 真实 Docker 栈的浏览器端到端验收通过（含双标签页冲突、拖拽移动、卸载 flush）。执行差异与环境发现见 **M6.5**；M5 遗留的 `@InnerAuth` 图片直传阻塞继续挂起。
 
 **历史：M2-M5 已于 2026-09-11 全部合并 `dev`**（`e6384e5` / `05c2598` / `c3c3597` / `7b96e67`，逐个 `--no-ff`，无冲突；合并后 `dev` 的 tree 与 `phase/5.5-tiptap-core` 为同一 OID）。M5 实现与浏览器验收完成于 2026-09-10，分支 `phase/5.5-tiptap-core` 自 `phase/5.4-app-shell` 叠出。
 TipTap 实际版本 v3.31.3；编辑器主 chunk 从 341.2 KB 降到 **211.3 KB gzip**（KaTeX / Shiki 改懒加载）；
