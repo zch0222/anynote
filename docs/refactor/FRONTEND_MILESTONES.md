@@ -1,8 +1,8 @@
 # Anynote 前端重构里程碑（可执行版）
 
-> 文档版本：v1.5 | 生成日期：2026-05-13 | 最近核对：2026-09-10（M5 TipTap 编辑器核心实现 + 浏览器验收；M2 / M3 / M4 维持"实现完成、合并暂缓"）
+> 文档版本：v1.6 | 生成日期：2026-05-13 | 最近核对：2026-09-11（M2 / M3 / M4 / M5 已全部 `--no-ff` 合并 `dev`）
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2.0 已完成；M2 / M3 / M4 / M5 实现与验收通过，合并 `dev` 暂缓；M6-M8 未启动**。
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2 / M3 / M4 / M5 已完成并合并 `dev`；M6-M8 未启动**。
 > 完成度参考：9 个里程碑完成 2 个，M2-M5 代码及验收完成（各剩一次合并）；按工期估算 14-19 天中约完成 9 天，**Phase 5 约 50%**
 > M5 遗留一项未通过：图片分片直传第 1 步被后端 `@InnerAuth` 拦截（见 M5.10），需后端确认后重跑端到端
 > `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
@@ -12,7 +12,7 @@
 >
 > ✅ **漂移门禁缺陷已修复（2026-08-08）**：生成时剥离 `servers`、递归排序 key，并在校验通过后才覆盖 baseline；包含 20 个单测，历史验证见 §6。2026-09-07 未重新运行全栈验收。
 >
-> **分支落点（2026-09-09 核对）**：M2.0 已通过 `3865a2f` 合并到 `dev`；Gateway/Bearer 前置提交和本轮认证实现均位于 `phase/5.2-auth-bff`。本轮五笔代码提交见 §5，未合并到 `dev` 或 `main`；分支已推送 `origin/phase/5.2-auth-bff`（2026-09-10 核对确认与本地同步）。
+> **分支落点（2026-09-11 核对）**：M2.0 已通过 `3865a2f` 合并到 `dev`；Gateway/Bearer 前置提交和本轮认证实现均位于 `phase/5.2-auth-bff`，五笔代码提交见 §5。M2-M5 四条叠分支已于 2026-09-11 全部合并 `dev`（`e6384e5` / `05c2598` / `c3c3597` / `7b96e67`），分支保留；`main` 未动。`phase/5.2-auth-bff` 已推送 `origin`（本地比远程领先 3 个提交）。
 
 ---
 
@@ -303,7 +303,7 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 - [x] 先复现失败后修复：新增 Gateway 20 个用例 + OpenAPI 1 个用例；相关模块及依赖共 109 个单测通过。`mvn install -DskipTests`、`pnpm check`、`pnpm typecheck` 与直接运行 `pnpm --filter @anynote/api-client typecheck` 通过。
 - [x] 本地开发栈 9 个 Java 服务健康；真实 Gateway 的无凭据、仅旧头、无效 Bearer、Basic 加旧头请求均返回 HTTP 401 / `A0350`。
 
-**兼容性影响**：`apps/web-legacy` 仍发旧请求头，切换后的私有调用会失败；本次没有擅自迁移旧前端。Gateway 改造已提交为 `57bf8b3`，OpenAPI 与六份 baseline 已提交为 `216a930`；本次未合并到 `dev` 或 `main`。
+**兼容性影响**：`apps/web-legacy` 仍发旧请求头，切换后的私有调用会失败；本次没有擅自迁移旧前端。Gateway 改造已提交为 `57bf8b3`，OpenAPI 与六份 baseline 已提交为 `216a930`；该轮当时未合并，已随 M2 于 2026-09-11 合并 `dev`（`e6384e5`），`main` 仍未动。
 
 > **刷新流程待评估风险（2026-09-08 更正）**：下方原始 BFF 任务及 `Map<rt, Promise<void>>` 要求保持不变，尚未实现。文档仅用 `isExpiringSoon(at)` 示意触发条件，未明确提前刷新阈值、token 缺失/失效时的处理及完整重试流程。
 >
@@ -342,7 +342,7 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 - [x] DevTools → Application → LocalStorage / SessionStorage 全空（2026-09-10 浏览器核验：注册后与登录后两个时点 `localStorage`/`sessionStorage` 均为空对象，键数为 0）
 - [x] 手动让 `at` 提前过期（缩短 TTL 至 30s 测试），并发触发 10 个请求，只产生 1 次 `/api/auth/refresh` 调用（2026-09-10 以等价且更严格的方式验证：`at` 过期后浏览器会直接删除该 Cookie，故用 10 个**仅携带 rt** 的并发代理请求模拟——10 个全部成功、10 个响应携带同一对旋转凭据、旧 rt 复用 401/A0311，即仅一次后端刷新；真实 Docker 栈 + `next start` 生产构建）
 - [x] 登出响应清除 cookies 两件套；2026-09-09 真实 HTTP 链路验证双 Cookie 与仅 rt 场景，旧凭据撤销结果符合契约；2026-09-10 浏览器内复核：登出 200 后 `me` 401/A0311、访问 `/dashboard` 被中间件重定向 `/login`、`document.cookie` 仍为空；GUI 错误密码出现"用户身份校验失败"吐司且停留登录页，正确密码跳转 `/dashboard`
-- [ ] 合并 `phase/5.2-auth-bff` → `dev`
+- [x] 合并 `phase/5.2-auth-bff` → `dev`（2026-09-11 `--no-ff` merge commit `e6384e5`）
 
 ---
 
@@ -381,7 +381,7 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 - [x] `useMe()` 在 dashboard 雏形页拉到用户资料并渲染昵称（浏览器实测登录后 `/dashboard` 显示"欢迎回来，浏览器验收"；组件级 3 个单测覆盖昵称渲染/401 回退/非 401 错误停留）
 - [x] 调用未授权端点，BFF 自动刷新或重定向到登录（M2 集成测试覆盖自动刷新；浏览器实测登出后访问 `/dashboard` 被拦回 `/login`；401 兜底由组件单测覆盖）
 - [x] `pnpm typecheck` 0 错误（web 与 api-client 均通过；Biome 47 文件无问题；`pnpm build` 10 路由成功；单测 182 个全绿）
-- [ ] 合并到 `dev`（按用户指示暂缓，与 M2 一并处理）
+- [x] 合并到 `dev`（2026-09-11 `--no-ff` merge commit `05c2598`）
 
 ---
 
@@ -391,7 +391,7 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 
 **分支**：`phase/5.4-app-shell`（2026-09-10 从 `phase/5.3-api-layer` 叠出，延续 M2 / M3 暂不合并的安排）
 
-**状态**：🟢 实现与验收通过（2026-09-10），合并 `dev` 暂缓。
+**状态**：🟢 实现与验收通过（2026-09-10）；2026-09-11 已 `--no-ff` 合并 `dev`（`c3c3597`）。
 
 ### M4.1 路由组结构
 - [x] `(workspace)/layout.tsx`：左侧栏 + 顶栏 + 内容区；公共 `WorkspaceSession` 处理加载、失败重试与 BFF 返回 401 后跳转登录
@@ -420,7 +420,7 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 - [x] 210 个前端单测（本次新增 28 个）、TypeScript、Biome、生产构建通过；现有 Docker 后端 + 新 `next start` 生产前端的 14 个认证 / 代理集成用例通过
 - [x] 修正 `web lint` 的工作目录：先回仓库根再执行 Biome，使根配置里的 `apps/web/src/components/ui` 排除规则生效；避免误检查 vendored shadcn 原件
 - [x] 浏览器真实注册 → dashboard 昵称 → 导航 → 用户菜单设置 → 登出 → `/notes` 被重定向 `/login`；本次浏览器控制台无 error / warn。临时账号 `m4ui09101441` 保留，已通过登出撤销该浏览器会话
-- [ ] 合并到 `dev`（延续 M2 / M3 暂缓安排）
+- [x] 合并到 `dev`（2026-09-11 `--no-ff` merge commit `c3c3597`）
 
 ---
 
@@ -430,7 +430,7 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 
 **分支**：`phase/5.5-tiptap-core`（计划从 `dev`；实际因 M2-M4 未合并，自 `phase/5.4-app-shell` 叠出，与 M3 / M4 的叠分支方式一致）
 
-**状态**：🟢 **2026-09-10 完成 M5.1–M5.9 实现与浏览器验收**；仅"图片粘贴上传"因后端 `@InnerAuth` 未通过（M5.10），合并 `dev` 暂缓。
+**状态**：🟢 **2026-09-10 完成 M5.1–M5.9 实现与浏览器验收**；仅"图片粘贴上传"因后端 `@InnerAuth` 未通过（M5.10）。2026-09-11 已 `--no-ff` 合并 `dev`（`7b96e67`），该项作为遗留问题带入 M6。
 
 ### M5.1 依赖
 ```bash
@@ -512,7 +512,7 @@ cd apps/web && pnpm add \
 - [x] 复制粘贴富文本（从 Notion / Google Docs）能正确清洗（浏览器实测：内联 `style` 与 `<script>` 被剥除，加粗 / 斜体 / 链接 / 列表语义保留）
 - [ ] 图片粘贴上传 → 渲染 → 序列化为 `![](url)` —— **被后端 `@InnerAuth` 阻塞**，见 M5.10
 - [x] Bundle 报告：编辑器 chunk gzipped ≤ 250KB（实测 211.3 KB）
-- [ ] 合并到 `dev`（延续 M2-M4 的暂缓安排）
+- [x] 合并到 `dev`（2026-09-11 `--no-ff` merge commit `7b96e67`）
 
 ### M5.10 实际执行结果与差异（2026-09-10）
 
@@ -555,7 +555,7 @@ POST /api/proxy/file/ossSliceUploadTasks → {"code":"A0301","msg":"没有内部
 **环境发现（与 M5 代码无关）**：
 
 - `next build --turbopack` 的产物用 `next start` 起不来：`TypeError: routesManifest.dataRoutes is not iterable`（生成的 `routes-manifest.json` 无 `dataRoutes`）。浏览器验收因此跑在 `next dev` 上；生产构建本身成功（24 条路由）
-- 本会话期间本地分支 ref 曾被外部清空（仅剩 `main`）。已按已知 commit 还原：`phase/5.2a-auth-backend`(2a12afc) / `phase/5.2-auth-bff`(dd3ca98) / `phase/5.3-api-layer`(186b50c) / `phase/5.4-app-shell`(b6035d5)
+- 本会话期间本地分支 ref 曾被外部清空（仅剩 `main`）。当时按已知 commit 还原，但 `phase/5.2-auth-bff` 误用了 `dd3ca98`（`origin` 的值，比真值旧 3 个提交）；2026-09-11 已按事故前快照更正为 `be0fcdb`。真值：`phase/5.2-auth-bff`(be0fcdb) / `phase/5.2a-auth-backend`(2a12afc) / `phase/5.3-api-layer`(186b50c) / `phase/5.4-app-shell`(b6035d5) / `phase/5.5-tiptap-core`(5600106)。根因为 WorkBuddy 沙箱把删除劫持成回收站、破坏 `rmdir` 非空必失败语义，导致 git 清理空父目录时一路递归
 
 **浏览器端到端验收（2026-09-10，真实 Docker 后端 + `next dev`）**：
 
@@ -714,23 +714,23 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 
 ---
 
-## 5. 当前执行位置（2026-09-10 核对）
+## 5. 当前执行位置（2026-09-11 核对）
 
-**最新：M5 已于 2026-09-10 完成实现与浏览器验收**，分支 `phase/5.5-tiptap-core`（自 `phase/5.4-app-shell` 叠出，延续 M2-M4 不合并 `dev` 的安排）。
+**最新：M2-M5 已于 2026-09-11 全部合并 `dev`**（`e6384e5` / `05c2598` / `c3c3597` / `7b96e67`，逐个 `--no-ff`，无冲突；合并后 `dev` 的 tree 与 `phase/5.5-tiptap-core` 为同一 OID）。M5 实现与浏览器验收完成于 2026-09-10，分支 `phase/5.5-tiptap-core` 自 `phase/5.4-app-shell` 叠出。
 TipTap 实际版本 v3.31.3；编辑器主 chunk 从 341.2 KB 降到 **211.3 KB gzip**（KaTeX / Shiki 改懒加载）；
 285 个前端单测、110+ 文件 Biome、类型检查、生产构建与 `next dev` 浏览器实测均通过。
 完整差异、已知限制与后端契约缺口见 **M5.10**。唯一未通过项：图片分片直传第 1 步 `POST /file/ossSliceUploadTasks`
 被后端 `@InnerAuth` 拦截（`A0301`），需后端确认后重跑端到端。
 
 > 备注：本次核对期间本地分支 ref 曾被外部清空（仅剩 `main`），已按已知 commit 还原
-> `phase/5.2a-auth-backend`(2a12afc) / `phase/5.2-auth-bff`(dd3ca98) / `phase/5.3-api-layer`(186b50c) /
+> `phase/5.2a-auth-backend`(2a12afc) / `phase/5.2-auth-bff`(**be0fcdb** —— 2026-09-11 更正，原记的 `dd3ca98` 是 `origin` 的值、旧 3 个提交) / `phase/5.3-api-layer`(186b50c) /
 > `phase/5.4-app-shell`(b6035d5)。
 
 ---
 
 M2.0 已于 2026-09-07 合并 `dev`（`3865a2f`）。当前分支 `phase/5.2-auth-bff` 已完成用户确认的 Gateway 仅 Bearer 前置改造，以及 OpenAPI 安全方案、测试和六份 baseline 更新；代码提交分别为 `57bf8b3` 和 `216a930`。
 
-**当前执行位置**：M2 已全部验收（含浏览器端 M2.4），合并 `dev` 按用户指示暂缓。M3 于 2026-09-10 在 `phase/5.3-api-layer`（自 `phase/5.2-auth-bff` 叠出）完成：`pnpm openapi:generate` 零漂移；`types/api.ts` 聚合导出、`lib/api/openapi.ts` 分域代理 client、`lib/api/errors.ts` ApiError、全局 `providers.tsx`、`features/auth/use-me.ts` + query-keys、dashboard 雏形页、CI spec-diff 增强。单测 182 个全绿（新增 use-me 4 个、query key 1 个、dashboard 3 个），typecheck / Biome / build 通过；浏览器实测登录后 dashboard 渲染昵称、登出后回登录页。M4 于同日继续完成 AppShell、主题和命令面板，并通过单测、Docker 后端集成测试与 Codex 浏览器验证（详见 M4.5）；M5-M8 未启动。
+**当前执行位置**：M2 已全部验收（含浏览器端 M2.4），并于 2026-09-11 合并 `dev`（`e6384e5`）。M3 于 2026-09-10 在 `phase/5.3-api-layer`（自 `phase/5.2-auth-bff` 叠出）完成：`pnpm openapi:generate` 零漂移；`types/api.ts` 聚合导出、`lib/api/openapi.ts` 分域代理 client、`lib/api/errors.ts` ApiError、全局 `providers.tsx`、`features/auth/use-me.ts` + query-keys、dashboard 雏形页、CI spec-diff 增强。单测 182 个全绿（新增 use-me 4 个、query key 1 个、dashboard 3 个），typecheck / Biome / build 通过；浏览器实测登录后 dashboard 渲染昵称、登出后回登录页。M4 于同日继续完成 AppShell、主题和命令面板，并通过单测、Docker 后端集成测试与 Codex 浏览器验证（详见 M4.5）；M5 也已于同日完成（见 M5 / M5.10）。M2-M5 四条叠分支已于 2026-09-11 逐个 `--no-ff` 合并 `dev`；M6-M8 未启动。
 
 **2026-09-10 本轮验证与发现**：
 - 实现：`src/lib/auth/refresh.ts`（单飞刷新，锁挂进程级 `globalThis`）、`src/app/api/auth/refresh|me/route.ts`、`src/app/api/proxy/[...path]/route.ts`、`backend.ts` 增 `systemClient`。BFF 三处 catch 增加 `console.error` 服务端日志（此前异常被静默吞掉，本轮定位 502 全靠日志补齐）。
@@ -781,7 +781,7 @@ WSL 环境检查、联网生产构建申请均再次被自动审批服务 HTTP 5
 | `e6cc598` | auth OpenAPI baseline 同步 |
 | `bcfb053` | web 认证 BFF、登录/注册页、单测及独立真实认证测试 |
 
-文档与验收记录另行同步提交。未合并 dev/main；分支已推送 `origin/phase/5.2-auth-bff`（2026-09-10 核对确认与本地同步）。刷新已于 2026-09-10 按用户指示实现；M2.4 仅剩浏览器面板人工检查与合并 dev；如实现必须偏离方案，仍须先说明并确认。
+文档与验收记录另行同步提交。分支已推送 `origin/phase/5.2-auth-bff`（2026-09-10 核对确认与本地同步）；2026-09-11 已 `--no-ff` 合并 `dev`（`e6384e5`），`main` 未动。刷新已于 2026-09-10 按用户指示实现；M2.4 全部完成。
 
 ---
 
