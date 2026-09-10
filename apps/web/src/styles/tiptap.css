@@ -1,0 +1,356 @@
+/* TipTap 编辑器样式：容器 / 工具栏 / 气泡菜单 / Slash 菜单 / 自定义节点 / Shiki 高亮。
+   纯 CSS（不使用 @apply），避免依赖 Tailwind 的编译上下文；颜色一律走 globals.css 的 token。 */
+
+/* ---------- 容器 ---------- */
+.anynote-editor {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--card);
+  overflow: hidden;
+}
+
+.anynote-editor[data-preset="readonly"] {
+  border: none;
+  background-color: transparent;
+}
+
+.anynote-editor__surface {
+  flex: 1;
+  min-height: 0;
+}
+
+.anynote-editor__content {
+  padding: 1rem 1.25rem;
+  min-height: 320px;
+  outline: none;
+}
+
+.anynote-editor[data-preset="readonly"] .anynote-editor__content {
+  padding: 0;
+  min-height: 0;
+}
+
+.anynote-editor__content:focus,
+.anynote-editor__content:focus-visible {
+  outline: none;
+}
+
+/* Placeholder（@tiptap/extension-placeholder 用 data-placeholder + is-editor-empty） */
+.anynote-editor__content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+/* ---------- 工具栏 ---------- */
+.anynote-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--muted);
+}
+
+.anynote-toolbar__button,
+.anynote-bubble-menu__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: calc(var(--radius) * 0.6);
+  background-color: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.anynote-toolbar__button:hover,
+.anynote-bubble-menu__button:hover {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.anynote-toolbar__button.is-active,
+.anynote-bubble-menu__button.is-active {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.anynote-toolbar__button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.anynote-toolbar__button svg,
+.anynote-bubble-menu__button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.anynote-toolbar__text {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.anynote-toolbar__divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background-color: var(--border);
+}
+
+.anynote-toolbar__spacer {
+  flex: 1;
+}
+
+.anynote-toolbar__count {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+/* ---------- 气泡菜单 ---------- */
+.anynote-bubble-menu {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.8);
+  background-color: var(--popover);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+}
+
+/* ---------- Slash 菜单 ---------- */
+.anynote-slash-menu {
+  width: 260px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.8);
+  background-color: var(--popover);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+}
+
+.anynote-slash-menu--empty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.anynote-slash-menu__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.anynote-slash-menu__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: calc(var(--radius) * 0.6);
+  background-color: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.anynote-slash-menu__item.is-selected {
+  background-color: var(--accent);
+}
+
+.anynote-slash-menu__title {
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.anynote-slash-menu__description {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+/* ---------- 代码块（Shiki 高亮层 + 可编辑层叠加） ---------- */
+.anynote-code-block {
+  position: relative;
+  margin: 0.75rem 0;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.8);
+  background-color: var(--muted);
+  overflow: hidden;
+}
+
+.anynote-code-block__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.anynote-code-block__language {
+  border: none;
+  background-color: transparent;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.anynote-code-block__body {
+  position: relative;
+}
+
+.anynote-code-block__preview,
+.anynote-code-block__editor {
+  margin: 0;
+  padding: 12px 14px;
+  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", monospace);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background-color: transparent;
+  border: none;
+}
+
+.anynote-code-block__preview {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.anynote-code-block__editor {
+  position: relative;
+  color: transparent;
+  caret-color: var(--foreground);
+}
+
+.anynote-code-block__preview .shiki,
+.anynote-code-block__preview .shiki span {
+  color: var(--shiki-light);
+  background-color: transparent;
+}
+
+.dark .anynote-code-block__preview .shiki,
+.dark .anynote-code-block__preview .shiki span {
+  color: var(--shiki-dark);
+}
+
+/* ---------- Callout ---------- */
+.anynote-editor__content blockquote[data-callout] {
+  margin: 0.75rem 0;
+  padding: 8px 12px;
+  border-left-width: 3px;
+  border-left-style: solid;
+  border-radius: calc(var(--radius) * 0.6);
+  font-style: normal;
+}
+
+.anynote-editor__content blockquote[data-callout="info"] {
+  border-left-color: oklch(0.62 0.16 250);
+  background-color: oklch(0.62 0.16 250 / 8%);
+}
+
+.anynote-editor__content blockquote[data-callout="tip"] {
+  border-left-color: oklch(0.68 0.15 155);
+  background-color: oklch(0.68 0.15 155 / 10%);
+}
+
+.anynote-editor__content blockquote[data-callout="warn"] {
+  border-left-color: oklch(0.75 0.15 75);
+  background-color: oklch(0.75 0.15 75 / 12%);
+}
+
+.anynote-editor__content blockquote[data-callout="danger"] {
+  border-left-color: oklch(0.6 0.2 25);
+  background-color: oklch(0.6 0.2 25 / 10%);
+}
+
+/* ---------- 任务列表 ---------- */
+.anynote-editor__content ul[data-type="taskList"] {
+  padding-left: 0;
+  list-style: none;
+}
+
+.anynote-editor__content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.anynote-editor__content ul[data-type="taskList"] li > label {
+  margin-top: 4px;
+}
+
+/* ---------- 表格 ---------- */
+.anynote-editor__content table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.anynote-editor__content th,
+.anynote-editor__content td {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.anynote-editor__content th {
+  background-color: var(--muted);
+  font-weight: 600;
+}
+
+/* ---------- 双链 / AI 块 ---------- */
+.anynote-editor__content .anynote-wikilink {
+  padding: 0 4px;
+  border-radius: 4px;
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+  cursor: pointer;
+}
+
+.anynote-editor__content .anynote-ai-block {
+  margin: 0.75rem 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: calc(var(--radius) * 0.8);
+  background-color: var(--muted);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+/* ---------- 数学公式（KaTeX 懒加载 NodeView） ---------- */
+.anynote-editor__content .anynote-math-inline {
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.anynote-editor__content .anynote-math-block {
+  margin: 0.75rem 0;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.anynote-editor__content .anynote-math-inline.ProseMirror-selectednode,
+.anynote-editor__content .anynote-math-block.ProseMirror-selectednode {
+  background-color: var(--accent);
+}
+
+/* ---------- 只读渲染的数学公式微调 ---------- */
+.anynote-editor .katex-display {
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
