@@ -95,16 +95,50 @@ API 客户端由 `pnpm openapi:generate` 从后端 Swagger 自动生成，**不�
 
 ---
 
-## 编辑器集成
+## 编辑器集成（TipTap，Phase 5 起）
 
-Milkdown（主编辑器）配合以下插件：
+新前端**统一 TipTap v3**，已废弃 Milkdown / Wangeditor / Vditor / Muya。入口：
 
-| 插件              | 用途              |
-|-------------------|-------------------|
-| `@milkdown/preset-gfm` | GFM Markdown  |
-| `@milkdown/plugin-math` | LaTeX 数学公式 |
-| `@milkdown/plugin-prism` | 代码高亮        |
-| `@milkdown/plugin-slash` | 斜杠命令        |
+```tsx
+// 懒加载入口（dynamic ssr:false），业务侧只 import 这个
+import { TiptapEditor } from "@/components/editor/TiptapEditor";
+
+<TiptapEditor preset="full" value={markdown} onChange={setMarkdown} />
+```
+
+| 预设 | 用途 | 关键扩展 |
+|------|------|---------|
+| `full` | 笔记 / 文档编辑 | StarterKit（关 codeBlock/underline）+ 自定义节点 + Slash 菜单 + 工具栏 + 气泡菜单 |
+| `minimal` | 评论 / AI 输入框 | StarterKit + Placeholder |
+| `readonly` | 预览 / AI 输出 / Wikis | 渲染型扩展，无交互扩展与工具栏 |
+
+自定义节点（`components/editor/extensions/`）：`anynote-callout`（`> [!INFO]`）、
+`anynote-image`（分片直传）、`anynote-wikilink`（`[[双链]]`）、`anynote-ai-block`（```anynote-ai fence）、
+`code-block-shiki`（Shiki 懒加载 NodeView）、`slash-command`（`/` 菜单）、`anynote-math`（KaTeX 懒加载）。
+
+Markdown 约定（`tiptap-markdown`，`html:false`）：
+
+| 语法 | 节点 / mark |
+|------|------------|
+| `==文本==` | highlight |
+| `++文本++` | underline |
+| `$latex$` / `$$latex$$` | inlineMath / blockMath |
+| `[[目标\|别名]]` | wikilink |
+| `> [!INFO\|TIP\|WARN\|DANGER]` | callout |
+
+已知限制：`textAlign`、highlight 的颜色不写进 Markdown（编辑期保留、持久化丢失）；Color / TextStyle 未启用。
+
+**性能约束**：编辑器整包走 `dynamic(..., { ssr: false })` 懒加载；KaTeX 与 Shiki 均为动态 import
+（编辑器主 chunk 实测 211 KB gzip，预算 250 KB）。改动编辑器依赖后用
+`node apps/web/scripts/bundle-report.mjs` 复测。
+
+开发调试页：`/playground/editor`（仅 `NODE_ENV=development` 暴露，生产 404）。
+
+### Markdown 序列化扩展点
+
+自定义 Markdown 语法（callout / 双链 / 公式）通过 `lib/editor/markdown-it.ts` 的
+`addInlineAtom` / `addInlineWrapper` / `registerMdPlugin` 注册到 markdown-it；每个自定义节点在
+`addStorage().markdown` 里声明 `serialize` 与 `parse`，未声明的节点会退化成 `[nodeName]` 占位。
 
 ---
 
@@ -130,6 +164,8 @@ pnpm openapi:generate
 
 | 变量                       | 用途                          |
 |----------------------------|-------------------------------|
-| `NEXT_PUBLIC_API_URL`      | 网关地址（客户端侧）          |
-| `INTERNAL_API_URL`         | 服务端直连网关地址            |
-| `NEXTAUTH_SECRET`          | Cookie 签名密钥               |
+| `NEXT_PUBLIC_APP_URL`      | 浏览器侧应用源（默认 `http://localhost:3000`） |
+| `INTERNAL_API_URL`         | BFF 直连 Gateway 地址（默认 `http://localhost:8080`） |
+
+> 不使用 `NEXTAUTH_SECRET`：认证走自研 BFF 透传后端 JWT，不做二次签名。
+> 旧的 `NEXT_PUBLIC_API_URL` / `BACKEND_URL` 已废弃（M2 里 `BACKEND_URL` → `INTERNAL_API_URL`）。

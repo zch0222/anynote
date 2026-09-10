@@ -25,6 +25,7 @@
       "apps/web-legacy",
       "apps/web/.next",
       "apps/web/src/components/ui",
+      "apps/web/src/styles/katex.css",
       "openapi/specs"
     ]
   }

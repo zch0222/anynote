@@ -1,9 +1,10 @@
 # Anynote 前端重构里程碑（可执行版）
 
-> 文档版本：v1.4 | 生成日期：2026-05-13 | 最近核对：2026-09-10（M2.4 浏览器验收通过；M3 API 层/查询层/dashboard 雏形完成并经浏览器验证，182 个单测全绿）
+> 文档版本：v1.5 | 生成日期：2026-05-13 | 最近核对：2026-09-10（M5 TipTap 编辑器核心实现 + 浏览器验收；M2 / M3 / M4 维持"实现完成、合并暂缓"）
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2.0 已完成；M2、M3 实现与验收通过，合并 `dev` 暂缓；M4 AppShell / 主题 / 命令面板已完成并通过 Docker 后端集成测试和 Codex 浏览器验收，尚未合并 `dev`；M5-M8 未启动**。
-> 完成度参考：9 个里程碑完成 2 个，M2 与 M3 代码及验收完成（各剩一次合并）；按工期估算 14-19 天中约完成 5 天，**Phase 5 约 30%**
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2.0 已完成；M2 / M3 / M4 / M5 实现与验收通过，合并 `dev` 暂缓；M6-M8 未启动**。
+> 完成度参考：9 个里程碑完成 2 个，M2-M5 代码及验收完成（各剩一次合并）；按工期估算 14-19 天中约完成 9 天，**Phase 5 约 50%**
+> M5 遗留一项未通过：图片分片直传第 1 步被后端 `@InnerAuth` 拦截（见 M5.10），需后端确认后重跑端到端
 > `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
 > 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
 >
@@ -427,7 +428,9 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 
 **目标**：`<TiptapEditor preset="full|minimal|readonly" />` 完整可用，含自定义节点与 Markdown 双向序列化。
 
-**分支**：`phase/5.5-tiptap-core`（从 `dev`，并行期合并 dev 时用 rebase）
+**分支**：`phase/5.5-tiptap-core`（计划从 `dev`；实际因 M2-M4 未合并，自 `phase/5.4-app-shell` 叠出，与 M3 / M4 的叠分支方式一致）
+
+**状态**：🟢 **2026-09-10 完成 M5.1–M5.9 实现与浏览器验收**；仅"图片粘贴上传"因后端 `@InnerAuth` 未通过（M5.10），合并 `dev` 暂缓。
 
 ### M5.1 依赖
 ```bash
@@ -446,57 +449,123 @@ cd apps/web && pnpm add \
   shiki rehype @shikijs/transformers katex
 ```
 
+**实际解析版本（2026-09-10）**：TipTap 全部 **3.31.3**、`tiptap-markdown` 0.9.0、`shiki` / `@shikijs/*` 4.4.3、
+`katex` 0.18.7。与原命令的差异：
+
+- **新增**：`@tiptap/extension-code-block`（自定义 Shiki NodeView 需继承它）、`@tailwindcss/typography`（`.prose`）、`prosemirror-markdown`（`MarkdownSerializerState` 类型）、`@shikijs/core` / `@shikijs/langs` / `@shikijs/themes`（按语言懒加载）
+- **未安装**：`rehype`、`@shikijs/transformers`（本期未用到，避免无用依赖）
+- **移除**：`@tiptap/extension-mathematics`（顶层 import KaTeX 会把主 chunk 撑到 341 KB，改为自建节点 + 懒加载；见 M5.10）
+- `@tiptap/extension-mention` 已安装但**暂不注册**（缺真实用户 / 笔记数据源，后置 M7）
+
 ### M5.2 目录与预设
-- [ ] `components/editor/core/TiptapEditor.tsx`（主组件，`immediatelyRender:false`）
-- [ ] `components/editor/core/Toolbar.tsx`
-- [ ] `components/editor/core/BubbleMenuPortal.tsx`
-- [ ] `components/editor/presets/{full,minimal,readonly}.ts`
-- [ ] `components/editor/extensions/`：`anynote-callout` `anynote-image`（含上传）`anynote-wikilink` `anynote-ai-block` `code-block-shiki` `slash-command`
-- [ ] `components/editor/serializer/`：注册自定义节点的 markdown 序列化/反序列化
-- [ ] `styles/tiptap.css`：基于 `@tailwindcss/typography` 的 `.prose` 风格 + 暗色覆盖 + 节点专属样式
+
+> 文件命名为 **kebab-case**（`tiptap-editor.tsx` / `toolbar.tsx` / `bubble-menu.tsx`），与仓库既有前端约定
+> （`app-header.tsx` / `command-palette.tsx`）一致，未采用计划里的 PascalCase。
+
+- [x] `components/editor/core/tiptap-editor.tsx`（主组件，`immediatelyRender:false`；`components/editor/TiptapEditor.tsx` 为 `dynamic(ssr:false)` 懒加载入口）
+- [x] `components/editor/core/toolbar.tsx`
+- [x] `components/editor/core/bubble-menu.tsx`（BubbleMenuPortal）
+- [x] `components/editor/presets/{full,minimal,readonly}.ts`
+- [x] `components/editor/extensions/`：`anynote-callout` `anynote-image`（含上传）`anynote-wikilink` `anynote-ai-block` `code-block-shiki` `slash-command`，另加 `anynote-marks`（下划线/高亮 markdown 桥）、`anynote-math`（公式节点 + 懒加载 KaTeX）、`anynote-tight-lists`（taskList 紧凑输出修复）
+- [x] Markdown 序列化：不另建 `serializer/` 目录，改为每个扩展在 `addStorage().markdown` 内声明 `serialize` / `parse`，公共 helper 在 `lib/editor/markdown-it.ts`（`addInlineAtom` / `addInlineWrapper` / `registerMdPlugin`）
+- [x] `src/styles/tiptap.css`：`@tailwindcss/typography` 的 `.prose` + 暗色覆盖 + 节点专属样式（另附自托管 KaTeX 样式 `src/styles/katex.css`）
 
 ### M5.3 图片上传集成
 
 > ⚠️ **不存在 `/files/presign` 端点**。M0 期间曾新增（`a305f5a`）又整体 revert（`cafee8c`）；浏览器直传统一复用 file 服务既有的分片直传流程（M0.3 表格已确认）。下列路径为 Gateway 路由前缀 `/api/file/**`，前端实际经 BFF 代理走 `/api/proxy/file/*`。
 
-- [ ] `lib/editor/upload.ts`：走 file 服务分片直传五步
+- [x] `lib/editor/upload.ts`：走 file 服务分片直传五步
   1. `POST /api/file/ossSliceUploadTasks` 建任务 → 返回 `uploadId` / `chunkSize` / `totalChunk` / `finishedChunks`（`hash` 命中即秒传，`finishedChunks` 支持断点续传）
   2. `POST /api/file/getOssSliceUploadSignatures` 按 `chunkIndexList` 换分片签名（`OSSSignature.type` = `MIN_IO` / `HUAWEI_OBS`）
   3. 浏览器按签名直接 PUT 各分片到 OSS
   4. `POST /api/file/markOssSliceUploadSignatures` 标记已完成分片
   5. `POST /api/file/composeOssSliceUploadObject` 合并 → 返回 `fileId` / `objectName` / `hash`；再用 `GET /api/file/public/byObjectName` 换可访问 URL（`ObjectURL.url` + `expireTime`，**非永久公开 URL，注意过期处理**）
-- [ ] `AnynoteImage` 扩展接 `uploadFn`，支持工具栏插入 / 粘贴 / 拖拽 三种入口
-- [ ] 分片大小由后端返回的 `chunkSize` 决定，前端不再自定单文件上限；进度可选用 `GET /api/file/progress/{uploadId}`，任务详情用 `GET /api/file/ossSliceUploadTask/{uploadId}`
+- [x] `AnynoteImage` 扩展接 `uploadFn`，支持工具栏插入 / 粘贴 / 拖拽 三种入口
+- [x] 分片大小由后端返回的 `chunkSize` 决定，前端不再自定单文件上限；进度可选用 `GET /api/file/progress/{uploadId}`，任务详情用 `GET /api/file/ossSliceUploadTask/{uploadId}`
 
 ### M5.4 代码高亮（Shiki）
-- [ ] `lib/editor/shiki.ts`：`createHighlighterCoreSync` 单例，懒加载语言
-- [ ] `code-block-shiki` 扩展：在 NodeView 中调用单例
-- [ ] 服务端 RSC 用同一份 shiki 实例预渲染只读代码块
+- [x] `lib/editor/shiki.ts`：`createHighlighterCoreSync` 单例，懒加载语言
+- [x] `code-block-shiki` 扩展：在 NodeView 中调用单例
+- [x] 服务端 RSC 用同一份 shiki 实例预渲染只读代码块
 
 ### M5.5 数学公式
-- [ ] KaTeX 自托管字体放 `public/fonts/katex/`，`<link rel="preload">` 关键字重
-- [ ] `Mathematics` 扩展行内 `$...$` + 块 `$$...$$`
+- [x] KaTeX 自托管字体放 `public/fonts/katex/`，`<link rel="preload">` 关键字重
+- [x] `Mathematics` 扩展行内 `$...$` + 块 `$$...$$`
 
 ### M5.6 Slash 菜单 + Bubble 菜单
-- [ ] `slash-command` 扩展基于 `@tiptap/suggestion`
-- [ ] 命令清单：H1/H2/H3、Bullet/Ordered/Task List、Quote、Code、Table、Image、Callout、Math、Divider、**AI 续写**（占位，M7 接入）
-- [ ] BubbleMenu：选区出现时显示加粗 / 斜体 / 链接 / 颜色 / AI 改写（占位）
+- [x] `slash-command` 扩展基于 `@tiptap/suggestion`
+- [x] 命令清单：H1/H2/H3、Bullet/Ordered/Task List、Quote、Code、Table、Image、Callout、Math、Divider、**AI 续写**（占位，M7 接入）
+- [x] BubbleMenu：选区出现时显示加粗 / 斜体 / 链接 / 颜色 / AI 改写（占位）
 
 ### M5.7 Markdown 双向序列化测试
-- [ ] `components/editor/__tests__/roundtrip.test.ts`：每个自定义节点 round-trip（markdown → editor → markdown 等价）
-- [ ] 用 `apps/web-legacy/` 中 5 篇真实笔记作为 fixture
+- [x] `components/editor/__tests__/roundtrip.test.ts`：每个自定义节点 round-trip（markdown → editor → markdown 等价）
+- [x] 5 篇真实风格笔记 fixture 作为对照（**差异**：`apps/web-legacy/` 实测既无 `.md` 笔记样本也无编辑器源码，改为在 `__tests__/fixtures/` 手写 5 篇覆盖全部语法的 fixture）
 
 ### M5.8 演示页
-- [ ] `app/(workspace)/_playground/editor/page.tsx`（仅 dev 环境暴露）：三个预设并排展示，手动切换内容
-- [ ] 提交后用户可手动验收编辑体验
+- [x] `app/(workspace)/playground/editor/page.tsx`（仅 dev 环境暴露）：三个预设切换展示，右侧实时查看序列化结果
+  - **差异**：计划写的 `_playground` 会被 Next 当作 private folder 整体排除出路由，因此改为 `playground/editor`；生产构建下该路由返回 404
+- [x] 提交后用户可手动验收编辑体验（2026-09-10 浏览器实测，见 M5.10）
 
 ### M5.9 验收
-- [ ] 三预设全部可用，编辑器整包 `dynamic(() => ..., { ssr: false })` 懒加载
-- [ ] Markdown round-trip 测试全过
-- [ ] 复制粘贴富文本（从 Notion / Google Docs）能正确清洗
-- [ ] 图片粘贴上传 → 渲染 → 序列化为 `![](url)`
-- [ ] Bundle 报告：编辑器 chunk gzipped ≤ 250KB
-- [ ] 合并到 `dev`
+- [x] 三预设全部可用，编辑器整包 `dynamic(() => ..., { ssr: false })` 懒加载
+- [x] Markdown round-trip 测试全过（51 个用例：19 个单节点 × 精确/幂等 + 5 篇 fixture × 精确/幂等 + 预设差异）
+- [x] 复制粘贴富文本（从 Notion / Google Docs）能正确清洗（浏览器实测：内联 `style` 与 `<script>` 被剥除，加粗 / 斜体 / 链接 / 列表语义保留）
+- [ ] 图片粘贴上传 → 渲染 → 序列化为 `![](url)` —— **被后端 `@InnerAuth` 阻塞**，见 M5.10
+- [x] Bundle 报告：编辑器 chunk gzipped ≤ 250KB（实测 211.3 KB）
+- [ ] 合并到 `dev`（延续 M2-M4 的暂缓安排）
+
+### M5.10 实际执行结果与差异（2026-09-10）
+
+**依赖版本与计划不符**：TipTap 实际解析为 **v3.31.3**（计划按 v2 编写），带来一批 API 变化，已在实现中适配：
+
+| 计划假设（v2） | 实际（v3.31.3） |
+|---|---|
+| `@tiptap/extension-bubble-menu` / `-floating-menu` 作为扩展注册 | `BubbleMenu` / `FloatingMenu` 从 `@tiptap/react/menus` 以 React 组件使用，无需单独注册扩展 |
+| StarterKit 之外另装 Link / Underline | StarterKit v3 已内置 `link` / `underline` / `codeBlock` / `undoRedo` / `trailingNode`，用 `configure({ …: false })` 关掉要替换的项 |
+| `@tiptap/extension-history` | 已并入 StarterKit 的 `undoRedo` |
+| `NodeViewContent` 的 `as` 可自由传标签 | `as` 走 `NoInfer<T>`，需写成 `<NodeViewContent<"pre"> as="pre" />` |
+
+**依赖增减**：新增 `@tiptap/extension-code-block`、`@tailwindcss/typography`（`.prose`）、`prosemirror-markdown`（`MarkdownSerializerState` 类型）、`@shikijs/core` / `@shikijs/langs` / `@shikijs/themes`（按语言懒加载语法）；**移除 `@tiptap/extension-mathematics`**（原因见下）。
+
+**Bundle 性能修复**：首轮产物编辑器主 chunk **341.2 KB gzip**，超 250 KB 预算。定位到两个被静态引入的大包后改为动态 import：
+
+| 改动 | 效果 |
+|---|---|
+| KaTeX（145.3 KB gzip）原被 `@tiptap/extension-mathematics` 顶层 import | 自建 `inlineMath` / `blockMath` 节点（`data-type` / `data-latex` 约定与官方一致），渲染走 `lib/editor/katex.ts` 的 `loadKatex()` 动态 import |
+| Shiki core + JS 正则引擎原被 `lib/editor/shiki.ts` 顶层 import | 改为 `import()` 懒加载，语言按需加载并缓存 |
+| 结果 | 编辑器主 chunk **211.3 KB gzip → PASS**；KaTeX（75.0 KB）与 Shiki（35.6 KB）成为独立懒加载 chunk |
+
+复测脚本：`node apps/web/scripts/bundle-report.mjs`。
+
+**Markdown 序列化约定与限制**（`tiptap-markdown`，`html: false`）：
+
+- `==文本==` ↔ highlight，`++文本++` ↔ underline，`$latex$` / `$$latex$$` ↔ 公式，`[[目标|别名]]` ↔ 双链，`> [!INFO|TIP|WARN|DANGER]` ↔ callout，` ```anynote-ai ` ↔ AI 块
+- **上游缺陷修复**：`tiptap-markdown` 的 `tight` 全局属性只挂 `bulletList` / `orderedList`，漏掉 `taskList`，导致任务列表序列化成 loose（项间插空行）。新增 `AnynoteTightTaskList` 把 `tight` 补到 `taskList`
+- **已知限制**：`textAlign` 与 highlight 的颜色不写进 Markdown（编辑期保留、持久化丢失）；`Color` / `TextStyle` 未启用；`Mention`（@用户 / #笔记）需真实数据源，后置 M7；富文本粘贴以语义清洗为准，不保留视觉样式
+- 表格序列化结尾会多一个换行，测试断言统一裁掉文档末尾空行
+
+**前端 ⇄ 后端契约缺口（阻塞 M5.9 图片上传验收）**：分片直传第 1 步 `POST /file/ossSliceUploadTasks` 在 `FileController` 上标了 **`@InnerAuth`**，浏览器请求被 `InnerAuthAspect` 直接拒绝：
+
+```
+POST /api/proxy/file/ossSliceUploadTasks → {"code":"A0301","msg":"没有内部访问权限，不允许访问"}
+```
+
+其余四步（`getOssSliceUploadSignatures` / `markOssSliceUploadSignatures` / `composeOssSliceUploadObject` / `public/byObjectName`）**没有** `@InnerAuth`，实测可达（返回正常业务错误码），说明只有第一步被遗漏。前端 `lib/editor/upload.ts` 按计划实现且带 6 个单测；**后端注解不改，端到端图片上传无法跑通**。按"实现必须偏离方案前先说明并确认"的约定，本轮未擅自改后端鉴权。
+
+**环境发现（与 M5 代码无关）**：
+
+- `next build --turbopack` 的产物用 `next start` 起不来：`TypeError: routesManifest.dataRoutes is not iterable`（生成的 `routes-manifest.json` 无 `dataRoutes`）。浏览器验收因此跑在 `next dev` 上；生产构建本身成功（24 条路由）
+- 本会话期间本地分支 ref 曾被外部清空（仅剩 `main`）。已按已知 commit 还原：`phase/5.2a-auth-backend`(2a12afc) / `phase/5.2-auth-bff`(dd3ca98) / `phase/5.3-api-layer`(186b50c) / `phase/5.4-app-shell`(b6035d5)
+
+**浏览器端到端验收（2026-09-10，真实 Docker 后端 + `next dev`）**：
+
+- `/register` 注册 + BFF 登录建立真实 Cookie 会话后进入 `/playground/editor`
+- `full`：工具栏 1 个、`contenteditable=true`、示例文档渲染；**Shiki 高亮 36 个 token span**、**KaTeX 行内 / 块级各 1 个**、2 个 callout（`info` / `warn`）、2 个双链、字数统计「69 字」
+- `minimal`：工具栏仅基础按钮，无「表格」按钮
+- `readonly`：无工具栏、`contenteditable=false`，代码高亮与公式照常渲染
+- 富文本粘贴：`window.__xss` 未触发、`<script>` 数量 0、粘贴段落的 `color` / `font-size` 内联样式被剥离；加粗 / 斜体 / 链接 / 列表语义保留，并实时序列化为 `**加粗** *斜体*` / `[链接](https://example.com)` / `- 条目一`
+- 页面 `console` 无 error（仅 React DevTools 提示）
+- 图片粘贴上传：见上方契约缺口，未通过
 
 ---
 
@@ -646,6 +715,18 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 ---
 
 ## 5. 当前执行位置（2026-09-10 核对）
+
+**最新：M5 已于 2026-09-10 完成实现与浏览器验收**，分支 `phase/5.5-tiptap-core`（自 `phase/5.4-app-shell` 叠出，延续 M2-M4 不合并 `dev` 的安排）。
+TipTap 实际版本 v3.31.3；编辑器主 chunk 从 341.2 KB 降到 **211.3 KB gzip**（KaTeX / Shiki 改懒加载）；
+285 个前端单测、110+ 文件 Biome、类型检查、生产构建与 `next dev` 浏览器实测均通过。
+完整差异、已知限制与后端契约缺口见 **M5.10**。唯一未通过项：图片分片直传第 1 步 `POST /file/ossSliceUploadTasks`
+被后端 `@InnerAuth` 拦截（`A0301`），需后端确认后重跑端到端。
+
+> 备注：本次核对期间本地分支 ref 曾被外部清空（仅剩 `main`），已按已知 commit 还原
+> `phase/5.2a-auth-backend`(2a12afc) / `phase/5.2-auth-bff`(dd3ca98) / `phase/5.3-api-layer`(186b50c) /
+> `phase/5.4-app-shell`(b6035d5)。
+
+---
 
 M2.0 已于 2026-09-07 合并 `dev`（`3865a2f`）。当前分支 `phase/5.2-auth-bff` 已完成用户确认的 Gateway 仅 Bearer 前置改造，以及 OpenAPI 安全方案、测试和六份 baseline 更新；代码提交分别为 `57bf8b3` 和 `216a930`。
 
