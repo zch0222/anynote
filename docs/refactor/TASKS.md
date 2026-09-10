@@ -1,6 +1,6 @@
 # Anynote 重构任务进度清单
 
-> 更新时间：2026-05-02  
+> 更新时间：2026-09-08（本次核对 Phase 5；其他 Phase 沿用原记录）
 > 执行依据：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md)  
 > 项目根目录：本仓库根（以下命令均假设在项目根执行）  
 > 历史源码位置：`Anynote-Cloud/` · `anynote-next-web-dev/` · `anynote-langchain/`（Phase 0 已迁入 `services/` · `apps/web-legacy/` · `ai-service/`）
@@ -141,8 +141,9 @@
   - [x] 5.2 安装依赖（TanStack Query 5.100, Zustand 5, RHF 7.76, Zod 4.4, shadcn 4.8 / 21 组件 / Field 替代废弃的 Form / 切到 @base-ui/react）
 - [ ] **M2** 认证 BFF + Cookie 安全（5.3 BFF + httpOnly Cookie）🟡 进行中
   - [x] M2.0 后端补 `/auth/refresh` + `/auth/logout`：代码已落地（`52cc74a`），单测已补（`LoginServiceImplTest` / `TokenUtilTest`）
-  - [ ] M2.0 收尾 ⚠️ **阻塞中**：`openapi/specs/auth.json` baseline 未重生（缺 `/refresh` `/logout`，CI `openapi-check.yml` 必红）；`phase/5.2a-auth-backend` 未合并回 `origin/dev`（领先 17 个 commit）
-  - [ ] M2.1-M2.4 前端 BFF / middleware / 登录页：**未启动**（`apps/web/src/app/` 仅有 layout + page + globals.css）
+  - [x] M2.0 收尾：2026-08-08 补齐 auth spec baseline 并修复生成脚本；2026-09-07 合并 `phase/5.2a-auth-backend` → `dev`（`3865a2f`），本地 `origin/dev` 跟踪引用已指向该提交。
+  - [x] M2.1 前置契约修复（2026-09-08 用户确认；Gateway `57bf8b3` / OpenAPI `216a930`）：Gateway 仅接受 Bearer，取消旧请求头兼容；OpenAPI HTTP Bearer/JWT 与六份 baseline 已更新。新增 21 个单测，相关模块共 109 个单测通过；真实 Gateway 无凭据、旧头、无效 Bearer 均返回 401。
+  - [ ] M2.1-M2.4 前端 BFF / middleware / 登录页：**尚无实现**。刷新触发、重试及异常处理细节尚未明确；此前局部锁模型仅记为待评估风险，已撤回将 5 秒缓存调整列为开工前置的结论。原方案保持不变，详见 `FRONTEND_MILESTONES.md` M2.1。
 - [ ] **M3** API 客户端 + 查询层 + 代理（5.4 TanStack Query 数据层）
 - [ ] **M4** AppShell + 主题 + 命令面板
 - [ ] **M5** TipTap 编辑器核心（5.5 编辑器集成 — **统一 TipTap**，废弃 Milkdown / Wangeditor / Vditor / Muya）

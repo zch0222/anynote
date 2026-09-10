@@ -1,7 +1,9 @@
 package com.anynote.auth.model.dto;
 
+import com.anynote.core.utils.StringUtils;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.AssertTrue;
 import lombok.Data;
 
 /**
@@ -10,13 +12,19 @@ import lombok.Data;
  * @author 称霸幼儿园
  */
 @Data
-@Schema(description = "登出请求；服务端会清除指定 token 的 Redis 缓存")
+@Schema(description = "登出请求；accessToken 与 refreshToken 至少提供一个非空白值，服务端仅清除所提供 token 的 Redis 缓存")
 public class LogoutDTO {
 
-    @NotBlank
-    @Schema(description = "当前会话的 accessToken", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "当前会话的 accessToken（可选；与 refreshToken 至少提供一个）")
     private String accessToken;
 
-    @Schema(description = "当前会话的 refreshToken（可选；若提供会同时失效）")
+    @Schema(description = "当前会话的 refreshToken（可选；可单独提供以撤销刷新凭据）")
     private String refreshToken;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    @AssertTrue(message = "accessToken 与 refreshToken 至少提供一个非空白值")
+    public boolean isTokenProvided() {
+        return StringUtils.isNotBlank(accessToken) || StringUtils.isNotBlank(refreshToken);
+    }
 }

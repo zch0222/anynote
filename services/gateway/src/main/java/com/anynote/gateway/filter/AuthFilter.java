@@ -33,6 +33,9 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 import jakarta.annotation.Resource;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 认证过滤器
@@ -42,6 +45,10 @@ import jakarta.annotation.Resource;
 @Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class AuthFilter implements GlobalFilter, Ordered {
+
+    /** 外部认证仅接受 Bearer；不回退到 accessToken、Cookie 或 query。 */
+    private static final Pattern BEARER_TOKEN = Pattern.compile(
+            "^Bearer +([a-zA-Z0-9._~+/-]+=*)$", Pattern.CASE_INSENSITIVE);
 
     @Autowired
     private RedisService redisService;
@@ -78,8 +85,10 @@ public class AuthFilter implements GlobalFilter, Ordered {
             return unauthorizedResponse(exchange, e.getErrorCode());
         }
 
-        // 消除用户id
+        // 外部身份头不能覆盖 Bearer 校验后的身份；内部服务沿用网关注入协议。
         removeHeader(mutate, SecurityConstants.DETAILS_USER_ID);
+        removeHeader(mutate, SecurityConstants.ACCESS_TOKEN);
+        removeHeader(mutate, HttpHeaders.AUTHORIZATION);
 
         addHeader(mutate, SecurityConstants.ACCESS_TOKEN, accessToken);
         addHeader(mutate, SecurityConstants.DETAILS_USER_ID, loginUser.getUserId());
@@ -97,7 +106,12 @@ public class AuthFilter implements GlobalFilter, Ordered {
 
 
     private String getAccessToken(ServerHttpRequest request) {
-        return request.getHeaders().getFirst(SecurityConstants.ACCESS_TOKEN);
+        List<String> authorization = request.getHeaders().get(HttpHeaders.AUTHORIZATION);
+        if (authorization == null || authorization.size() != 1) {
+            return null;
+        }
+        Matcher matcher = BEARER_TOKEN.matcher(authorization.getFirst());
+        return matcher.matches() ? matcher.group(1) : null;
     }
 
     //    @Override

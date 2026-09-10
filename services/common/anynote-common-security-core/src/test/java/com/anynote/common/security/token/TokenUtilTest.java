@@ -274,6 +274,32 @@ class TokenUtilTest {
         }
 
         @Test
+        @DisplayName("accessToken 缺省时只删除所提供 refreshToken 的键，不影响其他会话")
+        void deletesOnlyRefreshKeyWhenAccessTokenMissing() {
+            String rt = signToken(SECRET, loginUser(false),
+                    new Date(System.currentTimeMillis() + 600_000));
+
+            tokenUtil.logout(null, rt);
+
+            verify(redisService).deleteObject(refreshKey(rt));
+            verifyNoMoreInteractions(redisService);
+        }
+
+        @Test
+        @DisplayName("accessToken 已过期时仍可撤销有效的 refreshToken")
+        void revokesRefreshTokenEvenWhenAccessTokenExpired() {
+            String at = signToken(SECRET, loginUser(false),
+                    new Date(System.currentTimeMillis() - 60_000));
+            String rt = signToken(SECRET, loginUser(false),
+                    new Date(System.currentTimeMillis() + 600_000));
+
+            tokenUtil.logout(at, rt);
+
+            verify(redisService).deleteObject(refreshKey(rt));
+            verifyNoMoreInteractions(redisService);
+        }
+
+        @Test
         @DisplayName("token 已过期 / 非法时静默成功，不删任何键（幂等）")
         void silentlyIgnoresInvalidTokens() {
             String expired = signToken(SECRET, loginUser(false),

@@ -77,12 +77,21 @@ class LoginServiceImplTest {
         verify(tokenUtil).logout("at", null);
     }
 
-    @ParameterizedTest(name = "logout([{0}], \"rt\") 抛 LoginException")
+    @ParameterizedTest(name = "logout([{0}], \"rt\") 撤销 refreshToken")
     @NullSource
     @ValueSource(strings = {"", "   "})
-    @DisplayName("logout：accessToken 为空时抛 LoginException，且不触碰 TokenUtil")
-    void logoutRejectsBlankAccessToken(String blank) {
-        assertThatThrownBy(() -> loginService.logout(blank, "rt"))
+    @DisplayName("logout：仅提供 refreshToken 时仍委托 TokenUtil 撤销当前凭据")
+    void logoutAllowsRefreshTokenOnly(String blank) {
+        loginService.logout(blank, "rt");
+
+        verify(tokenUtil).logout(blank, "rt");
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {"NULL,NULL", "NULL,''", "'',NULL", "'',''", "'   ','   '", "NULL,'   '", "'   ',NULL"}, nullValues = "NULL")
+    @DisplayName("logout：两个 token 都为空白时拒绝，不触碰 TokenUtil")
+    void logoutRejectsBothBlankTokens(String accessToken, String refreshToken) {
+        assertThatThrownBy(() -> loginService.logout(accessToken, refreshToken))
                 .isInstanceOf(LoginException.class)
                 .hasMessageContaining("accessToken");
 

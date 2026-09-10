@@ -1,21 +1,23 @@
 # Anynote 前端重构里程碑（可执行版）
 
-> 文档版本：v1.2 | 生成日期：2026-05-13 | 最近核对：2026-08-08
+> 文档版本：v1.4 | 生成日期：2026-05-13 | 最近核对：2026-09-10（refresh/me/代理 BFF 完成；Docker 真实栈端到端 14 个集成测试通过，含 10 并发仅 1 次刷新）
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 已完成，M2 后端（M2.0）已收尾，M2.1-M2.4 与 M3-M8 未启动**（逐里程碑状态见下方各节）
-> 完成度参考：9 个里程碑完成 2 个；按工期估算 14-19 天中约完成 2 天，**Phase 5 约 15%**
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2.0 已完成；M2.1 全部 BFF 路由（登录/注册/登出/refresh/me/通用代理）、M2.2 路由保护与 M2.3 页面已实现并通过单测与真实链路集成测试；M2.4 验收全部通过（含浏览器端 Cookie/Storage 核验与并发刷新），仅剩合并 `dev`；M3-M8 未启动**。
+> 完成度参考：9 个里程碑完成 2 个，M2 代码与自动化验收完成（仅剩合并）；按工期估算 14-19 天中约完成 3.5 天，**Phase 5 约 25%**
 > `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
 > 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
 >
 > ✅ **契约漂移已修复（2026-08-08）**：起全栈跑 `pnpm openapi:generate` 后，`openapi/specs/auth.json` 从 4 条路径补齐到 6 条（新增 `/refresh` `/logout`，以及 `RefreshTokenDTO` / `LogoutDTO` 两个 schema）。M2.1 的阻塞随之解除。
 >
-> ⛔ **新发现（2026-08-08）：漂移门禁本身不可用 —— `servers[0].url` 是容器运行时 IP**。6 份 spec 的 `.servers[0].url` 都是 springdoc 按请求上下文写入的容器 IP（如 `http://172.19.0.11:8083`），Docker 每次起栈重新分配。CI `openapi-check.yml` 是**裸 `git diff --exit-code openapi/specs/`，无任何归一化**，所以**任何一次 CI 运行都会因 IP 变化而红，与 API 是否真的改动无关**。这是 M0.4 建门禁时就存在的缺陷（旧 baseline 里同样是 IP），不是本次引入。修复方案见 §6。
+> ✅ **漂移门禁缺陷已修复（2026-08-08）**：生成时剥离 `servers`、递归排序 key，并在校验通过后才覆盖 baseline；包含 20 个单测，历史验证见 §6。2026-09-07 未重新运行全栈验收。
 >
-> ⚠️ **分支同步现状（2026-08-08 核对）**：`origin/dev` 仍停在 `dfe9360`（M0 合并点，本地无 `dev` 分支）。`phase/5.2a-auth-backend` 已**领先 origin/dev 17 个 commit**：M1 线 3 个（`f2336a7` / `a7f9443` / 合并点 `c83a083`）+ M1/M2.0 文档与实现 2 个（`94fcb00` / `52cc74a`）+ 2026-08-07 起的测试基础设施 12 个（见 §1.1）。恢复推进前先把这条线推回 `origin/dev`。
+> **分支落点（2026-09-09 核对）**：M2.0 已通过 `3865a2f` 合并到 `dev`；Gateway/Bearer 前置提交和本轮认证实现均位于 `phase/5.2-auth-bff`。本轮五笔代码提交见 §5，未合并到 `dev` 或 `main`；分支已推送 `origin/phase/5.2-auth-bff`（2026-09-10 核对确认与本地同步）。
 
 ---
 
-## 0. 当前可复用资产盘点
+## 0. 规划时的可复用资产盘点（历史快照）
+
+> 本节保留开工前盘点；当前进度以各里程碑状态与本文顶部 2026-09-07 核对为准。
 
 | 项 | 状态 | 位置 / 备注 |
 |----|------|------------|
@@ -84,7 +86,7 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 
 **分支**：`phase/5.0-openapi-validation`（从 `dev` 切出）
 
-**状态**：🟢 **2026-05-13 完成 M0.1 / M0.2 / M0.3（strict 范围）/ M0.4，待 M0.5 合入。**
+**状态**：🟢 **M0 已完成并合入 dev（`dfe9360`）；M0.1-M0.4 的历史验收记录如下，M0.5 合并状态见本节末。**
 
 ### M0.1 启动完整后端 ✅
 - [x] 在 `infra/` 启动中间件：`docker compose --env-file=/dev/null -f docker-compose-middleware.yaml up -d`，确认 MySQL/Redis/Nacos/MinIO/ES/RocketMQ 健康
@@ -244,8 +246,8 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 - **`phase/5.2a-auth-backend`**：后端补 refresh/logout 端点（不在原计划中，因 M0.3 已识别该缺口）
 - **`phase/5.2-auth-bff`**：前端 BFF + middleware + 登录页
 
-**状态**：🟡 进行中（2026-05-23 起）—— **2026-08-08 核对：只有 M2.0 的后端代码落地，且 M2.0 本身未收尾；M2.1-M2.4 前端零进度**。
-`apps/web/src/app/` 下当前仅 `layout.tsx` / `page.tsx` / `globals.css` / `favicon.ico`，无 `api/auth/**` BFF 路由、无 `middleware.ts`、无登录页、无 `features/` 与 `stores/` 目录。
+**状态**：🟡 进行中（2026-05-23 起）—— **2026-09-10 本轮完成 refresh / me / 通用代理三个 BFF 路由及共享单飞刷新模块；174 个前端单测与 14 个真实链路集成测试全部通过（含 10 并发仅 1 次刷新）。M2.4 浏览器端验收亦通过，仅剩合并 `dev`。**
+`features/auth/` 已实现；`stores/` 尚未实现。本轮按原确认方案实现（进程内单飞 Map 锁），未采纳"保留成功结果 5 秒"或提前 60 秒刷新的讨论建议。构建及后端单测重跑限制见 §5。
 
 ### 关键决策（开工前敲定）
 
@@ -263,11 +265,13 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
    - Output：新 `Token`（access + refresh 同时旋转，旧 refresh 立即从 Redis 删除）
    - 旧 accessToken 留待自然过期（实例已存于 Redis；攻击窗口至多到 TTL）
 4. **Logout 契约**
-   - Input：`{ accessToken, refreshToken? }`
+   - Input：`{ accessToken?, refreshToken? }`，至少一个非空白（2026-09-08 用户确认允许仅凭 `rt` 登出；原契约强制 `accessToken`）
    - 服务端仅清当前会话 Redis 键（**单会话登出**），不动该用户其他端
+   - 仅提供 `rt` 时撤销该 refreshToken；不推断或批量删除未提供的 accessToken
    - 幂等：token 失效/不存在时静默成功
+   - 变更提案：[仅凭 refreshToken 登出](../../.claude/openspec/changes/2026-09-08-logout-refresh-token-only.md)；代码、真实 Springdoc baseline 与 BFF 已同步，测试记录见 §5
 
-### M2.0 后端：补 /auth/refresh + /auth/logout 🟢 代码与 spec 已完成（仅剩合并）
+### M2.0 后端：补 /auth/refresh + /auth/logout 🟢 代码、spec 与合并已完成
 
 **分支**：`phase/5.2a-auth-backend`
 
@@ -286,34 +290,57 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
   - 6 份 spec 全部校验通过（可解析 + paths 非空）：ai 16 / auth 6 / file 13 / note 60 / notify 2 / system 23
   - `notify.json` 的 `info` 块（contact / license / description）由空值变为 Nacos `application-dev.yml` 注入的全局值，与其余 5 份收敛一致 —— 属预期修正
   - **M2.1 的阻塞就此解除**
-- [ ] merge `phase/5.2a-auth-backend` → `dev` 并推回 `origin/dev`（当前领先 17 个 commit，之后再开 5.2-auth-bff）—— 用户手动操作
+- [x] 2026-09-07 merge `phase/5.2a-auth-backend` → `dev`（`3865a2f`）；本地 `origin/dev` 跟踪引用已同步。后续工作在 `phase/5.2-auth-bff` 推进，新增提交见 M2.1。
 
 ### M2.1 BFF 路由
 
-> ✅ **阻塞已解除（2026-08-08）**：`packages/api-client/src/auth.ts` 已含 `/refresh` `/logout` 的 typed paths，可直接开工。注意该目录 gitignored，换机器后需先跑一次 `pnpm openapi:generate`（要求后端在跑）。
+**Gateway 前置改造：已按 2026-09-08 用户确认完成。** 用户要求“补 Bearer，直接去除对 accessToken 的兼容”，因此取消兼容旧头的候选方案，采用外部仅 Bearer 的破坏性变更。契约记录见 [2026-09-08-gateway-bearer-only.md](../../.claude/openspec/changes/2026-09-08-gateway-bearer-only.md)。
 
-- [ ] 重命名 `apps/web/src/lib/env.ts` 中 `BACKEND_URL` → `INTERNAL_API_URL`（2026-08-08 核对：`env.ts:5` 仍是 `BACKEND_URL`，未改）
-- [ ] `src/app/api/auth/login/route.ts`：调用 `/api/auth/login` → 响应中 `Set-Cookie` 两件套（`at` / `rt`）
-- [ ] `src/app/api/auth/refresh/route.ts`：进程内 `Map<rt, Promise<void>>` 锁防并发
-- [ ] `src/app/api/auth/logout/route.ts`：清两件套 + 调后端 `/api/auth/logout`
-- [ ] `src/app/api/auth/me/route.ts`：转发 `/api/system/user/mine`，返回用户资料
-- [ ] `src/app/api/proxy/[...path]/route.ts`：所有业务请求经此，自动注入 `Authorization: Bearer ${at}` 并在过期时触发 refresh
+- [x] Gateway 私有路由仅从 `Authorization: Bearer <token>` 取 token，缺失/格式非法/重复头/失效 token 返回原有 401 + ResData；不回退到旧头、Cookie 或 query。
+- [x] 验证后移除外部 Authorization 和伪造身份头，按既有内部协议注入 `accessToken` / `user_id`。内部字段不属于旧客户端认证兼容入口。
+- [x] `SwaggerAutoConfiguration` 声明 HTTP Bearer/JWT，六份 spec 经真实后端 `pnpm openapi:generate` 重生；逐份结构对比确认仅 security scheme 变化，paths 与业务 schema 不变。
+- [x] 先复现失败后修复：新增 Gateway 20 个用例 + OpenAPI 1 个用例；相关模块及依赖共 109 个单测通过。`mvn install -DskipTests`、`pnpm check`、`pnpm typecheck` 与直接运行 `pnpm --filter @anynote/api-client typecheck` 通过。
+- [x] 本地开发栈 9 个 Java 服务健康；真实 Gateway 的无凭据、仅旧头、无效 Bearer、Basic 加旧头请求均返回 HTTP 401 / `A0350`。
+
+**兼容性影响**：`apps/web-legacy` 仍发旧请求头，切换后的私有调用会失败；本次没有擅自迁移旧前端。Gateway 改造已提交为 `57bf8b3`，OpenAPI 与六份 baseline 已提交为 `216a930`；本次未合并到 `dev` 或 `main`。
+
+> **刷新流程待评估风险（2026-09-08 更正）**：下方原始 BFF 任务及 `Map<rt, Promise<void>>` 要求保持不变，尚未实现。文档仅用 `isExpiringSoon(at)` 示意触发条件，未明确提前刷新阈值、token 缺失/失效时的处理及完整重试流程。
+>
+> 此前使用 Map/finally 的局部模型，模拟 10 个携带相同旧 Cookie 的请求，其中 9 个晚到刷新逻辑，得出 2 次刷新、9 个失败。该结果只说明此局部算法在指定时序下的风险；不是完整 BFF 的实现或验收结果，也不足以直接决定必须采用哪种修复。
+>
+> **撤回过早的阻塞结论**：不再将“共享 Promise<Token> + 保留成功结果 5 秒”列为开工前置或当前必须确认的调整。该候选方案未经采纳，尚未修改文档原定实现要求或编写 BFF。应先明确完整刷新流程，再结合具体实现与并发用例评估；若确需偏离已确认方案，再按用户要求停下确认。
+>
+> **2026-09-10 已按原方案落地并完成并发评估**：单飞锁挂在进程级 `globalThis`（dev HMR / 分路由打包下仍进程唯一），成功或失败都在 `finally` 立即释放。真实 Docker 栈 + 生产构建下，10 个仅携带 rt 的并发代理请求全部成功且 10 个响应携带**同一对**旋转凭据（`Set-Cookie` 唯一），旧 rt 复用返回 401/A0311——即只发生了一次后端刷新。5 秒结果保留与提前刷新均未引入。
+>
+> 原 spec 缺口已解决；派生的 `packages/api-client/src/` 仍 gitignored，换机器需按仓库流程重新生成。
+
+> **本轮执行范围（2026-09-08 用户确认）**：暂缓刷新，先完成独立任务。`refresh`、`me`、通用代理均保持未完成；登录、注册、登出、路由保护和 M2.3 页面已实现。接手时前端 125 个测试中 refresh-only 登出失败，修复后全通过；新增页面/mutation 24 个测试，现共 149 个通过。后端工作区已有对应实现与 23:32 的成功报告，本轮从运行中的真实服务生成契约，未把历史报告记作本轮重跑成功。
+>
+> **2026-09-10 用户确认继续执行后续计划**：refresh / me / 通用代理已实现，暂缓解除。
+
+- [x] 重命名 `apps/web/src/lib/env.ts` 中 `BACKEND_URL` → `INTERNAL_API_URL`（2026-09-08 已核对代码与环境变量单测）
+- [x] `src/app/api/auth/login/route.ts`：调用 `/api/auth/login` → 响应中 `Set-Cookie` 两件套（`at` / `rt`）；注册 BFF 同步实现，响应仅含公开资料，Origin、错误及 Cookie 边界均有单测
+- [x] `src/app/api/auth/logout/route.ts`：清两件套 + 调后端 `/api/auth/logout`；仅 `rt` 时省略 `accessToken`，无 Cookie 时幂等清理，后端失败仍清 Cookie 并返回错误
+- [x] `src/app/api/auth/refresh/route.ts`：进程内 `Map<rt, Promise>` 单飞锁防并发（锁挂 `globalThis`，成败均在 `finally` 释放；401 清 Cookie 回登录页，5xx 保留 Cookie 待重试；2026-09-10）
+- [x] `src/app/api/auth/me/route.ts`：转发 `/api/system/user/mine`，返回用户资料（白名单滤除 password/审计字段，`role` 按生成契约 `roleKey`/`roleName` 对齐；at 缺失或 401 时自动刷新并重试一次；2026-09-10）
+- [x] `src/app/api/proxy/[...path]/route.ts`：所有业务请求经此，自动注入 `Authorization: Bearer ${at}` 并在过期时触发 refresh（GET/HEAD 放行缺失 Origin，写方法校验 Origin；401 单飞刷新后重放一次，请求体缓冲以支持重放；流式响应透传兼容 M7 SSE；剥除 cookie/authorization/x-forwarded-* 请求头与 content-encoding/set-cookie 响应头；路径段校验防穿越；2026-09-10）
 
 ### M2.2 中间件路由保护
-- [ ] `apps/web/src/middleware.ts`：未带 `at` cookie 的私有路由重定向到 `/login`
-- [ ] `matcher` 排除 `/login` `/register` `/api/auth/**` `/_next` 静态资源
+- [x] `apps/web/src/middleware.ts`：未带 `at` cookie 的私有路由重定向到 `/login`（2026-09-08 代码与单测核对通过）
+- [x] `matcher` 排除 `/login` `/register` `/api/auth/**` `/_next` 静态资源；API 自行鉴权，matcher 单测覆盖公开与私有路径
 
 ### M2.3 登录 / 注册页
-- [ ] `(auth)/login/page.tsx`：react-hook-form + zod + shadcn Field，提交到 `/api/auth/login`
-- [ ] `(auth)/register/page.tsx`：调 `/api/auth/register`（后端 register 直接登录返回 LoginDTO）
-- [ ] 错误吐司用 sonner
-- [ ] 登录成功 `router.push('/dashboard')`
+> 2026-09-08 代码与单测完成。页面及 BFF 共用 zod 校验，调用生成契约约束的 openapi-fetch 客户端；`useLoginMutation` / `useRegisterMutation` 不重试写请求。认证路由组提供 QueryClientProvider 与 Toaster，待 M3 的全局 Provider 统一接入。`/dashboard` 页面属于后续里程碑，目前仅验证跳转目标。
+- [x] `(auth)/login/page.tsx`：react-hook-form + zod + shadcn Field，提交到 `/api/auth/login`
+- [x] `(auth)/register/page.tsx`：调 `/api/auth/register`（后端 register 直接登录返回 LoginDTO）；用户名 6–15 位，密码 8–15 位且包含大小写字母和数字，性别沿用 0 男 / 1 女
+- [x] 错误吐司用 sonner；覆盖 HTTP 200 业务失败、HTTP 错误、异常响应及网络失败
+- [x] 登录成功 `router.push('/dashboard')`；注册成功同样跳转；测试覆盖提交期间禁用按钮、失败可重试和页面互链
 
 ### M2.4 验收
-- [ ] 登录后 DevTools → Application → Cookies：只有 `at` / `rt`，HttpOnly 均为 ✓
-- [ ] DevTools → Application → LocalStorage / SessionStorage 全空
-- [ ] 手动让 `at` 提前过期（缩短 TTL 至 30s 测试），并发触发 10 个请求，只产生 1 次 `/api/auth/refresh` 调用
-- [ ] 登出后 cookies 两件套全部清空
+- [x] 登录后 DevTools → Application → Cookies：只有 `at` / `rt`，HttpOnly 均为 ✓（2026-09-10 ZCode 浏览器工具核验：GUI 注册/登录跳转 `/dashboard` 后 `document.cookie` **完全为空**——JS 读不到 `at`/`rt`，即 HttpOnly 对浏览器生效；同页 `fetch /api/auth/me` 返回 200 与资料，证明 Cookie 存在且自动携带；`Set-Cookie` 仅 `at`/`rt` 两枚及 HttpOnly/Secure/SameSite=Strict/Path=/ 属性已由集成测试在真实响应上断言）
+- [x] DevTools → Application → LocalStorage / SessionStorage 全空（2026-09-10 浏览器核验：注册后与登录后两个时点 `localStorage`/`sessionStorage` 均为空对象，键数为 0）
+- [x] 手动让 `at` 提前过期（缩短 TTL 至 30s 测试），并发触发 10 个请求，只产生 1 次 `/api/auth/refresh` 调用（2026-09-10 以等价且更严格的方式验证：`at` 过期后浏览器会直接删除该 Cookie，故用 10 个**仅携带 rt** 的并发代理请求模拟——10 个全部成功、10 个响应携带同一对旋转凭据、旧 rt 复用 401/A0311，即仅一次后端刷新；真实 Docker 栈 + `next start` 生产构建）
+- [x] 登出响应清除 cookies 两件套；2026-09-09 真实 HTTP 链路验证双 Cookie 与仅 rt 场景，旧凭据撤销结果符合契约；2026-09-10 浏览器内复核：登出 200 后 `me` 401/A0311、访问 `/dashboard` 被中间件重定向 `/login`、`document.cookie` 仍为空；GUI 错误密码出现"用户身份校验失败"吐司且停留登录页，正确密码跳转 `/dashboard`
 - [ ] 合并 `phase/5.2-auth-bff` → `dev`
 
 ---
@@ -615,31 +642,62 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 
 ---
 
-## 5. 立即可执行的下一步（2026-08-08 更新）
+## 5. 当前执行位置（2026-09-10 核对）
 
-> 上一版本此处仍是 M0 开工步骤（切 `phase/5.0-openapi-validation`、跑首次生成），M0/M1 早已完成，已整节重写。
+M2.0 已于 2026-09-07 合并 `dev`（`3865a2f`）。当前分支 `phase/5.2-auth-bff` 已完成用户确认的 Gateway 仅 Bearer 前置改造，以及 OpenAPI 安全方案、测试和六份 baseline 更新；代码提交分别为 `57bf8b3` 和 `216a930`。
 
-**当前唯一卡点是 M2.0 收尾**，顺序不能颠倒——M2.1 需要 refresh/logout 的生成类型：
+**当前执行位置**：M2.1 的 refresh / me / 通用代理已于 2026-09-10 实现并通过全部自动化验证；M2 代码与自动化验收完成，剩 M2.4 浏览器面板人工检查与合并 `dev`。M3-M8 未启动，原工期口径未重估。
 
-1. 起全栈（dev 场景，注意 `--env-file=/dev/null`）：
+**2026-09-10 本轮验证与发现**：
+- 实现：`src/lib/auth/refresh.ts`（单飞刷新，锁挂进程级 `globalThis`）、`src/app/api/auth/refresh|me/route.ts`、`src/app/api/proxy/[...path]/route.ts`、`backend.ts` 增 `systemClient`。BFF 三处 catch 增加 `console.error` 服务端日志（此前异常被静默吞掉，本轮定位 502 全靠日志补齐）。
+- 单测：前端 **174 个用例全部通过**（新增 25 个：单飞模块 4、refresh 路由 6、me 路由 6、代理 9）；`tsc --noEmit`、Biome（含 integration 目录）、OpenAPI 工具 20 个用例均通过；`pnpm --filter web build` 生产构建成功（本轮字体下载未再阻断），`next start` 启动正常。
+- 端到端：`docker compose up -d` 复用既有容器（18 个全部 healthy，含带 LogoutFilter 修复的 auth）；集成测试扩展为 **14 个用例全部通过**（新增 `integration/proxy.live.test.ts` 6 个：me 白名单、me 仅 rt 自动刷新、代理 Bearer 透传、10 并发仅 1 次刷新、无 Cookie 401、写方法 Origin + POST body 透传）。测试账号会话在 afterAll 定向撤销。
+- 端到端发现并修复：me 白名单初版把 `SysRole` 字段猜成 `name`/`code`，真实契约为 `roleKey`/`roleName`，zod 严格校验失败导致 502——按生成契约修正并改为可选字段 + `looseObject` 放行后端新增字段。另发现后端 JWT 的 `userContext` 内嵌 bcrypt 密码哈希（登录/刷新令牌均可 base64 解出），属后端议题，未在本轮处理，建议另开工单。
+- 运行状态：Docker 全栈保持运行；`next start` 生产服务为浏览器验收重新启动并保持运行（`http://localhost:3000`）。探针账号（probe*/p5-p8）保留在库中，其令牌均有 Redis TTL 自然过期。
 
-   ```bash
-   docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml up -d --build
-   ```
+**2026-09-10 M2.4 浏览器端验收（ZCode In-app Browser，真实栈 + `next start` 生产构建）**：
+- GUI 注册（表单校验、性别下拉）→ 自动登录跳转 `/dashboard`（页面本身 404 属 M3/M4 范围，不影响验收）。
+- 注册后与登录后两个时点：`document.cookie` **完全为空**（JS 读不到 `at`/`rt`，HttpOnly 对浏览器生效）；`localStorage` / `sessionStorage` 键数均为 0。
+- 同页 `fetch /api/auth/me` 返回 200 与白名单资料（无 password/token）；刷新 `/dashboard` 不被重定向（中间件凭 `at` Cookie 放行）。
+- GUI 错误密码 → sonner 吐司"用户身份校验失败"、停留登录页、可重试；正确密码 → 跳转 `/dashboard`。
+- 页面内登出（POST `/api/auth/logout`）→ 200 后 `me` 401/A0311、再访问 `/dashboard` 被重定向 `/login`、`document.cookie` 仍为空。
+- 验收账号 `e2eguie127` 会话已在浏览器内撤销；登录页截图留存于会话产物。
 
-2. 重生 spec 与客户端，确认 `auth.json` 出现 `/refresh` 与 `/logout`：
+**2026-09-08 本轮验证**：
+- 前端 Vitest：7 个测试文件、149 个用例全部通过；含本轮新增 24 个页面/mutation 用例，以及先失败后修复的 refresh-only 登出用例。
+- web 与 api-client 的 `tsc --noEmit` 均通过；OpenAPI 工具的 20 个 Vitest 用例通过；Biome 对 apps/web、openapi、packages 及根配置共 49 个文件检查通过；`git diff --check` 通过。
+- `pnpm openapi:generate` 在当前沙箱的 Git Bash `mkdir` 权限处失败，因此使用 PowerShell 从相同六个真实 Gateway URL 拉取，依次运行仓库 `normalize-cli.mjs` 与已安装的 openapi-typescript。未手改生成文件；六份类型均重生，baseline 仅 auth 的 LogoutDTO 与 logout 描述发生预期变化。
+- `pnpm check` 全仓扫描会扫到既有 `.pnpm-store` 中超过 1 MiB 的缓存索引，故源码检查使用上述明确目录范围；未为此改动格式化规范。
+- 生产构建未通过：现有 `next/font/google` 的 Geist / Geist Mono 下载因联网失败而阻断；没有改动字体方案。
+- 后端本轮未重跑成功：本机 Maven 离线缓存缺依赖；WSL 环境检查及 Maven 联网申请被自动审批服务的 HTTP 503 故障拒绝。已有 auth 的 45 个成功用例报告时间为 23:32，仅作为接手前历史证据。
 
-   ```bash
-   pnpm openapi:generate
-   ```
+**2026-09-09 首次验证与提交尝试（历史，权限后续已恢复）**：用户要求完成当前工作区验证并提交。本轮重新运行前端 149 个单测、OpenAPI 工具 20 个单测、web/api-client 类型检查及 49 个源码/配置文件的 Biome 检查，均通过；`git diff --check` 通过。从六个真实 Gateway OpenAPI URL 拉取后经仓库归一化逻辑验证，与工作区 baseline 的 SHA-256 均一致。
 
-3. 提交 `openapi/specs/auth.json`（baseline 必须入库），本地跑 `pnpm openapi:check` 确认与 CI 同行为
-4. merge `phase/5.2a-auth-backend` → `dev`，**推回 `origin/dev`**（消化掉当前 17 个 commit 的落差；本地无 `dev` 分支，需先 `git checkout -b dev origin/dev`）
-5. 切 `phase/5.2-auth-bff`，按 M2.1 → M2.4 推进；每个 Route Handler 必须附带单测（断言 `Set-Cookie`，见 CLAUDE.md「测试要求」）
+WSL 环境检查、联网生产构建申请均再次被自动审批服务 HTTP 503 拒绝，后端单测及构建未完成重跑。`git add` 因 `.git/index.lock` 写权限不足失败，随后提权申请也被同一审批服务故障拒绝；没有文件进入暂存区，没有新增提交，HEAD 仍为 `77916e7`。
 
-> 第 1-3 步已于 2026-08-08 完成，见 M2.0。第 4 步由用户手动执行。
+**2026-09-09 权限恢复后的最终验证**：
+- `mvn package -pl auth -am` 成功；相关模块共 **136 个单测**通过（common-core 55、security-core 35、security-servlet 1、auth 45）。
+- 前端 **149 个单测**、OpenAPI 工具 **20 个单测**通过；web/api-client 类型检查、源码 lint 与差异检查通过。
+- `pnpm --filter web build` 成功，10/10 页面生成；`/login` 与 `/register` 的 First Load JS 均为 242 kB（Next 构建报告口径）。生产服务启动成功。
+- 仓库原始 `pnpm openapi:generate` 已成功执行，六份契约与类型生成完成，不再依赖 PowerShell 替代流程。
+- 浏览器验证了空表单字段错误、页面互链、真实账号注册、错误密码 toast、正确登录与 `/dashboard` 跳转。Dashboard 尚未实现，跳转后的 404 属于后续 M3/M4 工作，不能算 Dashboard 验收通过。当前浏览器工具未提供存储面板检查能力，HttpOnly 等属性由真实响应与单测验证，不宣称已完成 DevTools 存储检查。
+- 新增独立命令 `pnpm --filter web test:integration:auth`，**8 个真实 HTTP 集成测试全部通过**：私有页面重定向、注册与 Cookie 属性、错误密码/重复注册、Origin 防护、仅 Bearer、双 Cookie 登出、仅 rt 登出、无 Cookie 幂等登出。验证旧 refresh 返回 HTTP 401 / A0311；rt-only 不额外撤销未提供的 access。默认单测和 CI 不连接真实后端，运行说明见 README「测试」。
 
-**里程碑口径的剩余量**：M2 剩 M2.1-M2.4，M3-M8 整体未启动，约 12-17 工作日。
+**端到端发现并修复的实现缺陷**：共享 servlet `SecurityConfig` 未关闭 Spring Security 默认 LogoutFilter，导致 `/logout` 被截获为 HTTP 302，Location 指向容器 `/login?logout`，业务 Controller 不执行。新增只装配 MVC/安全过滤链的 `SecurityConfigTest`，先复现 200→302 失败，再通过 `.logout(AbstractHttpConfigurer::disable)` 让请求进入既有业务撤销逻辑。认证契约及刷新方案均未改变。
+
+**本地运行状态**：Docker Hub 鉴权请求超时，镜像重建未成功；经用户批准将已测试 JAR 复制到本地 `anynote-anynote-auth-1` 后重启，真实登出已返回 200。缓存镜像仍是旧版本，重新创建容器前应重建镜像以保留修复。测试账号保留；成功测试自动撤销会话，浏览器和早期失败测试的三个临时账号会话也已定向清理。
+
+**本轮代码已按模块提交**：
+
+| 提交 | 内容 |
+|---|---|
+| `1a4d217` | security-core TokenUtil 的单会话撤销边界测试 |
+| `ac6c107` | auth 的可选登出凭据契约及 DTO/Service 单测 |
+| `2348f7f` | security-servlet 默认 LogoutFilter 修复及过滤链回归测试 |
+| `e6cc598` | auth OpenAPI baseline 同步 |
+| `bcfb053` | web 认证 BFF、登录/注册页、单测及独立真实认证测试 |
+
+文档与验收记录另行同步提交。未合并 dev/main；分支已推送 `origin/phase/5.2-auth-bff`（2026-09-10 核对确认与本地同步）。刷新已于 2026-09-10 按用户指示实现；M2.4 仅剩浏览器面板人工检查与合并 dev；如实现必须偏离方案，仍须先说明并确认。
 
 ---
 

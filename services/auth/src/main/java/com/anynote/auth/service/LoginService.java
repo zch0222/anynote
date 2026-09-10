@@ -31,9 +31,9 @@ public interface LoginService {
     Token refresh(String refreshToken);
 
     /**
-     * 单会话登出：清除指定 accessToken 与 refreshToken 的 Redis 缓存
-     * @param accessToken 当前会话 accessToken（必填）
-     * @param refreshToken 当前会话 refreshToken（可选）
+     * 单会话登出：清除指定 token 的 Redis 缓存，至少提供一个非空白 token
+     * @param accessToken 当前会话 accessToken（可选）
+     * @param refreshToken 当前会话 refreshToken（可选，可单独提供）
      */
     void logout(String accessToken, String refreshToken);
 }
