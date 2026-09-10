@@ -2,7 +2,7 @@
 
 > 文档版本：v1.4 | 生成日期：2026-05-13 | 最近核对：2026-09-10（refresh/me/代理 BFF 完成；Docker 真实栈端到端 14 个集成测试通过，含 10 并发仅 1 次刷新）
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2.0 已完成；M2.1 全部 BFF 路由（登录/注册/登出/refresh/me/通用代理）、M2.2 路由保护与 M2.3 页面已实现并通过单测与真实链路集成测试；M2.4 并发刷新与登出验收已过，浏览器面板人工检查与合并 `dev` 待办；M3-M8 未启动**。
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2.0 已完成；M2.1 全部 BFF 路由（登录/注册/登出/refresh/me/通用代理）、M2.2 路由保护与 M2.3 页面已实现并通过单测与真实链路集成测试；M2.4 验收全部通过（含浏览器端 Cookie/Storage 核验与并发刷新），仅剩合并 `dev`；M3-M8 未启动**。
 > 完成度参考：9 个里程碑完成 2 个，M2 代码与自动化验收完成（仅剩合并）；按工期估算 14-19 天中约完成 3.5 天，**Phase 5 约 25%**
 > `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
 > 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
@@ -246,7 +246,7 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 - **`phase/5.2a-auth-backend`**：后端补 refresh/logout 端点（不在原计划中，因 M0.3 已识别该缺口）
 - **`phase/5.2-auth-bff`**：前端 BFF + middleware + 登录页
 
-**状态**：🟡 进行中（2026-05-23 起）—— **2026-09-10 本轮完成 refresh / me / 通用代理三个 BFF 路由及共享单飞刷新模块；174 个前端单测与 14 个真实链路集成测试全部通过（含 10 并发仅 1 次刷新）。M2.4 剩浏览器面板人工检查与合并 `dev`。**
+**状态**：🟡 进行中（2026-05-23 起）—— **2026-09-10 本轮完成 refresh / me / 通用代理三个 BFF 路由及共享单飞刷新模块；174 个前端单测与 14 个真实链路集成测试全部通过（含 10 并发仅 1 次刷新）。M2.4 浏览器端验收亦通过，仅剩合并 `dev`。**
 `features/auth/` 已实现；`stores/` 尚未实现。本轮按原确认方案实现（进程内单飞 Map 锁），未采纳"保留成功结果 5 秒"或提前 60 秒刷新的讨论建议。构建及后端单测重跑限制见 §5。
 
 ### 关键决策（开工前敲定）
@@ -337,10 +337,10 @@ pnpm dlx shadcn@latest add @shadcn/field --yes   # Form 已弃用，改 Field �
 - [x] 登录成功 `router.push('/dashboard')`；注册成功同样跳转；测试覆盖提交期间禁用按钮、失败可重试和页面互链
 
 ### M2.4 验收
-- [ ] 登录后 DevTools → Application → Cookies：只有 `at` / `rt`，HttpOnly 均为 ✓（Cookie 属性已由集成测试在真实响应上断言：HttpOnly/Secure/SameSite=Strict/Path=/、无 Domain；浏览器面板人工核验待做）
-- [ ] DevTools → Application → LocalStorage / SessionStorage 全空（BFF 各路由响应体均不含凭据，单测与集成测试已断言；浏览器面板人工核验待做）
+- [x] 登录后 DevTools → Application → Cookies：只有 `at` / `rt`，HttpOnly 均为 ✓（2026-09-10 ZCode 浏览器工具核验：GUI 注册/登录跳转 `/dashboard` 后 `document.cookie` **完全为空**——JS 读不到 `at`/`rt`，即 HttpOnly 对浏览器生效；同页 `fetch /api/auth/me` 返回 200 与资料，证明 Cookie 存在且自动携带；`Set-Cookie` 仅 `at`/`rt` 两枚及 HttpOnly/Secure/SameSite=Strict/Path=/ 属性已由集成测试在真实响应上断言）
+- [x] DevTools → Application → LocalStorage / SessionStorage 全空（2026-09-10 浏览器核验：注册后与登录后两个时点 `localStorage`/`sessionStorage` 均为空对象，键数为 0）
 - [x] 手动让 `at` 提前过期（缩短 TTL 至 30s 测试），并发触发 10 个请求，只产生 1 次 `/api/auth/refresh` 调用（2026-09-10 以等价且更严格的方式验证：`at` 过期后浏览器会直接删除该 Cookie，故用 10 个**仅携带 rt** 的并发代理请求模拟——10 个全部成功、10 个响应携带同一对旋转凭据、旧 rt 复用 401/A0311，即仅一次后端刷新；真实 Docker 栈 + `next start` 生产构建）
-- [x] 登出响应清除 cookies 两件套；2026-09-09 真实 HTTP 链路验证双 Cookie 与仅 rt 场景，旧凭据撤销结果符合契约（浏览器存储面板尚未直接检查）
+- [x] 登出响应清除 cookies 两件套；2026-09-09 真实 HTTP 链路验证双 Cookie 与仅 rt 场景，旧凭据撤销结果符合契约；2026-09-10 浏览器内复核：登出 200 后 `me` 401/A0311、访问 `/dashboard` 被中间件重定向 `/login`、`document.cookie` 仍为空；GUI 错误密码出现"用户身份校验失败"吐司且停留登录页，正确密码跳转 `/dashboard`
 - [ ] 合并 `phase/5.2-auth-bff` → `dev`
 
 ---
@@ -653,7 +653,15 @@ M2.0 已于 2026-09-07 合并 `dev`（`3865a2f`）。当前分支 `phase/5.2-aut
 - 单测：前端 **174 个用例全部通过**（新增 25 个：单飞模块 4、refresh 路由 6、me 路由 6、代理 9）；`tsc --noEmit`、Biome（含 integration 目录）、OpenAPI 工具 20 个用例均通过；`pnpm --filter web build` 生产构建成功（本轮字体下载未再阻断），`next start` 启动正常。
 - 端到端：`docker compose up -d` 复用既有容器（18 个全部 healthy，含带 LogoutFilter 修复的 auth）；集成测试扩展为 **14 个用例全部通过**（新增 `integration/proxy.live.test.ts` 6 个：me 白名单、me 仅 rt 自动刷新、代理 Bearer 透传、10 并发仅 1 次刷新、无 Cookie 401、写方法 Origin + POST body 透传）。测试账号会话在 afterAll 定向撤销。
 - 端到端发现并修复：me 白名单初版把 `SysRole` 字段猜成 `name`/`code`，真实契约为 `roleKey`/`roleName`，zod 严格校验失败导致 502——按生成契约修正并改为可选字段 + `looseObject` 放行后端新增字段。另发现后端 JWT 的 `userContext` 内嵌 bcrypt 密码哈希（登录/刷新令牌均可 base64 解出），属后端议题，未在本轮处理，建议另开工单。
-- 运行状态：Next 生产服务已停止；Docker 全栈保持运行供后续开发。探针账号（probe*/p5-p8）保留在库中，其令牌均有 Redis TTL 自然过期。
+- 运行状态：Docker 全栈保持运行；`next start` 生产服务为浏览器验收重新启动并保持运行（`http://localhost:3000`）。探针账号（probe*/p5-p8）保留在库中，其令牌均有 Redis TTL 自然过期。
+
+**2026-09-10 M2.4 浏览器端验收（ZCode In-app Browser，真实栈 + `next start` 生产构建）**：
+- GUI 注册（表单校验、性别下拉）→ 自动登录跳转 `/dashboard`（页面本身 404 属 M3/M4 范围，不影响验收）。
+- 注册后与登录后两个时点：`document.cookie` **完全为空**（JS 读不到 `at`/`rt`，HttpOnly 对浏览器生效）；`localStorage` / `sessionStorage` 键数均为 0。
+- 同页 `fetch /api/auth/me` 返回 200 与白名单资料（无 password/token）；刷新 `/dashboard` 不被重定向（中间件凭 `at` Cookie 放行）。
+- GUI 错误密码 → sonner 吐司"用户身份校验失败"、停留登录页、可重试；正确密码 → 跳转 `/dashboard`。
+- 页面内登出（POST `/api/auth/logout`）→ 200 后 `me` 401/A0311、再访问 `/dashboard` 被重定向 `/login`、`document.cookie` 仍为空。
+- 验收账号 `e2eguie127` 会话已在浏览器内撤销；登录页截图留存于会话产物。
 
 **2026-09-08 本轮验证**：
 - 前端 Vitest：7 个测试文件、149 个用例全部通过；含本轮新增 24 个页面/mutation 用例，以及先失败后修复的 refresh-only 登出用例。
