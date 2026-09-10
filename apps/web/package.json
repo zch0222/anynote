@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "biome check src",
+    "lint": "cd ../.. && biome check apps/web/src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

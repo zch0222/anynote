@@ -1,4 +1,5 @@
-import DashboardPage from "@/app/dashboard/page";
+import DashboardPage from "@/app/(workspace)/dashboard/page";
+import { WorkspaceSession } from "@/components/layout/workspace-session";
 import { renderWithProviders } from "@/test/render";
 import { screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,10 +26,14 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("dashboard 雏形页", () => {
+describe("dashboard 工作区页面", () => {
   it("useMe 成功后渲染昵称", async () => {
     fetchMock.mockResolvedValue(envelope(profile));
-    renderWithProviders(<DashboardPage />);
+    renderWithProviders(
+      <WorkspaceSession>
+        <DashboardPage />
+      </WorkspaceSession>,
+    );
 
     expect(await screen.findByRole("heading", { name: "欢迎回来，测试用户" })).toBeInTheDocument();
     expect(replace).not.toHaveBeenCalled();
@@ -36,14 +41,22 @@ describe("dashboard 雏形页", () => {
 
   it("会话失效（BFF 刷新后仍 401）回退到登录页", async () => {
     fetchMock.mockResolvedValue(envelope(null, "A0311", 401));
-    renderWithProviders(<DashboardPage />);
+    renderWithProviders(
+      <WorkspaceSession>
+        <DashboardPage />
+      </WorkspaceSession>,
+    );
 
     await waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith("/login"));
   });
 
   it("非 401 失败停留原地展示错误", async () => {
     fetchMock.mockResolvedValue(envelope(null, "B0400", 502));
-    renderWithProviders(<DashboardPage />);
+    renderWithProviders(
+      <WorkspaceSession>
+        <DashboardPage />
+      </WorkspaceSession>,
+    );
 
     expect(await screen.findByText("加载用户信息失败，请稍后重试")).toBeInTheDocument();
     expect(replace).not.toHaveBeenCalled();
