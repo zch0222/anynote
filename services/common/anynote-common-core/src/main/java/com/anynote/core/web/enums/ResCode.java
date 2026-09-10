@@ -23,6 +23,7 @@ public enum ResCode {
     USER_PARAMETERS_ERROR("A0400", "用户请求参数错误", "用户请求参数错误"),
     INVALID_USER_INPUT("A0402", "无效的用户输入", "无效的用户输入"),
     INVALID_USER_INPUT_NOT_FOUND("A0404", "用户请求资源未找到", "用户请求资源未找到"),
+    RESOURCE_VERSION_CONFLICT("A0409", "用户提交的资源版本已过期", "资源已被其他会话更新，请刷新后重试"),
     REQUIRED_PARAMETERS_NULL("A0410", "请求必填参数为空", "请求必填参数为空"),
     GREEN_ERROR("A0411", "内容安全检测不通过", "内容安全检测不通过"),
 

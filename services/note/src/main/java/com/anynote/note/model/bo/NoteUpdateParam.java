@@ -28,9 +28,16 @@ public class NoteUpdateParam extends NoteQueryParam{
 
     private Long contentId;
 
+    /**
+     * 本次编辑所基于的版本号，为空表示不做冲突检测
+     */
+    private String version;
+
     public NoteUpdateParam(NoteEditDTO noteEditDTO) {
         this.setId(noteEditDTO.getNoteId());
         this.setTitle(noteEditDTO.getTitle());
         this.content = noteEditDTO.getContent();
+        this.version = noteEditDTO.getVersion();
+        this.setKnowledgeBaseId(noteEditDTO.getKnowledgeBaseId());
     }
 }

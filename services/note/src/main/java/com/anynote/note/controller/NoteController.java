@@ -24,6 +24,7 @@ import com.anynote.note.model.dto.*;
 import com.anynote.note.model.vo.NoteHistoryListItemVO;
 import com.anynote.note.model.vo.NoteHistoryVO;
 import com.anynote.note.model.vo.NoteListVO;
+import com.anynote.note.model.vo.NoteSaveResultVO;
 import com.anynote.note.service.NoteHistoryService;
 import com.anynote.note.service.NoteOperationLogService;
 import com.anynote.note.service.NoteService;
@@ -118,6 +119,7 @@ public class NoteController {
         return ResUtil.success(noteService.getNoteById(queryParam));
     }
 
+    @Operation(summary = "删除笔记", description = "逻辑删除笔记及其正文，需要笔记的管理权限")
     @DeleteMapping("{noteId}")
     public ResData<String> deleteNote(@NotNull(message = "笔记id不能为空") @PathVariable Long noteId) {
         NoteDeleteParam noteDeleteParam = new NoteDeleteParam();
@@ -130,6 +132,7 @@ public class NoteController {
      * @param noteCreateDTO
      * @return
      */
+    @Operation(summary = "新建笔记", description = "在指定知识库下创建空白笔记，返回新笔记id；需要该知识库的编辑权限")
     @PostMapping()
     public ResData<Long> createNote(@Validated @RequestBody NoteCreateDTO noteCreateDTO) {
         NoteCreateParam createParam = new NoteCreateParam(noteCreateDTO);
@@ -142,10 +145,13 @@ public class NoteController {
      * @param noteId
      * @return
      */
-    @Operation(summary = "部分更新笔记", description = "支持标题、正文、知识库归属等字段；前端自动保存调用")
+    @Operation(summary = "部分更新笔记",
+            description = "支持标题、正文等字段；前端自动保存调用。"
+                    + "请求体携带 version 时做乐观并发检测，版本过期返回业务码 A0409；"
+                    + "成功时返回服务端权威的标题 / 正文 / 更新时间与新版本号")
     @PatchMapping("{noteId}")
-    public ResData<String> editNote(@NotNull(message = "笔记id不能为空") @PathVariable Long noteId,
-                                    @RequestBody NoteEditDTO noteEditDTO) {
+    public ResData<NoteSaveResultVO> editNote(@NotNull(message = "笔记id不能为空") @PathVariable Long noteId,
+                                              @RequestBody NoteEditDTO noteEditDTO) {
         noteEditDTO.setNoteId(noteId);
         return ResUtil.success(noteService.editNote(new NoteUpdateParam(noteEditDTO)));
     }

@@ -1,0 +1,4 @@
+# 容器挂载的脚本必须保持 LF：Windows 上 autocrlf 检出会把它们变成 CRLF，
+# 容器内 `/bin/sh^M: bad interpreter` 直接导致 MySQL/Nacos 初始化失败（M6 执行期实测）。
+*.sh text eol=lf
+*.sql text eol=lf

@@ -29,23 +29,28 @@ function createWrapper(queryClient: QueryClient) {
 /** 渲染组件，外层自动套 QueryClientProvider。 */
 export function renderWithProviders(
   ui: ReactElement,
-  options: Omit<RenderOptions, "wrapper"> = {},
+  options: Omit<RenderOptions, "wrapper"> & { queryClient?: QueryClient } = {},
 ) {
-  const queryClient = createTestQueryClient();
+  const { queryClient = createTestQueryClient(), ...rest } = options;
   return {
     queryClient,
-    ...render(ui, { wrapper: createWrapper(queryClient), ...options }),
+    ...render(ui, { wrapper: createWrapper(queryClient), ...rest }),
   };
 }
 
-/** 测试 use*Query / use*Mutation 用这个，外层自动套 QueryClientProvider。 */
+/**
+ * 测试 use*Query / use*Mutation 用这个，外层自动套 QueryClientProvider。
+ *
+ * 需要 `queryClient` 注入的场景：hook 只做命令式缓存读写（如 useSaveNote），
+ * 默认客户端的 `gcTime: 0` 会立刻回收无观察者的条目，此时给一个 gcTime 正常的实例。
+ */
 export function renderHookWithProviders<Result, Props>(
   hook: (initialProps: Props) => Result,
-  options: Omit<RenderHookOptions<Props>, "wrapper"> = {},
+  options: Omit<RenderHookOptions<Props>, "wrapper"> & { queryClient?: QueryClient } = {},
 ) {
-  const queryClient = createTestQueryClient();
+  const { queryClient = createTestQueryClient(), ...rest } = options;
   return {
     queryClient,
-    ...renderHook(hook, { wrapper: createWrapper(queryClient), ...options }),
+    ...renderHook(hook, { wrapper: createWrapper(queryClient), ...rest }),
   };
 }

@@ -9,6 +9,7 @@ import com.anynote.note.enums.NotePermissions;
 import com.anynote.note.model.bo.*;
 import com.anynote.note.model.dto.NoteSearchDTO;
 import com.anynote.note.model.vo.NoteListVO;
+import com.anynote.note.model.vo.NoteSaveResultVO;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 /**
@@ -29,7 +30,12 @@ public interface NoteService extends IService<Note> {
 
     public Note getNoteById(NoteQueryParam queryParam);
 
-    public String editNote(NoteUpdateParam updateParam);
+    /**
+     * 编辑笔记
+     * @param updateParam 更新参数；携带 version 时做乐观并发检测，版本过期抛 A0409
+     * @return 保存后的服务端权威状态（标题 / 正文 / 更新时间 / 新版本号）
+     */
+    public NoteSaveResultVO editNote(NoteUpdateParam updateParam);
 
     public Integer getNoteDataScope(Long noteId);
 
