@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) and Codex (via AGENT
 Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turborepo + Maven multi-module 编排：
 
 - `services/` — Java 21 · Spring Boot 3.3.4 · Spring Cloud 2023.0.3（9 个微服务 + Feign API 模块 + common 共享库 + BOM）
-- `apps/web/` — Next.js 15 · React 19（**Phase 5 重写中，M2 认证、M3 查询层、M4 AppShell 与 M5 TipTap 编辑器核心已实现并验收；业务页面仍为骨架占位**）
+- `apps/web/` — Next.js 15 · React 19（**Phase 5 重写中，M2 认证、M3 查询层、M4 AppShell、M5 TipTap 编辑器核心与 M6 笔记业务页面已实现并验收；AI/PDF/Mooc/Tasks/Wikis 页面仍为骨架占位（M7）**）
 - `apps/web-legacy/` — Next.js 13.5（**旧前端，仍是当前用户访问的版本**，Phase 5 验收后才删）
 - `ai-service/` — Python 3 · FastAPI · LangChain 0.3 · Pydantic v2
 - `packages/api-client/` — `pnpm openapi:generate` 产出的 TS 客户端（**不要手改**，`src/` 已 gitignore）
@@ -27,13 +27,13 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中** — M0 / M1 / M2 / M3 / M4 / M5 已完成并于 2026-09-11 全部 `--no-ff` 合并 `dev`（`e6384e5` / `05c2598` / `c3c3597` / `7b96e67`）。2026-09-10 M5：TipTap v3 编辑器核心 + 三预设 + 自定义节点完成，285 前端单测、类型检查、Biome、生产构建与浏览器实测通过（编辑器主 chunk 211.3 KB gzip）；图片分片直传第 1 步被后端 `@InnerAuth` 阻塞。M6-M8 未启动。详见 `docs/refactor/FRONTEND_MILESTONES.md` M5 / M5.10 / §5 与 `docs/refactor/TASKS.md` Phase 5；集成测试命令见 README「测试」 |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中** — M0-M5 已完成并于 2026-09-11 全部 `--no-ff` 合并 `dev`。**M6 笔记业务页面已于 2026-09-11 完成实现与浏览器验收并合并 `dev`（`888c7da`）**：知识库/笔记/编辑器页面、自动保存状态机、`update_time` 版本号乐观并发契约（`A0409`，PATCH 返回 `NoteSaveResultVO`）；后端 note 16 个 + 前端 75 个新单测通过，baseline 仅 note.json 契约性变更。Windows `autocrlf` 会让容器挂载脚本变 CRLF（已加 `.gitattributes`）。M7-M8 未启动。详见 `docs/refactor/FRONTEND_MILESTONES.md` M6 / M6.5 / §5 与 `docs/refactor/TASKS.md` Phase 5；集成测试命令见 README「测试」 |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
-**当前分支（2026-09-11 核对）**：`dev`。M2-M5 的四条 `phase/*` 叠分支已于 2026-09-11 全部 `--no-ff` 合并进来，分支保留未删。`main` 是发布分支，日常合并目标是 `dev`。
+**当前分支（2026-09-11 核对）**：`dev`。M2-M6 的 `phase/*` 分支已全部 `--no-ff` 合并进来，分支保留未删。`main` 是发布分支，日常合并目标是 `dev`。
 
-**分支落点（2026-09-11 核对）**：M2.0 通过 `3865a2f` 合并 `dev`；M2 / M3 / M4 / M5 于 2026-09-11 按 `phase/5.2-auth-bff` → `phase/5.3-api-layer` → `phase/5.4-app-shell` → `phase/5.5-tiptap-core` 顺序逐个 `--no-ff` 合并 `dev`（`e6384e5` / `05c2598` / `c3c3597` / `7b96e67`），无冲突；合并后 `dev` 的 tree 与 `phase/5.5-tiptap-core` 为同一 OID。M6 从 `dev` 切出。详情见里程碑 M2-M5 / §5。
+**分支落点（2026-09-11 核对）**：M2.0 通过 `3865a2f` 合并 `dev`；M2 / M3 / M4 / M5 于 2026-09-11 按 `phase/5.2-auth-bff` → `phase/5.3-api-layer` → `phase/5.4-app-shell` → `phase/5.5-tiptap-core` 顺序逐个 `--no-ff` 合并 `dev`（`e6384e5` / `05c2598` / `c3c3597` / `7b96e67`），无冲突；合并后 `dev` 的 tree 与 `phase/5.5-tiptap-core` 为同一 OID。M6 自合并后的 `dev` 切出 `phase/5.6-notes`，同日 `--no-ff` 合并回 `dev`（`888c7da`）。详情见里程碑 M2-M6 / §5。
 
 **认证契约（2026-09-08 用户确认并实现）**：Gateway 的外部私有请求仅接受 `Authorization: Bearer <token>`，取消旧 `accessToken` 请求头兼容；内部服务仍使用 Gateway 注入的已验证 `accessToken`。OpenAPI 已改为 HTTP Bearer/JWT，六份 baseline 已重生。旧前端尚未迁移，切换后的私有请求会失败。**刷新方案状态**：2026-09-08 的暂缓记录已由后续 M2 实现与验收更新；2026-09-10 自动刷新与并发刷新已通过真实栈测试。具体触发、重试和失败边界以里程碑 M2.1 为准，不将早期讨论建议当作现行方案。详见 `docs/refactor/FRONTEND_MILESTONES.md` M2.1 与 `.claude/openspec/changes/2026-09-08-gateway-bearer-only.md`。
 

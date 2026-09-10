@@ -1,10 +1,10 @@
 # Anynote 前端重构里程碑（可执行版）
 
-> 文档版本：v1.6 | 生成日期：2026-05-13 | 最近核对：2026-09-11（M2 / M3 / M4 / M5 已全部 `--no-ff` 合并 `dev`）
+> 文档版本：v1.7 | 生成日期：2026-05-13 | 最近核对：2026-09-11（M2-M6 已全部 `--no-ff` 合并 `dev`）
 > 关联文档：[REFACTOR_PLAN.md](./REFACTOR_PLAN.md) Phase 5、[FRONTEND_REFACTOR_PLAN.md](./FRONTEND_REFACTOR_PLAN.md)
-> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0 / M1 / M2 / M3 / M4 / M5 已完成并合并 `dev`；M6-M8 未启动**。
-> 完成度参考：9 个里程碑完成 2 个，M2-M5 代码及验收完成（各剩一次合并）；按工期估算 14-19 天中约完成 9 天，**Phase 5 约 50%**
-> M5 遗留一项未通过：图片分片直传第 1 步被后端 `@InnerAuth` 拦截（见 M5.10），需后端确认后重跑端到端
+> 当前状态：Phase 0-4、6、7 已 ✓；**Phase 5 进行中 —— M0-M6 已完成并合并 `dev`；M7-M8 未启动**。
+> 完成度参考：9 个里程碑完成 7 个；按工期估算 14-19 天中约完成 11 天，**Phase 5 约 65%**
+> M5 遗留一项未通过：图片分片直传第 1 步被后端 `@InnerAuth` 拦截（见 M5.10），需后端确认后重跑端到端；带入 M6 未处理，继续挂起
 > `openapi/specs/*.json` 6 份 baseline 已入库；`packages/api-client/src/` 仍 gitignored，需本地跑一次 `pnpm openapi:generate` 派生
 > 主干分支：`dev`；本计划**按里程碑逐个开分支**（`phase/5.0-openapi-validation` … `phase/5.8-polish`，见总览表），不使用单一的 `phase/5-frontend-rewrite`
 >
@@ -12,7 +12,7 @@
 >
 > ✅ **漂移门禁缺陷已修复（2026-08-08）**：生成时剥离 `servers`、递归排序 key，并在校验通过后才覆盖 baseline；包含 20 个单测，历史验证见 §6。2026-09-07 未重新运行全栈验收。
 >
-> **分支落点（2026-09-11 核对）**：M2.0 已通过 `3865a2f` 合并到 `dev`；Gateway/Bearer 前置提交和本轮认证实现均位于 `phase/5.2-auth-bff`，五笔代码提交见 §5。M2-M5 四条叠分支已于 2026-09-11 全部合并 `dev`（`e6384e5` / `05c2598` / `c3c3597` / `7b96e67`），分支保留；`main` 未动。`phase/5.2-auth-bff` 已推送 `origin`（本地比远程领先 3 个提交）。
+> **分支落点（2026-09-11 核对）**：M2.0 已通过 `3865a2f` 合并到 `dev`；Gateway/Bearer 前置提交和本轮认证实现均位于 `phase/5.2-auth-bff`，五笔代码提交见 §5。M2-M5 四条叠分支已于 2026-09-11 全部合并 `dev`（`e6384e5` / `05c2598` / `c3c3597` / `7b96e67`），分支保留；`main` 未动。`phase/5.2-auth-bff` 已推送 `origin`（本地比远程领先 3 个提交）。M6 自合并后的 `dev` 切出 `phase/5.6-notes`，同日 `--no-ff` 合并回 `dev`（`888c7da`），执行情况见 M6 / M6.5。
 
 ---
 
@@ -573,30 +573,74 @@ POST /api/proxy/file/ossSliceUploadTasks → {"code":"A0301","msg":"没有内部
 
 **目标**：替代 `apps/web-legacy/` 的笔记核心流程。
 
-**分支**：`phase/5.6-notes`
+**分支**：`phase/5.6-notes`（2026-09-11 自合并 M2-M5 后的 `dev` 切出）
 
-### M6.1 数据 hooks
-- [ ] `features/notes/use-knowledge-bases.ts`
-- [ ] `features/notes/use-notes.ts`（分页）
-- [ ] `features/notes/use-note.ts`
-- [ ] `features/notes/use-save-note.ts`（debounce 1.5s + 乐观更新 + 失败回滚）
-- [ ] `features/notes/use-create-note.ts` / `use-delete-note.ts`
+**状态**：🟢 **2026-09-11 完成 M6.0-M6.4 实现与浏览器端到端验收，同日 `--no-ff` 合并 `dev`（`888c7da`）**。验收与差异记录见 M6.5。
 
-### M6.2 页面
-- [ ] `(workspace)/notes/page.tsx`：知识库列表（卡片）
-- [ ] `(workspace)/notes/[baseId]/page.tsx`：当前知识库树 + 列表
-- [ ] `(workspace)/notes/[baseId]/[noteId]/page.tsx`：双栏（左目录、右 TipTap 编辑器）
-- [ ] `components/note/note-tree.tsx`：基于 `@dnd-kit` 拖拽排序
+### M6.0 后端配合：保存返回完整结果与乐观并发版本 ✅
 
-### M6.3 自动保存与冲突提示
-- [ ] 在线 / 离线检测：`navigator.onLine` + 失败重试
-- [ ] 后端 ETag / 版本号冲突 → 弹窗 diff（M8 完善 UI，本期只展示文字差异）
+M6 开工前先按 §2 的强制配合点补齐后端契约，变更提案与核验记录见
+[2026-09-11-note-save-result-and-version.md](../../.claude/openspec/changes/2026-09-11-note-save-result-and-version.md)：
 
-### M6.4 验收
-- [ ] 创建 / 编辑 / 删除 / 移动笔记全部正常
-- [ ] 离开页面前未保存内容自动 flush
-- [ ] 与 legacy 前端在同一笔记上对比，无格式损失
-- [ ] 合并到 `dev`
+- `PATCH /notes/{noteId}` 响应从 `ResData<String>` 改为 `ResData<NoteSaveResultVO>`（id / title / content / updateTime / version）；请求体 `NoteEditDTO` 新增可选 `version` 与 `knowledgeBaseId`（移动笔记）。
+- `version` 取 `n_note.update_time` 毫秒时间戳字符串（无 version 列、不改表）；客户端显式携带且与库中不一致时抛新枚举 `ResCode.RESOURCE_VERSION_CONFLICT("A0409")`，冲突不落库、不发 RocketMQ 消息。缺省 `version` 按后写入者胜出，legacy 与内部调用不受影响。
+- 移动笔记到其他知识库时校验目标库编辑权限（`A0301`）。
+- 实现细节：写库前把 `update_time` 截断到整秒（秒级 `datetime`，避免毫秒尾数让下一次保存被误判冲突）。
+- 单测：`NoteServiceImplEditNoteTest`（10）+ `NoteVersionUtilTest`（6）；`mvn test -pl note -am` 全绿（common-core 55、security 37、note 16）。
+- `pnpm openapi:generate` 重生 baseline：仅 `note.json` 一行变更且结构 diff 与契约逐一对应，其余 5 份零漂移。
+
+### M6.1 数据 hooks ✅
+- [x] `features/notes/use-knowledge-bases.ts`（列表 + 详情 + 新建库 mutation；`permissions=4` 取「全部可见」）
+- [x] `features/notes/use-notes.ts`（分页 + `keepPreviousData` 防翻页闪烁）
+- [x] `features/notes/use-note.ts`（详情；关闭自动重取避免覆盖正在编辑的正文）
+- [x] `features/notes/use-save-note.ts`（debounce 1.5s + 乐观更新 + 失败回滚 + 冲突/离线/卸载状态机）
+- [x] `features/notes/use-create-note.ts` / `use-delete-note.ts`（另有计划外补充 `use-move-note.ts`，与拖拽移动共用 PATCH 端点）
+- [x] `features/notes/schemas.ts`：zod 白名单校验（后端加字段不致前端崩），`toVersion` 与后端口径一致
+- [x] query keys 工厂 `features/notes/query-keys.ts` 并入 `features/_keys.test.ts` 前缀关系断言
+
+### M6.2 页面 ✅
+- [x] `(workspace)/notes/page.tsx`：知识库卡片列表 + 新建知识库弹窗
+- [x] `(workspace)/notes/[baseId]/page.tsx`：知识库页头 + 笔记分页卡片 + 新建笔记弹窗
+- [x] `(workspace)/notes/[baseId]/[noteId]/page.tsx`：双栏（左 `NoteTree` 目录、右 TipTap 编辑器）；`key={noteId}` 强制重挂载，切笔记时先经 `useSaveNote` 卸载清理把上一篇待存内容 flush 出去
+- [x] `components/note/note-tree.tsx`：基于 `@dnd-kit/core` 拖拽。**与计划的差异**：`n_note` 无排序列，同库排序无法落库，拖拽语义改为「跨知识库移动」（未安装 `@dnd-kit/sortable`）
+- [x] `components/note/conflict-dialog.tsx`（行级 diff）、`save-status.tsx`（六态保存徽章）、`features/notes/components/note-editor.tsx`（编辑页编排）
+- [x] `/notes/new` 从占位升级为可用创建页（先选知识库再起标题；无库时引导建库）
+
+### M6.3 自动保存与冲突提示 ✅
+- [x] 在线 / 离线检测：`navigator.onLine` 离线时改动留在本地，`online` 事件补发；保存失败按 5s 固定间隔重试（仅网络/服务端故障，冲突不重试）
+- [x] 版本冲突：保存携带服务端 `version`，`A0409` 时停止自动保存、回读服务端内容并弹窗展示行级 diff（`lib/notes/diff.ts`，LCS）；用户可选「用我的改动覆盖」（以服务端最新版本号重发）或「放弃我的改动」。三方合并 UI 按计划留待 M8
+- [x] 离开页面 flush：SPA 路由切换 / `pagehide` / `beforeunload` 均经 keepalive 请求把待存改动送出
+
+### M6.4 验收 ✅
+- [x] 创建（知识库/笔记）/ 编辑（正文+标题自动保存、刷新后持久）/ 删除（confirm 后逻辑删除、列表回空态）/ 移动（操作菜单 + 目录树拖拽两条路径均验证）全部正常
+- [x] 离开页面前未保存内容自动 flush：debounce 未到即导航，keepalive 补存后回读内容完整
+- [x] 版本冲突：两个标签页真实触发后端 `A0409`，弹窗 diff 与两种解决路径均验证
+- [x] **与 legacy 对比的替代口径**：未起 `web-legacy` 做 A/B 对比；以 M5.7 的 51 个 Markdown round-trip 用例 + 本轮「编辑器 → 自动保存 → 服务端读回原始 markdown」的逐字节核验（标题 / 段落空行结构无损）作为格式保真依据。legacy A/B 对比留待 M8 清理前复验
+- [x] 单测：笔记域新增 75 个用例（hooks / use-save-note 状态机 / schemas / diff / 组件 / 创建页），全仓 359 个前端单测 + 后端 note 模块 16 个单测通过；`pnpm typecheck`、`pnpm check`、webpack 生产构建通过
+- [x] 合并到 `dev`（2026-09-11 `--no-ff` merge commit `888c7da`）
+
+### M6.5 实际执行结果与环境发现（2026-09-11）
+
+**浏览器端到端验收**（真实 Docker 栈 18 容器 + 生产构建 `next start`，ZCode 浏览器工具）：
+
+- 注册 `m6notes0911` → 自动登录 → `/notes` 建库（id 56/57）→ 建笔记 → 编辑器页自动保存全链路（debounce 合并、`已保存 HH:MM`、刷新持久）。
+- 冲突：A/B 两个标签页编辑同一笔记，后写入者被后端 `A0409` 拒绝 → 弹窗行级 diff（本地 `-` / 服务端 `+`）→「用我的改动覆盖」后保存成功且持久化。
+- 移动：菜单移动（56→57）与目录树 dnd-kit 拖拽（57→56）均成功；删除经 `window.confirm` 后回空态。
+- 离开 flush：debounce 未到即导航，回读内容完整（keepalive 生效）。
+
+**本轮修复的缺陷（先复现后修复）**：
+
+- `DropdownMenuLabel` 在 base-ui 下必须位于 `DropdownMenuGroup` 内，否则打开「笔记操作」菜单即抛 `MenuGroupContext is missing` 运行时错误——按 M4 user-menu 的既有写法补包一层分组，并补组件单测。
+- `roundtrip.test.ts` 的 `normalize` 补 CRLF→LF 归一：Windows `autocrlf` 检出会把 M5 的 fixture 变成 CRLF 导致 5 个用例红。
+- `lib/notes/diff.ts` 按 `noUncheckedIndexedAccess` 重写索引访问（vitest 不做类型检查，`pnpm typecheck` 才暴露）。
+- 测试工具 `renderHookWithProviders` 支持注入自定义 `QueryClient`：`useSaveNote` 只做命令式缓存读写，默认 `gcTime: 0` 会回收无观察者条目，无法断言缓存内容。
+
+**环境发现（与 M6 代码无关，长期生效）**：
+
+1. **Windows `autocrlf` 会把容器挂载的 shell 脚本检出成 CRLF**：MySQL 初始化脚本 `00-import-sql.sh` 变 CRLF 后容器内 `/bin/sh^M: bad interpreter`（exit 126），全栈起不来。已新增仓库根 `.gitattributes`（`*.sh` / `*.sql` 强制 LF）。此坑与 M0.1 的 `--env-file=/dev/null` 同级，换 Windows 机器必踩。
+2. **Next 15.5.18 dev 模式在本机不稳定**：`next dev --turbopack` 与 `next dev`（webpack）运行约十几分钟后 node 进程均会占满全部核心并假死（curl 无响应）。浏览器验收因此改用 **webpack 生产构建 + `next start`**（构建成功且 First Load JS 比 turbopack 产物小约一半：shared 104 kB vs 215 kB）。dev 假死根因未查明，记入 TASKS.md 候选。
+
+**遗留**：M5.10 的图片分片直传 `@InnerAuth` 阻塞项未在本轮处理；`use-save-note` 首次打开编辑器会触发一次内容相同的幂等保存（TipTap StarterKit `trailingNode` 初始化补尾部段落触发 `onUpdate`），无害，留 M8 打磨。
 
 ---
 
@@ -716,7 +760,9 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 
 ## 5. 当前执行位置（2026-09-11 核对）
 
-**最新：M2-M5 已于 2026-09-11 全部合并 `dev`**（`e6384e5` / `05c2598` / `c3c3597` / `7b96e67`，逐个 `--no-ff`，无冲突；合并后 `dev` 的 tree 与 `phase/5.5-tiptap-core` 为同一 OID）。M5 实现与浏览器验收完成于 2026-09-10，分支 `phase/5.5-tiptap-core` 自 `phase/5.4-app-shell` 叠出。
+**最新：M6 已于 2026-09-11 完成并合并 `dev`**（分支 `phase/5.6-notes`，自合并 M2-M5 后的 `dev` 切出；`--no-ff` merge commit `888c7da`）。笔记业务页面全量落地：知识库/笔记/编辑器三页面 + 数据 hooks + 自动保存状态机（debounce/乐观更新/回滚/离线/冲突/卸载 flush）+ 基于 `update_time` 版本号的后端乐观并发契约（`A0409`，见 openspec `2026-09-11-note-save-result-and-version`）。后端 note 模块 16 个、前端笔记域 75 个（全仓 359 个）单测通过；OpenAPI baseline 仅 note.json 契约性变更；生产构建 + 真实 Docker 栈的浏览器端到端验收通过（含双标签页冲突、拖拽移动、卸载 flush）。执行差异与环境发现见 **M6.5**；M5 遗留的 `@InnerAuth` 图片直传阻塞继续挂起。
+
+**历史：M2-M5 已于 2026-09-11 全部合并 `dev`**（`e6384e5` / `05c2598` / `c3c3597` / `7b96e67`，逐个 `--no-ff`，无冲突；合并后 `dev` 的 tree 与 `phase/5.5-tiptap-core` 为同一 OID）。M5 实现与浏览器验收完成于 2026-09-10，分支 `phase/5.5-tiptap-core` 自 `phase/5.4-app-shell` 叠出。
 TipTap 实际版本 v3.31.3；编辑器主 chunk 从 341.2 KB 降到 **211.3 KB gzip**（KaTeX / Shiki 改懒加载）；
 285 个前端单测、110+ 文件 Biome、类型检查、生产构建与 `next dev` 浏览器实测均通过。
 完整差异、已知限制与后端契约缺口见 **M5.10**。唯一未通过项：图片分片直传第 1 步 `POST /file/ossSliceUploadTasks`
@@ -730,7 +776,7 @@ TipTap 实际版本 v3.31.3；编辑器主 chunk 从 341.2 KB 降到 **211.3 KB 
 
 M2.0 已于 2026-09-07 合并 `dev`（`3865a2f`）。当前分支 `phase/5.2-auth-bff` 已完成用户确认的 Gateway 仅 Bearer 前置改造，以及 OpenAPI 安全方案、测试和六份 baseline 更新；代码提交分别为 `57bf8b3` 和 `216a930`。
 
-**当前执行位置**：M2 已全部验收（含浏览器端 M2.4），并于 2026-09-11 合并 `dev`（`e6384e5`）。M3 于 2026-09-10 在 `phase/5.3-api-layer`（自 `phase/5.2-auth-bff` 叠出）完成：`pnpm openapi:generate` 零漂移；`types/api.ts` 聚合导出、`lib/api/openapi.ts` 分域代理 client、`lib/api/errors.ts` ApiError、全局 `providers.tsx`、`features/auth/use-me.ts` + query-keys、dashboard 雏形页、CI spec-diff 增强。单测 182 个全绿（新增 use-me 4 个、query key 1 个、dashboard 3 个），typecheck / Biome / build 通过；浏览器实测登录后 dashboard 渲染昵称、登出后回登录页。M4 于同日继续完成 AppShell、主题和命令面板，并通过单测、Docker 后端集成测试与 Codex 浏览器验证（详见 M4.5）；M5 也已于同日完成（见 M5 / M5.10）。M2-M5 四条叠分支已于 2026-09-11 逐个 `--no-ff` 合并 `dev`；M6-M8 未启动。
+**当前执行位置**：M2 已全部验收（含浏览器端 M2.4），并于 2026-09-11 合并 `dev`（`e6384e5`）。M3 于 2026-09-10 在 `phase/5.3-api-layer`（自 `phase/5.2-auth-bff` 叠出）完成：`pnpm openapi:generate` 零漂移；`types/api.ts` 聚合导出、`lib/api/openapi.ts` 分域代理 client、`lib/api/errors.ts` ApiError、全局 `providers.tsx`、`features/auth/use-me.ts` + query-keys、dashboard 雏形页、CI spec-diff 增强。单测 182 个全绿（新增 use-me 4 个、query key 1 个、dashboard 3 个），typecheck / Biome / build 通过；浏览器实测登录后 dashboard 渲染昵称、登出后回登录页。M4 于同日继续完成 AppShell、主题和命令面板，并通过单测、Docker 后端集成测试与 Codex 浏览器验证（详见 M4.5）；M5 也已于同日完成（见 M5 / M5.10）。M2-M5 四条叠分支已于 2026-09-11 逐个 `--no-ff` 合并 `dev`；M6 已于同日完成实现、验收并合并 `dev`（`888c7da`，见 M6 / M6.5）。
 
 **2026-09-10 本轮验证与发现**：
 - 实现：`src/lib/auth/refresh.ts`（单飞刷新，锁挂进程级 `globalThis`）、`src/app/api/auth/refresh|me/route.ts`、`src/app/api/proxy/[...path]/route.ts`、`backend.ts` 增 `systemClient`。BFF 三处 catch 增加 `console.error` 服务端日志（此前异常被静默吞掉，本轮定位 502 全靠日志补齐）。

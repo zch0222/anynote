@@ -147,7 +147,7 @@
 - [x] **M3** API 客户端 + 查询层 + 代理（5.4 TanStack Query 数据层）——2026-09-10 实现与验收通过，2026-09-11 合并 `dev`（`05c2598`）
 - [x] **M4** AppShell + 主题 + 命令面板——2026-09-10 实现与验收通过，分支 `phase/5.4-app-shell`；210 前端单测、14 Docker 后端集成用例、生产构建与 Codex 浏览器验证通过，2026-09-11 合并 `dev`（`c3c3597`）。详细范围见 `FRONTEND_MILESTONES.md` M4（业务内容仍为 Skeleton，占位新建入口待 M6 接入）
 - [x] **M5** TipTap 编辑器核心（5.5 编辑器集成 — **统一 TipTap**，废弃 Milkdown / Wangeditor / Vditor / Muya）——2026-09-10 实现与浏览器验收通过，分支 `phase/5.5-tiptap-core`（自 `phase/5.4-app-shell` 叠出）；285 前端单测、编辑器主 chunk 211.3 KB gzip、三预设浏览器实测通过，2026-09-11 合并 `dev`（`7b96e67`）；图片分片直传第 1 步被后端 `@InnerAuth` 阻塞，作为遗留问题带入 M6。详见 `FRONTEND_MILESTONES.md` M5 / M5.10
-- [ ] **M6** 笔记业务页面
+- [x] **M6** 笔记业务页面——2026-09-11 实现与浏览器端到端验收通过，分支 `phase/5.6-notes`（自 `dev` 切出），同日合并 `dev`（`888c7da`）：知识库/笔记/编辑器三页面 + 数据 hooks + 自动保存状态机（debounce/乐观更新/回滚/离线/卸载 flush）+ `update_time` 版本号乐观并发契约（`A0409`，PATCH 返回 `NoteSaveResultVO`，openspec `2026-09-11-note-save-result-and-version`）；后端 note 16 个 + 前端笔记域 75 个（全仓 359 个）单测、typecheck、Biome、webpack 生产构建与真实 Docker 栈浏览器验收通过；环境发现：Windows autocrlf 使容器挂载脚本变 CRLF（已加 `.gitattributes`）、Next 15.5 dev 模式本机假死（验收改用生产构建）。详见 `FRONTEND_MILESTONES.md` M6 / M6.5
 - [ ] **M7** AI / PDF / Mooc / Tasks / Wikis
 - [ ] **M8** 协同 + 桌面 + 收尾
 
