@@ -1,5 +1,5 @@
-import { WorkspacePlaceholder } from "@/components/layout/workspace-placeholder";
+import WorkflowPage from "@/features/ai/components/workflow/workflow-page";
 
 export default function Page() {
-  return <WorkspacePlaceholder title="AI 工作流" description="将重复的工作串联为自动化流程。" />;
+  return <WorkflowPage />;
 }

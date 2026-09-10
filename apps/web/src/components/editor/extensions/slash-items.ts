@@ -1,4 +1,5 @@
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
+import type { AiContinueFn } from "@/components/editor/presets/types";
 import type { Editor, Range } from "@tiptap/core";
 import { toast } from "sonner";
 
@@ -13,6 +14,7 @@ export type SlashItem = {
 
 export type SlashContext = {
   uploadFn?: UploadFn | undefined;
+  aiContinue?: AiContinueFn | undefined;
 };
 
 function pickImageFile(uploadFn: UploadFn | undefined, editor: Editor, range: Range) {
@@ -234,12 +236,45 @@ export function createSlashItems(context: SlashContext): SlashItem[] {
     },
     {
       title: "AI 续写",
-      description: "让 AI 接着写（M7 接入）",
+      description: "让 AI 接着写",
       group: "AI",
       keywords: ["ai", "continue", "write", "xu xie"],
       run: ({ editor, range }) => {
         editor.chain().focus().deleteRange(range).run();
-        toast.info("AI 续写将在 M7 接入");
+        const aiContinue = context.aiContinue;
+        if (!aiContinue) {
+          toast.error("当前编辑器未接入 AI 续写");
+          return;
+        }
+        // 光标前正文（整篇序列化开销大，续写只需要局部上下文）
+        const contextTail = editor.state.doc.textBetween(0, editor.state.selection.from, "\n\n");
+        editor
+          .chain()
+          .focus()
+          .insertContent({ type: "aiBlock", attrs: { payload: "" } })
+          .run();
+        // atom 节点占 1 个位置，插入后光标紧跟其后
+        const blockPos = editor.state.selection.from - 1;
+        const controller = new AbortController();
+        let accumulated = "";
+        void aiContinue({
+          contextTail,
+          signal: controller.signal,
+          onDelta: (delta) => {
+            accumulated += delta;
+            const node = editor.state.doc.nodeAt(blockPos);
+            if (!node || node.type.name !== "aiBlock") {
+              controller.abort();
+              return;
+            }
+            editor.view.dispatch(
+              editor.state.tr.setNodeMarkup(blockPos, undefined, { payload: accumulated }),
+            );
+          },
+        }).catch((error: unknown) => {
+          console.error(error);
+          toast.error("AI 续写失败，请稍后重试");
+        });
       },
     },
   ];

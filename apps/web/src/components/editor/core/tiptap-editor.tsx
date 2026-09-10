@@ -3,7 +3,7 @@
 import { BubbleMenuPortal } from "@/components/editor/core/bubble-menu";
 import { Toolbar } from "@/components/editor/core/toolbar";
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
-import { type PresetName, presets } from "@/components/editor/presets";
+import { type AiContinueFn, type PresetName, presets } from "@/components/editor/presets";
 import { getMarkdown } from "@/lib/editor/markdown";
 // KaTeX 布局样式 + 自托管字体（public/fonts/katex）；编辑器样式表
 import "@/styles/katex.css";
@@ -23,6 +23,8 @@ export type TiptapEditorProps = {
   placeholder?: string;
   /** 图片上传实现；不传时图片相关入口会提示未配置。 */
   uploadFn?: UploadFn;
+  /** 「AI 续写」实现；不传时 slash 菜单对应项提示未接入。 */
+  aiContinue?: AiContinueFn;
   onReady?: (editor: Editor) => void;
   className?: string;
 };
@@ -42,9 +44,15 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
     editable = true,
     placeholder,
     uploadFn,
+    aiContinue,
     onReady,
     className,
   } = props;
+
+  // readonly 预设不含交互与 undo 扩展：强制只读并跳过 Toolbar / BubbleMenu，
+  // 否则工具栏对不存在的命令（can().undo()）求值会直接抛错、炸掉整个 React 树。
+  const isReadonlyPreset = preset === "readonly";
+  const effectiveEditable = isReadonlyPreset ? false : editable;
 
   const lastEmitted = useRef(value);
   const onChangeRef = useRef(onChange);
@@ -54,9 +62,9 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
 
   const editor = useEditor(
     {
-      extensions: presets[preset]({ uploadFn, placeholder }),
+      extensions: presets[preset]({ uploadFn, aiContinue, placeholder }),
       content: value,
-      editable,
+      editable: effectiveEditable,
       immediatelyRender: false,
       shouldRerenderOnTransaction: false,
       onUpdate: ({ editor: current }) => {
@@ -71,7 +79,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
         },
       },
     },
-    [preset, placeholder, uploadFn],
+    [preset, placeholder, uploadFn, aiContinue],
   );
 
   // 外部 value 变化（如切换示例内容）时同步进编辑器，避免覆盖用户正在输入的内容
@@ -91,8 +99,8 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
   }, [editor, value]);
 
   useEffect(() => {
-    editor?.setEditable(editable);
-  }, [editor, editable]);
+    editor?.setEditable(effectiveEditable);
+  }, [editor, effectiveEditable]);
 
   useEffect(() => {
     if (editor) {
@@ -102,10 +110,10 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
 
   return (
     <div className={cn("anynote-editor", className)} data-preset={preset}>
-      {editable ? (
+      {effectiveEditable ? (
         <Toolbar editor={editor} variant={preset === "minimal" ? "minimal" : "full"} />
       ) : null}
-      {editable ? <BubbleMenuPortal editor={editor} /> : null}
+      {effectiveEditable ? <BubbleMenuPortal editor={editor} /> : null}
       <EditorContent editor={editor} className="anynote-editor__surface" />
     </div>
   );

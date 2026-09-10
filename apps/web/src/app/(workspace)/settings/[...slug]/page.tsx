@@ -1,5 +1,16 @@
-import { WorkspacePlaceholder } from "@/components/layout/workspace-placeholder";
+import type { SettingsSection } from "@/features/settings/components/account-settings";
+import { SettingsPage } from "@/features/settings/components/settings-page";
+import { notFound } from "next/navigation";
 
-export default function Page() {
-  return <WorkspacePlaceholder title="设置" description="管理你的个人资料与使用偏好。" />;
+const VALID_SECTIONS: SettingsSection[] = ["profile", "appearance", "ai", "integrations"];
+
+export default async function Page({ params }: { params: Promise<{ slug: string[] }> }) {
+  const { slug } = await params;
+  const section = slug[0];
+  // /settings/account 与 /settings/profile 等价（账号分区沿用 legacy 路径名）
+  const normalized = section === "account" ? "profile" : section;
+  if (!normalized || !VALID_SECTIONS.includes(normalized as SettingsSection)) {
+    notFound();
+  }
+  return <SettingsPage section={normalized as SettingsSection} />;
 }

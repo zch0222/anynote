@@ -26,6 +26,7 @@
       "apps/web/.next",
       "apps/web/src/components/ui",
       "apps/web/src/styles/katex.css",
+      "apps/web/public/pdf.worker.min.mjs",
       "openapi/specs"
     ]
   }

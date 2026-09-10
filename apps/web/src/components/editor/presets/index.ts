@@ -5,6 +5,7 @@ import type { PresetContext, PresetName } from "@/components/editor/presets/type
 import type { Extensions } from "@tiptap/core";
 
 export type { PresetContext, PresetName } from "@/components/editor/presets/types";
+export type { AiContinueFn } from "@/components/editor/presets/types";
 export { DEFAULT_PLACEHOLDER } from "@/components/editor/presets/types";
 
 type PresetFactory = (ctx: PresetContext) => Extensions;
