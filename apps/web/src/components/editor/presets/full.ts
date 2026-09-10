@@ -50,7 +50,7 @@ export function full(ctx: PresetContext): Extensions {
     AnynoteCallout,
     AnynoteWikilink,
     AnynoteAiBlock,
-    SlashCommand.configure({ uploadFn: ctx.uploadFn }),
+    SlashCommand.configure({ uploadFn: ctx.uploadFn, aiContinue: ctx.aiContinue }),
     MarkdownBridge,
   ];
 }

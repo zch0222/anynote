@@ -1,6 +1,7 @@
 "use client";
 
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
+import type { AiContinueFn } from "@/components/editor/presets/types";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
 import { NoteTree } from "@/components/note/note-tree";
 import { SaveStatusBadge } from "@/components/note/save-status";
@@ -24,6 +25,7 @@ import { useMoveNoteMutation } from "@/features/notes/use-move-note";
 import { useNoteQuery } from "@/features/notes/use-note";
 import { useNotesQuery } from "@/features/notes/use-notes";
 import { useSaveNote } from "@/features/notes/use-save-note";
+import { continueWriting } from "@/lib/ai/sse";
 import { MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -75,6 +77,18 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
       scheduleSave({ title: next, content: contentRef.current });
     },
     [scheduleSave],
+  );
+
+  // Slash 菜单「AI 续写」：流式增量写回编辑器里的 aiBlock 节点（引用须稳定，否则编辑器会重建）
+  const handleAiContinue = useCallback<AiContinueFn>(
+    async ({ contextTail, signal, onDelta, onError }) => {
+      try {
+        await continueWriting({ contextTail, signal, onDelta });
+      } catch (error) {
+        onError?.(error);
+      }
+    },
+    [],
   );
 
   async function handleDelete() {
@@ -195,6 +209,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
               preset="full"
               value={initialContent}
               onChange={handleContentChange}
+              aiContinue={handleAiContinue}
             />
           </>
         )}

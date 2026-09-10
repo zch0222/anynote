@@ -6,12 +6,14 @@ import {
   createSlashItems,
   filterSlashItems,
 } from "@/components/editor/extensions/slash-items";
+import type { AiContinueFn } from "@/components/editor/presets/types";
 import { Extension } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
 
 export type SlashCommandOptions = {
   uploadFn?: UploadFn | undefined;
+  aiContinue?: AiContinueFn | undefined;
 };
 
 /**
@@ -26,7 +28,10 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
   },
 
   addProseMirrorPlugins() {
-    const items = createSlashItems({ uploadFn: this.options.uploadFn });
+    const items = createSlashItems({
+      uploadFn: this.options.uploadFn,
+      aiContinue: this.options.aiContinue,
+    });
 
     return [
       Suggestion<SlashItem, SlashItem>({
