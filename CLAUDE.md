@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) and Codex (via AGENT
 Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turborepo + Maven multi-module 编排：
 
 - `services/` — Java 21 · Spring Boot 3.3.4 · Spring Cloud 2023.0.3（9 个微服务 + Feign API 模块 + common 共享库 + BOM）
-- `apps/web/` — Next.js 15 · React 19（**Phase 5 重写中，M1 骨架与工具链已完成，首页仍是默认模板**）
+- `apps/web/` — Next.js 15 · React 19（**Phase 5 重写中，M2 认证、M3 查询层与 M4 AppShell 已实现并验收；业务页面仍为骨架占位**）
 - `apps/web-legacy/` — Next.js 13.5（**旧前端，仍是当前用户访问的版本**，Phase 5 验收后才删）
 - `ai-service/` — Python 3 · FastAPI · LangChain 0.3 · Pydantic v2
 - `packages/api-client/` — `pnpm openapi:generate` 产出的 TS 客户端（**不要手改**，`src/` 已 gitignore）
@@ -27,17 +27,17 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中（约 15%，沿用原工期口径）** — M0 / M1 / M2.0 已完成；M2.1 独立认证 BFF、M2.2 与 M2.3 已实现。2026-09-09 权限恢复后：136 个 Java 单测、149 个前端单测、20 个 OpenAPI 单测、8 个真实认证集成测试、生产构建与原始契约生成通过；已修复默认 LogoutFilter 截获。刷新按用户确认暂缓，M2.4 未完成；M3-M8 未启动。本地 auth 容器已换新 JAR，但缓存镜像重建仍受 Docker Hub 超时影响。详见 `docs/refactor/FRONTEND_MILESTONES.md` §5；集成测试命令见 README「测试」 |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **进行中** — M0 / M1 / M2.0 已完成；M2 / M3 / M4 实现与验收通过，合并 `dev` 暂缓。2026-09-10 M4：210 前端单测、14 个 Docker 后端认证 / 代理集成用例、类型检查、Biome、生产构建与 Codex 浏览器验证通过。M5-M8 未启动。详见 `docs/refactor/FRONTEND_MILESTONES.md` M4 / §5 与 `docs/refactor/TASKS.md` Phase 5；集成测试命令见 README「测试」 |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
-**当前分支（2026-09-09 核对）**：`phase/5.2-auth-bff`。`main` 是发布分支，日常合并目标是 `dev`。
+**当前分支（2026-09-10 核对）**：`phase/5.4-app-shell`，从 `phase/5.3-api-layer` 叠出。`main` 是发布分支，日常合并目标是 `dev`。
 
-**分支落点（2026-09-09 核对）**：M2.0 已通过 `3865a2f` 合并到 `dev`。当前 `phase/5.2-auth-bff` 含 Gateway/Bearer 前置提交，以及本轮 common/auth/OpenAPI/web 五笔代码提交（`1a4d217` … `bcfb053`），详情见里程碑 §5；未合并到 `dev` 或 `main`，未推送远端。
+**分支落点（2026-09-10 核对）**：M2.0 已通过 `3865a2f` 合并到 `dev`；后续按 `phase/5.2-auth-bff` → `phase/5.3-api-layer` → `phase/5.4-app-shell` 叠分支继续开发。M2 / M3 合并按用户此前指示暂缓，M4 延续此安排；本轮不合并或推送。详情见里程碑 M2-M4 / §5。
 
-**认证契约（2026-09-08 用户确认并实现）**：Gateway 的外部私有请求仅接受 `Authorization: Bearer <token>`，取消旧 `accessToken` 请求头兼容；内部服务仍使用 Gateway 注入的已验证 `accessToken`。OpenAPI 已改为 HTTP Bearer/JWT，六份 baseline 已重生。旧前端尚未迁移，切换后的私有请求会失败。**刷新方案审查状态**：完整触发、重试和失败处理规则尚未明确；2026-09-08 用户明确“暂缓刷新，先完成独立任务”，提前 60 秒刷新等讨论建议未获采纳。局部锁风险不作为必须调整方案的结论；保留原 BFF 方案。详见 `docs/refactor/FRONTEND_MILESTONES.md` M2.1 与 `.claude/openspec/changes/2026-09-08-gateway-bearer-only.md`。
+**认证契约（2026-09-08 用户确认并实现）**：Gateway 的外部私有请求仅接受 `Authorization: Bearer <token>`，取消旧 `accessToken` 请求头兼容；内部服务仍使用 Gateway 注入的已验证 `accessToken`。OpenAPI 已改为 HTTP Bearer/JWT，六份 baseline 已重生。旧前端尚未迁移，切换后的私有请求会失败。**刷新方案状态**：2026-09-08 的暂缓记录已由后续 M2 实现与验收更新；2026-09-10 自动刷新与并发刷新已通过真实栈测试。具体触发、重试和失败边界以里程碑 M2.1 为准，不将早期讨论建议当作现行方案。详见 `docs/refactor/FRONTEND_MILESTONES.md` M2.1 与 `.claude/openspec/changes/2026-09-08-gateway-bearer-only.md`。
 
-**M2.1 登出契约补充（2026-09-08 用户确认）**：允许 `{ accessToken?, refreshToken? }`，至少一个非空白；仅 `rt` 时撤销该 refreshToken，不扩大到其他会话。已核对真实 Springdoc 契约并同步 OpenAPI 与 BFF；M2.3 页面与测试也已完成，完整验收仍待补齐。详见 `.claude/openspec/changes/2026-09-08-logout-refresh-token-only.md` 和 `docs/refactor/FRONTEND_MILESTONES.md` §5。
+**M2.1 登出契约补充（2026-09-08 用户确认）**：允许 `{ accessToken?, refreshToken? }`，至少一个非空白；仅 `rt` 时撤销该 refreshToken，不扩大到其他会话。已核对真实 Springdoc 契约并同步 OpenAPI 与 BFF；M2.3 页面与测试也已完成，M2 完整验收于 2026-09-10 通过。详见 `.claude/openspec/changes/2026-09-08-logout-refresh-token-only.md` 和 `docs/refactor/FRONTEND_MILESTONES.md` §5。
 
 ## 常用命令
 
