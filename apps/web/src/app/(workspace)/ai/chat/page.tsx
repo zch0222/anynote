@@ -1,5 +1,5 @@
-import { WorkspacePlaceholder } from "@/components/layout/workspace-placeholder";
+import { ChatPage } from "@/features/ai/components/chat-page";
 
 export default function Page() {
-  return <WorkspacePlaceholder title="AI 对话" description="与 AI 一起探索问题，拓展思路。" />;
+  return <ChatPage />;
 }
