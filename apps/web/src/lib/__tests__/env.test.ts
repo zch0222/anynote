@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 beforeEach(() => {
   vi.resetModules();
   vi.stubEnv("NODE_ENV", "test");
+  vi.stubEnv("DEPLOYMENT_ENV", undefined);
   vi.stubEnv("INTERNAL_API_URL", undefined);
   vi.stubEnv("NEXT_PUBLIC_APP_URL", undefined);
   vi.stubEnv("COLLAB_TOKEN_SECRET", undefined);
@@ -18,6 +19,14 @@ afterEach(() => {
 
 describe("服务端环境变量", () => {
   beforeEach(() => vi.stubGlobal("window", undefined));
+
+  it("容器可在生产构建上显式声明开发部署", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DEPLOYMENT_ENV", "development");
+    const { env } = await import("../env");
+    expect(env.NODE_ENV).toBe("production");
+    expect(env.DEPLOYMENT_ENV).toBe("development");
+  });
 
   it("提供本地 Gateway 与浏览器源默认值", async () => {
     const { env } = await import("../env");
@@ -72,18 +81,21 @@ describe("服务端环境变量", () => {
     await expect(import("../env")).rejects.toThrow("Invalid env vars");
   });
 
-  it.each(["INTERNAL_API_URL", "NEXT_PUBLIC_APP_URL", "NODE_ENV", "NEXT_PUBLIC_COLLAB_WS_URL"])(
-    "%s 非法时拒绝启动并报告字段名",
-    async (name) => {
-      vi.stubEnv(name, "invalid");
-      const error = vi.spyOn(console, "error").mockImplementation(() => {});
-      await expect(import("../env")).rejects.toThrow("Invalid env vars");
-      expect(error).toHaveBeenCalledWith(
-        "❌ Invalid env vars:",
-        expect.objectContaining({ [name]: expect.any(Array) }),
-      );
-    },
-  );
+  it.each([
+    "INTERNAL_API_URL",
+    "NEXT_PUBLIC_APP_URL",
+    "NODE_ENV",
+    "DEPLOYMENT_ENV",
+    "NEXT_PUBLIC_COLLAB_WS_URL",
+  ])("%s 非法时拒绝启动并报告字段名", async (name) => {
+    vi.stubEnv(name, "invalid");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(import("../env")).rejects.toThrow("Invalid env vars");
+    expect(error).toHaveBeenCalledWith(
+      "❌ Invalid env vars:",
+      expect.objectContaining({ [name]: expect.any(Array) }),
+    );
+  });
 });
 
 describe("浏览器环境变量", () => {
