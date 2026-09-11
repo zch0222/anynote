@@ -1,0 +1,14 @@
+# 叠加在 base + dev 后：前端 HMR。依赖与 .next 留在容器，避免 Windows/Linux 或构建混用。
+services:
+  anynote-web:
+    build:
+      target: development
+    volumes:
+      - ../apps/web/src:/workspace/apps/web/src:ro
+      - ../apps/web/public:/workspace/apps/web/public:ro
+      - ../apps/web/next.config.ts:/workspace/apps/web/next.config.ts:ro
+      - ../apps/web/tsconfig.json:/workspace/apps/web/tsconfig.json:ro
+    healthcheck:
+      start_period: 120s
+      timeout: 10s
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login',{signal:AbortSignal.timeout(9000)}).then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]

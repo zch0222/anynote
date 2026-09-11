@@ -1,0 +1,6 @@
+# 仅与 docker-compose-middleware.yaml 合并；IDEA 客户端通过宿主机访问 broker。
+services:
+  rocketmq-broker:
+    environment:
+      ROCKETMQ_BROKER_ADVERTISE_IP: 127.0.0.1
+      brokerIP1: 127.0.0.1
