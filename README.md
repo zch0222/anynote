@@ -6,7 +6,7 @@
 |--------|------|
 | Java · Spring Boot | 21 · 3.3.4 |
 | Spring Cloud / Alibaba | 2023.0.3 / 2023.0.3.4 |
-| Next.js · React · TypeScript | 13.5 · 18 · 5 |
+| Next.js · React · TypeScript | 15.5 · 19 · 5 |
 | Python · FastAPI · LangChain | 3.x · 0.116 · 0.3 |
 
 ---
@@ -51,18 +51,19 @@ anynote/
 |------|------|---------|
 | [A. Dev Docker 全栈](#场景-adev-docker-全栈推荐日常使用) | 日常本机开发，最快 | `--env-file=/dev/null` + `docker-compose.dev.yaml` override |
 | [B. IDEA / 宿主机跑 Java](#场景-bidea--宿主机跑-java混合模式) | 想在 IDE 里 debug Java 服务 | 只起中间件，IDEA Run Config 接 `.env.idea` |
-| [C. 生产部署](#场景-c生产部署) | 对外暴露的环境 | 必须 `infra/.env` 配置真密码 + Nginx 终止 TLS |
+| [C. 生产部署](#场景-c生产部署) | 对外暴露的环境 | `--env-file infra/.env` + prod override + 容器外 Nginx |
 
 ### 环境变量文件总览（必读）
 
-`infra/` 下的 `.env` 类文件按用途分为两套，**不要混用**：
+环境配置按容器部署、IDEA Java 与宿主机前端三种用途分开，**不要混用**：
 
 | 文件 | 用途 | 入库 | docker compose 默认会读？ |
 |------|------|:----:|:----:|
-| `infra/.env.example` | 容器化全栈部署时**覆盖密码、镜像 tag** | ✅ | ✅（拷贝为 `.env` 后自动加载） |
+| `infra/.env.example` | 生产密码、域名、镜像标签样板（必填值留空） | ✅ | ❌ |
 | `infra/.env.idea.example` | **IDEA / 宿主机直接跑 Java** 时把中间件 host 改成 `127.0.0.1` | ✅ | ❌ |
-| `infra/.env` | 你从 `.env.example` 拷贝出的本地实例（含真密码） | ❌ | ✅ 自动 |
-| `infra/.env.idea` | 你从 `.env.idea.example` 拷贝出的 IDEA 实例（含 `127.0.0.1` host 覆盖） | ❌ | **绝不能**——含 `127.0.0.1` 类 host，会污染容器 |
+| `infra/.env` | 从生产样板拷贝出的部署实例 | ❌ | 生产命令显式 `--env-file infra/.env` |
+| `infra/.env.idea` | IDEA Java 的宿主机地址配置 | ❌ | **不能交给 Compose** |
+| `apps/web/.env.example` → `.env.local` | 宿主机 Next.js 开发，`.env.local` 不入库 | 样板 ✅ | ❌，由 Next.js 加载 |
 
 **踩坑提示**：`.env.idea` 文件名不是 `.env`，所以 docker compose 默认不会加载。但如果你不慎把它重命名成 `.env`，里面的 `ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 容器向 namesrv 广播错误地址，结果是其它容器内的 app 无法连接 broker，MQ listener 启动失败。
 
@@ -75,9 +76,9 @@ anynote/
 
 ### 场景 A：Dev Docker 全栈（推荐日常使用）
 
-> 不在宿主机装 Java / Python，所有服务全部跑在容器里；几分钟内拉起全栈。
+> Next.js、协同服务、9 个 Java 服务和中间件进入 Compose。Java JAR 仍需预先构建；Python AI 独立运行，由 `AI_FASTAPI_ADDRESS` 指向其内网地址。
 
-**前置**：Docker >= 24 + Compose Plugin、Maven、pnpm >= 9。
+**前置**：Docker >= 24 + Compose >= 2.24.4、Maven / JDK 21。前端依赖和生产构建全部在镜像内完成。下列 shell 命令在 Linux / macOS / WSL 执行；Windows 原生 Compose 的空环境文件用 `--env-file=NUL`。
 
 #### A.1 构建 Java 服务 JAR
 
@@ -98,6 +99,8 @@ docker compose --env-file=/dev/null \
 - `--env-file=/dev/null`：强制 compose 忽略本地 `.env`，避免 IDEA 用 host 覆盖污染容器
 - `docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便 `docker logs` 排查；中间件保留原 restart 策略
 - `--build`：首次或代码变更时必带；后续仅起容器可省
+- 浏览器访问 `http://localhost:3000/login`；先停止占用 3000 的宿主机 `next start` / `next dev`。前端健康检查访问 `/login`。前端镜像不含 Nginx。
+- 前端默认运行生产构建；只重建前端可用同一组 `-f` 参数执行 `up -d --build --no-deps anynote-web`。构建与运行目录隔离，不挂载宿主机 `.next`。
 
 启动约需 60–120 秒。
 
@@ -136,7 +139,15 @@ pnpm openapi:generate
 pnpm --filter @anynote/api-client typecheck
 ```
 
-#### A.5 停止与清理
+#### A.5 前端容器热更新（可选）
+
+```bash
+docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml -f infra/docker-compose.web-dev.yaml up -d --build --no-deps anynote-web
+```
+
+`src/`、`public/` 和 Next/TS 配置只读挂载，依赖、生成类型与 `.next` 留在容器。修改依赖、锁文件或 OpenAPI baseline 后重新 build。恢复生产构建时去掉 `web-dev` 覆盖文件，仍需 `up -d --build --no-deps anynote-web`；切换构建目标不能只用 `restart`。
+
+#### A.6 停止与清理
 
 ```bash
 # 停止全部容器（保留数据）
@@ -164,7 +175,7 @@ cp infra/.env.idea.example infra/.env.idea
 #### B.2 只起中间件
 
 ```bash
-docker compose --env-file=/dev/null -f infra/docker-compose-middleware.yaml up -d
+docker compose --env-file=/dev/null -f infra/docker-compose-middleware.yaml -f infra/docker-compose.middleware-idea.yaml up -d
 # 包含：MySQL · Redis · Nacos · Elasticsearch · MinIO · RocketMQ · Logstash · XXL-Job
 ```
 
@@ -193,9 +204,19 @@ uvicorn app:app --reload --host 0.0.0.0 --port 8000
 
 ```bash
 pnpm install
-pnpm --filter web-legacy dev
+cp apps/web/.env.example apps/web/.env.local
+pnpm openapi:generate  # Gateway 就绪后从真实契约派生类型
+pnpm --filter web dev
 # 访问 http://localhost:3000
 ```
+
+宿主机前端启动前，停掉 `anynote-web` 容器以释放 3000。协同服务可以单独启动：
+
+```bash
+docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml up -d --build --no-deps anynote-collab
+```
+
+IDEA 模式和 Docker Java 模式不要同时运行同名服务；切回 Docker 全栈时去掉 `middleware-idea` 覆盖文件并重新创建 broker。前端配置放 `apps/web/.env.local`，Java 配置放 `infra/.env.idea`，两者均不提供给镜像构建。
 
 #### B.6 更新 API 客户端类型（后端接口变更后）
 
@@ -208,122 +229,81 @@ pnpm --filter @anynote/api-client typecheck
 
 ### 场景 C：生产部署
 
-> 对外暴露的环境。与 dev 的关键差异：**真密码 + 自动重启 + Nginx 终止 TLS**。**不**使用 `--env-file=/dev/null`，**不**使用 `docker-compose.dev.yaml` override。
+部署拓扑：容器外 Nginx 终止 TLS → Next.js BFF / 协同 WebSocket → Docker 内网 Java 服务与中间件。Compose 不创建 Nginx。生产必须合并 `docker-compose.prod.yaml`，不能单独使用 base 或 dev 覆盖文件。
 
-**前置**：Docker >= 24 + Compose Plugin、Maven（或预构建镜像）、Nginx、（可选）私有镜像 Registry。
-
-#### C.1 必修改的安全敏感变量
-
-| 变量 | 默认值（**不要**在生产使用） | 风险 |
-|------|------|------|
-| `JWT_SECRET` | `yxlm`（4 字符极弱） | 认证绕过 |
-| `MYSQL_ROOT_PASSWORD` | `AnynoteRoot123` | 数据库 root |
-| `MYSQL_APP_PASSWORD` | `Anynote*1832` | 应用账户 |
-| `MINIO_ROOT_PASSWORD` | `AnynoteMinio123` | 对象存储 |
-| `XXL_JOB_ADMIN_ACCESSTOKEN` | `default_token` | 任务调度 |
-| `REDIS_PASSWORD` | _(空)_，无认证 | 缓存读写 |
-| `NACOS_PASSWORD` | `nacos`（账密默认） | 配置中心 |
-
-随机密钥生成：`openssl rand -hex 32`。
-
-#### C.2 拷贝并填充 `infra/.env`
+#### C.1 准备发布配置
 
 ```bash
 cp infra/.env.example infra/.env
-$EDITOR infra/.env
-# 至少替换上表所有变量；SPRING_PROFILES_ACTIVE 改为 prod（确保 Nacos 中已建对应 prod 命名空间）
 chmod 600 infra/.env
+# 编辑并填满所有空值：真实密码、COLLAB_TOKEN_SECRET、NACOS_NAMESPACE、APP_IMAGE_TAG、MINIO_VERSION。
+# 密钥建议用 openssl rand -hex 32 独立生成。
 ```
 
-`infra/.env` 已在 `.gitignore` 内，确认不会被推送。
+`NEXT_PUBLIC_APP_URL=https://你的域名`（无尾斜杠），`NEXT_PUBLIC_COLLAB_WS_URL=wss://你的域名/collab`。它们是**构建参数**；域名变更必须重新构建前端镜像。容器启动会校验构建值与运行配置一致，防止页面仍连接 localhost。协同密钥只在运行时注入 web/collab，不能作为 build arg；纯 Web 部署保持 `DESKTOP_EXCHANGE_KEY` 未配置。
 
-#### C.3 构建或拉取镜像
+所有生产命令显式使用 `--env-file infra/.env`，避免当前工作目录影响环境加载。缺少必要变量时 Compose 在启动前报错。`APP_IMAGE_TAG` 使用唯一发布标签，`MINIO_VERSION` 固定已验证的 RELEASE 标签。已有数据卷的数据库密码不会因更改 `.env` 自动修改，轮换时需同步数据库账户。
 
-本仓库默认走"宿主机 build JAR → `infra/Dockerfile.local` 打镜像"模式：
+#### C.2 准备生产 Nacos 配置
+
+生产覆盖文件关闭默认 dev 配置自动导入，并将 Spring 的配置导入切换到 `application-prod.yml` 和 `<spring.application.name>-prod.yml`，不再读取 JAR 中硬编码的 `application-dev.yml`。
+
+1. 启动中间件，创建 `NACOS_NAMESPACE` 对应的生产 namespace。
+2. 在 `NACOS_PROD_CONFIG_DIR`（宿主机绝对路径）准备 `DEFAULT_GROUP` 下的 `application-prod.yml` 及各服务 `*-prod.yml`。以 `infra/docker/nacos/configs/` 为结构参考，检查数据库、Redis、对象存储、AI 地址、第三方密钥、日志和权限配置；不要把 dev 配置原样发布。
+3. 从可信运维环境访问 Nacos API/控制台后手动导入，或显式运行下面的 `nacos-init`。普通 `up` 不重写配置。
 
 ```bash
-pnpm services:build                                # 在 build 主机产 JAR
-docker compose -f infra/docker-compose.yaml build  # 打镜像；可推私有 registry
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml up -d mysql redis nacos elasticsearch rocketmq-namesrv rocketmq-broker logstash minio xxl-job-admin
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml run --rm nacos-init
 ```
 
-或使用预构建的远端镜像：把 `APP_IMAGE_PREFIX` 指向你的 registry，跳过 build。
+生产不发布 Nacos / Elasticsearch 等管理端口。这些中间件沿用单机可信 Docker 网络模式；不要把不可信容器加入 `anynote-net`。如有跨主机中间件或多租户运维要求，需要另外配置中间件认证与 TLS。Python AI 仍是独立服务，`AI_FASTAPI_ADDRESS` 必须指向可达的内网地址。
 
-#### C.4 启动全栈
+#### C.3 构建并启动
 
 ```bash
-docker compose -f infra/docker-compose.yaml up -d
-# 注意：
-# - 不带 --env-file=/dev/null（需要读 infra/.env 中的真密码）
-# - 不带 docker-compose.dev.yaml override（保留 restart: on-failure:5）
+pnpm services:build
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml build
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml up -d --no-build --wait
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml ps
 ```
 
-启动约需 60–180 秒（生产 JVM 参数可能更大、ES 冷启动更慢）。
+前端在多阶段镜像内安装锁文件依赖、从入库 OpenAPI baseline 生成类型、运行 webpack 构建，最终只拷贝 standalone、静态资源与 public。无需宿主机 `node_modules`、`.next` 或运行中的 Gateway；构建需要 npm/基础镜像与 Google 字体下载网络。运行用户为 `node`，带健康检查、退出自动重启及日志轮转。生产 Java/中间件仅有 Docker 内网端口。
 
-#### C.5 Nacos 配置审查
-
-部署后立即检查 Nacos 中 `application-dev.yml` / `anynote-<svc>-dev.yml` 是否还残留 dev 占位值。生产建议：
-
-- 在 Nacos 新建 prod 命名空间，复制并修订 13 份 config（`infra/docker/nacos/configs/` 是 dev baseline，**不要**直接用于 prod）
-- 容器设置 `SPRING_PROFILES_ACTIVE=prod` 让服务加载 prod config
-- 关闭 Nacos 匿名访问：把 `infra/docker-compose-middleware.yaml` 中 `NACOS_AUTH_ENABLE` 改为 `true` 并在 Nacos 控制台改默认账密
-
-#### C.6 验证
+使用镜像仓库时配置 `APP_IMAGE_PREFIX` 和 `APP_IMAGE_TAG`，在构建机 `build` / `push`，部署机 `pull` 后 `up -d --no-build --wait`。仅升级前端：
 
 ```bash
-docker compose -f infra/docker-compose.yaml ps
-# 9 个 app 容器 + 8 个中间件容器全部 healthy
-
-# 通过 Nginx 入口验证（替换为你的域名）
-curl -fsS https://api.example.com/actuator/health | jq .
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml up -d --build --no-deps --wait anynote-web
 ```
 
-#### C.7 数据持久化与备份
+单实例替换存在短暂重连窗口；需要无中断发布时部署两套独立 release 后由外部 Nginx 切换 upstream，不共享 `.next`。
 
-生产数据卷（`docker volume ls --filter name=anynote`）：
+#### C.4 安装容器外 Nginx
 
-| 卷名 | 内容 | 备份建议 |
-|------|------|---------|
-| `anynote_mysql-data` | MySQL 全部数据 | 每日 `mysqldump` 异地存储 |
-| `anynote_minio-data` | 对象存储（用户上传文件） | 定期 `mc mirror` 同步到冷备 |
-| `anynote_elasticsearch-data` | 笔记搜索索引 | 可从 MySQL 重建，备份优先级低 |
-| `anynote_nacos-logs` | 配置中心运行日志 | 滚动归档 |
-| `anynote_rocketmq-broker-store` | 消息存储 | 接受消息丢失则可不备份 |
+模板：[`infra/nginx/nginx.conf`](infra/nginx/nginx.conf) 与 [`infra/nginx/snippets/sse-common.conf`](infra/nginx/snippets/sse-common.conf)。Nginx >= 1.25.1，把主配置放进 `http {}` 下加载的目录，snippet 放 `/etc/nginx/snippets/`，替换域名和证书后执行 `nginx -t` 再 reload。
 
-⚠️ `down -v` 会删除上述全部卷——**生产环境绝不要在不备份的情况下执行 `down -v`**。
+| 外部路径 | 宿主机 upstream | 说明 |
+|---|---|---|
+| `/`、`/_next/*` | `127.0.0.1:3000` | Next.js 页面与静态资源 |
+| `/api/*` | `127.0.0.1:3000` | BFF 登录、Cookie、代理及 SSE；关闭缓冲 |
+| `/collab/*` | `127.0.0.1:1234` | 去掉 `/collab/` 前缀并保留 Upgrade；不记录含令牌的请求 URL |
 
-#### C.8 Nginx 反向代理
+`/api/` 不能转发到 8080：新前端需要先经过 BFF，内部才请求 `http://anynote-gateway:8080`。使用 HTTPS 保持 Secure Cookie；请求 Host/Origin 必须与配置的站点来源一致。Next 自己设置静态缓存头，不对错误响应强加长期缓存。
 
-所有容器端口均绑定 `127.0.0.1`，不直接对外暴露。生产环境通过 Nginx 统一转发：
+默认 Nginx 与 Docker 同机，两个入口只绑定回环。如 Nginx 在另一台内网主机，将 `WEB_BIND_IP` / `COLLAB_BIND_IP` 改成 **Docker 主机的私网 IP**，upstream 同步修改，防火墙只允许 Nginx 来源访问 3000/1234，TLS 仍在 Nginx 终止。只有 Nginx 对客户端暴露 80/443。
 
-```
-外网 443/80
-  └── Nginx
-        ├── /api/aiNio/  →  127.0.0.1:8080  （SSE，关闭缓冲）
-        ├── /api/        →  127.0.0.1:8080  （普通 API）
-        └── /            →  127.0.0.1:3000  （前端）
-```
+网络架构图与访问链路见 [`docs/deployment-network.md`](docs/deployment-network.md)。
 
-配置模板见 [`infra/nginx/nginx.conf`](infra/nginx/nginx.conf)，复制后替换域名和证书路径即可。
+#### C.5 验证与持久化
 
-**SSE 关键配置**（`/api/aiNio/` 路由，含 AI 流式对话和语音转写状态推送）：
+访问 `https://你的域名/login`，确认所有 JS/CSS 返回 200；验证登录失败提示、成功后 Cookie/用户资料、`/docs` 协同连接和 SSE。自动检查命令见「测试」节。没有真实域名、证书和生产 Nacos 配置前，只能完成本地容器验证，不能把它记作生产发版验收。
 
-```nginx
-location /api/aiNio/ {
-    proxy_pass          http://127.0.0.1:8080;
-    proxy_buffering     off;       # 必须：关闭缓冲，否则 SSE 数据流被批量缓存
-    proxy_cache         off;
-    proxy_read_timeout  3600s;     # SSE 连接持续时间较长
-    proxy_http_version  1.1;
-    proxy_set_header    Connection '';
-    add_header          X-Accel-Buffering no always;
-}
-```
+MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同文档均保留命名卷。尤其 `collab-data` 存储协同文档，备份时停写或使用一致性快照；前端产物无数据卷，每次发布来自新镜像。MySQL 用 `mysqldump`、MinIO 用 `mc mirror` 做异地备份，保留 Nacos 配置备份。生产不要执行 `down -v`。
 
 ---
-
 ## 环境变量参考
 
-所有变量均在 `infra/.env` 中设置（由 `infra/docker-compose-middleware.yaml` 与 `infra/docker-compose.yaml` 读取）。**dev 推荐用 `--env-file=/dev/null` 强制走 YAML 默认值**，避免与 `infra/.env.idea` 混淆（详见 [环境变量文件总览](#环境变量文件总览必读)）。未设置时使用括号内的默认值。
+容器变量在 `infra/.env` 中设置，宿主机前端变量在 `apps/web/.env.local` 中设置（由 `infra/docker-compose-middleware.yaml` 与 `infra/docker-compose.yaml` 读取）。**dev 推荐用 `--env-file=/dev/null` 强制走 YAML 默认值**，避免与 `infra/.env.idea` 混淆（详见 [环境变量文件总览](#环境变量文件总览必读)）。未设置时使用括号内的默认值。
 
 ### 必须修改（安全敏感）
 
@@ -343,6 +323,12 @@ location /api/aiNio/ {
 | `JAVA_OPTS` | `-Xms256m -Xmx512m` | 所有 Java 服务共享的 JVM 参数 |
 | `AI_FASTAPI_ADDRESS` | `http://host.docker.internal:8000` | Python AI 服务地址；容器内部署时改为容器名 |
 | `APP_IMAGE_PREFIX` | `anynote` | Docker 镜像名前缀 |
+| `APP_IMAGE_TAG` | `local` | 生产必须显式设置发布标签 |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | 公开来源，构建时内联，生产要求 HTTPS |
+| `NEXT_PUBLIC_COLLAB_WS_URL` | `ws://localhost:1234` | 生产为同源 `wss://域名/collab` |
+| `COLLAB_TOKEN_SECRET` | 开发密钥 | 生产必须独立生成至少 32 字符，web/collab 共用 |
+| `WEB_BIND_IP` / `COLLAB_BIND_IP` | `127.0.0.1` | 只发布外部 Nginx 所需入口 |
+| `WEB_PORT` / `COLLAB_PORT` | `3000` / `1234` | 改动后同步 Nginx upstream |
 | `APP_DOCKERFILE` | `infra/Dockerfile.local` | 构建用 Dockerfile 路径 |
 
 ### 数据库（MySQL）
@@ -486,6 +472,18 @@ location /api/aiNio/ {
 ---
 
 ## 测试
+
+部署配置回归：`node --test infra/web/config.test.mjs`；Linux/WSL 下运行 `python3 -m unittest discover -s infra/tests -v` 检查生产端口、环境隔离、必填配置和 HMR 挂载。
+
+本地部署冒烟（会创建随机测试账号并在结束时撤销会话，账号记录保留）：
+
+```bash
+python3 infra/tests/smoke_web.py http://localhost:3000 --ws ws://localhost:1234
+# 验证生产 HTTPS/WSS 配置，连接当前开发后端，临时代理容器在结束后自动清理：
+docker build -f infra/Dockerfile.web --build-arg NEXT_PUBLIC_APP_URL=https://localhost:3443 --build-arg NEXT_PUBLIC_COLLAB_WS_URL=wss://localhost:3443/collab -t anynote/anynote-web:prod-check .
+sh infra/tests/proxy-smoke.sh
+```
+
 
 ### 技术栈
 

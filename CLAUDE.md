@@ -54,7 +54,7 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 要点速查（强制约束，**违反这些会踩坑**）：
 
 - **dev 场景 `docker compose` 命令必须加 `--env-file=/dev/null`**。原因：`infra/.env.idea`（IDEA 在宿主机跑 Java 时用）含 `127.0.0.1` 类 host 覆盖；若被 compose 自动加载，`ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 广播错误地址，容器内 app 连不上 broker。
-- **prod 场景反向：必须读 `infra/.env`，不加 `--env-file=/dev/null`，也不带 `docker-compose.dev.yaml` override**（生产需要 `restart: on-failure:5` 自动恢复）。
+- **prod 必须显式 `--env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml`**，不带 dev override。生产关闭 Java/中间件宿主机端口，使用 `restart: unless-stopped`，只给容器外 Nginx 发布 web:3000 / collab:1234。
 - **dev 全栈推荐命令**：
 
   ```bash
@@ -65,6 +65,8 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
   ```
 
   `docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便日志排查；中间件保留原 restart 策略。
+- **前端容器化**：`infra/Dockerfile.web` 从入库 OpenAPI baseline 派生类型并构建 Next standalone；不挂载宿主机 `.next`，容器内不含 Nginx。`NEXT_PUBLIC_*` 是构建参数，域名变化要重建；运行时只注入服务端密钥。`docker-compose.web-dev.yaml` 提供前端 HMR；IDEA 中间件模式叠加 `docker-compose.middleware-idea.yaml`，宿主机前端读取 `apps/web/.env.local`。完整步骤仍以 README 为准。
+- **新前端外部路由**：`/api/*` 和页面必须经 Next BFF，再由 Docker 内网调用 Gateway；外部 Nginx `/collab/*` 单独转协同容器，不能沿用旧模板把 `/api/` 直连 Gateway。架构图见 [`docs/deployment-network.md`](docs/deployment-network.md)。
 - **OpenAPI / TS 客户端**：后端 Controller 改完跑 `pnpm openapi:generate`，必须把 `openapi/specs/*.json` 一并提交（baseline 入库）；CI `openapi-check.yml` 会对 baseline diff 阻断漂移。`packages/api-client/src/` 仍 gitignored，从 specs 派生。
 
 ### 单服务 / 单模块
@@ -258,6 +260,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 
 - `.claude/context/backend.md` — 服务端口表、模块依赖、包结构、ResCode 速查
 - `.claude/context/frontend.md` — 前端目录、Query Key 工厂、BFF 认证流程、协同编辑与两条派生凭据
+- `docs/deployment-network.md` — 前端 Compose、外部 Nginx、生产与本地网络架构（启动步骤见 README）
 - `.claude/context/api-contracts.md` — API 契约详细规范，含 Gateway 外部仅 Bearer 与内部身份头边界
 - `openapi/WORKFLOW.md` — API-First 开发步骤
 - `.claude/openspec/README.md` — OpenSpec 使用说明
