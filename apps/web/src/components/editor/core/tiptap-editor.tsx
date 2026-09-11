@@ -3,7 +3,12 @@
 import { BubbleMenuPortal } from "@/components/editor/core/bubble-menu";
 import { Toolbar } from "@/components/editor/core/toolbar";
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
-import { type AiContinueFn, type PresetName, presets } from "@/components/editor/presets";
+import {
+  type AiContinueFn,
+  type CollaborationBinding,
+  type PresetName,
+  presets,
+} from "@/components/editor/presets";
 import { getMarkdown } from "@/lib/editor/markdown";
 // KaTeX 布局样式 + 自托管字体（public/fonts/katex）；编辑器样式表
 import "@/styles/katex.css";
@@ -25,6 +30,11 @@ export type TiptapEditorProps = {
   uploadFn?: UploadFn;
   /** 「AI 续写」实现；不传时 slash 菜单对应项提示未接入。 */
   aiContinue?: AiContinueFn;
+  /**
+   * 协同绑定（配合 `preset="collaborative"`）。传了之后正文的唯一真相是 Y.Doc，
+   * `value` 不再作为初始内容、也不再受控回灌。
+   */
+  collaboration?: CollaborationBinding;
   onReady?: (editor: Editor) => void;
   className?: string;
 };
@@ -45,6 +55,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
     placeholder,
     uploadFn,
     aiContinue,
+    collaboration,
     onReady,
     className,
   } = props;
@@ -60,10 +71,13 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
   onChangeRef.current = onChange;
   onReadyRef.current = onReady;
 
+  // 协同模式下正文由 ySyncPlugin 从 Y.Doc 灌入：再设 content / setContent 会把内容写两遍。
+  const isCollaborative = Boolean(collaboration);
+
   const editor = useEditor(
     {
-      extensions: presets[preset]({ uploadFn, aiContinue, placeholder }),
-      content: value,
+      extensions: presets[preset]({ uploadFn, aiContinue, placeholder, collaboration }),
+      ...(isCollaborative ? {} : { content: value }),
       editable: effectiveEditable,
       immediatelyRender: false,
       shouldRerenderOnTransaction: false,
@@ -79,12 +93,12 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
         },
       },
     },
-    [preset, placeholder, uploadFn, aiContinue],
+    [preset, placeholder, uploadFn, aiContinue, collaboration],
   );
 
   // 外部 value 变化（如切换示例内容）时同步进编辑器，避免覆盖用户正在输入的内容
   useEffect(() => {
-    if (!editor) {
+    if (!editor || isCollaborative) {
       return;
     }
     if (value === lastEmitted.current) {
@@ -96,7 +110,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
     }
     lastEmitted.current = value;
     editor.commands.setContent(value, { emitUpdate: false });
-  }, [editor, value]);
+  }, [editor, value, isCollaborative]);
 
   useEffect(() => {
     editor?.setEditable(effectiveEditable);

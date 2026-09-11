@@ -49,6 +49,17 @@ packages/api-client/src/
 # 注意：openapi/specs/*.json 是 OpenAPI 契约 baseline，**入库**，由 CI 的漂移检测 diff
 # 是否与最新后端注解保持一致（详见 .github/workflows/openapi-check.yml 与 openapi/WORKFLOW.md）。
 
+# ===== Rust / Tauri（apps/desktop）=====
+**/src-tauri/target/
+**/src-tauri/gen/
+
+# ===== 端到端测试产物 =====
+# e2e/.auth 存的是每轮临时账号与登录态，绝不能入库
+apps/web/e2e/.auth/
+apps/web/e2e/.output/
+apps/web/playwright-report/
+apps/web/test-results/
+
 # ===== Logs =====
 *.log
 logs/

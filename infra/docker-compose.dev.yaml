@@ -29,3 +29,5 @@ services:
     <<: *app-dev
   anynote-modules-job:
     <<: *app-dev
+  anynote-collab:
+    <<: *app-dev

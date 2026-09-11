@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "桌面壳只负责承载远端页面，不开放任何额外的 IPC 能力",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

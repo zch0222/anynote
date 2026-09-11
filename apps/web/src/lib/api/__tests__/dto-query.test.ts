@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { flattenedDtoQuerySerializer } from "@/lib/api/dto-query";
+import { describe, expect, it } from "vitest";
 
 describe("flattenedDtoQuerySerializer", () => {
   it("把 DTO 包装对象展开为平铺 query（Spring ModelAttribute 绑定方式）", () => {
