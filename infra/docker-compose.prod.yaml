@@ -1,0 +1,106 @@
+# 生产与 docker-compose.yaml 合并，显式读取 infra/.env。Compose >= 2.24.4。
+# Nginx 在 Compose 外；只发布 web / collab，其余仅在 Docker 网络内可达。
+x-required-production:
+  JWT_SECRET: ${JWT_SECRET:?请配置生产 JWT_SECRET}
+  MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请配置生产 MySQL root 密码}
+  MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:?请配置生产 MySQL 应用密码}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?请配置生产 Redis 密码}
+  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?请配置生产 MinIO 密码}
+  XXL_JOB_ADMIN_ACCESSTOKEN: ${XXL_JOB_ADMIN_ACCESSTOKEN:?请配置生产 XXL-Job Token}
+  MINIO_VERSION: ${MINIO_VERSION:?请固定已验证的 MinIO 版本}
+  APP_IMAGE_TAG: ${APP_IMAGE_TAG:?请设置发布镜像标签}
+
+x-prod: &prod
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-java-prod: &java-prod
+  <<: *prod
+  ports: !reset []
+  environment:
+    SPRING_PROFILES_ACTIVE: prod
+    # 覆盖 JAR bootstrap.yml 中硬编码的 application-dev.yml import。
+    SPRING_CONFIG_IMPORT: "nacos:application-prod.yml?group=DEFAULT_GROUP&refreshEnabled=true,optional:nacos:$${spring.application.name}.yml?group=DEFAULT_GROUP&refreshEnabled=true,nacos:$${spring.application.name}-prod.yml?group=DEFAULT_GROUP&refreshEnabled=true"
+    SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ${NACOS_NAMESPACE:?请配置生产 Nacos namespace}
+    SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ${NACOS_NAMESPACE:?请配置生产 Nacos namespace}
+    MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+    SPRINGDOC_API_DOCS_ENABLED: "false"
+    SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+
+services:
+  anynote-web:
+    <<: *prod
+    build:
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?请配置 HTTPS 站点来源}
+        NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:?请配置同源 WSS 协同地址}
+    environment:
+      DEPLOYMENT_ENV: production
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?请配置 HTTPS 站点来源}
+      NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:?请配置同源 WSS 协同地址}
+      COLLAB_TOKEN_SECRET: ${COLLAB_TOKEN_SECRET:?请配置至少32字符的协同密钥}
+  anynote-collab:
+    <<: *prod
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      COLLAB_TOKEN_SECRET: ${COLLAB_TOKEN_SECRET:?请配置至少32字符的协同密钥}
+      COLLAB_ALLOWED_ORIGINS: ${NEXT_PUBLIC_APP_URL:?请配置 HTTPS 站点来源}
+  anynote-gateway:
+    <<: *java-prod
+  anynote-auth:
+    <<: *java-prod
+  anynote-modules-system:
+    <<: *java-prod
+  anynote-modules-note:
+    <<: *java-prod
+  anynote-modules-file:
+    <<: *java-prod
+  anynote-modules-ai-nio:
+    <<: *java-prod
+  anynote-modules-manage:
+    <<: *java-prod
+  anynote-modules-notify:
+    <<: *java-prod
+  anynote-modules-job:
+    <<: *java-prod
+  mysql:
+    <<: *prod
+    ports: !reset []
+  redis:
+    <<: *prod
+    ports: !reset []
+  nacos:
+    <<: *prod
+    ports: !reset []
+  nacos-init:
+    # 人工创建生产 namespace、准备配置后显式 run；普通 up 不覆盖现网 Nacos 配置。
+    profiles: [ops]
+    volumes: !override
+      - ./docker/nacos/nacos-init.sh:/docker/nacos/nacos-init.sh:ro
+      - ${NACOS_PROD_CONFIG_DIR:?请准备生产Nacos配置目录}:/docker/nacos/configs:ro
+  elasticsearch:
+    <<: *prod
+    ports: !reset []
+  rocketmq-namesrv:
+    <<: *prod
+    ports: !reset []
+  rocketmq-broker:
+    <<: *prod
+    ports: !reset []
+  logstash:
+    <<: *prod
+    ports: !reset []
+  minio:
+    <<: *prod
+    ports: !reset []
+  xxl-job-admin:
+    <<: *prod
+    ports: !reset []
