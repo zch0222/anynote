@@ -1,4 +1,4 @@
-import { CollabDocWorkspace } from "@/features/collab/components/doc-workspace";
+import { CollabDocWorkspace } from "@/features/collab/components/collab-loader";
 import { isCollabDocId } from "@/lib/collab/rooms";
 import { notFound } from "next/navigation";
 

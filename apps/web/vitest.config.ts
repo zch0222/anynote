@@ -23,7 +23,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // scripts/ 下是构建期工具（产物预算判定等），逻辑同样要有单测兜底
+    include: ["src/**/*.{test,spec}.{ts,tsx}", "scripts/**/*.{test,spec}.mjs"],
     exclude: [
       "node_modules/**",
       ".next/**",
