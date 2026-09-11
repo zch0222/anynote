@@ -1,4 +1,33 @@
-# 容器挂载的脚本必须保持 LF：Windows 上 autocrlf 检出会把它们变成 CRLF，
-# 容器内 `/bin/sh^M: bad interpreter` 直接导致 MySQL/Nacos 初始化失败（M6 执行期实测）。
+# 全仓文本统一 LF：仓库里存 LF，检出到工作树也是 LF。
+#
+# 为什么要显式声明而不是依赖 core.autocrlf：
+#   1. autocrlf 是**每台机器的本地配置**，Windows 上默认 true 会把检出的文件变成 CRLF；
+#      而 Biome 只按 LF 格式化，于是 `pnpm check` 在一份干净检出上就会失败。
+#   2. autocrlf 只在提交时做规范化，挡不住「已经以 CRLF 存进对象库」的历史文件——
+#      本仓库就有 7 个 Java 文件是这种状态，它们会永远显示为已修改
+#      （`git diff` 看不出内容差异，但 `git diff-files` 一直报 stat 差异）。
+#      已用 `git add --renormalize .` 修正，本文件负责不让它再发生。
+#
+# text=auto 会自动识别二进制（靠 NUL 字节），woff2 / png / ico 不会被改动；
+# 下面仍显式标注常见二进制类型，避免将来某个文件被误判成文本。
+* text=auto eol=lf
+
+# 以下两条已被上面的通配规则覆盖，单独保留是为了记录「为什么必须 LF」：
+# 容器挂载的脚本一旦是 CRLF，容器内会直接 `/bin/sh^M: bad interpreter`，
+# 导致 MySQL/Nacos 初始化失败（M6 执行期实测）。
 *.sh text eol=lf
 *.sql text eol=lf
+
+# ===== 二进制（显式标注，不做任何行尾转换）=====
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.jar binary
+*.zip binary
