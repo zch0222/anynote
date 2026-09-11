@@ -54,7 +54,7 @@ M0 ──▶ M1 ──▶ M2 ──▶ M3 ──┬─▶ M4 ──┐
 | **M5** | TipTap 编辑器核心 | 3-4 天 | M1（可与 M2-M4 并行） | `phase/5.5-tiptap-core` | 中（文件分片直传） |
 | **M6** | 笔记业务页面 | 2-3 天 | M3, M5 | `phase/5.6-notes` | 强（笔记 CRUD） |
 | **M7** | AI / PDF / Mooc / Tasks / Wikis | 3-4 天 | M3, M5 | `phase/5.7-features` | 强（AI SSE / chat-pdf） |
-| **M8** | 协同 + 桌面 + 收尾 | 2 天 | M6, M7 | `phase/5.8-polish` | 弱 |
+| **M8** | 协同 + 桌面 + 收尾 | 2 天 | M6, M7 | `phase/5.8-polish` | 弱（协同为自建服务，不走 OpenAPI） |
 
 **总工期估算**：14-19 工作日（约 3-4 周），与 REFACTOR_PLAN 中 Phase 5 估算 5-7 天的差异来自 TipTap 切换 + 完整业务页面迁移成本。
 
@@ -712,34 +712,103 @@ M6 开工前先按 §2 的强制配合点补齐后端契约，变更提案与核
 
 **目标**：可发布质量，旧前端可删。
 
-**分支**：`phase/5.8-polish`
+**分支**：`phase/5.8-polish`（2026-09-11 自 `dev` 切出）
 
-### M8.1 协同编辑（可选）
-- [ ] `@tiptap/extension-collaboration` + `yjs` + `y-websocket`
-- [ ] 仅 `/docs/[id]` 启用
-- [ ] 后端协同 WS 端点确认或后置
+**状态**：🟢 **2026-09-11 完成 M8.1–M8.4 实现、单测与浏览器验收**，合并 `dev`。
+三项未做且已定性：桌面构建验证（工具链缺失）、删除 `apps/web-legacy/`（条件未达成）、
+合并 `main` 与打 tag（交用户决定）。执行差异见 **M8.6**。
+
+### M8.1 协同编辑（原标注「可选」，2026-09-11 用户确认按「自建 dev WS 服务」实现）
+- [x] `@tiptap/extension-collaboration` + `@tiptap/extension-collaboration-caret` + `yjs` + `y-websocket`
+- [x] 仅 `/docs` 与 `/docs/[id]` 启用（`/docs` 原为占位页；文档库索引本身也是协同房间，不新增后端接口）
+- [x] 后端协同 WS 端点：确认不存在，**自建 `apps/collab`**（Node + yjs 13 + y-protocols 1，:1234），
+      compose 加 `anynote-collab` 服务与 `collab-data` 卷
+- [x] 握手鉴权：BFF 新增 `POST /api/auth/collab-token` 签发 5 分钟、另一套密钥的协同令牌
 
 ### M8.2 桌面端
-- [ ] `apps/desktop`（或保留 `apps/web/src-tauri`）：Tauri 2 配置
-- [ ] 桌面登录走"令牌交换"端点（避免 httpOnly Cookie 跨进程问题）
-- [ ] 验证 dev 与 release 两种构建
+- [x] `apps/desktop`：Tauri 2 配置骨架（窗口在 `lib.rs` 里建，以便注入桌面标记）
+- [x] 桌面登录走「令牌交换」端点：`POST /api/auth/exchange` + `lib/desktop/bridge.ts`
+- [ ] 验证 dev 与 release 两种构建 —— **后置**：本机无 rustc / cargo / MSVC Build Tools，
+      `src-tauri/` 下的 Rust 代码尚未经过编译验证（见 `apps/desktop/README.md`）
 
 ### M8.3 E2E + 性能预算
-- [ ] Playwright：登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 暗色切换 6 条关键路径
-- [ ] Lighthouse：Performance ≥ 90，Accessibility ≥ 95
-- [ ] Bundle 报告：初始 JS gzipped ≤ 300KB，编辑器 chunk ≤ 250KB
-- [ ] Sentry（可选）接入并验证错误上报
+- [x] Playwright：6 条关键路径全部落地并通过，另加协同编辑双上下文同步，共 **15 条用例全绿**
+- [x] Lighthouse：`/login` 100、`/dashboard` 99、`/notes` 99、`/docs` 99、`/ai/chat` 99；
+      无障碍全部 **100**（门槛 90 / 95）
+- [x] Bundle 报告：最重路由 `/notes/[baseId]/[noteId]` **292.0 KB** gzip（预算 300KB）、
+      编辑器 chunk **10.2 KB**（预算 250KB）
+- [ ] Sentry（可选）—— 未接入，属里程碑原文标注的可选项
 
 ### M8.4 清理
-- [ ] 删除 `apps/web-legacy/`（确认 1 周稳定后）
-- [ ] 删除 `node_modules/.cache` 等遗留
-- [ ] 更新 `README.md` 与 `CONTRIBUTING.md` 启动流程
-- [ ] 更新 `.claude/context/frontend.md`
+- [ ] 删除 `apps/web-legacy/` —— **不删**：条件是「确认 1 周稳定后」，而 M7.6 的 5 个后端缺口未解，
+      新前端尚不能替代它承担线上流量。删除前置条件已写入 `CLAUDE.md`「双前端约定」
+- [x] 删除 `node_modules/.cache` 等遗留；`.gitignore` 补 Tauri `target/`/`gen/` 与 e2e 产物
+- [x] 更新 `README.md` 与 `CONTRIBUTING.md` 启动流程
+- [x] 更新 `.claude/context/frontend.md`（顺带修正与实际不符的目录结构）
+- [x] 同步 `CLAUDE.md`（文档维护约定要求：新增文档必须补指针，不留悬空引用）
 
 ### M8.5 验收 / 发版
-- [ ] 合并到 `dev` → `main`
-- [ ] 打 Tag `v0.6.0`（对应 REFACTOR_PLAN.md 表）
-- [ ] TASKS.md Phase 5 标记 `[DONE]`
+- [x] 合并到 `dev`
+- [ ] 合并到 `main` —— 按用户决定，停在 `dev`
+- [ ] 打 Tag `v0.6.0` —— 同上，随 `main` 合并一起做
+- [x] TASKS.md Phase 5 标记为「代码完成，发版待定」
+
+### M8.6 实际执行结果与环境发现（2026-09-11）
+
+**范围决策（开工前与用户确认）**：协同编辑按「自建 dev WS 服务」实现（而非跳过）；
+桌面端只落代码骨架、构建验证后置；`apps/web-legacy/` 保留；停在 `dev` 不发版。
+
+**关键实现决策**：
+
+1. **协同服务不用 `@y/websocket-server`**：它 0.1.5 依赖 `@y/y@14.0.0-rc`，而 TipTap 的
+   collaboration 扩展 peer 要求 `yjs ^13`。混用 v13 客户端与 v14-rc 服务端风险太大，
+   改为直接基于 `yjs@13` + `y-protocols@1` + `ws` 实现 sync/awareness 线协议
+   （约 200 行），顺带把协议层做成可脱离 socket 单测的纯函数。
+2. **持久化用文件而非 y-leveldb**：整份 `encodeStateAsUpdate` 防抖覆盖写 + 先写临时文件
+   再 rename。省掉 classic-level 原生依赖（容器构建更稳），代价是不做增量日志——
+   属开发/自托管级别，文档里已写明。
+3. **`/docs` 作为协同文档库**：里程碑原文说「仅 `/docs/[id]` 启用」，但 `/docs` 当时只是
+   占位页，而 Chat PDF 的资料库在 M7 已落在 `/ai/pdf` 内。于是 `/docs` = 协同文档库、
+   `/docs/[id]` = 协同编辑页，索引存在 `index` 房间里，`/docs` 全程零后端接口调用。
+4. **协同令牌必须另签**：浏览器 `WebSocket` 构造函数不能自定义请求头，凭据只能走查询串；
+   accessToken 又是 httpOnly Cookie 前端拿不到。因此 BFF 用**另一套 HMAC 密钥**签一枚
+   5 分钟、`aud=anynote-collab` 的令牌，泄露也调不动网关任何业务接口。
+   令牌到期前自动续期并写回 `provider.params`，否则 y-websocket 断线重连必然 401。
+5. **`/api/auth/exchange` 默认关闭**：这是整个 BFF 里唯一把真实 Token 交给 JS 的地方。
+   三道闸——`DESKTOP_EXCHANGE_KEY` 未配置即整体关闭、密钥匹配、Origin 在桌面白名单。
+   密钥打包在二进制里可被逆向，所以真正的边界是 Origin 校验，两者缺一不可。
+   已在真实服务器上逐条验证：Web Origin → 403「请求来源不受信任」，
+   错密钥 → 403「桌面客户端标识无效」，对密钥 + tauri Origin + 无会话 → 401。
+
+**本轮发现并修复的问题**：
+
+- **产物预算此前算法有误**：`app-build-manifest.json` 把 layout 与 page 分开列，
+  只统计页面自身 chunk 会**系统性低估**首屏体积。改成「页面 ∪ 各级 layout 去重求和」后，
+  立刻发现新增的 `/docs` 达 **315.1 KB**、超出 300KB 预算——根因是 `yjs` + `y-websocket`
+  被静态引入进首屏。改成 `dynamic(..., { ssr: false })` 后 `/docs` 降到 115 KB（Next 口径），
+  最重路由回到 `/notes/[baseId]/[noteId]` 292 KB。
+- **Lighthouse 只设 `formFactor: "desktop"` 是不够的**：节流参数仍沿用移动端默认值
+  （150ms RTT、4 倍 CPU 降速），据此量到的 84 / 77 分并非真实桌面表现。改用官方
+  `desktopConfig` 后为 100 / 99。**这条是量法错误，不是性能优化**，不要误记为「优化后提升」。
+- **E2E 用例自身的两处错误**：把 SPA 软导航写成 `page.goto` 会重建 JS 进程，
+  store 本来就会清空——那样测的不是「切页不丢消息」；侧栏「工作台」有品牌位与导航位
+  两个链接，需 `exact: true` 锁定。
+- PDF 上传用例必须先选中知识库，否则 `handleFiles` 直接 toast 返回、根本不发请求。
+
+**环境发现**：
+
+- 仓库根 `.dockerignore` 是给 Java 构建定制的（把整个 `apps/` 排除了）。BuildKit 支持与
+  Dockerfile 同名的 `.dockerignore`，collab 的构建忽略规则放在 `infra/Dockerfile.collab.dockerignore`。
+- 容器里 `npm install` 装 `vitest@4` 会触发 npm 10 的 `Cannot read properties of null (reading 'edgesOut')`。
+  构建镜像时只保留编译必需的三个 devDependency 即可绕开。
+- `apps/collab` 源码里的相对 import 写 `.ts` 后缀 + tsconfig 开 `rewriteRelativeImportExtensions`：
+  这样 `node --experimental-strip-types` 能直接跑源码（`pnpm dev`），tsc 产物里又会被改写成 `.js`。
+- Playwright 的配置与 `globalSetup` 走 CJS 加载，里面不能用 `import.meta.url`，用 `__dirname`。
+- 验收前务必确认没有旧的 `next start` 占着 3000 端口（M7.6 已记录同一 `.next` 并行两实例的问题）。
+
+**遗留（后端阻塞，延续 M5.10 / M7.6）**：AI 流式全链路、PDF 上传转存、
+Settings 资料保存、图片分片直传、mooc 权限规则——均非前端可解，E2E 用例已按
+「发起请求并进入明确终态」的方式覆盖，后端修好后无需改用例。
 
 ---
 
@@ -789,7 +858,28 @@ M0 (门禁) ───┬──▶ M1 ──▶ M2 ──▶ M3 ─┐
 
 ## 5. 当前执行位置（2026-09-11 核对）
 
-**最新：M7 已于 2026-09-11 完成实现、单测与浏览器验收**（分支 `phase/5.7-features`，自合并 M6 后的 `dev` 切出；合并 `dev` 待执行）。AI 聊天（SSE 流式会话 + 会话管理 + readonly Markdown 渲染 + slash AI 续写）、Chat PDF（上传/索引轮询/预览/文档问答）、AI 工作流（ReactFlow + zod）、Mooc（课程卡片/详情/视频）、Tasks（react-table + 提交）、Wikis（两级导航 + 只读渲染）、Settings（四分区嵌套路由）全部落地；全仓前端单测 359 → **440** 个，认证/代理集成 14 个真实用例通过，13 条路由 console 零 error。**AI 成功流式路径被后端阻塞**（ai-nio servlet 栈 reactor context 丢失 + LLM 上游未启动，见 M7.6 第 1 条），前端按错误路径验收；PDF 上传与资料保存同受后端缺口阻塞（M7.6 第 4、5 条）。执行差异见 **M7.6**。
+**最新：M8 已于 2026-09-11 完成并合并 `dev`**（分支 `phase/5.8-polish`，自合并 M7 后的 `dev` 切出）。
+至此 **Phase 5 的 M0-M8 代码全部完成**，只差发版动作。
+
+本轮落地：
+
+- **M8.1 协同编辑**：新增 `apps/collab`（自建 y-websocket 协议服务，:1234，75 个单测），
+  BFF 增 `/api/auth/collab-token`，`/docs` 从占位页变成协同文档库、`/docs/[id]` 为协同编辑页，
+  编辑器新增 `collaborative` 预设。compose 增 `anynote-collab` 服务与 `collab-data` 卷。
+- **M8.2 桌面端**：`apps/desktop` Tauri 2 骨架 + `/api/auth/exchange` 令牌交换（默认关闭）+
+  `lib/desktop/bridge.ts`。**构建验证后置**（本机无 Rust / MSVC 工具链，Rust 代码未编译验证）。
+- **M8.3 E2E + 性能**：Playwright 15 条用例全绿（6 条关键路径 + 协同双端同步）；
+  Lighthouse 性能 99-100、无障碍 100；产物预算最重路由 292KB / 编辑器 10.2KB，全部在预算内。
+- **M8.4 收尾**：README / CONTRIBUTING / CLAUDE.md / context 全量同步；
+  **`apps/web-legacy/` 保留**（M7.6 的后端缺口未解，新前端还不能替代它）。
+
+数量：全仓前端单测 **586 个**（M7 结束 440，本轮 +146）、协同服务 **75 个**、
+E2E **15 条**；`pnpm typecheck`、`pnpm check`、生产构建、真实 Docker 栈的浏览器验收全部通过，
+13 条路由 console 零 error。执行差异、量法纠错与环境发现见 **M8.6**。
+
+**发版待用户决定**：`main` 合并与 tag `v0.6.0` 未执行，当前停在 `dev`。
+
+**历史：M7 已于 2026-09-11 完成实现、单测与浏览器验收**（分支 `phase/5.7-features`，自合并 M6 后的 `dev` 切出；已合并 `dev`，merge commit `744686d`）。AI 聊天（SSE 流式会话 + 会话管理 + readonly Markdown 渲染 + slash AI 续写）、Chat PDF（上传/索引轮询/预览/文档问答）、AI 工作流（ReactFlow + zod）、Mooc（课程卡片/详情/视频）、Tasks（react-table + 提交）、Wikis（两级导航 + 只读渲染）、Settings（四分区嵌套路由）全部落地；全仓前端单测 359 → **440** 个，认证/代理集成 14 个真实用例通过，13 条路由 console 零 error。**AI 成功流式路径被后端阻塞**（ai-nio servlet 栈 reactor context 丢失 + LLM 上游未启动，见 M7.6 第 1 条），前端按错误路径验收；PDF 上传与资料保存同受后端缺口阻塞（M7.6 第 4、5 条）。执行差异见 **M7.6**。
 
 **历史：M6 已于 2026-09-11 完成并合并 `dev`**（分支 `phase/5.6-notes`，自合并 M2-M5 后的 `dev` 切出；`--no-ff` merge commit `888c7da`）。笔记业务页面全量落地：知识库/笔记/编辑器三页面 + 数据 hooks + 自动保存状态机（debounce/乐观更新/回滚/离线/冲突/卸载 flush）+ 基于 `update_time` 版本号的后端乐观并发契约（`A0409`，见 openspec `2026-09-11-note-save-result-and-version`）。后端 note 模块 16 个、前端笔记域 75 个（全仓 359 个）单测通过；OpenAPI baseline 仅 note.json 契约性变更；生产构建 + 真实 Docker 栈的浏览器端到端验收通过（含双标签页冲突、拖拽移动、卸载 flush）。执行差异与环境发现见 **M6.5**；M5 遗留的 `@InnerAuth` 图片直传阻塞继续挂起。
 

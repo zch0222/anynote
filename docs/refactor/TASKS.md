@@ -149,7 +149,16 @@
 - [x] **M5** TipTap 编辑器核心（5.5 编辑器集成 — **统一 TipTap**，废弃 Milkdown / Wangeditor / Vditor / Muya）——2026-09-10 实现与浏览器验收通过，分支 `phase/5.5-tiptap-core`（自 `phase/5.4-app-shell` 叠出）；285 前端单测、编辑器主 chunk 211.3 KB gzip、三预设浏览器实测通过，2026-09-11 合并 `dev`（`7b96e67`）；图片分片直传第 1 步被后端 `@InnerAuth` 阻塞，作为遗留问题带入 M6。详见 `FRONTEND_MILESTONES.md` M5 / M5.10
 - [x] **M6** 笔记业务页面——2026-09-11 实现与浏览器端到端验收通过，分支 `phase/5.6-notes`（自 `dev` 切出），同日合并 `dev`（`888c7da`）：知识库/笔记/编辑器三页面 + 数据 hooks + 自动保存状态机（debounce/乐观更新/回滚/离线/卸载 flush）+ `update_time` 版本号乐观并发契约（`A0409`，PATCH 返回 `NoteSaveResultVO`，openspec `2026-09-11-note-save-result-and-version`）；后端 note 16 个 + 前端笔记域 75 个（全仓 359 个）单测、typecheck、Biome、webpack 生产构建与真实 Docker 栈浏览器验收通过；环境发现：Windows autocrlf 使容器挂载脚本变 CRLF（已加 `.gitattributes`）、Next 15.5 dev 模式本机假死（验收改用生产构建）。详见 `FRONTEND_MILESTONES.md` M6 / M6.5
 - [x] **M7** AI / PDF / Mooc / Tasks / Wikis——2026-09-11 实现与浏览器端到端验收通过，分支 `phase/5.7-features`（自 `dev` 切出）：AI 聊天 SSE 流式会话（store 层持流切页不丢、readonly Markdown 渲染、slash AI 续写）、Chat PDF（XHR 真实进度上传 + RAG 索引轮询 + react-pdf 预览 + 文档问答）、ReactFlow 工作流（zod 校验 + localStorage）、Mooc（卡片/详情/DPlayer）、Tasks（react-table v8 + 提交）、Wikis（只读渲染）、Settings 四分区；全仓前端单测 359 → 440 个、13 条路由 console 零 error；**后端阻塞项**（详见 `FRONTEND_MILESTONES.md` M7.6）：ai-nio servlet 栈 reactor context 丢失致 AI 成功流式路径不可用（叠加 LLM 上游未启动）、PDF 上传 Feign 转存失败、`PUT /user/{userId}` `@InnerAuth` 契约缺口；前端修正：ai 域代理前缀改 `/api/proxy/aiNio`、DTO 包装 query 平铺 serializer、readonly 预设强制只读（炸树 bug）、创建课程补 `dataScope`
-- [ ] **M8** 协同 + 桌面 + 收尾
+- [x] **M8** 协同 + 桌面 + 收尾——2026-09-11 实现、单测与浏览器端到端验收通过，分支 `phase/5.8-polish`（自 `dev` 切出），同日合并 `dev`。
+  - [x] M8.1 协同编辑（用户确认按「自建 dev WS 服务」实现）：新增 `apps/collab`（yjs 13 + y-protocols 1 + ws 自实现 sync/awareness 线协议，**不用 `@y/websocket-server`**——它依赖 `@y/y@14.0.0-rc`，与 TipTap 要求的 `yjs ^13` 冲突）；BFF 增 `/api/auth/collab-token`（另一套密钥签的 5 分钟令牌，因为浏览器 WebSocket 不能自定义请求头、accessToken 又是 httpOnly）；`/docs` 协同文档库 + `/docs/[id]` 协同编辑页，索引本身也是协同房间，**零后端接口**；compose 加 `anynote-collab` + `collab-data` 卷；75 个服务端单测 + 51 个前端协同单测
+  - [x] M8.2 桌面端骨架：`apps/desktop` Tauri 2 配置 + `/api/auth/exchange` 令牌交换（**未配 `DESKTOP_EXCHANGE_KEY` 即整体关闭**，三道闸已在真实服务器逐条验证）+ `lib/desktop/bridge.ts`（localStorage 禁令的唯一例外，非桌面环境读写空操作）。**构建验证后置**：本机无 rustc / cargo / MSVC Build Tools，`src-tauri/` 的 Rust 代码尚未编译验证
+  - [x] M8.3 E2E + 性能预算：Playwright **15 条全绿**（6 条关键路径 + 协同双上下文同步）；Lighthouse `/login` 100 其余 99、无障碍全 100；产物预算最重路由 `/notes/[baseId]/[noteId]` 292.0 KB、编辑器 10.2 KB。**两处量法纠错**：产物预算原先漏算各级 layout chunk（改对后立刻抓出 `/docs` 315KB 超预算，已改懒加载）；Lighthouse 只设 `formFactor` 而未换节流参数，此前 84/77 分并非真实桌面表现
+  - [x] M8.4 清理与文档：README / CONTRIBUTING / CLAUDE.md / `.claude/context/frontend.md` 全量同步（顺带修正与实际不符的目录结构、删掉 CLAUDE.md 里重复两遍的小节）；`.gitignore` 补 Tauri 与 e2e 产物
+  - [ ] **不删 `apps/web-legacy/`**：里程碑条件是「确认 1 周稳定后」，而 M7.6 的 5 个后端缺口未解，新前端尚不能替代它承担线上流量；删除前置条件已写入 `CLAUDE.md`「双前端约定」
+  - [ ] Sentry（里程碑原文标注为可选）未接入
+  - [ ] 合并 `main` 与打 Tag `v0.6.0`——按用户决定，停在 `dev`
+
+> Phase 5 的 M0-M8 代码已全部完成，状态保持 `[IN PROGRESS]` 直到发版动作（`main` 合并 + tag）执行完毕。详见 [`FRONTEND_MILESTONES.md`](./FRONTEND_MILESTONES.md) M8 / M8.6 / §5。
 
 ---
 
