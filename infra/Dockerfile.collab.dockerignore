@@ -1,0 +1,13 @@
+# 仓库根的 .dockerignore 是给 Java 构建用的（它把整个 apps/ 和 packages/ 都排除了）。
+# BuildKit 会优先采用与 Dockerfile 同名的 .dockerignore，这里只放 collab 构建真正需要的东西。
+*
+
+!apps/collab/package.json
+!apps/collab/tsconfig.json
+!apps/collab/src
+!packages/tsconfig
+
+apps/collab/src/__tests__
+apps/collab/node_modules
+apps/collab/dist
+packages/tsconfig/node_modules

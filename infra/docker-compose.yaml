@@ -241,6 +241,32 @@ services:
     ports:
       - "127.0.0.1:${JOB_PORT:-8093}:8093"
 
+  # 协同编辑 WebSocket 服务（Node，非 Spring）。不依赖 Nacos / MySQL，
+  # 文档状态落在自己的卷里，因此不挂 x-app-common 的依赖与健康检查。
+  anynote-collab:
+    image: ${APP_IMAGE_PREFIX:-anynote}/anynote-collab:local
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.collab
+    restart: on-failure:5
+    environment:
+      TZ: Asia/Shanghai
+      COLLAB_PORT: 1234
+      COLLAB_PERSISTENCE_DIR: /data
+      # 必须与 apps/web 的 COLLAB_TOKEN_SECRET 一致，否则所有握手都会 401
+      COLLAB_TOKEN_SECRET: ${COLLAB_TOKEN_SECRET:-anynote-collab-dev-secret}
+      COLLAB_ALLOWED_ORIGINS: ${COLLAB_ALLOWED_ORIGINS:-http://localhost:3000}
+    volumes:
+      - collab-data:/data
+    networks:
+      - anynote-net
+    ports:
+      - "127.0.0.1:${COLLAB_PORT:-1234}:1234"
+    healthcheck:
+      <<: *health-defaults
+      start_period: 20s
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:1234/healthz >/dev/null || exit 1"]
+
 networks:
   anynote-net:
     driver: bridge
@@ -256,3 +282,4 @@ volumes:
   logstash-data:
   minio-data:
   xxl-job-logs:
+  collab-data:

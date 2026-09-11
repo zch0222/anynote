@@ -1,0 +1,43 @@
+# 协同编辑 WebSocket 服务（apps/collab）。构建上下文是仓库根目录。
+#
+# 这里用 npm 而不是 pnpm：collab 只有 5 个运行时依赖、且不依赖任何 workspace 包
+# （唯一的 workspace 依赖 @anynote/tsconfig 是 devDependency，直接按路径塞进 node_modules），
+# 用 npm 单包安装比在容器里重建整个 pnpm workspace 快得多也稳得多。
+#
+# 构建时忽略规则在 Dockerfile.collab.dockerignore（仓库根的 .dockerignore 是给 Java 构建用的，
+# 它把整个 apps/ 排除了）。
+
+FROM node:22-alpine AS build
+WORKDIR /app
+
+COPY apps/collab/package.json ./
+# devDependencies 只保留编译真正需要的三项（版本仍以 package.json 为准）：
+# @anynote/tsconfig 用的是 npm 解析不了的 workspace: 协议，稍后按路径塞进 node_modules；
+# vitest 只在本地跑测试用，装进镜像既慢又会让 npm 的依赖图解析失败。
+RUN node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("package.json","utf8"));const d=p.devDependencies;p.devDependencies={typescript:d.typescript,"@types/node":d["@types/node"],"@types/ws":d["@types/ws"]};fs.writeFileSync("package.json",JSON.stringify(p,null,2));' \
+    && npm install --no-audit --no-fund
+
+COPY packages/tsconfig ./node_modules/@anynote/tsconfig
+COPY apps/collab/tsconfig.json ./
+COPY apps/collab/src ./src
+RUN npx tsc -p tsconfig.json
+
+
+FROM node:22-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production TZ=Asia/Shanghai
+
+COPY apps/collab/package.json ./
+RUN node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("package.json","utf8"));delete p.devDependencies;fs.writeFileSync("package.json",JSON.stringify(p,null,2));' \
+    && npm install --omit=dev --no-audit --no-fund \
+    && npm cache clean --force
+
+COPY --from=build /app/dist ./dist
+
+# 持久化目录要能被 node 用户写入
+RUN mkdir -p /data && chown -R node:node /data
+USER node
+VOLUME ["/data"]
+
+EXPOSE 1234
+CMD ["node", "dist/main.js"]
