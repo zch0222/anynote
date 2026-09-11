@@ -7,6 +7,8 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_APP_URL", undefined);
   vi.stubEnv("COLLAB_TOKEN_SECRET", undefined);
   vi.stubEnv("NEXT_PUBLIC_COLLAB_WS_URL", undefined);
+  vi.stubEnv("DESKTOP_EXCHANGE_KEY", undefined);
+  vi.stubEnv("DESKTOP_ALLOWED_ORIGINS", undefined);
 });
 
 afterEach(() => {
@@ -23,6 +25,7 @@ describe("服务端环境变量", () => {
       NODE_ENV: "test",
       INTERNAL_API_URL: "http://localhost:8080",
       COLLAB_TOKEN_SECRET: "anynote-collab-dev-secret",
+      DESKTOP_ALLOWED_ORIGINS: "tauri://localhost,http://tauri.localhost,https://tauri.localhost",
       NEXT_PUBLIC_APP_URL: "http://localhost:3000",
       NEXT_PUBLIC_COLLAB_WS_URL: "ws://localhost:1234",
     });
@@ -50,6 +53,17 @@ describe("服务端环境变量", () => {
     const { env } = await import("../env");
     expect(env.COLLAB_TOKEN_SECRET).toBe("a-much-longer-production-secret");
     expect(env.NEXT_PUBLIC_COLLAB_WS_URL).toBe("wss://notes.example.com/collab");
+  });
+
+  it("桌面令牌交换默认关闭：不配 DESKTOP_EXCHANGE_KEY 就没有这个字段", async () => {
+    const { env } = await import("../env");
+    expect(env.DESKTOP_EXCHANGE_KEY).toBeUndefined();
+  });
+
+  it("桌面密钥过短时拒绝启动", async () => {
+    vi.stubEnv("DESKTOP_EXCHANGE_KEY", "short");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(import("../env")).rejects.toThrow("Invalid env vars");
   });
 
   it("协同密钥过短时拒绝启动（HMAC 强度不足）", async () => {
@@ -82,8 +96,9 @@ describe("浏览器环境变量", () => {
     });
     expect(env).not.toHaveProperty("INTERNAL_API_URL");
     expect(env).not.toHaveProperty("NODE_ENV");
-    // 协同密钥是服务端机密，绝不能进浏览器包
+    // 协同密钥与桌面交换密钥都是服务端机密，绝不能进浏览器包
     expect(env).not.toHaveProperty("COLLAB_TOKEN_SECRET");
+    expect(env).not.toHaveProperty("DESKTOP_EXCHANGE_KEY");
   });
 
   it("公共地址非法时仍拒绝加载", async () => {
