@@ -1,0 +1,29 @@
+{
+  "name": "@anynote/collab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --experimental-strip-types --watch src/main.ts",
+    "start": "node dist/main.js",
+    "lint": "cd ../.. && biome check apps/collab/src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "jose": "^6.2.3",
+    "lib0": "^0.2.104",
+    "ws": "^8.21.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32"
+  },
+  "devDependencies": {
+    "@anynote/tsconfig": "workspace:*",
+    "@types/node": "^20",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5",
+    "vitest": "^4.1.7"
+  }
+}

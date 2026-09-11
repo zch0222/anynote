@@ -1,0 +1,19 @@
+{
+  "extends": "@anynote/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    "outDir": "dist",
+    "rootDir": "src",
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": true,
+    // 源码里写 `./x.ts`：Node 的类型擦除（pnpm dev）能直接跑，tsc 产物里再改写成 `./x.js`。
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules", "src/__tests__/**"]
+}

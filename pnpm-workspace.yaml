@@ -1,5 +1,6 @@
 packages:
   - "apps/web"
+  - "apps/collab"
   - "packages/*"
   - "openapi"
   # apps/web-legacy 是旧 Next.js 13 前端，仅作参考，不纳入 workspace
