@@ -29,6 +29,8 @@ export function full(ctx: PresetContext): Extensions {
       codeBlock: false,
       underline: false,
       link: { openOnClick: false, autolink: true, linkOnPaste: true },
+      // 协同模式下本地历史栈会连别人的编辑一起撤销，由调用方关掉换成 Y.UndoManager
+      ...(ctx.undoRedo === false ? { undoRedo: false as const } : {}),
     }),
     AnynoteUnderline,
     AnynoteHighlight,

@@ -354,3 +354,38 @@
   overflow-x: auto;
   overflow-y: hidden;
 }
+
+/* ---------- 协同光标（CollaborationCaret） ---------- */
+/* 光标颜色来自 awareness 里每个人的 user.color，由扩展写成内联样式，
+   这里只负责几何与层叠；标签默认隐藏，悬停时才浮出来，避免挡住正文。 */
+.anynote-editor__content .collaboration-carets__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+
+.anynote-editor__content .collaboration-carets__label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  border-radius: 4px 4px 4px 0;
+  padding: 0.1rem 0.3rem;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: normal;
+  white-space: nowrap;
+  color: #fff;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.anynote-editor__content .collaboration-carets__caret:hover .collaboration-carets__label,
+.anynote-editor__content:focus-within .collaboration-carets__label {
+  opacity: 1;
+}

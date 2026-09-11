@@ -1,7 +1,7 @@
 "use client";
 
-import { ApiError, unwrapEnvelope } from "@/lib/api/errors";
 import { flattenedDtoQuerySerializer } from "@/lib/api/dto-query";
+import { ApiError, unwrapEnvelope } from "@/lib/api/errors";
 import { aiApi, noteApi } from "@/lib/api/openapi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
