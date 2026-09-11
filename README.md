@@ -16,10 +16,12 @@
 ```
 anynote/
 ├── apps/
-│   └── web-legacy/           前端 Next.js 13.5 应用（当前活跃）
+│   ├── web/                  前端 Next.js 15 应用（Phase 5 重写，M0-M8 已完成）
+│   ├── web-legacy/           旧前端 Next.js 13.5（用户当前实际访问的版本，不在 workspace 内）
+│   ├── collab/               协同编辑 WebSocket 服务（Node，:1234）
+│   └── desktop/              Tauri 2 桌面壳（构建需 Rust 工具链，见其 README）
 ├── packages/
 │   ├── api-client/           自动生成的 TypeScript API 客户端（禁止手改）
-│   ├── ui/                   共享 React 组件库
 │   └── tsconfig/             共享 TypeScript 配置
 ├── services/                 Java Spring Cloud 微服务
 │   ├── gateway/              API 网关（:8080）
@@ -111,7 +113,14 @@ docker compose --env-file=/dev/null \
 for port in 8080 8083 8091 18091 8095 9065 9066; do
   curl --noproxy '*' -fsS -m 2 "http://127.0.0.1:$port/actuator/health" | jq -r '.status'
 done
+
+# 协同编辑服务（Node，非 Spring，健康检查路径不同）
+curl --noproxy '*' -fsS -m 2 http://127.0.0.1:1234/healthz
 ```
+
+> `anynote-collab` 是 `apps/web` 的 `/docs` 协同编辑所依赖的 WebSocket 服务。它不连
+> Nacos / MySQL，文档状态落在自己的 `collab-data` 卷里。`COLLAB_TOKEN_SECRET` 必须与
+> 前端的同名环境变量一致，否则所有握手都会 401（错误只出现在 collab 容器日志里）。
 
 #### A.4 验证 OpenAPI 聚合
 
@@ -430,13 +439,28 @@ location /api/aiNio/ {
 | `XXL_JOB_ADMIN_VERSION` | `2.5.0` |
 | `CURL_VERSION` | `8.10.1` |
 
-### 前端（`apps/web-legacy/.env`）
+### 旧前端（`apps/web-legacy/.env`）
 
 | 变量 | 示例值 | 说明 |
 |------|--------|------|
 | `NEXT_PUBLIC_BASE_URL` | `https://api.example.com` | 后端 API 基础地址 |
 | `NEXT_PUBLIC_VDITOR_CDN` | `https://unpkg.com/vditor/dist` | Vditor 编辑器 CDN 地址 |
 | `NEXT_PUBLIC_ICP` | _(空)_ | ICP 备案号（页脚展示，可留空） |
+
+### 新前端（`apps/web/.env.local`）
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `INTERNAL_API_URL` | `http://localhost:8080` | BFF 转发到网关的地址（**服务端专用**，不进浏览器包） |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | 浏览器侧的自身源，用于 Origin 校验 |
+| `NEXT_PUBLIC_COLLAB_WS_URL` | `ws://localhost:1234` | 协同服务地址；容器化部署应指向 Nginx 上的 ws 反代路径 |
+| `COLLAB_TOKEN_SECRET` | `anynote-collab-dev-secret` | 签发协同令牌的 HMAC 密钥，**必须与 `anynote-collab` 容器一致**，生产必改 |
+| `DESKTOP_EXCHANGE_KEY` | _(未设置)_ | 桌面端令牌交换密钥。**纯 Web 部署不要配**——不配即关闭该端点 |
+| `DESKTOP_ALLOWED_ORIGINS` | `tauri://localhost,...` | 允许调用令牌交换的来源，仅在上一项已配置时生效 |
+
+> `DESKTOP_EXCHANGE_KEY` 是唯一会把真实 Token 交给页面 JS 的开关（供 Tauri 桌面壳使用，
+> 见 [`apps/desktop/README.md`](apps/desktop/README.md)）。Web 部署保持不配置，
+> 否则一次 XSS 就能把 Token 取走。
 
 ---
 
@@ -452,8 +476,12 @@ location /api/aiNio/ {
 | `pnpm typecheck` | turbo typecheck（含 `@anynote/api-client`） |
 | `pnpm services:build` | = `cd services && mvn clean install -DskipTests` |
 | `cd services && mvn clean install -pl note -am -DskipTests` | 构建单个 Java 服务及其依赖 |
-| `pnpm test` | 全仓前端测试（Turborepo） |
+| `pnpm test` | 全仓前端测试（Turborepo，含 `apps/web` 与 `apps/collab`） |
 | `cd services && mvn clean test` | 全部 Java 模块单测 |
+| `pnpm --filter web test:e2e` | Playwright 端到端（需生产构建 + 真实后端栈，见「测试」节） |
+| `pnpm --filter web bundle:budget` | 产物体积预算判定（需先 build） |
+| `pnpm --filter web lighthouse:budget` | Lighthouse 质量门禁（需生产前端在跑） |
+| `pnpm --filter @anynote/desktop dev` | 启动 Tauri 桌面壳（需 Rust 工具链） |
 
 ---
 
@@ -466,6 +494,9 @@ location /api/aiNio/ {
 | Java | JUnit 5 + Mockito + AssertJ（由 `spring-boot-starter-test` 提供） | `services/<module>/src/test/java/com/anynote/<module>/` |
 | Java（Reactive） | 额外 `reactor-test`（StepVerifier） | `gateway` / `ai` |
 | 前端 | Vitest + Testing Library + jsdom | `apps/web/src/**/__tests__/` 或同名 `*.test.ts(x)` |
+| 前端（构建期脚本） | Vitest（node 环境） | `apps/web/scripts/lib/__tests__/*.test.mjs` |
+| 前端（端到端） | Playwright（Chromium） | `apps/web/e2e/*.spec.ts` |
+| 协同服务 | Vitest（node 环境） | `apps/collab/src/__tests__/` |
 
 `spring-boot-starter-test` 在父 pom [`services/pom.xml`](services/pom.xml) 的 `<dependencies>` 中统一声明，所有模块自动继承，新增模块无需改 pom。
 
@@ -491,6 +522,12 @@ pnpm --filter web test                      # 仅 apps/web
 pnpm --filter web test:watch                # watch 模式
 pnpm --filter web test:integration:auth     # 真实本地认证链路（需先启动生产前端与后端）
 
+# 端到端与性能（都需要「生产构建 + 真实后端栈」，不进默认 pnpm test 与 CI）
+pnpm --filter web build                     # 先出生产产物
+pnpm --filter web test:e2e                  # Playwright 6 条关键路径 + 协同双端同步
+pnpm --filter web bundle:budget             # 产物体积预算（超标退出码非零）
+pnpm --filter web lighthouse:budget         # Lighthouse 门禁（需生产前端在跑）
+
 # Java 单测
 cd services && mvn clean test               # 全部模块
 cd services && mvn test -pl auth -am        # 单模块
@@ -503,6 +540,24 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 
 认证集成测试单独使用 `apps/web/vitest.auth-integration.config.ts`，不会进入默认 `pnpm test` 或无中间件的 CI。先启动本地 Gateway/Auth/System/Redis，再执行 `pnpm --filter web build` 和 `pnpm --filter web start`；测试固定访问 `http://localhost:3000` 与 `http://localhost:8080`。每次创建一个随机 `e2e` 前缀的本地测试账号，结束时撤销创建的会话，账号记录保留；不要用于生产环境。覆盖注册、登录、Cookie 属性、Origin 校验、Bearer、路由保护与两种登出路径。浏览器页面交互和刷新并发验收另行执行。
 
+### 端到端与性能门禁（M8.3）
+
+三项都跑在**生产构建 + 真实 Docker 栈**上，与 `test:integration:auth` 同属「需要真实链路」的一类，**不进默认 `pnpm test`，也不进无中间件的 CI**。
+
+| 命令 | 内容 | 门槛 |
+|------|------|------|
+| `pnpm --filter web test:e2e` | 登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 暗色切换 6 条关键路径，外加协同编辑的双上下文实时同步 | 全绿 |
+| `pnpm --filter web bundle:budget` | 各路由首屏 JS（含各级 layout chunk）与编辑器整包的 gzip 体积 | 首屏 ≤ 300KB、编辑器 ≤ 250KB |
+| `pnpm --filter web lighthouse:budget` | `/login`、`/dashboard`、`/notes`、`/docs`、`/ai/chat` 五条路由 | Performance ≥ 90、Accessibility ≥ 95 |
+
+注意事项：
+
+- **E2E 每轮新建一个随机 `e2e` 前缀账号**并把登录态存到 `apps/web/e2e/.auth/`（已 gitignore）。账号不删（后端无注销端点），不要在生产环境跑。
+- **协同用例需要 `anynote-collab` 容器在跑**，否则 `/docs` 停在「连接中」。
+- **Lighthouse 必须用官方 desktop 预设**（脚本里已固定）。只设 `formFactor: "desktop"` 而不换节流参数，量到的是「桌面页面跑在移动 4G + 4 倍 CPU 降速下」的分数，与桌面门槛对不上。
+- 需要登录的路由靠 E2E 攒下的 `state.json` 提供 Cookie，所以 **Lighthouse 要在 E2E 之后跑**。
+- 跑之前确认没有旧的 `next start` 占着 3000 端口：同一 `.next` 上并行两个实例会产出引用不存在 chunk 的 HTML。
+
 ### 前端测试基建
 
 | 文件 | 作用 |
@@ -510,6 +565,8 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 | [`apps/web/vitest.config.ts`](apps/web/vitest.config.ts) | jsdom 环境、`@` 别名、JSX transform；排除 vendored 的 `src/components/ui` |
 | [`apps/web/vitest.setup.ts`](apps/web/vitest.setup.ts) | 注册 jest-dom matcher 与用例间 DOM cleanup |
 | [`apps/web/src/test/render.tsx`](apps/web/src/test/render.tsx) | `renderWithProviders` / `renderHookWithProviders` / `createTestQueryClient`，测 TanStack Query hook 用这套包装 |
+| [`apps/web/playwright.config.ts`](apps/web/playwright.config.ts) | E2E 配置：串行执行、复用已在跑的生产前端、失败留 trace 与截图 |
+| [`apps/web/e2e/global-setup.ts`](apps/web/e2e/global-setup.ts) | 每轮建临时账号并存 `storageState`，用例默认带登录态 |
 
 ### CI
 
@@ -555,7 +612,7 @@ API 开发遵循 API-First 流程，详见 [`openapi/WORKFLOW.md`](openapi/WORKF
 | 2 | Maven BOM 重构 | ✅ v0.3.0 |
 | 3 | Spring Boot 3 / Java 21 升级 | ✅ v0.4.0 |
 | 4 | 服务层重构（异常/REST/HMAC） | ✅ v0.5.0 |
-| 5 | 前端完全重写（Next.js 15） | 🔲 待开始 |
+| 5 | 前端完全重写（Next.js 15） | 🟡 M0-M8 已完成，发版待定（见 [`docs/refactor/FRONTEND_MILESTONES.md`](docs/refactor/FRONTEND_MILESTONES.md)） |
 | 6 | Python AI 服务现代化 | ✅ v0.7.0 |
 | 7 | OpenSpec 集成（AI 上下文） | ✅ v1.0.0 |
 

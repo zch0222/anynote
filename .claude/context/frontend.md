@@ -10,26 +10,41 @@
 apps/web/
 ├── src/
 │   ├── app/                  Next.js App Router 页面
-│   │   ├── (auth)/           登录/注册路由组
-│   │   ├── (dashboard)/      主工作区路由组
+│   │   ├── (auth)/           登录 / 注册路由组
+│   │   ├── (workspace)/      主工作区路由组（dashboard / notes / docs / ai / mooc / tasks / wikis / settings）
+│   │   ├── api/auth/*        BFF 认证路由（login / register / logout / refresh / me / collab-token / exchange）
+│   │   ├── api/proxy/[...]   带鉴权的网关代理（含 SSE 透传）
 │   │   ├── layout.tsx        根布局（字体、Provider）
-│   │   └── providers.tsx     Provider 树（QueryClient、Theme、Auth）
-│   ├── components/           通用组件（shadcn/ui 扩展 + 业务组件）
-│   │   └── ui/               shadcn 原子组件（Button、Dialog、...）
-│   ├── features/             功能模块（note、kb、ai、auth 等）
+│   │   └── providers.tsx     Provider 树（QueryClient、Theme）
+│   ├── components/           通用组件
+│   │   ├── ui/               shadcn 原子组件（vendored，不改不测）
+│   │   ├── editor/           TipTap 编辑器（core / extensions / presets）
+│   │   ├── layout/           AppShell、侧栏、命令面板、主题切换
+│   │   └── note/             笔记域共享组件
+│   ├── features/             功能模块（auth / notes / collab / ai / mooc / tasks / wikis / settings）
 │   │   └── <feature>/
 │   │       ├── components/   模块内组件
-│   │       ├── hooks/        模块内 Query hooks
-│   │       └── types.ts      模块类型
-│   ├── hooks/                全局 hooks（useAuth、useTheme 等）
+│   │       ├── use-*.ts      Query / Mutation hooks（**平铺，不建 hooks/ 子目录**）
+│   │       ├── query-keys.ts key 工厂
+│   │       └── schemas.ts    zod 校验
 │   ├── lib/
-│   │   ├── api-client/       自动生成的类型化 API 客户端
+│   │   ├── api/              openapi-fetch 实例、错误信封、DTO query 序列化
+│   │   ├── auth/             BFF 侧 Cookie / 刷新 / 资料（server-only）
+│   │   ├── collab/           协同房间命名、会话、索引文档
+│   │   ├── desktop/          桌面壳桥接（令牌交换 + 本地保管）
+│   │   ├── editor/           Markdown 桥接、Shiki、KaTeX、上传
 │   │   └── utils.ts          cn()、格式化工具
-│   ├── store/                Zustand stores（仅 UI 状态）
+│   ├── stores/               Zustand stores（仅 UI 状态）
 │   └── types/                全局类型声明
+├── e2e/                      Playwright 端到端用例（M8.3）
+├── scripts/                  构建期脚本（产物预算、Lighthouse、资源同步）
+├── integration/              真实链路的 vitest 用例（认证 / 代理）
 ├── public/
 └── package.json
 ```
+
+> `packages/api-client/src/` 是 `pnpm openapi:generate` 的产物（gitignored），
+> 前端只从它引类型，不在 `src/lib` 下再放一份。
 
 ---
 
@@ -82,7 +97,34 @@ API 客户端由 `pnpm openapi:generate` 从后端 Swagger 自动生成，**不�
   → 服务端组件/API Route 从 Cookie 读取 token 后转发
 ```
 
-客户端组件通过 `useAuth()` hook 获取用户信息（从 /api/auth/me 接口，无需直接持有 token）。
+客户端组件通过 `useMe()` hook 获取用户信息（从 `/api/auth/me`，无需直接持有 token）。
+`/api/auth/me` 与 `/api/auth/collab-token` 共用 `lib/auth/profile.ts` 的 `loadSessionProfile`——
+两者都需要「已验证的当前用户」，刷新与失效的处理必须完全一致。
+
+### 两条派生凭据（M8 新增）
+
+| 端点 | 产出 | 谁能拿到 | 守卫 |
+|------|------|---------|------|
+| `POST /api/auth/collab-token` | 5 分钟有效、**另一套密钥**签的协同令牌 | 任何已登录的同源页面 | Origin 校验 + 有效会话 |
+| `POST /api/auth/exchange` | **真实 accessToken / refreshToken** | 仅 Tauri 桌面壳 | `DESKTOP_EXCHANGE_KEY` 未配置即整体关闭 + 密钥匹配 + Origin 在桌面白名单 |
+
+协同令牌之所以要另签而不是复用 accessToken：浏览器的 `WebSocket` 构造函数不能自定义
+请求头，凭据只能走查询串；那就必须是一枚泄露了也调不动网关业务接口的令牌。
+
+`/api/auth/exchange` 是整个 BFF 里唯一会把真实 Token 交给 JS 的地方，**Web 部署必须
+保持 `DESKTOP_EXCHANGE_KEY` 未配置**。
+
+---
+
+## 协同编辑（M8.1）
+
+- 服务端：`apps/collab`（自建 y-websocket 协议服务，:1234），房间名 `index` 与 `doc:<id>`
+- 前端：`features/collab/use-collab-room.ts` 管连接生命周期，`use-collab-index.ts` 管文档索引
+- 文档库索引本身也是一个协同房间，**没有任何后端接口**参与 `/docs` 的读写
+- 编辑器用 `preset="collaborative"`：关掉 StarterKit 的本地 undo/redo（会撤销掉别人的编辑），
+  改用 Collaboration 的 Y.UndoManager；且**不设初始 content**，正文只由 Y.Doc 灌入
+- `/docs` 与 `/docs/[id]` 走 `dynamic(..., { ssr: false })` 懒加载：
+  yjs + y-websocket 静态引入会把首屏 JS 顶出 300KB 预算
 
 ---
 
@@ -156,6 +198,11 @@ pnpm --filter web typecheck
 
 # 重新生成 API 客户端（需后端运行）
 pnpm openapi:generate
+
+# 端到端与性能门禁（需生产构建 + 真实后端栈，细节见 README「测试」节）
+pnpm --filter web test:e2e
+pnpm --filter web bundle:budget
+pnpm --filter web lighthouse:budget
 ```
 
 ---
@@ -166,6 +213,10 @@ pnpm openapi:generate
 |----------------------------|-------------------------------|
 | `NEXT_PUBLIC_APP_URL`      | 浏览器侧应用源（默认 `http://localhost:3000`） |
 | `INTERNAL_API_URL`         | BFF 直连 Gateway 地址（默认 `http://localhost:8080`） |
+| `NEXT_PUBLIC_COLLAB_WS_URL`| 协同服务地址（默认 `ws://localhost:1234`） |
+| `COLLAB_TOKEN_SECRET`      | 协同令牌 HMAC 密钥，**必须与 `apps/collab` 一致** |
+| `DESKTOP_EXCHANGE_KEY`     | 桌面令牌交换开关，**Web 部署不要配** |
+| `DESKTOP_ALLOWED_ORIGINS`  | 允许交换令牌的桌面来源，仅在上一项配置后生效 |
 
 > 不使用 `NEXTAUTH_SECRET`：认证走自研 BFF 透传后端 JWT，不做二次签名。
 > 旧的 `NEXT_PUBLIC_API_URL` / `BACKEND_URL` 已废弃（M2 里 `BACKEND_URL` → `INTERNAL_API_URL`）。
