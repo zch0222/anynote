@@ -145,6 +145,65 @@ describe("POST /api/proxy/[...path]", () => {
   });
 });
 
+describe("302 透传（笔记图片的稳定地址）", () => {
+  it("上游 302 不 follow：原样透传 Location 与状态码", async () => {
+    // 笔记正文存的是 /api/proxy/file/objects/{fileId}/redirect，后端回 302 到新鲜的预签名 URL。
+    // 这里必须把 Location 交给浏览器，让它直接去对象存储取图。
+    fetchMock.mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: {
+          location:
+            "http://localhost:9000/anynote/anynote_Shanghai_one/note/1/a.png?X-Amz-Signature=abc",
+          "cache-control": "private, max-age=300",
+        },
+      }),
+    );
+
+    const response = await GET(
+      request("file/objects/12/redirect", { cookie: `at=${access}` }),
+      context("/api/proxy/file/objects/12/redirect"),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:9000/anynote/anynote_Shanghai_one/note/1/a.png?X-Amz-Signature=abc",
+    );
+    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+    // 关键：redirect 必须是 manual，否则 Node 会自己把对象下载一遍再返回 200
+    const [, init] = fetchMock.mock.calls.at(0) ?? [];
+    expect(init.redirect).toBe("manual");
+    // 上游未返回 content-type，不应被伪造
+    expect(response.headers.has("content-type")).toBe(false);
+  });
+
+  it("上游 302 不带 Location 时不崩，仍返回 302", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 302 }));
+
+    const response = await GET(
+      request("file/objects/13/redirect", { cookie: `at=${access}` }),
+      context("/api/proxy/file/objects/13/redirect"),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("非 302 行为不回归：普通 200 JSON 仍剥掉 content-encoding / set-cookie", async () => {
+    fetchMock.mockResolvedValue(upstreamResponse());
+
+    const response = await GET(
+      request("file/objects/14/redirect", { cookie: `at=${access}` }),
+      context("/api/proxy/file/objects/14/redirect"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ code: "00000" });
+    expect(response.headers.has("content-encoding")).toBe(false);
+    expect(response.headers.getSetCookie()).toEqual([]);
+  });
+});
+
 describe("代理鉴权与刷新", () => {
   it("没有任何 Cookie 时返回 401 并清除两件套", async () => {
     const response = await GET(request("system/user/mine"), context("/api/proxy/system/user/mine"));
