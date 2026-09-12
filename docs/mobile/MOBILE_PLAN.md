@@ -1,6 +1,6 @@
 # Anynote 移动端适配技术方案
 
-> 文档版本：v1.1 | 创建 2026-09-12 | 最近更新 2026-09-12 | 状态：**决策已拍板（§11），实施中**
+> 文档版本：v1.2 | 创建 2026-09-12 | 最近更新 2026-09-12 | 状态：**决策已拍板（§11）；M10.0 - M10.4 已实现，实施期偏差见里程碑「与方案的偏差」**
 > 关联文档：[README.md](./README.md) · [UI_INVENTORY.md](./UI_INVENTORY.md)（现状证据） · [MOBILE_MILESTONES.md](./MOBILE_MILESTONES.md)（执行顺序与验收）
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 测试节](../../README.md#测试)、[`docs/refactor/FRONTEND_MILESTONES.md`](../refactor/FRONTEND_MILESTONES.md)（M7.6 后端缺口）、[`docs/deployment-network.md`](../deployment-network.md)
 > 本文是**方案 + 代码骨架**。执行顺序与验收标准在 [MOBILE_MILESTONES.md](./MOBILE_MILESTONES.md)。
@@ -106,10 +106,10 @@ app/(mobile)/m/…      移动端，独立 layout
 - `middleware.ts` 加 UA 判定，仅在**入口路径**（`/`、`/dashboard`）做一次 307 到 `/m/dashboard`，深层桌面路由（`/notes/3/7` 这类）不动——它们通常来自分享链接，改写会让分享语义变坏。
 - 逃生口 `?desktop=1`：带上它访问入口路径不跳转，并把偏好 Cookie 写成 `desktop`；`?mobile=1` 反之。
 - 偏好 Cookie `anynote_view=desktop|mobile`：非 httpOnly、`sameSite=lax`、一年有效，**只存版式选择，不含任何身份信息**，因此不违反 `CLAUDE.md` 禁止清单里的"token 不得进 document.cookie"。偏好存在时它**优先于 UA**（桌面浏览器可以主动留在移动版，反之亦然）。
-- 判定与跳转目标的计算抽成纯函数 `resolveViewRedirect()`，单测覆盖 UA / 偏好 / 逃生口 / 非入口路径四类输入。
+- 判定与跳转目标的计算抽成纯函数 `resolveViewDecision()`（实现时改的名，见里程碑「与方案的偏差」1），单测覆盖 UA / 偏好 / 逃生口 / 非入口路径四类输入。
 
 **风险与缓解**：备选项的已知风险是"跳转逻辑未经真机验证就上线"。缓解是把它压在纯函数 + 单测里，
-并在 M10.5 的真机清单中把"iOS / Android 首次访问 `/` 落到 `/m/dashboard`、`?desktop=1` 能逃生"列为签字项。
+并在 M10.5 的真机清单中把"iOS / Android 首次访问 `/` 落到 `/m/dashboard`、`?desktop=1` 能逃生"列为签字项（E2E 也有对应两条用例）。
 
 ### D3 导航范式：底部 tab bar + 顶部 title bar，不用侧边栏抽屉
 
@@ -390,14 +390,15 @@ export function isMobileUserAgent(ua: string | null): boolean { /* … */ }
 /**
  * 入口分流：只在 `/`、`/dashboard` 上做一次 307，深层路由不动。
  * 优先级：?desktop=1 / ?mobile=1 逃生口 > anynote_view 偏好 Cookie > UA 判定。
- * 返回 null 表示不跳转；返回 { to, setView } 时由 middleware 负责写偏好 Cookie。
+ * 恒返回一个决策对象：redirectTo 为 null 表示留在当前路由，setView 非 null 时
+ * 由 middleware 负责写偏好 Cookie（两者可以同时出现，也可以都不出现）。
  */
-export function resolveViewRedirect(input: {
+export function resolveViewDecision(input: {
   pathname: string;
   search: string;
-  userAgent: string | null;
-  viewCookie: string | undefined;
-}): { to: string; setView: "mobile" | "desktop" | null } | null { /* … */ }
+  userAgent: string | null | undefined;
+  viewCookie: string | null | undefined;
+}): { redirectTo: string | null; setView: "mobile" | "desktop" | null } { /* … */ }
 
 // 偏好 Cookie 只存版式选择（anynote_view=desktop|mobile），非 httpOnly、sameSite=lax，不含身份信息。
 ```
@@ -440,7 +441,7 @@ export function resolveViewRedirect(input: {
 |------|---------|
 | `navigation.ts` 的 `toMobileHref` / `toDesktopHref` | 每条映射、带参数路由、`/ai/workflow → null`、未知路径回退 |
 | `mobileTabs` 与 `isRouteActive` 的联动 | 每个 tab 在其子路由下高亮（如 `/m/notes/3/7` 高亮"笔记"）；`/m/tasks` 不高亮任何 tab |
-| `resolveViewRedirect` | 入口路径跳 / 深层路径不跳 / `?desktop=1` 逃生 / 偏好 Cookie 优先于 UA / 已在 `/m/*` 不再跳 |
+| `resolveViewDecision` | 入口路径跳 / 深层路径不跳 / `?desktop=1` 逃生 / 偏好 Cookie 优先于 UA / 已在 `/m/*` 不再跳 |
 | `isImmersiveMobileRoute` | 编辑器、对话、文档详情隐藏 tab bar；列表页不隐藏 |
 | `MobileShell` | 全屏页隐藏 tab bar；返回键调用 `router.back()`；安全区变量写入 |
 | `mobile-toolbar-groups.ts` | 常驻命令集与 overflow 集不重不漏、与 `Toolbar` 实际注册的命令一一对应 |

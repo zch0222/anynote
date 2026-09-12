@@ -1,7 +1,8 @@
 # Anynote 移动端适配
 
-> 文档版本：v1.1 | 创建 2026-09-12 | 最近更新 2026-09-12
-> 状态：**7 个决策点已于 2026-09-12 拍板，实施中**（里程碑重排为 M10.0 – M10.5）
+> 文档版本：v1.2 | 创建 2026-09-12 | 最近更新 2026-09-12
+> 状态：**M10.0 - M10.4 代码完成（835 条前端单测全绿）；M10.5 的 E2E / Lighthouse / 真机验收未跑**
+> 实测数字与未做项见 [MOBILE_MILESTONES.md 的「验收记录」](./MOBILE_MILESTONES.md#验收记录)
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 测试节](../../README.md#测试)、[`README.md` Git 工作流](../../README.md#git-工作流)、[`docs/refactor/FRONTEND_MILESTONES.md`](../refactor/FRONTEND_MILESTONES.md)（M7.6 后端缺口）、[`docs/deployment-network.md`](../deployment-network.md)
 
 ## 这是什么
@@ -19,18 +20,19 @@
 
 | 对象 | 结论 |
 |------|------|
-| `apps/web` | **部分适配**：外壳（侧边栏抽屉 + 渐进隐藏的头部）、列表页（`grid … sm:grid-cols-2 lg:grid-cols-3`）、表单页窄屏可用；但三个次级面板不可达，`/ai/pdf` 在 < 1024px **横向溢出**，编辑器工具栏 23 个 28px 按钮要折 3 行，且**没有任何移动端门禁** |
+| `apps/web` | **已适配**（2026-09-12）：21 条 `/m/*` 路由 + UA 入口分流 + 移动端专属门禁。下表记的是开工前的现状，作为对照留档：外壳与列表页窄屏可用，但三个次级面板不可达、`/ai/pdf` 在 < 1024px 横向溢出、编辑器工具栏 23 个 28px 按钮要折 3 行、没有任何移动端门禁 |
 | `apps/web-legacy` | **基本未适配**：整个 `src/` 只有 1 处断点前缀、28 处硬编码 px 宽度、2 处 `@media` 全是注释。**不做适配**（删除条件见 `CLAUDE.md` Phase 5 表） |
 
 移动端适配在 `docs/refactor/` 全文中没有任何条目（唯一一处"移动端"是在讲 Lighthouse 节流参数），
 因此这是 Phase 5 M8 之后的**新增范围**，需要自带验收基线——这也是本目录存在的原因。
+逐文件改动清单见 [`docs/changelist/2026-09-12-mobile-adaptation.md`](../changelist/2026-09-12-mobile-adaptation.md)。
 
 ## 目录
 
 | 文档 | 内容 |
 |------|------|
 | [MOBILE_PLAN.md](./MOBILE_PLAN.md) | **技术方案**：目标与非目标、既有事实盘点（证据链）、8 条架构决策（落点 / 路由形状 / 导航范式 / master-detail 拆分 / 编辑器形态 / 交互替换 / 复用边界 / 性能预算）、6 个被否方案、目录结构、代码骨架、桌面→移动路由映射表、测试计划、CI、风险表、7 个决策点（已拍板）、工期估算 |
-| [MOBILE_MILESTONES.md](./MOBILE_MILESTONES.md) | **执行计划**：M10.0 – M10.5 的任务清单、可执行验收命令、分支名、依赖关系图；留"验收记录"与"与方案的偏差"两节待实施期填写 |
+| [MOBILE_MILESTONES.md](./MOBILE_MILESTONES.md) | **执行计划与验收结果**：M10.0 – M10.5 的任务清单（已逐条勾选）、可执行验收命令、"验收记录"（实测数字 + 未做项）、"与方案的偏差"（10 条） |
 | [UI_INVENTORY.md](./UI_INVENTORY.md) | **现状证据**：逐页核对结果，每条带 `文件:行` 出处——已经做对的部分、按严重度排序的问题清单、门禁现状、可零改动复用的资产、与 M7.6 后端缺口的关系、legacy 核对数据 |
 
 阅读顺序：先 [UI_INVENTORY.md](./UI_INVENTORY.md)（知道现状），再 [MOBILE_PLAN.md](./MOBILE_PLAN.md)（知道为什么这么设计），最后 [MOBILE_MILESTONES.md](./MOBILE_MILESTONES.md)（按它干活）。
@@ -58,7 +60,12 @@
 
 ## 下一步
 
-按 [MOBILE_MILESTONES.md](./MOBILE_MILESTONES.md) 从 M10.0 依次执行。M10.0 同时清掉 `/ai/pdf` 的
-横向溢出 bug（它属于桌面版既有缺陷，不应等移动端一起做）。
+代码在 `feat/mobile-foundation` 上（7 个 commit），**还没合并 `dev`**。合并前要做的三件事：
 
-估算合计 **10.5 天**（单人、含单测、不含等待后端缺口修复）。移动端**不阻塞** Phase 5 发版。
+1. `pnpm --filter web test:e2e -- --project=mobile` —— 29 条用例跑在生产构建 + 真实 Docker 栈上
+2. `pnpm --filter web lighthouse:budget:mobile` —— 5 条路由过 0.85 / 0.95
+3. **真机验收 8 条签字**（[方案 §8.3](./MOBILE_PLAN.md)）—— 软键盘遮挡工具条这条不接受 DevTools 验证
+
+另外这条分支是从尚未并 `dev` 的 `fix/notes-editor-bugs` 切出来的，合并顺序要先并它。
+
+移动端**不阻塞** Phase 5 发版。

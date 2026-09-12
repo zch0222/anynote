@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) and Codex (via AGENT
 Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turborepo + Maven multi-module 编排：
 
 - `services/` — Java 21 · Spring Boot 3.3.4 · Spring Cloud 2023.0.3（9 个微服务 + Feign API 模块 + common 共享库 + BOM）
-- `apps/web/` — Next.js 15 · React 19（**Phase 5 重写，M0-M8 已实现并验收；M8 于 2026-09-11 完成，发版待定**）
+- `apps/web/` — Next.js 15 · React 19（**Phase 5 重写，M0-M8 已实现并验收；M8 于 2026-09-11 完成，发版待定**）。桌面版在 `app/(workspace)/**`，移动端在 `app/(mobile)/m/**`（M10.x，见 `docs/mobile/`）
 - `apps/web-legacy/` — Next.js 13.5（**旧前端，仍是当前用户访问的版本**，删除条件见下方 Phase 5 表）
 - `apps/collab/` — Node · yjs 13 · ws（协同编辑 WebSocket 服务，:1234；M8.1 自建，后端无此端点）
 - `apps/desktop/` — Tauri 2 桌面壳（M8.2 骨架；构建需 Rust + MSVC 工具链，尚未编译验证）
@@ -31,7 +31,7 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **代码完成，发版待定** — M0-M7 已于 2026-09-11 全部 `--no-ff` 合并 `dev`。**M8（协同 + 桌面 + E2E/性能 + 收尾）同日完成**：`apps/collab` 自建协同服务 + `/docs` 协同文档库、`apps/desktop` Tauri 骨架与 `/api/auth/exchange` 令牌交换、Playwright 20 条用例（2026-09-12 笔记模块重构后扩充）、Lighthouse（性能 97-100 / 无障碍 100）、产物预算全绿；全仓前端单测 **619** + 协同服务 **75**。**未做**：桌面构建验证（本机无 Rust/MSVC 工具链）、删除 `apps/web-legacy/`（M7.6 的 5 个后端缺口未解，新前端还不能替代它）、合并 `main` 与打 tag `v0.6.0`。AI 流式与 PDF 上传仍受后端阻塞（见里程碑 M7.6）。详见 `docs/refactor/FRONTEND_MILESTONES.md` M7/M7.6/M8/M8.6/§5 与 `docs/refactor/TASKS.md` Phase 5；E2E 与性能门禁命令见 README「测试」 |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **代码完成，发版待定** — M0-M7 已于 2026-09-11 全部 `--no-ff` 合并 `dev`。**M8（协同 + 桌面 + E2E/性能 + 收尾）同日完成**：`apps/collab` 自建协同服务 + `/docs` 协同文档库、`apps/desktop` Tauri 骨架与 `/api/auth/exchange` 令牌交换、Playwright 20 条用例（2026-09-12 笔记模块重构后扩充）、Lighthouse（性能 97-100 / 无障碍 100）、产物预算全绿；全仓前端单测 **619**（移动端 M10.x 之后 **835**）+ 协同服务 **75**。**未做**：桌面构建验证（本机无 Rust/MSVC 工具链）、删除 `apps/web-legacy/`（M7.6 的 5 个后端缺口未解，新前端还不能替代它）、合并 `main` 与打 tag `v0.6.0`。AI 流式与 PDF 上传仍受后端阻塞（见里程碑 M7.6）。详见 `docs/refactor/FRONTEND_MILESTONES.md` M7/M7.6/M8/M8.6/§5 与 `docs/refactor/TASKS.md` Phase 5；E2E 与性能门禁命令见 README「测试」 |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
@@ -94,15 +94,20 @@ pnpm format              # Biome format only
 ### 端到端与性能门禁（需生产构建 + 真实后端栈）
 
 ```bash
-pnpm --filter web test:e2e          # Playwright 20 条用例（关键路径 + 笔记编辑器回归 + 协同双端同步）
-pnpm --filter web bundle:budget     # 首屏 JS ≤ 300KB、编辑器 ≤ 250KB（gzip）
-pnpm --filter web lighthouse:budget # Performance ≥ 90、Accessibility ≥ 95
+pnpm --filter web test:e2e          # Playwright 49 条用例：桌面 20（chromium）+ 移动端 29（mobile）
+pnpm --filter web bundle:budget     # 首屏 JS ≤ 300KB、/m/* ≤ 250KB、编辑器 ≤ 250KB（gzip）
+pnpm --filter web lighthouse:budget # 桌面 Performance ≥ 90、Accessibility ≥ 95
+pnpm --filter web lighthouse:budget:mobile  # 移动口径 Performance ≥ 85、Accessibility ≥ 95
 pnpm --filter @anynote/cli test:e2e # CLI 端到端：知识库/笔记增删改查闭环（需先 build CLI）
 ```
 
-四者都**不进**默认 `pnpm test` 与 CI（与 `test:integration:auth` 同类）。前三者的注意事项、
+五者都**不进**默认 `pnpm test` 与 CI（与 `test:integration:auth` 同类）。前四者的注意事项、
 门槛与踩坑见 [`README.md` 的「端到端与性能门禁」](./README.md#端到端与性能门禁m83)；
 CLI 的见 [`apps/cli/README.md`](./apps/cli/README.md)。
+
+> 两个 Playwright project 按文件名分工：`mobile-*.spec.ts` 只在 `--project=mobile`（Pixel 5）下跑，
+> 其余只在 `chromium` 下跑。`workers: 1` 时这样避免全量时间翻倍。
+> 移动端 Performance 门槛更低是**口径差异不是退化**（移动预设自带 4× CPU 降速 + 150ms RTT）。
 
 ## 后端服务一览
 
@@ -273,7 +278,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `CONTRIBUTING.md` — 代码规范要点
 - `apps/desktop/README.md` — 桌面壳的令牌交换流程、构建前置条件与未验证项
 - `docs/cli/` — CLI 前端：`CLI_PLAN.md`（技术方案）、`CLI_MILESTONES.md`（M9.x 进度）、`COMMANDS.md`（**生成物**）
-- `docs/mobile/` — 移动端适配：`MOBILE_PLAN.md`（技术方案）、`MOBILE_MILESTONES.md`（M10.0–M10.5 进度）、`UI_INVENTORY.md`（现状逐页核对证据）。**决策已于 2026-09-12 拍板**：移动端落在 `apps/web` 的 `app/(mobile)/m/**` 路由段、不新开应用（认证 Cookie 是 host-only + `sameSite=strict`，刷新锁是进程级）；入口从一开始就做 UA 分流（`?desktop=1` 逃生口 + 非身份的 `anynote_view` 偏好 Cookie），登录后落 `/m/dashboard`。契约登记见 `.claude/openspec/changes/2026-09-12-mobile-route-segment.md`
+- `docs/mobile/` — 移动端适配：`MOBILE_PLAN.md`（技术方案）、`MOBILE_MILESTONES.md`（M10.0–M10.5 进度 + 验收记录 + 与方案的偏差）、`UI_INVENTORY.md`（开工前逐页核对证据）。**M10.0–M10.4 已实现**（2026-09-12，分支 `feat/mobile-foundation`，未并 `dev`）：21 条 `/m/*` 路由落在 `apps/web` 的 `app/(mobile)/m/**` 路由段、不新开应用（认证 Cookie 是 host-only + `sameSite=strict`，刷新锁是进程级）；入口做 UA 分流（`?desktop=1` 逃生口 + 非身份的 `anynote_view` 偏好 Cookie），登录后落 `/m/dashboard`。**未做**：E2E / Lighthouse 实跑与真机验收（见里程碑「验收记录」）。契约登记见 `.claude/openspec/changes/2026-09-12-mobile-route-segment.md`，逐文件清单见 `docs/changelist/2026-09-12-mobile-adaptation.md`
 - `docs/changelist/` — 各批改动的逐文件审计清单；`README.md` 是编写规范与命名规则（`YYYY-MM-DD-<slug>.md`）
 - `apps/cli/README.md` — CLI 的构建、环境变量、凭据安全与测试命令
 - `.claude/skills/anynote-*` — 给 Claude Code 的 CLI / 笔记配方 / 仓库操作手册（`anynote-cli` 的 `reference/commands.md` 是生成物）
