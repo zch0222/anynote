@@ -7,12 +7,12 @@
 
 ## 概览
 
-`git diff --stat 0bf840e..HEAD`（不含尚未提交的 `apps/web/e2e/mobile-core.spec.ts`）：
+`git diff --stat 0bf840e..HEAD`（含本文件自身）：
 
 | 项 | 数字 |
 |----|------|
-| 文件总数 | **104**（新增 82 · 修改 22 · 删除 0）—— 上表各行相加：新增 22+33+9+4+6+1+1+1+5 = 82，修改 2+8+10+2 = 22 |
-| 行数 | +8103 / −194 |
+| 文件总数 | **106**（新增 84 · 修改 22 · 删除 0）—— 下表各行相加：新增 22+33+9+4+6+1+2+1+6 = 84，修改 2+8+10+2 = 22 |
+| 行数 | +8652 / −200 |
 
 按目录分布：
 
@@ -25,9 +25,9 @@
 | `apps/web/src/lib/mobile/` + `src/hooks/` | 6 | 0 | 入口分流、搜索候选、visualViewport 三组纯逻辑与单测 |
 | `apps/web/src/styles/mobile.css` | 1 | 0 | 安全区 + 高度变量 + 工具条横滑 |
 | `apps/web/scripts/` + `package.json` + `playwright.config.ts` | 0 | 8 | 产物预算分桶 + Lighthouse 移动口径 + mobile project |
-| `apps/web/e2e/` | 1 | 0 | 窄屏溢出回归（`mobile-core.spec.ts` 在本清单之后提交） |
+| `apps/web/e2e/` | 2 | 0 | `mobile-viewport.spec.ts`（窄屏溢出回归 4 条）+ `mobile-core.spec.ts`（关键路径 25 条） |
 | 桌面既有业务文件 | 1 | 10 | 见「对桌面既有代码的改动」一节；新增的那 1 个是 `/ai/pdf` 溢出 bug 的复现用例 |
-| 文档 | 5 | 2 | `docs/mobile/` 四份 + OpenSpec 提案；`CLAUDE.md` / `README.md` |
+| 文档 | 6 | 2 | `docs/mobile/` 四份 + OpenSpec 提案 + 本清单；`CLAUDE.md` / `README.md` |
 
 ### 验证结果
 
@@ -38,7 +38,7 @@
 | `npx biome check apps/web/src apps/web/scripts` | ✅ 无错误 |
 | `npx next build` | ✅ 编译 + 37 条路由静态生成通过。standalone 拷贝阶段在本机报 `EPERM: symlink`（Windows 符号链接权限），与代码无关 |
 | `node scripts/bundle-report.mjs` | ✅ 桌面最重 295.1KB / 300KB；移动端最重 242.8KB / 250KB；编辑器 13.2KB / 250KB |
-| `npx playwright test --list` | ✅ `chromium` 20 条（不变）、`mobile` 29 条 |
+| `npx playwright test --list` | ✅ `chromium` 20 条（不变）、`mobile` 29 条（25 + 4） |
 | `pnpm --filter web test:e2e` | ❌ **未跑**：需生产构建 + 真实 Docker 全栈 |
 | `pnpm --filter web lighthouse:budget:mobile` | ❌ **未跑**：同上，且需 E2E 攒的会话 Cookie |
 | 真机验收（方案 §8.3 的 8 条） | ❌ **未做**：无 iOS / Android 真机 |
@@ -167,7 +167,7 @@
 | `middleware.ts` | 修改 | 接线入口分流：未登录仍先跳登录页；判定全在纯函数里，这里只负责写偏好 Cookie（非 httpOnly、`sameSite=lax`、https 下才加 `Secure`） |
 | `middleware.test.ts` | 修改 | 新增 8 条：入口跳转、深层路由不跳、逃生口写 Cookie、偏好双向优先于 UA、未登录优先、`Secure` 随协议 |
 
-## 8. 文档与契约（新增 5 · 修改 2）
+## 8. 文档与契约（新增 6 · 修改 2）
 
 | 文件 | 状态 | 作用与原因 |
 |------|------|-----------|
@@ -178,6 +178,9 @@
 | `.claude/openspec/changes/2026-09-12-mobile-route-segment.md` | 新增 | 契约登记：为什么不换 origin（Cookie host-only + 进程级刷新锁），以及非 httpOnly 的 `anynote_view` 为什么不违反"token 不得进 document.cookie"。**不改任何后端契约**，`openapi/specs/*.json` 未变动 |
 | `CLAUDE.md` | 修改 | 导航加 `docs/mobile/`；门禁命令补移动端两条；`apps/web` 条目标注两个路由段；Phase 5 单测数字补注 |
 | `README.md` | 修改 | 「端到端与性能门禁」加移动端三行表 + project 分工说明 + 移动端门槛更低的口径解释 |
+| `docs/changelist/2026-09-12-mobile-adaptation.md` | 新增 | 本清单 |
+| `apps/web/e2e/mobile-viewport.spec.ts` | 新增 | `/ai/pdf` 在 375 / 414 / 768px 三档视口的无横向滚动回归（T0.3 的像素级断言） |
+| `apps/web/e2e/mobile-core.spec.ts` | 新增 | 移动端关键路径 25 条：入口分流与逃生口、tab 导航、13 条路由无横向滚动、笔记三级导航与自动保存回读、工具条横滑与触摸目标、动作表二次确认、AI 与 PDF 形态、搜索跳转 |
 
 
 ---
