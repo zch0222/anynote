@@ -8,6 +8,9 @@ RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/api-client/package.json ./packages/api-client/package.json
+# api-core 与 api-client 不同：它有运行时代码，由 Next 的 transpilePackages 一起编译，
+# 清单不进来 pnpm 装不出这个 workspace 链接，build 阶段会报 Can't resolve '@anynote/api-core/*'
+COPY packages/api-core/package.json ./packages/api-core/package.json
 COPY packages/tsconfig ./packages/tsconfig
 RUN --mount=type=cache,id=anynote-web-pnpm,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store && pnpm install --frozen-lockfile
@@ -15,6 +18,7 @@ RUN --mount=type=cache,id=anynote-web-pnpm,target=/pnpm/store \
 FROM dependencies AS source
 COPY apps/web ./apps/web
 COPY packages/api-client/tsconfig.json ./packages/api-client/tsconfig.json
+COPY packages/api-core ./packages/api-core
 COPY openapi/specs ./openapi/specs
 # 使用入库的契约 + 锁定版本生成器，构建不需要访问运行中的后端。
 RUN mkdir -p packages/api-client/src && \

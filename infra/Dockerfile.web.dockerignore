@@ -9,6 +9,8 @@
 !packages/api-client/
 !packages/api-client/package.json
 !packages/api-client/tsconfig.json
+!packages/api-core/
+!packages/api-core/**
 !packages/tsconfig/
 !packages/tsconfig/**
 !openapi/
