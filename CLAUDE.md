@@ -31,7 +31,7 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **代码完成，发版待定** — M0-M7 已于 2026-09-11 全部 `--no-ff` 合并 `dev`。**M8（协同 + 桌面 + E2E/性能 + 收尾）同日完成**：`apps/collab` 自建协同服务 + `/docs` 协同文档库、`apps/desktop` Tauri 骨架与 `/api/auth/exchange` 令牌交换、Playwright 15 条用例、Lighthouse（性能 99-100 / 无障碍 100）、产物预算全绿；全仓前端单测 **586** + 协同服务 **75**。**未做**：桌面构建验证（本机无 Rust/MSVC 工具链）、删除 `apps/web-legacy/`（M7.6 的 5 个后端缺口未解，新前端还不能替代它）、合并 `main` 与打 tag `v0.6.0`。AI 流式与 PDF 上传仍受后端阻塞（见里程碑 M7.6）。详见 `docs/refactor/FRONTEND_MILESTONES.md` M7/M7.6/M8/M8.6/§5 与 `docs/refactor/TASKS.md` Phase 5；E2E 与性能门禁命令见 README「测试」 |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **代码完成，发版待定** — M0-M7 已于 2026-09-11 全部 `--no-ff` 合并 `dev`。**M8（协同 + 桌面 + E2E/性能 + 收尾）同日完成**：`apps/collab` 自建协同服务 + `/docs` 协同文档库、`apps/desktop` Tauri 骨架与 `/api/auth/exchange` 令牌交换、Playwright 20 条用例（2026-09-12 笔记模块重构后扩充）、Lighthouse（性能 97-100 / 无障碍 100）、产物预算全绿；全仓前端单测 **619** + 协同服务 **75**。**未做**：桌面构建验证（本机无 Rust/MSVC 工具链）、删除 `apps/web-legacy/`（M7.6 的 5 个后端缺口未解，新前端还不能替代它）、合并 `main` 与打 tag `v0.6.0`。AI 流式与 PDF 上传仍受后端阻塞（见里程碑 M7.6）。详见 `docs/refactor/FRONTEND_MILESTONES.md` M7/M7.6/M8/M8.6/§5 与 `docs/refactor/TASKS.md` Phase 5；E2E 与性能门禁命令见 README「测试」 |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
@@ -94,7 +94,7 @@ pnpm format              # Biome format only
 ### 端到端与性能门禁（需生产构建 + 真实后端栈）
 
 ```bash
-pnpm --filter web test:e2e          # Playwright 6 条关键路径 + 协同双端同步
+pnpm --filter web test:e2e          # Playwright 20 条用例（关键路径 + 笔记编辑器回归 + 协同双端同步）
 pnpm --filter web bundle:budget     # 首屏 JS ≤ 300KB、编辑器 ≤ 250KB（gzip）
 pnpm --filter web lighthouse:budget # Performance ≥ 90、Accessibility ≥ 95
 pnpm --filter @anynote/cli test:e2e # CLI 端到端：知识库/笔记增删改查闭环（需先 build CLI）
@@ -257,7 +257,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 
 1. M7.6 的后端缺口全部关闭，新前端在这些路径上端到端可用
 2. 新前端接管线上流量并稳定运行 1 周
-3. `pnpm --filter web test:e2e` 6 条关键路径在生产环境全绿
+3. `pnpm --filter web test:e2e` 20 条用例在生产环境全绿
 
 ## 上下文文档导航
 

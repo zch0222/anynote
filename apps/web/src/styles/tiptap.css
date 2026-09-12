@@ -19,12 +19,21 @@
 .anynote-editor__surface {
   flex: 1;
   min-height: 0;
+  /* 外层给了确定高度时，长文在编辑区内部滚动；高度自适应时这条不生效。
+     没有它，容器的 overflow: hidden 会把超出的正文直接裁掉。 */
+  overflow-y: auto;
 }
 
 .anynote-editor__content {
   padding: 1rem 1.25rem;
   min-height: 320px;
   outline: none;
+}
+
+/* data-fill：外层已经把编辑器约束到确定高度（如笔记页占满视口）。
+   正文撑满可滚动区，正文下方的空白处点击也能聚焦到编辑器末尾。 */
+.anynote-editor[data-fill="true"] .anynote-editor__content {
+  min-height: 100%;
 }
 
 .anynote-editor[data-preset="readonly"] .anynote-editor__content {
@@ -181,9 +190,26 @@
   color: var(--muted-foreground);
 }
 
-/* ---------- 代码块（Shiki 高亮层 + 可编辑层叠加） ---------- */
+/* ---------- 代码 / 代码块 ----------
+   Tailwind Typography 的 prose 会给 pre 套深色底、给行内 code 加反引号伪元素，
+   与自定义代码块冲突。这里用「祖先类 + 自身类」把特异度抬到 prose 之上再复位，
+   不依赖两个样式表谁先加载。 */
+.anynote-editor .anynote-editor__content code::before,
+.anynote-editor .anynote-editor__content code::after {
+  content: none;
+}
+
+.anynote-editor .anynote-editor__content :not(pre) > code {
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  background-color: var(--muted);
+  color: var(--foreground);
+  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", monospace);
+  font-size: 0.875em;
+  font-weight: 500;
+}
+
 .anynote-code-block {
-  position: relative;
   margin: 0.75rem 0;
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) * 0.8);
@@ -205,43 +231,28 @@
   font-size: 11px;
 }
 
-.anynote-code-block__body {
-  position: relative;
-}
-
-.anynote-code-block__preview,
-.anynote-code-block__editor {
+.anynote-editor .anynote-editor__content pre.anynote-code-block__editor {
   margin: 0;
   padding: 12px 14px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--foreground);
   font-family: var(--font-mono, ui-monospace, "SFMono-Regular", monospace);
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  background-color: transparent;
-  border: none;
+  tab-size: 2;
 }
 
-.anynote-code-block__preview {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.anynote-code-block__editor {
-  position: relative;
-  color: transparent;
-  caret-color: var(--foreground);
-}
-
-.anynote-code-block__preview .shiki,
-.anynote-code-block__preview .shiki span {
+/* Shiki 分词结果以行内装饰贴在正文上：这里只决定明暗主题各取哪个变量，
+   颜色值本身在装饰 span 的 style 里（--shiki-light / --shiki-dark）。 */
+.anynote-code-block__editor .anynote-code-token {
   color: var(--shiki-light);
-  background-color: transparent;
 }
 
-.dark .anynote-code-block__preview .shiki,
-.dark .anynote-code-block__preview .shiki span {
+.dark .anynote-code-block__editor .anynote-code-token {
   color: var(--shiki-dark);
 }
 

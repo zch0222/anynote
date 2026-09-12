@@ -522,7 +522,7 @@ pnpm --filter web test:integration:auth     # 真实本地认证链路（需先�
 
 # 端到端与性能（都需要「生产构建 + 真实后端栈」，不进默认 pnpm test 与 CI）
 pnpm --filter web build                     # 先出生产产物
-pnpm --filter web test:e2e                  # Playwright 6 条关键路径 + 协同双端同步
+pnpm --filter web test:e2e                  # Playwright 20 条用例（关键路径 + 笔记编辑器回归 + 协同双端同步）
 pnpm --filter web bundle:budget             # 产物体积预算（超标退出码非零）
 pnpm --filter web lighthouse:budget         # Lighthouse 门禁（需生产前端在跑）
 
@@ -544,7 +544,7 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 
 | 命令 | 内容 | 门槛 |
 |------|------|------|
-| `pnpm --filter web test:e2e` | 登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 暗色切换 6 条关键路径，外加协同编辑的双上下文实时同步 | 全绿 |
+| `pnpm --filter web test:e2e` | 登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 暗色切换 6 条关键路径，笔记编辑器的高度、保存冲突与代码块回归，外加协同编辑的双上下文实时同步，共 20 条 | 全绿 |
 | `pnpm --filter web bundle:budget` | 各路由首屏 JS（含各级 layout chunk）与编辑器整包的 gzip 体积 | 首屏 ≤ 300KB、编辑器 ≤ 250KB |
 | `pnpm --filter web lighthouse:budget` | `/login`、`/dashboard`、`/notes`、`/docs`、`/ai/chat` 五条路由 | Performance ≥ 90、Accessibility ≥ 95 |
 

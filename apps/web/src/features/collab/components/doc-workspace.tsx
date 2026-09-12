@@ -105,7 +105,8 @@ export function CollabDocWorkspace({ docId }: { docId: string }) {
           value=""
           collaboration={collaboration}
           onChange={handleChange}
-          className="flex-1"
+          fill
+          className="min-h-0 flex-1"
         />
       ) : (
         <div className="space-y-3 rounded-xl border bg-card p-4" aria-busy="true">

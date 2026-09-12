@@ -1,6 +1,7 @@
 "use client";
 
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
+import type { UploadFn } from "@/components/editor/extensions/anynote-image";
 import type { AiContinueFn } from "@/components/editor/presets/types";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
 import { NoteTree } from "@/components/note/note-tree";
@@ -29,8 +30,14 @@ import { continueWriting } from "@/lib/ai/sse";
 import { MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+
+/**
+ * 编辑区高度 = 视口 − (AppHeader + 内容区上下内边距)。
+ * 与 `/ai/chat`、`/ai/pdf`、`/ai/workflow` 用的是同一个常量，改这里记得一起改。
+ */
+const WORKSPACE_VIEWPORT = "h-[calc(100svh-9rem)]";
 
 /**
  * `/notes/[baseId]/[noteId]`：左目录 + 右编辑器。
@@ -77,6 +84,16 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
       scheduleSave({ title: next, content: contentRef.current });
     },
     [scheduleSave],
+  );
+
+  // 图片走 file 服务的分片直传。实现（SHA-256 + 分片签名）只在真的插图时才下载，
+  // 静态 import 会把它压进笔记路由的首屏 JS；引用须稳定，否则每次渲染都会重建编辑器实例
+  const uploadFn = useMemo<UploadFn>(
+    () => async (file) => {
+      const { createNoteImageUploader } = await import("@/lib/editor/upload");
+      return createNoteImageUploader(noteId)(file);
+    },
+    [noteId],
   );
 
   // Slash 菜单「AI 续写」：流式增量写回编辑器里的 aiBlock 节点（引用须稳定，否则编辑器会重建）
@@ -126,9 +143,9 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl gap-6">
+    <div className={`mx-auto flex w-full min-h-0 max-w-7xl gap-6 ${WORKSPACE_VIEWPORT}`}>
       <aside className="hidden w-64 shrink-0 lg:block">
-        <ScrollArea className="h-[calc(100vh-9rem)] pr-2">
+        <ScrollArea className="h-full pr-2">
           <NoteTree
             bases={(bases.data ?? []).map((base) => ({
               id: base.id,
@@ -146,8 +163,8 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
         </ScrollArea>
       </aside>
 
-      <section className="min-w-0 flex-1 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
           <nav aria-label="面包屑" className="text-sm text-muted-foreground">
             <Link href="/notes" className="hover:text-foreground">
               笔记
@@ -191,9 +208,9 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
         </div>
 
         {note.isPending || initialContent === null ? (
-          <div className="space-y-3">
-            <Skeleton className="h-10 w-1/2" />
-            <Skeleton className="h-72 w-full rounded-xl" />
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <Skeleton className="h-10 w-1/2 shrink-0" />
+            <Skeleton className="min-h-0 flex-1 rounded-xl" />
           </div>
         ) : (
           <>
@@ -202,7 +219,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
               value={title}
               onChange={(event) => handleTitleChange(event.target.value)}
               placeholder="未命名笔记"
-              className="h-auto border-0 px-0 !text-2xl font-semibold shadow-none focus-visible:ring-0"
+              className="h-auto shrink-0 border-0 px-0 !text-2xl font-semibold shadow-none focus-visible:ring-0"
             />
             <TiptapEditor
               key={noteId}
@@ -210,6 +227,9 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
               value={initialContent}
               onChange={handleContentChange}
               aiContinue={handleAiContinue}
+              uploadFn={uploadFn}
+              fill
+              className="min-h-0 flex-1"
             />
           </>
         )}
