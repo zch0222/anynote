@@ -33,7 +33,16 @@ export default defineConfig({
     video: "off",
     locale: "zh-CN",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: /mobile-.*\.spec\.ts/ },
+    // M10.0：移动端门禁。`workers: 1` 下多一个 project 会让全量 E2E 时间翻倍，
+    // 所以两边按文件名分工——移动端用例只在 mobile project 跑，桌面用例只在 chromium 跑。
+    {
+      name: "mobile",
+      use: { ...devices["Pixel 5"] },
+      testMatch: /mobile-.*\.spec\.ts/,
+    },
+  ],
   webServer: {
     command: "npx next start",
     url: baseURL,

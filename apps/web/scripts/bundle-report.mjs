@@ -13,6 +13,7 @@ import {
   classifyChunk,
   evaluateBudgets,
   formatKb,
+  heaviestByBucket,
   sumEditorChunks,
   summarizeRoutes,
 } from "./lib/bundle.mjs";
@@ -71,17 +72,19 @@ for (const route of routes.slice(0, 10)) {
   console.log(`${formatKb(route.gzip).padStart(10)}  ${route.route}`);
 }
 
-const heaviest = routes[0];
+// 桌面与移动端分桶判定：/m/* 走更紧的 250KB 预算（M10.0）
+const { desktop, mobile } = heaviestByBucket(routes);
 const result = evaluateBudgets(
   {
-    initialJs: heaviest?.gzip ?? 0,
-    heaviestRoute: heaviest?.route ?? "",
+    initialJs: desktop?.gzip ?? 0,
+    heaviestRoute: desktop?.route ?? "",
+    ...(mobile ? { mobileInitialJs: mobile.gzip, heaviestMobileRoute: mobile.route } : {}),
     editorChunk: editorTotal,
   },
   DEFAULT_BUDGETS,
 );
 
-console.log("\n=== 性能预算（M8.3） ===");
+console.log("\n=== 性能预算（M8.3 / M10.0） ===");
 for (const check of result.checks) {
   const detail = check.detail ? `（${check.detail}）` : "";
   console.log(

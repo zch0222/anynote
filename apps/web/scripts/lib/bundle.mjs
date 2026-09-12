@@ -5,9 +5,33 @@
 export const DEFAULT_BUDGETS = {
   /** 单条路由首屏加载的全部 JS。 */
   initialJs: 300 * 1024,
+  /**
+   * 移动端路由（`/m/*`）首屏 JS。比桌面紧 50KB：移动端外壳不挂 sidebar / cmdk /
+   * react-table / xyflow，省下来的额度要守住，不能让它慢慢退化成桌面口径（M10.0 D8）。
+   */
+  mobileInitialJs: 250 * 1024,
   /** 编辑器整包（TipTap + 自定义扩展 + 桥接）。 */
   editorChunk: 250 * 1024,
 };
+
+/**
+ * 是否是移动端路由。
+ *
+ * 必须按**路径段**判断：`startsWith("/m")` 会把 `/mooc`、`/me` 这类桌面路由
+ * 误判进移动端桶，用更紧的预算去卡它们，报出与事实不符的红灯。
+ */
+export function isMobileRoute(route) {
+  return route === "/m" || route.startsWith("/m/");
+}
+
+/** 把路由按预算桶分组，返回各桶里最重的一条（没有则为 null）。 */
+export function heaviestByBucket(routes) {
+  const pick = (list) => list.reduce((max, row) => (max && max.gzip >= row.gzip ? max : row), null);
+  return {
+    desktop: pick(routes.filter((row) => !isMobileRoute(row.route))),
+    mobile: pick(routes.filter((row) => isMobileRoute(row.route))),
+  };
+}
 
 /** 判定 chunk 归属用的标志字符串。 */
 export const MARKERS = {
@@ -98,6 +122,17 @@ export function evaluateBudgets(actuals, budgets = DEFAULT_BUDGETS) {
       actual: actuals.initialJs,
       budget: budgets.initialJs,
     },
+    // 移动端路由还不存在时（M10.1 之前）没有可判定对象，整条检查跳过而不是记 0 分通过
+    ...(actuals.mobileInitialJs === undefined
+      ? []
+      : [
+          {
+            name: "移动端路由首屏 JS（gzip）",
+            detail: actuals.heaviestMobileRoute ?? "",
+            actual: actuals.mobileInitialJs,
+            budget: budgets.mobileInitialJs,
+          },
+        ]),
     {
       name: "编辑器 chunk 合计（gzip）",
       detail: "",

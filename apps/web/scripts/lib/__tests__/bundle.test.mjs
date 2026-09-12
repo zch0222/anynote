@@ -6,6 +6,8 @@ import {
   classifyChunk,
   evaluateBudgets,
   formatKb,
+  heaviestByBucket,
+  isMobileRoute,
   sumEditorChunks,
   summarizeRoutes,
   toRoutePath,
@@ -198,5 +200,89 @@ describe("formatKb", () => {
     expect(formatKb(1024)).toBe("1.0 KB");
     expect(formatKb(0)).toBe("0.0 KB");
     expect(formatKb(315 * 1024 + 100)).toBe("315.1 KB");
+  });
+});
+
+describe("isMobileRoute（M10.0 预算分桶）", () => {
+  it("按路径段匹配 /m 与其子路由", () => {
+    expect(isMobileRoute("/m")).toBe(true);
+    expect(isMobileRoute("/m/notes")).toBe(true);
+    expect(isMobileRoute("/m/notes/3/7")).toBe(true);
+  });
+
+  it("不把以 m 开头的桌面路由误判成移动端", () => {
+    // startsWith("/m") 会把这些全吃进更紧的 250KB 桶，报出与事实不符的红灯
+    expect(isMobileRoute("/mooc")).toBe(false);
+    expect(isMobileRoute("/mooc/12")).toBe(false);
+    expect(isMobileRoute("/me")).toBe(false);
+    expect(isMobileRoute("/manage")).toBe(false);
+  });
+
+  it("桌面根路由与其它路由一律不是移动端", () => {
+    expect(isMobileRoute("/")).toBe(false);
+    expect(isMobileRoute("/notes")).toBe(false);
+    expect(isMobileRoute("/ai/chat")).toBe(false);
+  });
+});
+
+describe("heaviestByBucket", () => {
+  const routes = [
+    { route: "/notes", gzip: 300 },
+    { route: "/mooc", gzip: 280 },
+    { route: "/m/notes", gzip: 200 },
+    { route: "/m/dashboard", gzip: 120 },
+  ];
+
+  it("两个桶各取最重的一条", () => {
+    const { desktop, mobile } = heaviestByBucket(routes);
+    expect(desktop?.route).toBe("/notes");
+    expect(mobile?.route).toBe("/m/notes");
+  });
+
+  it("没有移动端路由时 mobile 为 null（M10.1 之前的状态）", () => {
+    const { desktop, mobile } = heaviestByBucket([{ route: "/notes", gzip: 1 }]);
+    expect(desktop?.route).toBe("/notes");
+    expect(mobile).toBeNull();
+  });
+
+  it("空输入两个桶都是 null", () => {
+    expect(heaviestByBucket([])).toEqual({ desktop: null, mobile: null });
+  });
+});
+
+describe("evaluateBudgets 的移动端分桶", () => {
+  it("移动端路由超过 250KB 时失败，即使没超桌面的 300KB", () => {
+    const result = evaluateBudgets({
+      initialJs: 100,
+      heaviestRoute: "/notes",
+      mobileInitialJs: 260 * 1024,
+      heaviestMobileRoute: "/m/notes",
+      editorChunk: 100,
+    });
+    expect(result.pass).toBe(false);
+    const mobileCheck = result.checks.find((check) => check.detail === "/m/notes");
+    expect(mobileCheck).toMatchObject({ pass: false, budget: 250 * 1024 });
+  });
+
+  it("移动端正好等于 250KB 算通过", () => {
+    const result = evaluateBudgets({
+      initialJs: 100,
+      heaviestRoute: "/notes",
+      mobileInitialJs: DEFAULT_BUDGETS.mobileInitialJs,
+      heaviestMobileRoute: "/m/notes",
+      editorChunk: 100,
+    });
+    expect(result.pass).toBe(true);
+  });
+
+  it("没有移动端路由时不产生这条检查，而不是按 0 记通过", () => {
+    const result = evaluateBudgets({ initialJs: 1, heaviestRoute: "/", editorChunk: 1 });
+    expect(result.checks).toHaveLength(2);
+    expect(result.checks.some((check) => check.name.includes("移动端"))).toBe(false);
+  });
+
+  it("移动端预算比桌面紧 50KB", () => {
+    expect(DEFAULT_BUDGETS.mobileInitialJs).toBe(250 * 1024);
+    expect(DEFAULT_BUDGETS.initialJs - DEFAULT_BUDGETS.mobileInitialJs).toBe(50 * 1024);
   });
 });
