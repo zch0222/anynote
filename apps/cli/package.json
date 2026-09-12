@@ -1,0 +1,32 @@
+{
+  "name": "@anynote/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "anynote": "./dist/anynote.mjs" },
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "cd ../.. && biome check apps/cli/src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "manifest:write": "node dist/anynote.mjs manifest --format=markdown --write"
+  },
+  "dependencies": {
+    "@anynote/api-client": "workspace:^",
+    "@anynote/api-core": "workspace:^",
+    "commander": "^12.1.0",
+    "openapi-fetch": "^0.17.0",
+    "picocolors": "^1.1.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@anynote/tsconfig": "workspace:*",
+    "@types/node": "^20",
+    "tsup": "^8.3.5",
+    "typescript": "^5",
+    "vitest": "^4.1.7"
+  }
+}

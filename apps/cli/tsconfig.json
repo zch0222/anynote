@@ -1,0 +1,9 @@
+{
+  "extends": "@anynote/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "esModuleInterop": true
+  },
+  "include": ["src/**/*.ts", "e2e/**/*.ts", "*.config.ts"]
+}
