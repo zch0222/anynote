@@ -13,8 +13,10 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 - `apps/web-legacy/` — Next.js 13.5（**旧前端，仍是当前用户访问的版本**，删除条件见下方 Phase 5 表）
 - `apps/collab/` — Node · yjs 13 · ws（协同编辑 WebSocket 服务，:1234；M8.1 自建，后端无此端点）
 - `apps/desktop/` — Tauri 2 桌面壳（M8.2 骨架；构建需 Rust + MSVC 工具链，尚未编译验证）
+- `apps/cli/` — TypeScript CLI 前端 `@anynote/cli`（供人与 agent 操作知识库/笔记；直连 Gateway，配套 `.claude/skills/anynote-*`，方案见 `docs/cli/`）
 - `ai-service/` — Python 3 · FastAPI · LangChain 0.3 · Pydantic v2
 - `packages/api-client/` — `pnpm openapi:generate` 产出的 TS 客户端（**不要手改**，`src/` 已 gitignore）
+- `packages/api-core/` — 前端与 CLI 共用的数据层（`ResData` 信封拆包、springdoc 包装对象 query 展平、笔记/知识库 zod schema）
 - `infra/` — docker-compose（中间件 + 全栈）+ SQL + nginx
 - `openapi/` — spec 聚合与生成脚本
 
@@ -95,10 +97,12 @@ pnpm format              # Biome format only
 pnpm --filter web test:e2e          # Playwright 6 条关键路径 + 协同双端同步
 pnpm --filter web bundle:budget     # 首屏 JS ≤ 300KB、编辑器 ≤ 250KB（gzip）
 pnpm --filter web lighthouse:budget # Performance ≥ 90、Accessibility ≥ 95
+pnpm --filter @anynote/cli test:e2e # CLI 端到端：知识库/笔记增删改查闭环（需先 build CLI）
 ```
 
-三者都**不进**默认 `pnpm test` 与 CI（与 `test:integration:auth` 同类）。注意事项、
-门槛与踩坑见 [`README.md` 的「端到端与性能门禁」](./README.md#端到端与性能门禁m83)。
+四者都**不进**默认 `pnpm test` 与 CI（与 `test:integration:auth` 同类）。前三者的注意事项、
+门槛与踩坑见 [`README.md` 的「端到端与性能门禁」](./README.md#端到端与性能门禁m83)；
+CLI 的见 [`apps/cli/README.md`](./apps/cli/README.md)。
 
 ## 后端服务一览
 
@@ -161,6 +165,7 @@ pnpm --filter web lighthouse:budget # Performance ≥ 90、Accessibility ≥ 95
 | Python service 层与 Pydantic 校验逻辑 | |
 | 构建期脚本里的判定逻辑（`apps/web/scripts/lib/**` 的预算与门槛） | 脚本里读盘 / 起浏览器的 IO 外壳 |
 | 协同服务的协议、握手准入、持久化与房间生命周期（`apps/collab/src/**`） | |
+| CLI 的参数解析、输出信封、退出码映射、凭据存储与跨进程刷新锁、各命令的成功/失败路径（`apps/cli/src/**`） | `apps/cli/e2e/**`（另有真实栈端到端用例） |
 
 **Bug 修复必须先写复现该 bug 的失败用例，再改代码**——否则无法证明修好了。
 
@@ -267,6 +272,9 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `.claude/openspec/changes/` — API 变更提案归档
 - `CONTRIBUTING.md` — 代码规范要点
 - `apps/desktop/README.md` — 桌面壳的令牌交换流程、构建前置条件与未验证项
+- `docs/cli/` — CLI 前端：`CLI_PLAN.md`（技术方案）、`CLI_MILESTONES.md`（M9.x 进度）、`COMMANDS.md`（**生成物**）、`CHANGELIST.md`（本期改动审计表）
+- `apps/cli/README.md` — CLI 的构建、环境变量、凭据安全与测试命令
+- `.claude/skills/anynote-*` — 给 Claude Code 的 CLI / 笔记配方 / 仓库操作手册（`anynote-cli` 的 `reference/commands.md` 是生成物）
 - `docs/refactor/REFACTOR_PLAN.md` / `FRONTEND_REFACTOR_PLAN.md` / `FRONTEND_MILESTONES.md` — 重构决策与执行计划
 - `docs/refactor/TASKS.md` — Phase 级进度与未完成项
 - `docs/backend-security-inventory.md` — 后端安全配置清单
@@ -307,7 +315,8 @@ CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分�
 - ❌ 在 `application.yml` 改运行时配置（应改 Nacos）
 - ❌ 新前端用 Milkdown / Wangeditor / Vditor / Muya（统一 TipTap）
 - ❌ 前端手写 fetch / axios 直调后端（必须走 `@anynote/api-client` + BFF 代理）
-- ❌ 前端把 token 写到 `document.cookie` / localStorage / sessionStorage（必须 httpOnly Cookie）。**唯一例外**：`apps/web/src/lib/desktop/bridge.ts` 的桌面壳场景，由里程碑 M8.2 授权，且写入前校验确实处在 Tauri 壳中
+- ❌ 前端把 token 写到 `document.cookie` / localStorage / sessionStorage（必须 httpOnly Cookie）。**例外一**：`apps/web/src/lib/desktop/bridge.ts` 的桌面壳场景，由里程碑 M8.2 授权，且写入前校验确实处在 Tauri 壳中。**例外二**：`apps/cli` 把凭据写 `<configDir>/credentials.json`（POSIX 0600，Windows 无等价保护），由 `.claude/openspec/changes/2026-09-12-cli-credential-storage.md` 授权——CLI 没有 Cookie jar，且刷新必须走跨进程文件锁；不想落盘用 `ANYNOTE_TOKEN`
+- ❌ CLI 命令改动后不重新生成 `docs/cli/COMMANDS.md` 与 `.claude/skills/anynote-cli/reference/commands.md` 就提交（`pnpm --filter @anynote/cli manifest:write`，CI 的 `cli` job 会卡 diff）
 - ❌ 在纯 Web 部署里配置 `DESKTOP_EXCHANGE_KEY`（那是把真实 Token 交给 JS 的开关，不配即关闭）
 - ❌ 静态引入重依赖（编辑器整包、yjs / y-websocket、pdfjs、ReactFlow）——一律 `dynamic(..., { ssr: false })`，改完跑 `pnpm --filter web bundle:budget` 确认没顶出首屏 300KB 预算
 - ❌ 新增 / 修改 Service、工具类、前端 hook、BFF Route Handler 后不写单元测试就提交（见[「测试要求」](#测试要求强制)）
