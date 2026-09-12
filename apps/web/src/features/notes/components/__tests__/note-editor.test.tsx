@@ -1,6 +1,6 @@
 import { noteApi } from "@/lib/api/openapi";
 import { renderWithProviders } from "@/test/render";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "../note-editor";
@@ -38,6 +38,7 @@ function envelope(data: unknown, code = "00000") {
 
 beforeEach(() => {
   get.mockReset();
+  vi.mocked(noteApi.PATCH).mockReset();
   editorProps.mockReset();
   get.mockImplementation((path: string) => {
     if (path === "/notes/{noteId}") {
@@ -63,6 +64,32 @@ beforeEach(() => {
 });
 
 describe("NoteEditor 布局与编辑器接线", () => {
+  it("正文首个 H1 改动立即更新笔记标题，并将标题与正文一起保存", async () => {
+    vi.mocked(noteApi.PATCH).mockResolvedValue(envelope({ version: "next" }) as never);
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    act(() => {
+      editorProps.mock.calls.at(-1)?.[0].onChange("# 同步标题\n\n正文", {
+        state: {
+          doc: {
+            firstChild: { type: { name: "heading" }, attrs: { level: 1 }, textContent: "同步标题" },
+          },
+        },
+      });
+    });
+    expect(screen.getByLabelText("笔记标题")).toHaveValue("同步标题");
+    await waitFor(
+      () =>
+        expect(noteApi.PATCH).toHaveBeenCalledWith(
+          "/notes/{noteId}",
+          expect.objectContaining({
+            body: expect.objectContaining({ title: "同步标题", content: "# 同步标题\n\n正文" }),
+          }),
+        ),
+      { timeout: 3000 },
+    );
+  });
+
   it("编辑区占满工作区视口高度，而不是跟着内容长短变", async () => {
     const { container } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
     await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());

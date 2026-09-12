@@ -5,6 +5,28 @@ import type { Editor } from "@tiptap/react";
 import { describe, expect, it, vi } from "vitest";
 
 describe("TiptapEditor", () => {
+  it("初始化和切换编辑权限不触发内容保存回调", async () => {
+    const onChange = vi.fn();
+    const onReady = vi.fn();
+    const { rerender } = render(
+      <TiptapEditorImpl preset="full" value="# 正文标题" onChange={onChange} onReady={onReady} />,
+    );
+    await waitFor(() => expect(onReady).toHaveBeenCalled());
+    expect(onChange).not.toHaveBeenCalled();
+
+    rerender(
+      <TiptapEditorImpl
+        preset="full"
+        value="# 正文标题"
+        editable={false}
+        onChange={onChange}
+        onReady={onReady}
+      />,
+    );
+    expect((onReady.mock.calls[0]?.[0] as Editor).isEditable).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("full 预设渲染工具栏与可编辑区域", async () => {
     const { container } = render(<TiptapEditorImpl preset="full" value="# 标题" />);
 
@@ -45,6 +67,7 @@ describe("TiptapEditor", () => {
 
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(onChange.mock.calls.at(-1)?.[0]).toContain("**加粗**");
+    expect(onChange.mock.calls.at(-1)?.[1]).toBe(editor);
   });
 
   it("外部 value 变化时回填编辑器，且不覆盖用户输入", async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { TiptapEditor } from "@/components/editor/TiptapEditor";
+import { TiptapEditor, type TiptapEditorProps } from "@/components/editor/TiptapEditor";
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
 import type { AiContinueFn } from "@/components/editor/presets/types";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
@@ -24,6 +24,7 @@ import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { useMoveNoteMutation } from "@/features/notes/use-move-note";
 import { useNoteQuery } from "@/features/notes/use-note";
+import { useNoteTitle } from "@/features/notes/use-note-title";
 import { useNotesQuery } from "@/features/notes/use-notes";
 import { useSaveNote } from "@/features/notes/use-save-note";
 import { continueWriting } from "@/lib/ai/sse";
@@ -53,7 +54,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   const remove = useDeleteNoteMutation();
   const move = useMoveNoteMutation();
 
-  const [title, setTitle] = useState("");
+  const { title, setTitle, onEditorReady, getTitleForContent } = useNoteTitle();
   // 只在笔记切换时重置一次编辑器初始值，避免自动保存的回写打断输入
   const [initialContent, setInitialContent] = useState<string | null>(null);
   const loadedNoteId = useRef<number | null>(null);
@@ -68,14 +69,14 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
     setTitle(note.data.title ?? "");
     contentRef.current = note.data.content ?? "";
     setInitialContent(note.data.content ?? "");
-  }, [note.data, noteId]);
+  }, [note.data, noteId, setTitle]);
 
-  const handleContentChange = useCallback(
-    (markdown: string) => {
+  const handleContentChange = useCallback<NonNullable<TiptapEditorProps["onChange"]>>(
+    (markdown, editor) => {
       contentRef.current = markdown;
-      scheduleSave({ title, content: markdown });
+      scheduleSave({ title: getTitleForContent(editor), content: markdown });
     },
-    [scheduleSave, title],
+    [scheduleSave, getTitleForContent],
   );
 
   const handleTitleChange = useCallback(
@@ -83,7 +84,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
       setTitle(next);
       scheduleSave({ title: next, content: contentRef.current });
     },
-    [scheduleSave],
+    [scheduleSave, setTitle],
   );
 
   // 图片走 file 服务的分片直传。实现（SHA-256 + 分片签名）只在真的插图时才下载，
@@ -226,6 +227,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
               preset="full"
               value={initialContent}
               onChange={handleContentChange}
+              onReady={onEditorReady}
               aiContinue={handleAiContinue}
               uploadFn={uploadFn}
               fill

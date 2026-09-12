@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }));
@@ -39,12 +39,16 @@ vi.mock("@/features/notes/use-move-note", () => ({ useMoveNoteMutation: () => mo
 vi.mock("@/features/notes/use-delete-note", () => ({ useDeleteNoteMutation: () => remove }));
 
 // 编辑器整包在 jsdom 里跑不动也没必要，这里只验证接线
+const editorProps = vi.fn();
 vi.mock("@/components/editor/TiptapEditor", () => ({
-  TiptapEditor: ({ toolbar, value }: { toolbar?: string; value: string }) => (
-    <div data-testid="editor" data-toolbar={toolbar}>
-      {value}
-    </div>
-  ),
+  TiptapEditor: (props: { toolbar?: string; value: string }) => {
+    editorProps(props);
+    return (
+      <div data-testid="editor" data-toolbar={props.toolbar}>
+        {props.value}
+      </div>
+    );
+  },
 }));
 
 import { MobileNoteEditor } from "@/features/notes/components/mobile/note-editor-mobile";
@@ -83,6 +87,29 @@ describe("MobileNoteEditor", () => {
 
     fireEvent.change(screen.getByLabelText("笔记标题"), { target: { value: "新标题" } });
     expect(save.scheduleSave).toHaveBeenCalledWith({ title: "新标题", content: "正文内容" });
+  });
+
+  it("修改顶部 H1 同步移动端标题，并和正文一起自动保存", () => {
+    mockNote(LOADED);
+    renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+    act(() => {
+      editorProps.mock.calls.at(-1)?.[0].onChange("# 移动端新标题", {
+        state: {
+          doc: {
+            firstChild: {
+              type: { name: "heading" },
+              attrs: { level: 1 },
+              textContent: "移动端新标题",
+            },
+          },
+        },
+      });
+    });
+    expect(screen.getByLabelText("笔记标题")).toHaveValue("移动端新标题");
+    expect(save.scheduleSave).toHaveBeenLastCalledWith({
+      title: "移动端新标题",
+      content: "# 移动端新标题",
+    });
   });
 
   it("「移动到…」只列出别的知识库，且先落盘再移动", async () => {

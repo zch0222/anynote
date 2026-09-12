@@ -22,8 +22,8 @@ export type TiptapEditorProps = {
   preset: PresetName;
   /** Markdown 字符串（受控）。 */
   value: string;
-  /** 内容变化回调，参数为最新 Markdown。 */
-  onChange?: (markdown: string) => void;
+  /** 内容变化回调，同时提供当前编辑器以读取结构化文档（如顶部标题）。 */
+  onChange?: (markdown: string, editor: Editor) => void;
   editable?: boolean;
   placeholder?: string;
   /** 图片上传实现；不传时图片相关入口会提示未配置。 */
@@ -98,10 +98,12 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
       editable: effectiveEditable,
       immediatelyRender: false,
       shouldRerenderOnTransaction: false,
-      onUpdate: ({ editor: current }) => {
+      onUpdate: ({ editor: current, transaction }) => {
+        // setEditable 也会发 update；权限同步不应在标题基线建立前触发正文保存。
+        if (!transaction.docChanged) return;
         const markdown = getMarkdown(current);
         lastEmitted.current = markdown;
-        onChangeRef.current?.(markdown);
+        onChangeRef.current?.(markdown, current);
       },
       editorProps: {
         attributes: {
