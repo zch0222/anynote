@@ -1,0 +1,28 @@
+{
+  "name": "@anynote/api-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./codes": "./src/codes.ts",
+    "./errors": "./src/errors.ts",
+    "./query": "./src/query.ts",
+    "./note-schemas": "./src/note-schemas.ts"
+  },
+  "scripts": {
+    "lint": "cd ../.. && biome check packages/api-core/src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@anynote/tsconfig": "workspace:*",
+    "openapi-fetch": "^0.17.0",
+    "typescript": "^5",
+    "vitest": "^4.1.7"
+  }
+}
