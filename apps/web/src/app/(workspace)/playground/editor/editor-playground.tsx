@@ -2,9 +2,8 @@
 
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import type { PresetName } from "@/components/editor/presets";
-import { createNoteImageUploader } from "@/lib/editor/upload";
 import { cn } from "@/lib/utils";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 const SAMPLES: Record<string, string> = {
   综合示例: `# 编辑器能力总览
@@ -74,7 +73,9 @@ export function EditorPlayground() {
   const [markdown, setMarkdown] = useState(() => SAMPLES[Object.keys(SAMPLES)[0] ?? ""] ?? "");
   const [lastEdited, setLastEdited] = useState("");
 
-  const uploadFn = useMemo(() => createNoteImageUploader(), []);
+  // playground 没有绑定笔记，而图片上传任务的 path 与权限都由笔记归属决定
+  // （见 MINIO_PLAN §5-3），因此这里不提供 uploadFn：工具栏会提示"未配置图片上传"，
+  // 粘贴 / 拖拽也不会静默失败。
 
   const selectSample = (name: string) => {
     setSample(name);
@@ -134,7 +135,6 @@ export function EditorPlayground() {
             preset={preset}
             value={markdown}
             editable={preset !== "readonly"}
-            uploadFn={uploadFn}
             onChange={(next) => {
               setMarkdown(next);
               setLastEdited(next);

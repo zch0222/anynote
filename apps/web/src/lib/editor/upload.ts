@@ -1,15 +1,20 @@
 import { ApiError } from "@/lib/api/errors";
-import { fileApi } from "@/lib/api/openapi";
+import { fileApi, noteApi } from "@/lib/api/openapi";
 
 /**
- * 浏览器分片直传 file 服务（五步）：
- *   1. POST /ossSliceUploadTasks          建任务（hash 命中即秒传，finishedChunks 支持断点续传）
- *   2. POST /getOssSliceUploadSignatures  按 chunkIndexList 换分片签名
- *   3. 浏览器按签名直接 PUT 分片到 OSS（MinIO / HuaweiOBS）
- *   4. POST /markOssSliceUploadSignatures 标记已完成分片
- *   5. POST /composeOssSliceUploadObject  合并 → objectName；再 GET /public/byObjectName 换时效 URL
+ * 浏览器分片直传（五步），笔记图片场景：
+ *   1. POST /api/proxy/note/notes/{noteId}/images/uploadTasks  建任务（path / source 由服务端决定）
+ *   2. POST /api/proxy/file/getOssSliceUploadSignatures        按 chunkIndexList 换分片签名
+ *   3. 浏览器按签名直接 PUT 分片到对象存储（MinIO），不过 BFF / Gateway
+ *   4. POST /api/proxy/file/markOssSliceUploadSignatures       标记已完成分片（支持断点续传）
+ *   5. POST /api/proxy/file/composeOssSliceUploadObject        合并 → { fileId, objectName }
  *
- * 注意：不存在 `/files/presign`。见 docs/refactor/FRONTEND_REFACTOR_PLAN.md 6.5。
+ * 第 1 步**必须**打 note 的业务端点：file 的 /ossSliceUploadTasks 带 @InnerAuth，
+ * 浏览器直连会被正确拒绝（docs/minio/MINIO_PLAN.md §2.2）。path 与 source 也由服务端按
+ * 笔记归属拼装，请求体不允许携带——否则客户端能自选前缀越权写入他人 note/{id}/images。
+ *
+ * 返回的地址是稳定的 redirect 路径（`/api/proxy/file/objects/{fileId}/redirect`），
+ * 而不是预签名 URL：预签名 URL 会过期，写进正文就意味着过几天集体裂图（§2.6）。
  */
 
 /** `FileSources.NOTE_IMAGE`，见后端 `com.anynote.file.api.enums.FileSources`。 */
@@ -18,17 +23,22 @@ export const FILE_SOURCE_NOTE_IMAGE = 0;
 const SUCCESS_CODE = "00000";
 /** 单批向服务端索要的签名数量（与 legacy 上传实现保持一致）。 */
 const SIGNATURE_BATCH_SIZE = 5;
+const BYTES_PER_MB = 1024 * 1024;
 
 export type UploadResult = {
+  /** 合并后的文件 id，用于拼稳定地址。 */
+  fileId: number;
   objectName: string;
-  /** 时效 URL，带 expireTime，**不能**当永久地址写进 Markdown。 */
+  /**
+   * 稳定访问地址（BFF 的 redirect 路径），可直接写进 Markdown 的 `img src`——
+   * 它每次请求都由后端换成新鲜的预签名 URL，**不会过期**。
+   */
   url: string;
 };
 
 export type UploadOptions = {
-  /** 业务侧路径前缀，笔记图片用 `note/{noteId}` 或 `note`。 */
-  path: string;
-  source?: number;
+  /** 目标笔记 id；图片只能挂到某篇笔记下（服务端据此定 path 与权限）。 */
+  noteId: string | number;
   onProgress?: (percent: number) => void;
   signal?: AbortSignal;
 };
@@ -64,7 +74,12 @@ function withSignal(signal?: AbortSignal): { signal?: AbortSignal } {
   return signal ? { signal } : {};
 }
 
-/** 直接 PUT 单个分片到对象存储；签名由 file 服务下发，不经过 BFF。 */
+/** 笔记图片的稳定访问地址。正文存它，而不是会过期的预签名 URL。 */
+export function noteImageUrl(fileId: string | number): string {
+  return `/api/proxy/file/objects/${fileId}/redirect`;
+}
+
+/** 直接 PUT 单个分片到对象存储（MinIO）；签名由 file 服务下发，不经过 BFF。 */
 async function putChunk(
   credentials: SignatureCredentials,
   chunk: Blob,
@@ -90,21 +105,22 @@ async function putChunk(
 }
 
 /**
- * 上传单个文件，返回 `objectName` 与时效 URL。
+ * 上传单个文件到指定笔记，返回 `fileId` / `objectName` 与稳定地址。
  * 分片大小由后端 `chunkSize`（单位 MB）决定，前端不自定上限。
  */
 export async function uploadFile(file: File, options: UploadOptions): Promise<UploadResult> {
-  const { path, source = FILE_SOURCE_NOTE_IMAGE, onProgress, signal } = options;
+  const { noteId, onProgress, signal } = options;
   const hash = await sha256Hex(file);
 
-  const created = await fileApi.POST("/ossSliceUploadTasks", {
+  const created = await noteApi.POST("/notes/{noteId}/images/uploadTasks", {
+    params: { path: { noteId: Number(noteId) } },
     body: {
-      path,
       fileName: file.name,
-      fileSize: file.size,
+      // 后端按 **MB** 理解 fileSize（chunkSize = max(5, ceil(fileSize/1000))，见 MinIOFilePlugin）。
+      // 传字节会让 1MiB 的图片被算成 1000 个分片，上传必败。
+      fileSize: file.size / BYTES_PER_MB,
       hash,
       contentType: file.type || "application/octet-stream",
-      source,
     },
     ...withSignal(signal),
   });
@@ -126,7 +142,7 @@ export async function uploadFile(file: File, options: UploadOptions): Promise<Up
   }
 
   // 后端 chunkSize 单位是 MB；分片索引从 1 开始（与 legacy 实现一致）。
-  const chunkBytes = chunkSizeMb * 1024 * 1024;
+  const chunkBytes = chunkSizeMb * BYTES_PER_MB;
   const finished = new Set<number>(task.finishedChunks ?? []);
 
   const report = () => onProgress?.(Math.round((finished.size / totalChunk) * 100));
@@ -197,30 +213,18 @@ export async function uploadFile(file: File, options: UploadOptions): Promise<Up
   });
   const composedVo = unwrap(
     composed.response.status,
-    composed.data as Envelope<{ objectName?: string }>,
+    composed.data as Envelope<{ objectName?: string; fileId?: number }>,
   );
   const objectName = composedVo.objectName;
-  if (!objectName) {
-    throw new ApiError(502, "B0500", "合并分片失败：未返回 objectName");
+  const fileId = composedVo.fileId;
+  if (!objectName || !fileId) {
+    throw new ApiError(502, "B0500", "合并分片失败：未返回 objectName / fileId");
   }
 
-  const urlResponse = await fileApi.GET("/public/byObjectName", {
-    params: { query: { objectName } },
-    ...withSignal(signal),
-  });
-  const objectUrl = unwrap(
-    urlResponse.response.status,
-    urlResponse.data as Envelope<{ url?: string }>,
-  );
-  if (!objectUrl.url) {
-    throw new ApiError(502, "B0500", "获取文件访问地址失败");
-  }
-
-  return { objectName, url: objectUrl.url };
+  return { fileId, objectName, url: noteImageUrl(fileId) };
 }
 
-/** 编辑器图片上传入口：`AnynoteImage` 的 `uploadFn` 默认实现（返回时效 URL 字符串）。 */
-export function createNoteImageUploader(noteId?: string | number) {
-  return (file: File) =>
-    uploadFile(file, { path: noteId ? `note/${noteId}` : "note" }).then((result) => result.url);
+/** 编辑器图片上传入口：`AnynoteImage` 的 `uploadFn` 默认实现（返回可长期写入正文的地址）。 */
+export function createNoteImageUploader(noteId: string | number) {
+  return (file: File) => uploadFile(file, { noteId }).then((result) => result.url);
 }

@@ -56,7 +56,9 @@ async function forward(url: string, request: NextRequest, bearer: string, body?:
     method: request.method,
     headers: forwardHeaders(request, bearer),
     body: body ?? null,
-    redirect: "error",
+    // 302 必须自己透传给浏览器（图片的稳定地址走这条），不能让 Node 去 follow：
+    // follow 等于让服务端把对象再下载一遍，白费带宽还会把 30x 变成 200。
+    redirect: "manual",
     cache: "no-store",
   });
 }
