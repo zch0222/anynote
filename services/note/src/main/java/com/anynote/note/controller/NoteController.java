@@ -13,6 +13,8 @@ import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.file.api.model.bo.HuaweiOBSTemporarySignature;
 import com.anynote.file.api.model.dto.CompleteUploadDTO;
+import com.anynote.file.api.model.dto.OssSliceUploadTaskCreatePublicDTO;
+import com.anynote.file.api.model.vo.OssSliceUploadTaskVO;
 import com.anynote.note.api.model.po.Note;
 import com.anynote.note.api.model.po.NoteOperationLog;
 import com.anynote.note.datascope.annotation.RequiresNotePermissions;
@@ -154,6 +156,18 @@ public class NoteController {
                                               @RequestBody NoteEditDTO noteEditDTO) {
         noteEditDTO.setNoteId(noteId);
         return ResUtil.success(noteService.editNote(new NoteUpdateParam(noteEditDTO)));
+    }
+
+    @Operation(summary = "创建笔记图片上传任务",
+            description = "浏览器分片直传第 1 步。path 与 source 由服务端按笔记归属决定，"
+                    + "请求体只允许 fileName / hash / fileSize(MB) / contentType。"
+                    + "返回的 uploadId 即后续换签名、标记、合并的凭据；需要该笔记的编辑权限")
+    @PostMapping("{noteId}/images/uploadTasks")
+    public ResData<OssSliceUploadTaskVO> createNoteImageUploadTask(
+            @NotNull(message = "笔记id不能为空") @PathVariable Long noteId,
+            @Validated @RequestBody OssSliceUploadTaskCreatePublicDTO createDTO) {
+        return ResUtil.success(noteService.createNoteImageUploadTask(
+                new NoteImageUploadTaskCreateParam(noteId, createDTO)));
     }
 
     @PostMapping("images")

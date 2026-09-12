@@ -28,8 +28,10 @@ import com.anynote.file.api.RemoteFileService;
 import com.anynote.file.api.enums.FileSources;
 import com.anynote.file.api.model.dto.CompleteUploadDTO;
 import com.anynote.file.api.model.dto.CreateHuaweiOBSTemporarySignatureDTO;
+import com.anynote.file.api.model.dto.OssSliceUploadTaskCreateDTO;
 import com.anynote.file.api.model.bo.HuaweiOBSTemporarySignature;
 import com.anynote.file.api.model.po.FilePO;
+import com.anynote.file.api.model.vo.OssSliceUploadTaskVO;
 import com.anynote.note.api.model.bo.GenerateNoteEditLogMessage;
 import com.anynote.note.api.model.po.*;
 import com.anynote.note.datascope.annotation.RequiresKnowledgeBasePermissions;
@@ -66,6 +68,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -435,6 +438,24 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
                 .image(MarkdownUtil.buildMarkdownImage(filePO.getOriginalFileName(),
                         filePO.getUrl()))
                 .build();
+    }
+
+    @RequiresNotePermissions(NotePermissions.EDIT)
+    @Override
+    public OssSliceUploadTaskVO createNoteImageUploadTask(NoteImageUploadTaskCreateParam param) {
+        // 权限已由 RequiresNotePermissions(EDIT) 在切面里校验：必须与 editNote 同一把锁，
+        // 只校验登录是不够的——否则任何登录用户都能往别人笔记目录写对象。
+        Note note = this.baseMapper.selectById(param.getId());
+        if (StringUtils.isNull(note) || Objects.equals(note.getDeleted(), 1)) {
+            throw new BusinessException("笔记不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND);
+        }
+        // path 与 source 都在这里定死，绝不从请求体取：uploadId 就是后端颁发的临时凭据，
+        // 让客户端自选前缀等于允许越权写入他人 note/{id}/images。
+        return RemoteResDataUtil.getResData(remoteFileService.createOssSliceUploadTask(
+                        new OssSliceUploadTaskCreateDTO(param.getCreateDTO(),
+                                StringUtils.format(FileConstants.NOTE_IMAGE_PATH_TEMPLATE, param.getId()),
+                                FileSources.NOTE_IMAGE.getValue())),
+                "笔记图片上传任务创建失败");
     }
 
     @Override

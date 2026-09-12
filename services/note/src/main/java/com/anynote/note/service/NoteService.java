@@ -4,6 +4,7 @@ import com.anynote.common.elasticsearch.model.EsNoteIndex;
 import com.anynote.common.elasticsearch.model.bo.SearchPageBean;
 import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.file.api.model.bo.HuaweiOBSTemporarySignature;
+import com.anynote.file.api.model.vo.OssSliceUploadTaskVO;
 import com.anynote.note.api.model.po.Note;
 import com.anynote.note.enums.NotePermissions;
 import com.anynote.note.model.bo.*;
@@ -50,6 +51,16 @@ public interface NoteService extends IService<Note> {
     public NotePermissions getNotePermissions(Long noteId);
 
     public MarkdownImage uploadNoteImage(NoteImageUploadParam uploadParam);
+
+    /**
+     * 创建笔记图片上传任务（浏览器分片直传第 1 步）。
+     * <p>
+     * path 与 source 由服务端按笔记归属决定，请求体只带 fileName / hash / fileSize / contentType；
+     * 返回的 uploadId 即后续换签名、标记、合并的凭据。
+     * @param param 创建参数
+     * @return 上传任务信息
+     */
+    public OssSliceUploadTaskVO createNoteImageUploadTask(NoteImageUploadTaskCreateParam param);
 
     /**
      * 创建笔记上传临时地址
