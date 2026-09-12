@@ -148,6 +148,11 @@ services:
       file: docker-compose-middleware.yaml
       service: minio
 
+  minio-init:
+    extends:
+      file: docker-compose-middleware.yaml
+      service: minio-init
+
   xxl-job-admin:
     extends:
       file: docker-compose-middleware.yaml

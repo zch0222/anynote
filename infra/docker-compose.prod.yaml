@@ -101,6 +101,11 @@ services:
   minio:
     <<: *prod
     ports: !reset []
+  minio-init:
+    <<: *prod
+    # 一次性初始化容器：必须保持 "no"，否则 unless-stopped 会让它建完桶后无限重启。
+    restart: "no"
+    ports: !reset []
   xxl-job-admin:
     <<: *prod
     ports: !reset []

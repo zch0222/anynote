@@ -236,6 +236,12 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-anynote}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-AnynoteMinio123}
       MINIO_BROWSER_REDIRECT_URL: http://localhost:${MINIO_CONSOLE_PORT:-9001}
+      # 与客户端 MinIOConfig.region 对齐，两端 credential scope 必须一致（docs/minio/MINIO_PLAN.md §4.4）。
+      # 显式设置后 getPresignedObjectUrl 是纯本地计算，不再触发 GetBucketLocation 网络请求。
+      MINIO_SITE_REGION: ${MINIO_SITE_REGION:-us-east-1}
+      # 浏览器分片直传需要 CORS。MinIO 不实现 S3 的 PutBucketCors，只能在服务端配置（§6.1）。
+      # dev 用 *；prod 收敛成前端实际 Origin。
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_CORS_ALLOW_ORIGIN:-*}
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
@@ -245,6 +251,47 @@ services:
     healthcheck:
       <<: *health-defaults
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null"]
+    networks:
+      - anynote-net
+
+  # 一次性初始化：建桶 + 显式私有策略 + 分片垃圾的 ILM 兜底（docs/minio/MINIO_PLAN.md §6.2）。
+  # 插件自身不建桶（全文无 bucketExists / makeBucket），缺了这一步所有 MinIO 调用都会 NoSuchBucket。
+  minio-init:
+    # mc 只在 quay.io 发布（Docker Hub 的 minio/mc 已被移除，pull 会 access denied）。
+    image: ${MINIO_MC_IMAGE:-quay.io/minio/mc}:${MINIO_MC_VERSION:-latest}
+    container_name: anynote-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-anynote}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-AnynoteMinio123}
+      ANYNOTE_BUCKET: ${MINIO_BUCKET:-anynote}
+      # ILM 兜底是**可选**的，默认关闭。分片对象的路径是
+      # {basePath}/{path}/{uploadId}/{fileName}_chunk_{n}，而各业务来源的 {path} 不同，
+      # 没有任何单一 prefix 能只圈住分片。若照方案原文拿 {basePath}/ 当 prefix，
+      # 会把正式对象一起 1 天过期（丢数据）。只有部署者能给出确实只覆盖临时对象的
+      # prefix 时才设置它；常规清理靠合并后 removeObjects（§4.6-3）。
+      ANYNOTE_ILM_PREFIX: ${MINIO_ILM_PREFIX:-}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$ANYNOTE_BUCKET"
+        mc anonymous set none "local/$$ANYNOTE_BUCKET"
+        if [ -n "$$ANYNOTE_ILM_PREFIX" ]; then
+          echo "applying ILM: expire-days=1 prefix=$$ANYNOTE_ILM_PREFIX"
+          # 不同 mc RELEASE 的 ilm 子命令签名有差异，故不阻塞启动；验收时人工看下面输出。
+          mc ilm rule add --expire-days 1 \
+            --prefix "$$ANYNOTE_ILM_PREFIX" "local/$$ANYNOTE_BUCKET" || true
+        else
+          echo "MINIO_ILM_PREFIX 未设置，跳过 ILM（分片改由合并后删除清理）"
+        fi
+        mc ilm rule ls "local/$$ANYNOTE_BUCKET" || true
+        echo "minio-init done"
+    restart: "no"
     networks:
       - anynote-net
 
