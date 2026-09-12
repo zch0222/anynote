@@ -94,7 +94,7 @@ pnpm format              # Biome format only
 ### 端到端与性能门禁（需生产构建 + 真实后端栈）
 
 ```bash
-pnpm --filter web test:e2e          # Playwright 49 条用例：桌面 20（chromium）+ 移动端 29（mobile）
+pnpm --filter web test:e2e          # Playwright 52 条用例：桌面 23（chromium）+ 移动端 29（mobile）
 pnpm --filter web bundle:budget     # 首屏 JS ≤ 300KB、/m/* ≤ 250KB、编辑器 ≤ 250KB（gzip）
 pnpm --filter web lighthouse:budget # 桌面 Performance ≥ 90、Accessibility ≥ 95
 pnpm --filter web lighthouse:budget:mobile  # 移动口径 Performance ≥ 85、Accessibility ≥ 95
@@ -279,7 +279,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `apps/desktop/README.md` — 桌面壳的令牌交换流程、构建前置条件与未验证项
 - `docs/cli/` — CLI 前端：`CLI_PLAN.md`（技术方案）、`CLI_MILESTONES.md`（M9.x 进度）、`COMMANDS.md`（**生成物**）
 - `docs/mobile/` — 移动端适配：`MOBILE_PLAN.md`（技术方案）、`MOBILE_MILESTONES.md`（M10.0–M10.5 进度 + 验收记录 + 与方案的偏差）、`UI_INVENTORY.md`（开工前逐页核对证据）。**M10.0–M10.4 已实现**（2026-09-12，分支 `feat/mobile-foundation`，未并 `dev`）：21 条 `/m/*` 路由落在 `apps/web` 的 `app/(mobile)/m/**` 路由段、不新开应用（认证 Cookie 是 host-only + `sameSite=strict`，刷新锁是进程级）；入口做 UA 分流（`?desktop=1` 逃生口 + 非身份的 `anynote_view` 偏好 Cookie），登录后落 `/m/dashboard`。**未做**：E2E / Lighthouse 实跑与真机验收（见里程碑「验收记录」）。契约登记见 `.claude/openspec/changes/2026-09-12-mobile-route-segment.md`，逐文件清单见 `docs/changelist/2026-09-12-mobile-adaptation.md`
-- `docs/minio/` — 对象存储链路：`MINIO_PLAN.md`（MinIO 修复方案 v1.0，2026-09-12，**待实施**）。覆盖 note 侧上传任务端点补齐、MinIO 双 endpoint（内网 `endPoint` + 浏览器 `publicEndPoint`）、compose 建桶初始化、独立子域的 Nginx 反代与 CORS；§2 记录 9 条已核对的现状事实（含 `fileSize` 单位 bug 与 7 天预签名 URL 问题），§11 有 4 项待拍板
+- `docs/minio/` — 对象存储链路：`MINIO_PLAN.md`（MinIO 修复方案 v1.0，2026-09-12）+ `MINIO_MILESTONES.md`（**M11.0–M11.5 已实施**，含逐项验收记录）。覆盖 note 侧上传任务端点补齐、MinIO 双 endpoint（内网 `endPoint` + 浏览器 `publicEndPoint`）、compose 建桶初始化、独立子域的 Nginx 反代与 CORS；§2 记录 9 条已核对的现状事实（含 `fileSize` 单位 bug 与 7 天预签名 URL 问题），§11 的 4 项待拍板已按建议落地（D3 仍为「本期不接」，协同文档图片另开工单）；逐文件清单见 `docs/changelist/2026-09-12-minio-note-image-upload.md`
 - `docs/changelist/` — 各批改动的逐文件审计清单；`README.md` 是编写规范与命名规则（`YYYY-MM-DD-<slug>.md`）
 - `apps/cli/README.md` — CLI 的构建、环境变量、凭据安全与测试命令
 - `.claude/skills/anynote-*` — 给 Claude Code 的 CLI / 笔记配方 / 仓库操作手册（`anynote-cli` 的 `reference/commands.md` 是生成物）

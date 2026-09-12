@@ -522,7 +522,7 @@ pnpm --filter web test:integration:auth     # 真实本地认证链路（需先�
 
 # 端到端与性能（都需要「生产构建 + 真实后端栈」，不进默认 pnpm test 与 CI）
 pnpm --filter web build                     # 先出生产产物
-pnpm --filter web test:e2e                  # Playwright 20 条用例（关键路径 + 笔记编辑器回归 + 协同双端同步）
+pnpm --filter web test:e2e                  # Playwright 22 条用例（关键路径 + 编辑器回归 + 协同双端同步 + 图片直传）
 pnpm --filter web bundle:budget             # 产物体积预算（超标退出码非零）
 pnpm --filter web lighthouse:budget         # Lighthouse 门禁（需生产前端在跑）
 
@@ -544,7 +544,7 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 
 | 命令 | 内容 | 门槛 |
 |------|------|------|
-| `pnpm --filter web test:e2e` | 登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 暗色切换 6 条关键路径，笔记编辑器的高度、保存冲突与代码块回归，外加协同编辑的双上下文实时同步，共 20 条 | 全绿 |
+| `pnpm --filter web test:e2e` | 登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 暗色切换 6 条关键路径，笔记编辑器的高度、保存冲突与代码块回归，协同编辑的双上下文实时同步，外加笔记图片分片直传 MinIO 并渲染（含刷新后仍可加载），共 22 条 | 全绿 |
 | `pnpm --filter web bundle:budget` | 各路由首屏 JS（含各级 layout chunk）与编辑器整包的 gzip 体积 | 首屏 ≤ 300KB、编辑器 ≤ 250KB |
 | `pnpm --filter web lighthouse:budget` | `/login`、`/dashboard`、`/notes`、`/docs`、`/ai/chat` 五条路由 | Performance ≥ 90、Accessibility ≥ 95 |
 
@@ -560,12 +560,13 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 同一份产物在移动口径下必然低于桌面分数（理由见 [`docs/mobile/MOBILE_PLAN.md`](docs/mobile/MOBILE_PLAN.md) D8）。
 
 两个 project 按**文件名**分工：`mobile-*.spec.ts` 只在 `mobile` 下跑，其余只在 `chromium` 下跑。
-`workers: 1` 时这样能避免全量 E2E 时间翻倍；跑 `pnpm --filter web test:e2e` 会依次跑完两边（20 + 29 条）。
+`workers: 1` 时这样能避免全量 E2E 时间翻倍；跑 `pnpm --filter web test:e2e` 会依次跑完两边（22 + 29 条）。
 
 注意事项：
 
 - **E2E 每轮新建一个随机 `e2e` 前缀账号**并把登录态存到 `apps/web/e2e/.auth/`（已 gitignore）。账号不删（后端无注销端点），不要在生产环境跑。
-- **协同用例需要 `anynote-collab` 容器在跑**，否则 `/docs` 停在「连接中」。
+- **协同用例需要 `anynote-collab` 容器在跑**，否则 `/docs` 停在「连接中」。且 `crypto.randomUUID()` 只在 secure context 下存在：web 镜像的构建参数必须是 `http://localhost:3000`（不是 LAN IP，明文 HTTP 不算 secure context），collab 的 `COLLAB_ALLOWED_ORIGINS` 要同步成同一个 Origin。
+- **图片上传用例需要 MinIO 桶已建好**：先 `minio-init` 跑到 `minio-init done`，并确认 Redis 里的 `MIN_IO_CONFIG` 带真实凭据（改完 `sys_config` 要 `restart anynote-modules-system`，见 [`docs/minio/MINIO_PLAN.md`](docs/minio/MINIO_PLAN.md) §2.8 / §6.4）。
 - **Lighthouse 必须用官方 desktop 预设**（脚本里已固定）。只设 `formFactor: "desktop"` 而不换节流参数，量到的是「桌面页面跑在移动 4G + 4 倍 CPU 降速下」的分数，与桌面门槛对不上。
 - 需要登录的路由靠 E2E 攒下的 `state.json` 提供 Cookie，所以 **Lighthouse 要在 E2E 之后跑**。
 - 跑之前确认没有旧的 `next start` 占着 3000 端口：同一 `.next` 上并行两个实例会产出引用不存在 chunk 的 HTML。
