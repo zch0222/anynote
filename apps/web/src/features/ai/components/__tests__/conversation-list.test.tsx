@@ -75,4 +75,18 @@ describe("ConversationList", () => {
     renderWithProviders(<ConversationList activeId={0} />);
     expect(screen.getByText(/会话加载失败/)).toBeTruthy();
   });
+
+  // 触摸端没有 hover：操作入口只能常显，否则会话在手机上无法重命名 / 删除（M10.0 T0.4）
+  it("操作按钮在触摸端常显，md 以上才靠 hover 揭示", () => {
+    mockConversations({
+      ...PENDING,
+      isPending: false,
+      data: { pages: [{ rows: [{ id: 1, title: "会话一" }] }] },
+    });
+    renderWithProviders(<ConversationList activeId={1} />);
+
+    const trigger = screen.getByLabelText("会话「会话一」操作");
+    expect(trigger.className).toContain("md:opacity-0");
+    expect(trigger.className).not.toMatch(/(^|\s)opacity-0/);
+  });
 });
