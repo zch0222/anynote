@@ -82,4 +82,23 @@ describe("TiptapEditor", () => {
 
     await waitFor(() => expect(getMarkdown(editor)).toContain("> [!WARN] 注意"));
   });
+
+  it("默认不声明 data-fill，高度由内容撑开", async () => {
+    const { container } = render(<TiptapEditorImpl preset="full" value="" />);
+    await waitFor(() => expect(container.querySelector(".ProseMirror")).not.toBeNull());
+
+    expect(container.querySelector(".anynote-editor")?.hasAttribute("data-fill")).toBe(false);
+  });
+
+  it("fill 时标记 data-fill，正文撑满外层给定的高度", async () => {
+    const { container } = render(
+      <TiptapEditorImpl preset="full" value="" fill className="min-h-0 flex-1" />,
+    );
+    await waitFor(() => expect(container.querySelector(".ProseMirror")).not.toBeNull());
+
+    const root = container.querySelector(".anynote-editor");
+    expect(root?.getAttribute("data-fill")).toBe("true");
+    // 外层类名要原样落到根节点上，否则 flex-1 撑不满父容器
+    expect(root?.className).toContain("flex-1");
+  });
 });

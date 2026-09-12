@@ -36,6 +36,12 @@ export type TiptapEditorProps = {
    */
   collaboration?: CollaborationBinding;
   onReady?: (editor: Editor) => void;
+  /**
+   * 外层已经把编辑器约束到确定高度（如笔记页占满视口）时传 `true`：
+   * 正文会撑满可滚动区，长文在编辑器内部滚动而不是把整页顶长。
+   * 高度自适应的场景（playground、AI 输出）保持 `false`。
+   */
+  fill?: boolean;
   className?: string;
 };
 
@@ -57,6 +63,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
     aiContinue,
     collaboration,
     onReady,
+    fill = false,
     className,
   } = props;
 
@@ -123,7 +130,11 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
   }, [editor]);
 
   return (
-    <div className={cn("anynote-editor", className)} data-preset={preset}>
+    <div
+      className={cn("anynote-editor", className)}
+      data-preset={preset}
+      data-fill={fill ? "true" : undefined}
+    >
       {effectiveEditable ? (
         <Toolbar editor={editor} variant={preset === "minimal" ? "minimal" : "full"} />
       ) : null}
