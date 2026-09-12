@@ -573,7 +573,9 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, N
             throw new BusinessException("知识库不存在");
         }
         LoginUser loginUser = tokenUtil.getLoginUser();
-        if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) {
+        // 只有创建者能删除自己的知识库。原实现漏了取反，导致创建者永远删不掉，
+        // 反而任何非创建者都能删别人的知识库。
+        if (!knowledgeBase.getCreateBy().equals(loginUser.getUserId())) {
             throw new BusinessException("没有权限删除知识库");
         }
         int res = this.baseMapper.deleteById(id);
