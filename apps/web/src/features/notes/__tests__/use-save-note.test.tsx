@@ -331,3 +331,153 @@ describe("useSaveNote：离线与卸载", () => {
     expect(patch).not.toHaveBeenCalled();
   });
 });
+
+describe("useSaveNote：版本号推进（回归 —— 正常编辑不该弹冲突）", () => {
+  function renderSeeded(initialVersion: string | null = "1000") {
+    const queryClient = createPersistentQueryClient();
+    // 基线内容取自详情缓存，必须在挂载前放进去（真实页面里也是先有 note.data 才有 initialVersion）
+    queryClient.setQueryData<NoteDetail>(DETAIL_KEY, initialDetail);
+    return renderHookWithProviders(
+      (props: { initialVersion: string | null }) =>
+        useSaveNote({ noteId: NOTE_ID, initialVersion: props.initialVersion, debounceMs: 20 }),
+      { queryClient, initialProps: { initialVersion } },
+    );
+  }
+
+  it("保存响应给出的版本号不会被详情缓存回算出的旧值顶回去", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result, rerender } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "第一次", content: "c1" }));
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+    expect(patch.mock.calls[0]?.[1].body.version).toBe("1000");
+
+    // 页面把 initialVersion 算作 toVersion(note.data.updateTime)。后台重取或
+    // 卸载时的 keepalive 落盘都会让这个值落后于服务端真实版本；
+    // 跟着它走就是把过期令牌固化下来，下一次保存必然 A0409。
+    rerender({ initialVersion: "1500" });
+    act(() => result.current.scheduleSave({ title: "第二次", content: "c2" }));
+
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
+    expect(patch.mock.calls[1]?.[1].body.version).toBe("2000");
+  });
+
+  it("首次拿到服务端时间戳时才 seed 版本号，之后的 prop 变化一律忽略", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result, rerender } = renderSeeded(null);
+
+    rerender({ initialVersion: "1000" });
+    rerender({ initialVersion: "9999" });
+    act(() => result.current.scheduleSave({ title: "t", content: "c" }));
+
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+    expect(patch.mock.calls[0]?.[1].body.version).toBe("1000");
+  });
+
+  it("请求进行中产生的新改动，会在本次保存完成后自动补发", async () => {
+    let release: (() => void) | null = null;
+    patch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(okEnvelope(saveResult()));
+        }),
+    );
+    patch.mockResolvedValue(okEnvelope(saveResult({ version: "3000" })));
+    const { result } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "第一次", content: "c1" }));
+    await waitFor(() => expect(result.current.status).toBe("saving"));
+
+    // 请求还在飞的时候继续输入：这一批改动不能等到用户下次敲键盘才发
+    act(() => result.current.scheduleSave({ title: "飞行中改动", content: "c2" }));
+    act(() => release?.());
+
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
+    expect(patch.mock.calls[1]?.[1].body).toMatchObject({ title: "飞行中改动", content: "c2" });
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+  });
+
+  it("版本令牌漂移（服务端内容没变）时静默换号重发，不打扰用户", async () => {
+    patch.mockRejectedValueOnce(new ApiError(200, "A0409", "笔记已被其他会话更新，请刷新后重试"));
+    patch.mockResolvedValueOnce(okEnvelope(saveResult({ version: "5000" })));
+    // 回读到的服务端内容与基线（initialDetail）完全一致 ⇒ 没人动过这篇笔记
+    get.mockResolvedValue(
+      okEnvelope({
+        id: NOTE_ID,
+        title: initialDetail.title,
+        content: initialDetail.content,
+        updateTime: "2026-09-11T03:00:00.000Z",
+      }),
+    );
+    const { result } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "本地标题", content: "本地内容" }));
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+
+    expect(result.current.conflict).toBeNull();
+    expect(patch).toHaveBeenCalledTimes(2);
+    expect(patch.mock.calls[1]?.[1].body).toMatchObject({
+      title: "本地标题",
+      content: "本地内容",
+      version: SERVER_VERSION,
+    });
+  });
+
+  it("换号后仍被判过期时退回 error 等重试，不停在保存中", async () => {
+    patch.mockRejectedValue(new ApiError(200, "A0409", "笔记已被其他会话更新，请刷新后重试"));
+    // 回读会发生两次，Response 的 body 只能读一次，必须每次新建
+    get.mockImplementation(() =>
+      okEnvelope({
+        id: NOTE_ID,
+        title: initialDetail.title,
+        content: initialDetail.content,
+        updateTime: "2026-09-11T03:00:00.000Z",
+      }),
+    );
+    const { result } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "本地标题", content: "本地内容" }));
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.conflict).toBeNull();
+    expect(patch).toHaveBeenCalledTimes(2);
+  });
+
+  it("服务端内容真的变了才进冲突态", async () => {
+    patch.mockRejectedValueOnce(new ApiError(200, "A0409", "笔记已被其他会话更新，请刷新后重试"));
+    get.mockResolvedValue(
+      okEnvelope({
+        id: NOTE_ID,
+        title: "别人改过的标题",
+        content: "别人写的内容",
+        updateTime: "2026-09-11T03:00:00.000Z",
+      }),
+    );
+    const { result } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "本地标题", content: "本地内容" }));
+    await waitFor(() => expect(result.current.status).toBe("conflict"));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(result.current.conflict).toMatchObject({
+      local: { title: "本地标题", content: "本地内容" },
+      server: { title: "别人改过的标题", content: "别人写的内容" },
+    });
+  });
+
+  it("卸载 flush 把草稿写回缓存并让详情查询失效，回到这篇笔记不会读到旧正文", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result, unmount, queryClient } = renderSeeded();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+
+    act(() => result.current.scheduleSave({ title: "离开前", content: "未保存" }));
+    unmount();
+
+    expect(patch.mock.calls[0]?.[1]).toMatchObject({ keepalive: true });
+    // SPA 返回时编辑器拿缓存当初始内容：不写回就会用落盘前的旧正文接着编辑
+    expect(queryClient.getQueryData<NoteDetail>(DETAIL_KEY)).toMatchObject({
+      title: "离开前",
+      content: "未保存",
+    });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: DETAIL_KEY });
+  });
+});
