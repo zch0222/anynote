@@ -35,9 +35,22 @@ import java.util.stream.IntStream;
 @Slf4j
 public class MinIOFilePlugin implements FilePlugin {
 
+    /** region 未配置时的默认值，须与 MinIO 的 MINIO_SITE_REGION 一致。 */
+    private static final String DEFAULT_REGION = "us-east-1";
+
     private final MinIOConfig minIOConfig;
 
     private final MinioClient minioClient;
+
+    /**
+     * 生成预签名 URL 专用客户端，endpoint 取 {@code publicEndPoint}（浏览器可达地址）。
+     * <p>
+     * 与 {@link #minioClient} 分开的原因：SigV4 的签名包含 Host，而服务端内网地址
+     * （minio:9000）与浏览器实际请求的地址（localhost:9000 / oss.example.com）不同。
+     * 两者都显式设置 region，避免 minio-java 对公网 endpoint 发 GetBucketLocation。
+     * {@code publicEndPoint} 为空时两者是同一个实例，等价于旧行为。
+     */
+    private final MinioClient presignClient;
 
     private String getOriginalObjectName(String objectName) {
         return StringUtils.format("{}/{}", this.minIOConfig.getBasePath(), objectName);
@@ -47,10 +60,19 @@ public class MinIOFilePlugin implements FilePlugin {
 
     public MinIOFilePlugin(MinIOConfig config) {
         minIOConfig = config;
-        minioClient = new MinioClient.Builder()
+        String region = StringUtils.isEmpty(config.getRegion()) ? DEFAULT_REGION : config.getRegion();
+        minioClient = MinioClient.builder()
                 .endpoint(config.getEndPoint())
+                .region(region)
                 .credentials(config.getAccessKey(), config.getSecretKey())
                 .build();
+        presignClient = StringUtils.isEmpty(config.getPublicEndPoint())
+                ? minioClient
+                : MinioClient.builder()
+                        .endpoint(config.getPublicEndPoint())
+                        .region(region)
+                        .credentials(config.getAccessKey(), config.getSecretKey())
+                        .build();
     }
 
     @Override
@@ -77,7 +99,23 @@ public class MinIOFilePlugin implements FilePlugin {
 
     @Override
     public String multipartFileUpload(MultipartFile file, String path, String fileName) {
-        return "";
+        // 服务端中转上传（PDF 转存 / Whisper / 封面）在 MIN_IO 下走这里。
+        // MinIO 没有永久 URL，因此统一返回 objectName（写进 FilePO.objectName），
+        // 由 file 的 objects/{fileId}/redirect 端点换成新鲜预签名 URL。
+        String objectName = StringUtils.format("{}/{}", path, fileName);
+        try (InputStream inputStream = file.getInputStream()) {
+            this.minioClient.putObject(PutObjectArgs.builder()
+                    .bucket(this.minIOConfig.getBucketName())
+                    .object(getOriginalObjectName(objectName))
+                    .stream(inputStream, file.getSize(), -1)
+                    .contentType(StringUtils.isEmpty(file.getContentType())
+                            ? "application/octet-stream" : file.getContentType())
+                    .build());
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            throw new BusinessException(StringUtils.format("上传文件\"{}\"失败", fileName));
+        }
+        return objectName;
     }
 
     @Override
@@ -93,6 +131,9 @@ public class MinIOFilePlugin implements FilePlugin {
 
     /**
      * 获取MinIO PreSignedObject Url
+     * <p>
+     * 必须走 {@link #presignClient}：签名里的 Host 要与浏览器实际请求的 Host 一致。
+     * 已显式设置 region，因此这里是纯本地计算，不发任何网络请求。
      * @param objectName 对象名称
      * @param method 方法
      * @param duration 过期时间
@@ -101,7 +142,7 @@ public class MinIOFilePlugin implements FilePlugin {
      */
     private String getPreSignedObjectUrl(String objectName, Method method, Integer duration, TimeUnit unit) {
         try {
-            String url = minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+            String url = presignClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .method(method)
                     .bucket(this.minIOConfig.getBucketName())
                     .object(StringUtils.format("{}/{}", this.minIOConfig.getBasePath(), objectName))
@@ -301,6 +342,24 @@ public class MinIOFilePlugin implements FilePlugin {
         }
     }
 
+
+    @Override
+    public void removeObjects(List<String> objectNameList) {
+        if (objectNameList == null || objectNameList.isEmpty()) {
+            return;
+        }
+        // 尽力而为：分片残留不应让已经成功的上传对用户暴露为失败。
+        for (String objectName : objectNameList) {
+            try {
+                this.minioClient.removeObject(RemoveObjectArgs.builder()
+                        .bucket(this.minIOConfig.getBucketName())
+                        .object(getOriginalObjectName(objectName))
+                        .build());
+            } catch (Exception e) {
+                log.warn("删除分片对象\"{}\"失败：{}", getOriginalObjectName(objectName), e.getMessage());
+            }
+        }
+    }
 
     @Override
     public ObjectURL getObjectUrl(String objectName, Integer durationSeconds) {

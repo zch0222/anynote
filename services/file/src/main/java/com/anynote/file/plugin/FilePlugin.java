@@ -87,6 +87,15 @@ public interface FilePlugin {
     public OssObjectComposeResponse composeOssSliceUploadObject(List<String> objectNameList, String targetObjectName);
 
     /**
+     * 批量删除对象。用于合并成功后清理临时分片，避免 bucket 里垃圾只增不减。
+     * <p>
+     * 实现必须是「尽力而为」语义：删除失败只记日志、不抛异常——分片残留不应该
+     * 让一次已经成功的上传对用户暴露为失败。
+     * @param objectNameList 待删除的对象名列表
+     */
+    public void removeObjects(List<String> objectNameList);
+
+    /**
      * 获取对象URL
      * @param objectName 对象名称
      * @param durationSeconds 过期时间(秒)

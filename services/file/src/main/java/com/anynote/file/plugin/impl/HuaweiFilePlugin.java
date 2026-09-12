@@ -166,6 +166,31 @@ public class HuaweiFilePlugin implements FilePlugin {
     }
 
     @Override
+    public void removeObjects(List<String> objectNameList) {
+        if (StringUtils.isEmpty(objectNameList)) {
+            return;
+        }
+        ObsClient obsClient = null;
+        try {
+            obsClient = this.buildObsClient();
+            final ObsClient client = obsClient;
+            objectNameList.forEach(objectName -> client.deleteObject(huaweiOBSConfig.getBucketName(),
+                    huaweiOBSConfig.getBasePath() + "/" + objectName));
+        } catch (ObsException e) {
+            // 与 MinIO 侧一致：尽力而为，分片清理失败不影响上传结果。
+            log.warn("删除华为 OBS 分片失败：{}", e.getErrorMessage());
+        } finally {
+            if (StringUtils.isNotNull(obsClient)) {
+                try {
+                    obsClient.close();
+                } catch (IOException e) {
+                    log.warn("关闭 OBS 客户端失败：{}", e.getMessage());
+                }
+            }
+        }
+    }
+
+    @Override
     public ObjectURL getObjectUrl(String objectName, Integer durationSeconds) {
         return null;
     }

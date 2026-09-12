@@ -31,8 +31,23 @@ public class FilePluginFactory {
     @Resource
     private ConfigService configService;
 
+    /**
+     * 当前生效的对象存储类型（来自 sys_config 的 OSS_TYPE）。
+     * <p>
+     * 单独暴露成方法，供"某条路径只对特定后端有意义"的分支判断，
+     * 避免调用方为了拿类型而先构造一个插件实例。
+     * @return 当前 OSS 类型
+     */
+    public OssTypeEnum ossType() {
+        return OssTypeEnum.valueOf(getOssTypeConfig().getValue());
+    }
+
+    private SysConfig getOssTypeConfig() {
+        return (SysConfig) redisService.getCacheObject(ConfigEnum.OSS_TYPE.name());
+    }
+
     public FilePlugin filePlugin() {
-        switch (OssTypeEnum.valueOf(((SysConfig) redisService.getCacheObject(ConfigEnum.OSS_TYPE.name())).getValue())) {
+        switch (ossType()) {
             case HUAWEI_OBS: {
                 HuaweiOBSConfig huaweiOBSConfig = JSON.parseObject(((SysConfig)
                                 redisService.getCacheObject(ConfigEnum.HUAWEI_OBS_CONFIG.name())).getValue(),

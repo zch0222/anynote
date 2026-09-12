@@ -9,10 +9,15 @@ import com.anynote.file.api.model.po.FilePO;
 import com.anynote.file.api.model.vo.*;
 import com.anynote.file.service.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URI;
+import java.util.concurrent.TimeUnit;
 import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -130,11 +135,35 @@ public class FileController {
     /**
      * 公共的获取文件接口
      * @param objectName 对象名称
-     * @return 文件信息(七天)
+     * @return 文件信息(一小时)
      */
+    @Operation(summary = "按对象名获取时效访问地址",
+            description = "保留给 mooc / legacy。objectName 必须存在于 file 表且归属当前用户，否则返回 A0301。"
+                    + "笔记正文请改用 objects/{fileId}/redirect（地址不会过期）")
     @GetMapping("public/byObjectName")
     public ResData<ObjectURL> getObjectUrlByObjectName(@NotNull(message = "对象名称不能为空") String objectName) {
         return ResUtil.success(fileService.getObjectUrlByObjectName(objectName));
+    }
+
+    /**
+     * 按文件 id 重定向到新鲜的时效访问地址。
+     * <p>
+     * 笔记正文只存这个稳定路径，因此不会出现"7 天后图片集体裂图"。
+     * BFF 需要透传 302 的 Location 且不能 follow（见 apps/web 的 [...path]/route.ts）。
+     * @param fileId 文件id
+     * @return 302 + Location
+     */
+    @Operation(summary = "按文件ID重定向到时效访问地址",
+            description = "302 到新鲜的预签名 URL；笔记正文应存本路径而不是预签名 URL。"
+                    + "带归属校验：非本人文件返回 A0301")
+    @GetMapping("objects/{fileId}/redirect")
+    public ResponseEntity<Void> redirectToObject(
+            @NotNull(message = "文件id不能为空") @PathVariable("fileId") Long fileId) {
+        ObjectURL url = fileService.getObjectUrlByFileId(fileId);
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create(url.getUrl()))
+                .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePrivate())
+                .build();
     }
 
     /**

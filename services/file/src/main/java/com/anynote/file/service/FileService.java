@@ -95,6 +95,17 @@ public interface FileService extends IService<FilePO> {
     public ObjectURL getObjectUrlByObjectName(String objectName);
 
     /**
+     * 按文件 id 获取访问地址，带归属校验。
+     * <p>
+     * 与 {@link #getObjectUrlByObjectName} 的区别：objectName 含 UUID 不易枚举，但那是
+     * "靠难猜"而不是靠鉴权；这里要求文件存在且属于当前登录用户（或来源为公开可读的
+     * 慕课资源），否则抛 A0301。笔记正文的稳定地址端点依赖它。
+     * @param fileId 文件id
+     * @return 文件访问信息
+     */
+    public ObjectURL getObjectUrlByFileId(Long fileId);
+
+    /**
      * 下载对象到本地目录
      * @param downloadObjectDTO
      * @return

@@ -10,16 +10,19 @@ import com.anynote.core.utils.ServletUtils;
 import com.anynote.core.utils.StringUtils;
 import com.anynote.core.utils.UrlUtil;
 import com.anynote.core.utils.file.FileUtils;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.file.api.model.bo.*;
 import com.anynote.file.api.model.dto.CompleteUploadDTO;
 import com.anynote.file.api.model.dto.DownloadObjectDTO;
 import com.anynote.file.api.model.po.FilePO;
 import com.anynote.file.api.model.vo.*;
+import com.anynote.file.enums.OssTypeEnum;
 import com.anynote.file.factory.FilePluginFactory;
 import com.anynote.file.mapper.FileMapper;
 import com.anynote.file.model.bo.OssObjectComposeResponse;
 import com.anynote.file.plugin.FilePlugin;
 import com.anynote.file.service.FileService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -44,6 +47,18 @@ import java.util.stream.IntStream;
 @Slf4j
 public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
         implements FileService {
+
+    /**
+     * 分片上传任务在 Redis 的存活时间（秒）。与"断点续传最长窗口"对齐：
+     * 超过这个时间没完成的上传，任务与已完成分片集合一起过期，不会永久残留。
+     */
+    private static final long OSS_SLICE_UPLOAD_TASK_TTL_SECONDS = 24 * 60 * 60L;
+
+    /**
+     * 对象访问地址的缓存时长（秒）。定为 1 小时而不是原先的 7 天：
+     * 选了"按 fileId 302 重定向"之后正文不再固化 URL，长缓存只会让吊销滞后。
+     */
+    private static final long OBJECT_URL_CACHE_SECONDS = 3600L;
 
 
     @Autowired
@@ -72,8 +87,13 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
     public FilePO upload(MultipartFile file, String path, Long userId, String uploadId, Integer source) {
         ServletUtils.setRequestAttributes(RequestAttributesConstants.FILE_UPLOAD_ID_KEY, uploadId);
         String fileName = UUID.randomUUID().toString().replace("-", "") + "_" + file.getOriginalFilename();
-        String url = filePluginFactory.huaweiFilePlugin()
-                .multipartFileUpload(file, path, fileName);
+        // 走 filePlugin() 而不是 huaweiFilePlugin()：这条路径必须尊重 OSS_TYPE，
+        // 否则 OSS_TYPE=MIN_IO 时服务端中转上传（PDF 转存 / Whisper / 封面）仍写华为 OBS。
+        FilePlugin filePlugin = filePluginFactory.filePlugin();
+        String uploaded = filePlugin.multipartFileUpload(file, path, fileName);
+        // MinIO 没有永久 URL，multipartFileUpload 返回的是 objectName；华为 OBS 返回的是永久 URL。
+        // 用插件类型区分，避免把华为的 URL 写进 objectName（redirect 端点会拿它去 stat）。
+        boolean returnsObjectName = OssTypeEnum.MIN_IO.equals(filePlugin.getPluginOssType());
         Date date = new Date();
         FilePO filePO = null;
         try {
@@ -81,7 +101,9 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
                     .hash(DigestUtils.sha512Hex(file.getInputStream()))
                     .originalFileName(file.getOriginalFilename())
                     .fileName(fileName)
-                    .url(url)
+                    .url(uploaded)
+                    .objectName(returnsObjectName ? uploaded : null)
+                    .ossType(filePlugin.getPluginOssType().name())
                     .source(source)
                     .deleted(0)
                     .type(file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf(".")))
@@ -105,6 +127,11 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
     @Override
     public HuaweiOBSTemporarySignature createHuaweiOBSTemporarySignature(String path, String fileName, Long expireSeconds,
                                                                          String contentType, Integer source) {
+        // OSS_TYPE=MIN_IO 时不能静默落华为 OBS：那会让调用方以为签名可用、实际上传到的
+        // 是另一个存储后端（或直接失败）。明确拒绝，引导走分片上传任务流程。
+        if (!OssTypeEnum.HUAWEI_OBS.equals(filePluginFactory.ossType())) {
+            throw new BusinessException("MinIO 请走分片上传任务流程", ResCode.BUSINESS_ERROR);
+        }
         Date date = new Date();
         FilePO filePO = FilePO.builder()
                 .originalFileName(fileName)
@@ -210,7 +237,8 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
         ossSliceUploadTaskInfo.setUploadId(uploadId);
         filePO.setOssType(ossSliceUploadTaskInfo.getOssType());
         filePO.setObjectName(ossSliceUploadTaskInfo.getObjectName());
-        redisService.setCacheObject(getOssSliceUploadTaskInfoKey(userId, uploadId), ossSliceUploadTaskInfo);
+        redisService.setCacheObject(getOssSliceUploadTaskInfoKey(userId, uploadId), ossSliceUploadTaskInfo,
+                OSS_SLICE_UPLOAD_TASK_TTL_SECONDS, TimeUnit.SECONDS);
         //redisService.addToSet(getOssSliceUploadTaskFinishedSliceIndexSetKey(uploadId), new HashSet<>());
         return OssSliceUploadTaskVO.builder()
                 .originalFileName(fileName)
@@ -296,7 +324,9 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
             throw new BusinessException("检查分片错误");
         }
 
-        redisService.addToSet(setKey, chunkIndexList);
+        redisService.addToSet(setKey, markedChunkIndexList);
+        // 与任务 key 同步续期，避免分片集合在长上传里先于任务过期
+        redisService.expire(setKey, OSS_SLICE_UPLOAD_TASK_TTL_SECONDS, TimeUnit.SECONDS);
         return OssSliceUploadChunkMarkVO.builder()
                 .markedIndexList(markedChunkIndexList)
                 .build();
@@ -353,6 +383,13 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
 
         redisService.deleteObject(getOssSliceUploadTaskInfoKey(userId, uploadId));
         redisService.deleteObject(getOssSliceUploadTaskFinishedSliceIndexSetKey(uploadId));
+        // 合并后删掉临时分片对象：否则 bucket 里的 {uploadId} 分片垃圾只增不减。
+        // removeObjects 是尽力而为语义，失败不影响本次已成功的上传结果。
+        try {
+            filePlugin.removeObjects(objectNameList);
+        } catch (Exception e) {
+            log.warn("清理上传分片失败，uploadId={}：{}", uploadId, e.getMessage());
+        }
         return OssSliceUploadComposeOV.builder()
                 .fileId(filePO.getId())
                 .objectName(ossSliceUploadTaskInfo.getObjectName())
@@ -362,14 +399,56 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
 
     @Override
     public ObjectURL getObjectUrlByObjectName(String objectName) {
-        ObjectURL cacheObjectUrl = redisService.getCacheObject(StringUtils.format(RedisKey.OSS_OBJECT_URL, objectName));
+        // 保留给 mooc / legacy，但不再是"知道 objectName 就能换签名"：
+        // 必须能在 file 表里找到该对象且归属当前用户，否则 A0301。
+        Long currentUserId = Long.valueOf(ServletUtils.getHeader(SecurityConstants.DETAILS_USER_ID));
+        FilePO filePO = this.baseMapper.selectOne(new LambdaQueryWrapper<FilePO>()
+                .eq(FilePO::getObjectName, objectName)
+                .last("limit 1"));
+        if (StringUtils.isNull(filePO) || !Objects.equals(filePO.getCreateBy(), currentUserId)) {
+            log.warn("用户 {} 尝试按对象名访问未归属自己的对象 {}", currentUserId, objectName);
+            throw new BusinessException("无权访问该文件", ResCode.UNAUTHORIZED_ERROR);
+        }
+        return signObjectUrl(objectName);
+    }
+
+    /**
+     * 签名并缓存对象的访问地址。
+     * <p>
+     * 缓存 TTL 与签名有效期都收敛到 {@link #OBJECT_URL_CACHE_SECONDS}：正文改成存
+     * redirect 路径之后不再需要 7 天的长缓存，长缓存只会让地址吊销滞后。
+     */
+    private ObjectURL signObjectUrl(String objectName) {
+        String cacheKey = StringUtils.format(RedisKey.OSS_OBJECT_URL, objectName);
+        ObjectURL cacheObjectUrl = redisService.getCacheObject(cacheKey);
         if (StringUtils.isNotNull(cacheObjectUrl)) {
             return cacheObjectUrl;
         }
-        ObjectURL objectURL = filePluginFactory.filePlugin().getObjectUrl(objectName, 3600*24*7);
-        redisService.setCacheObject(StringUtils.format(RedisKey.OSS_OBJECT_URL, objectName), objectURL,
-                3600*24*7-600L, TimeUnit.SECONDS);
+        ObjectURL objectURL = filePluginFactory.filePlugin()
+                .getObjectUrl(objectName, (int) OBJECT_URL_CACHE_SECONDS);
+        redisService.setCacheObject(cacheKey, objectURL,
+                OBJECT_URL_CACHE_SECONDS - 60L, TimeUnit.SECONDS);
         return objectURL;
+    }
+
+    @Override
+    public ObjectURL getObjectUrlByFileId(Long fileId) {
+        FilePO filePO = this.baseMapper.selectById(fileId);
+        if (StringUtils.isNull(filePO)) {
+            throw new BusinessException("文件不存在", ResCode.UNAUTHORIZED_ERROR);
+        }
+        Long currentUserId = Long.valueOf(ServletUtils.getHeader(SecurityConstants.DETAILS_USER_ID));
+        // objectName 含 UUID 不易枚举，但"难猜"不是鉴权：非本人文件一律拒绝。
+        if (!Objects.equals(filePO.getCreateBy(), currentUserId)) {
+            log.warn("用户 {} 尝试访问不属于自己的文件 {}", currentUserId, fileId);
+            throw new BusinessException("无权访问该文件", ResCode.UNAUTHORIZED_ERROR);
+        }
+        String objectName = filePO.getObjectName();
+        if (StringUtils.isEmpty(objectName)) {
+            // 华为 OBS 历史数据只有永久 URL、没有 objectName，无法再签名。
+            throw new BusinessException("文件缺少对象名，无法生成访问地址", ResCode.INVALID_USER_INPUT_NOT_FOUND);
+        }
+        return signObjectUrl(objectName);
     }
 
     @Override
