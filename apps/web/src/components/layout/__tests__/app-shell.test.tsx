@@ -126,6 +126,11 @@ describe("AppShell 交互", () => {
       "href",
       "/settings/profile",
     );
+    // M10.1：桌面头部的手机版入口，指向当前页在移动端的对应地址并记住偏好
+    expect(screen.getByRole("menuitem", { name: "手机版" })).toHaveAttribute(
+      "href",
+      "/m/notes/new?mobile=1",
+    );
     fireEvent.click(screen.getByRole("menuitem", { name: "退出登录" }));
     expect(mutate).toHaveBeenCalledOnce();
   });
