@@ -109,7 +109,10 @@ describe("MobileTaskCards", () => {
     renderWithProviders(<MobileTaskCards />);
 
     fireEvent.click(screen.getByTestId("task-submit-1"));
-    expect(await screen.findByText("提交任务「读论文」")).toBeInTheDocument();
+    // 全量并行跑时这个动态 import 可能超过默认的 1s 等待
+    expect(
+      await screen.findByText("提交任务「读论文」", {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     expect(screen.getByText("选择一篇笔记作为任务成果提交。")).toBeInTheDocument();
   });
 });

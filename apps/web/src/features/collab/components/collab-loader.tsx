@@ -36,3 +36,9 @@ export const MobileCollabDocLibrary = dynamic(
   () => import("./mobile/doc-library-mobile").then((mod) => mod.MobileDocLibrary),
   { ssr: false, loading: LoadingCard },
 );
+
+/** 移动端协同文档编辑页（M10.3）。 */
+export const MobileCollabDocWorkspace = dynamic(
+  () => import("./mobile/doc-workspace-mobile").then((mod) => mod.MobileDocWorkspace),
+  { ssr: false, loading: LoadingCard },
+);

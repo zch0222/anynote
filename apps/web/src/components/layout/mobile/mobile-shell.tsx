@@ -3,8 +3,9 @@
 import { MobileTabBar } from "@/components/layout/mobile/mobile-tab-bar";
 import { isImmersiveMobileRoute } from "@/components/layout/navigation";
 import { WorkspaceSession } from "@/components/layout/workspace-session";
+import { useVisualViewportHeight } from "@/hooks/use-visual-viewport";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 /**
  * 移动端外壳。
@@ -20,12 +21,19 @@ import type { ReactNode } from "react";
 export function MobileShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const immersive = isImmersiveMobileRoute(pathname);
+  // 软键盘兜底：拿到真实可视高度就用它，拿不到（不支持 visualViewport）回退 100svh
+  const viewportHeight = useVisualViewportHeight();
 
   return (
     <div
       className="mobile-shell bg-background"
       data-testid="mobile-shell"
       data-immersive={immersive ? "true" : undefined}
+      style={
+        viewportHeight === null
+          ? undefined
+          : ({ "--mobile-viewport-h": `${viewportHeight}px` } as CSSProperties)
+      }
     >
       <a
         href="#mobile-content"

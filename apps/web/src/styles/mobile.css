@@ -9,10 +9,19 @@
   /* 顶栏 56px；底栏 52px 再垫一层 home 条高度（无刘海设备上 env() 取 0） */
   --mobile-header-h: 3.5rem;
   --mobile-tabbar-h: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  /*
+   * 可视视口高度。默认 100svh；MobileShell 拿到 visualViewport.height 后会用内联样式
+   * 覆盖它——软键盘弹出时这是唯一可靠的"用户真能看到多高"（见 hooks/use-visual-viewport.ts）。
+   */
+  --mobile-viewport-h: 100svh;
   /* 页面内容可用高度。编辑器、对话这类"内部滚动"的页面直接用它，不再各算 calc */
-  --mobile-content-h: calc(100svh - var(--mobile-header-h) - var(--mobile-tabbar-h));
+  --mobile-content-h: calc(
+    var(--mobile-viewport-h) -
+    var(--mobile-header-h) -
+    var(--mobile-tabbar-h)
+  );
 
-  min-height: 100svh;
+  min-height: var(--mobile-viewport-h);
   /* tab bar 是 fixed 的，内容底部要留出等高的空档，否则最后一行被挡住 */
   padding-bottom: var(--mobile-tabbar-h);
 }
@@ -73,6 +82,12 @@
 }
 
 .anynote-toolbar[data-variant="mobile"] .anynote-toolbar__button svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* "更多"弹层里的命令图标 */
+.anynote-toolbar__sheet-icon svg {
   width: 20px;
   height: 20px;
 }

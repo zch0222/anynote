@@ -1,6 +1,18 @@
 "use client";
 
+import {
+  MOBILE_OVERFLOW_GROUPS,
+  MOBILE_PRIMARY,
+} from "@/components/editor/core/mobile-toolbar-groups";
+import {
+  FULL_LAYOUT,
+  MINIMAL_LAYOUT,
+  TOOLBAR_DIVIDER,
+  type ToolbarCommandId,
+  type ToolbarSlot,
+} from "@/components/editor/core/toolbar-commands";
 import type { AnynoteImageOptions } from "@/components/editor/extensions/anynote-image";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
@@ -17,6 +29,7 @@ import {
   ListOrdered,
   MessageSquareWarning,
   Minus,
+  MoreHorizontal,
   Quote,
   Redo2,
   Sigma,
@@ -26,10 +39,10 @@ import {
   Underline as UnderlineIcon,
   Undo2,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
-export type ToolbarVariant = "full" | "minimal";
+export type ToolbarVariant = "full" | "minimal" | "mobile";
 
 export type ToolbarProps = {
   editor: Editor | null;
@@ -38,8 +51,8 @@ export type ToolbarProps = {
 
 type ToolbarButtonProps = {
   label: string;
-  active?: boolean;
-  disabled?: boolean;
+  active?: boolean | undefined;
+  disabled?: boolean | undefined;
   onClick: () => void;
   children: ReactNode;
 };
@@ -73,6 +86,7 @@ function pickImage(editor: Editor) {
   }
   const input = document.createElement("input");
   input.type = "file";
+  // 移动端浏览器会据此弹出「拍照 / 相册」，不需要额外的原生桥接
   input.accept = "image/*";
   input.addEventListener("change", () => {
     const file = input.files?.[0];
@@ -109,11 +123,221 @@ function applyLink(editor: Editor) {
   editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
 }
 
+type EditorSnapshot = {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strike: boolean;
+  code: boolean;
+  highlight: boolean;
+  link: boolean;
+  heading1: boolean;
+  heading2: boolean;
+  heading3: boolean;
+  bulletList: boolean;
+  orderedList: boolean;
+  taskList: boolean;
+  blockquote: boolean;
+  codeBlock: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  words: number;
+};
+
+type ToolbarCommand = {
+  label: string;
+  icon: ReactNode;
+  active?: boolean | undefined;
+  disabled?: boolean | undefined;
+  run: () => void;
+};
+
+/**
+ * 命令注册表：一份定义，桌面与移动端共用。
+ *
+ * `Record<ToolbarCommandId, ...>` 让 TS 保证不漏命令；新增按钮先加 id 再补这里，
+ * 移动端的常驻 / 更多分组也会被单测逼着一起更新。
+ */
+function buildCommands(
+  editor: Editor,
+  state: EditorSnapshot,
+): Record<ToolbarCommandId, ToolbarCommand> {
+  const chain = () => editor.chain().focus();
+  return {
+    undo: {
+      label: "撤销",
+      icon: <Undo2 />,
+      disabled: !state.canUndo,
+      run: () => chain().undo().run(),
+    },
+    redo: {
+      label: "重做",
+      icon: <Redo2 />,
+      disabled: !state.canRedo,
+      run: () => chain().redo().run(),
+    },
+    heading1: {
+      label: "一级标题",
+      icon: <span className="anynote-toolbar__text">H1</span>,
+      active: state.heading1,
+      run: () => chain().toggleHeading({ level: 1 }).run(),
+    },
+    heading2: {
+      label: "二级标题",
+      icon: <span className="anynote-toolbar__text">H2</span>,
+      active: state.heading2,
+      run: () => chain().toggleHeading({ level: 2 }).run(),
+    },
+    heading3: {
+      label: "三级标题",
+      icon: <span className="anynote-toolbar__text">H3</span>,
+      active: state.heading3,
+      run: () => chain().toggleHeading({ level: 3 }).run(),
+    },
+    bold: {
+      label: "加粗",
+      icon: <Bold />,
+      active: state.bold,
+      run: () => chain().toggleBold().run(),
+    },
+    italic: {
+      label: "斜体",
+      icon: <Italic />,
+      active: state.italic,
+      run: () => chain().toggleItalic().run(),
+    },
+    underline: {
+      label: "下划线",
+      icon: <UnderlineIcon />,
+      active: state.underline,
+      run: () => chain().toggleUnderline().run(),
+    },
+    strike: {
+      label: "删除线",
+      icon: <Strikethrough />,
+      active: state.strike,
+      run: () => chain().toggleStrike().run(),
+    },
+    code: {
+      label: "行内代码",
+      icon: <Code />,
+      active: state.code,
+      run: () => chain().toggleCode().run(),
+    },
+    highlight: {
+      label: "高亮",
+      icon: <Highlighter />,
+      active: state.highlight,
+      run: () => chain().toggleHighlight().run(),
+    },
+    link: {
+      label: "链接",
+      icon: <Link2 />,
+      active: state.link,
+      run: () => applyLink(editor),
+    },
+    bulletList: {
+      label: "无序列表",
+      icon: <List />,
+      active: state.bulletList,
+      run: () => chain().toggleBulletList().run(),
+    },
+    orderedList: {
+      label: "有序列表",
+      icon: <ListOrdered />,
+      active: state.orderedList,
+      run: () => chain().toggleOrderedList().run(),
+    },
+    taskList: {
+      label: "任务列表",
+      icon: <ListChecks />,
+      active: state.taskList,
+      run: () => chain().toggleTaskList().run(),
+    },
+    blockquote: {
+      label: "引用",
+      icon: <Quote />,
+      active: state.blockquote,
+      run: () => chain().toggleBlockquote().run(),
+    },
+    callout: {
+      label: "提示块",
+      icon: <MessageSquareWarning />,
+      run: () =>
+        chain()
+          .insertContent({ type: "callout", attrs: { level: "info" } })
+          .run(),
+    },
+    codeBlock: {
+      label: "代码块",
+      icon: <SquareCode />,
+      active: state.codeBlock,
+      run: () => chain().toggleCodeBlock().run(),
+    },
+    table: {
+      label: "表格",
+      icon: <TableIcon />,
+      run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+    },
+    image: {
+      label: "图片",
+      icon: <ImagePlus />,
+      run: () => pickImage(editor),
+    },
+    math: {
+      label: "行内公式",
+      icon: <Sigma />,
+      run: () =>
+        chain()
+          .insertContent({ type: "inlineMath", attrs: { latex: "E = mc^2" } })
+          .run(),
+    },
+    horizontalRule: {
+      label: "分割线",
+      icon: <Minus />,
+      run: () => chain().setHorizontalRule().run(),
+    },
+    clearFormat: {
+      label: "清除格式",
+      icon: <Eraser />,
+      run: () => chain().unsetAllMarks().run(),
+    },
+  };
+}
+
+function renderSlots(
+  slots: readonly ToolbarSlot[],
+  commands: Record<ToolbarCommandId, ToolbarCommand>,
+) {
+  return slots.map((slot, index) => {
+    if (slot === TOOLBAR_DIVIDER) {
+      // 分隔符没有天然 key，但排版数组是常量、顺序不会变，用下标是安全的
+      return <ToolbarDivider key={`divider-${index}`} />;
+    }
+    const command = commands[slot];
+    return (
+      <ToolbarButton
+        key={slot}
+        label={command.label}
+        active={command.active}
+        disabled={command.disabled}
+        onClick={command.run}
+      >
+        {command.icon}
+      </ToolbarButton>
+    );
+  });
+}
+
 /**
  * 编辑器工具栏。用 `useEditorState` 只订阅关心的状态，避免每次 transaction 全量重渲染。
- * `minimal` 只暴露基础排版（评论 / 输入框场景）。
+ *
+ * - `full`：全部 23 个命令（笔记、文档）
+ * - `minimal`：只留基础排版（评论 / 输入框场景）
+ * - `mobile`：单行横滑的 10 个常驻命令 + "更多"底部弹层，按钮 40px（方案 D5）
  */
 export function Toolbar({ editor, variant = "full" }: ToolbarProps) {
+  const [overflowOpen, setOverflowOpen] = useState(false);
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
@@ -150,167 +374,83 @@ export function Toolbar({ editor, variant = "full" }: ToolbarProps) {
     return null;
   }
 
-  const chain = () => editor.chain().focus();
+  const commands = buildCommands(editor, state);
+
+  if (variant === "mobile") {
+    return (
+      <div
+        className="anynote-toolbar"
+        data-variant="mobile"
+        role="toolbar"
+        aria-label="编辑器工具栏"
+      >
+        {renderSlots(MOBILE_PRIMARY, commands)}
+        <Sheet open={overflowOpen} onOpenChange={setOverflowOpen}>
+          <SheetTrigger
+            render={
+              <button
+                type="button"
+                className="anynote-toolbar__button"
+                aria-label="更多格式"
+                title="更多格式"
+              />
+            }
+          >
+            <MoreHorizontal />
+          </SheetTrigger>
+          <SheetContent
+            side="bottom"
+            className="max-h-[70svh] overflow-y-auto rounded-t-2xl pb-[env(safe-area-inset-bottom,0px)]"
+            data-testid="editor-more-sheet"
+          >
+            <SheetHeader>
+              <SheetTitle>更多格式</SheetTitle>
+            </SheetHeader>
+            <div className="space-y-4 px-4 pb-4">
+              {MOBILE_OVERFLOW_GROUPS.map((group) => (
+                <section key={group.label} className="space-y-2">
+                  <h3 className="text-xs text-muted-foreground">{group.label}</h3>
+                  <div className="grid grid-cols-4 gap-2">
+                    {group.ids.map((id) => {
+                      const command = commands[id];
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          disabled={command.disabled}
+                          onClick={() => {
+                            setOverflowOpen(false);
+                            command.run();
+                          }}
+                          className={cn(
+                            "flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border text-xs outline-none",
+                            "disabled:pointer-events-none disabled:opacity-50",
+                            command.active && "border-primary text-primary",
+                          )}
+                        >
+                          <span className="anynote-toolbar__sheet-icon">{command.icon}</span>
+                          {command.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    );
+  }
 
   return (
-    <div className="anynote-toolbar" role="toolbar" aria-label="编辑器工具栏">
-      <ToolbarButton label="撤销" disabled={!state.canUndo} onClick={() => chain().undo().run()}>
-        <Undo2 />
-      </ToolbarButton>
-      <ToolbarButton label="重做" disabled={!state.canRedo} onClick={() => chain().redo().run()}>
-        <Redo2 />
-      </ToolbarButton>
-      <ToolbarDivider />
-
-      {variant === "full" ? (
-        <>
-          <ToolbarButton
-            label="一级标题"
-            active={state.heading1}
-            onClick={() => chain().toggleHeading({ level: 1 }).run()}
-          >
-            <span className="anynote-toolbar__text">H1</span>
-          </ToolbarButton>
-          <ToolbarButton
-            label="二级标题"
-            active={state.heading2}
-            onClick={() => chain().toggleHeading({ level: 2 }).run()}
-          >
-            <span className="anynote-toolbar__text">H2</span>
-          </ToolbarButton>
-          <ToolbarButton
-            label="三级标题"
-            active={state.heading3}
-            onClick={() => chain().toggleHeading({ level: 3 }).run()}
-          >
-            <span className="anynote-toolbar__text">H3</span>
-          </ToolbarButton>
-          <ToolbarDivider />
-        </>
-      ) : null}
-
-      <ToolbarButton label="加粗" active={state.bold} onClick={() => chain().toggleBold().run()}>
-        <Bold />
-      </ToolbarButton>
-      <ToolbarButton
-        label="斜体"
-        active={state.italic}
-        onClick={() => chain().toggleItalic().run()}
-      >
-        <Italic />
-      </ToolbarButton>
-      <ToolbarButton
-        label="下划线"
-        active={state.underline}
-        onClick={() => chain().toggleUnderline().run()}
-      >
-        <UnderlineIcon />
-      </ToolbarButton>
-      <ToolbarButton
-        label="删除线"
-        active={state.strike}
-        onClick={() => chain().toggleStrike().run()}
-      >
-        <Strikethrough />
-      </ToolbarButton>
-      <ToolbarButton
-        label="行内代码"
-        active={state.code}
-        onClick={() => chain().toggleCode().run()}
-      >
-        <Code />
-      </ToolbarButton>
-      <ToolbarButton
-        label="高亮"
-        active={state.highlight}
-        onClick={() => chain().toggleHighlight().run()}
-      >
-        <Highlighter />
-      </ToolbarButton>
-      <ToolbarButton label="链接" active={state.link} onClick={() => applyLink(editor)}>
-        <Link2 />
-      </ToolbarButton>
-      <ToolbarDivider />
-
-      <ToolbarButton
-        label="无序列表"
-        active={state.bulletList}
-        onClick={() => chain().toggleBulletList().run()}
-      >
-        <List />
-      </ToolbarButton>
-      <ToolbarButton
-        label="有序列表"
-        active={state.orderedList}
-        onClick={() => chain().toggleOrderedList().run()}
-      >
-        <ListOrdered />
-      </ToolbarButton>
-
-      {variant === "full" ? (
-        <>
-          <ToolbarButton
-            label="任务列表"
-            active={state.taskList}
-            onClick={() => chain().toggleTaskList().run()}
-          >
-            <ListChecks />
-          </ToolbarButton>
-          <ToolbarDivider />
-          <ToolbarButton
-            label="引用"
-            active={state.blockquote}
-            onClick={() => chain().toggleBlockquote().run()}
-          >
-            <Quote />
-          </ToolbarButton>
-          <ToolbarButton
-            label="提示块"
-            onClick={() =>
-              chain()
-                .insertContent({ type: "callout", attrs: { level: "info" } })
-                .run()
-            }
-          >
-            <MessageSquareWarning />
-          </ToolbarButton>
-          <ToolbarButton
-            label="代码块"
-            active={state.codeBlock}
-            onClick={() => chain().toggleCodeBlock().run()}
-          >
-            <SquareCode />
-          </ToolbarButton>
-          <ToolbarButton
-            label="表格"
-            onClick={() => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-          >
-            <TableIcon />
-          </ToolbarButton>
-          <ToolbarButton label="图片" onClick={() => pickImage(editor)}>
-            <ImagePlus />
-          </ToolbarButton>
-          <ToolbarButton
-            label="行内公式"
-            onClick={() =>
-              chain()
-                .insertContent({ type: "inlineMath", attrs: { latex: "E = mc^2" } })
-                .run()
-            }
-          >
-            <Sigma />
-          </ToolbarButton>
-          <ToolbarButton label="分割线" onClick={() => chain().setHorizontalRule().run()}>
-            <Minus />
-          </ToolbarButton>
-          <ToolbarDivider />
-        </>
-      ) : null}
-
-      <ToolbarButton label="清除格式" onClick={() => chain().unsetAllMarks().run()}>
-        <Eraser />
-      </ToolbarButton>
-
+    <div
+      className="anynote-toolbar"
+      data-variant={variant}
+      role="toolbar"
+      aria-label="编辑器工具栏"
+    >
+      {renderSlots(variant === "full" ? FULL_LAYOUT : MINIMAL_LAYOUT, commands)}
       <span className="anynote-toolbar__spacer" />
       {variant === "full" ? (
         <span className="anynote-toolbar__count" data-testid="editor-word-count">
