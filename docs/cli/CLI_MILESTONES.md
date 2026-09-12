@@ -1,7 +1,7 @@
 # Anynote CLI 可执行里程碑（M9.0 - M9.4）
 
 > 文档版本：v2.0 | 创建 2026-09-12 | 最近更新 2026-09-12（M9.0-M9.3 主体完成）
-> 关联文档：[CLI_PLAN.md](./CLI_PLAN.md)（技术方案，本文的 §N 引用都指向它） · [README.md](./README.md) · [CHANGELIST.md](./CHANGELIST.md)（本期改动审计表）
+> 关联文档：[CLI_PLAN.md](./CLI_PLAN.md)（技术方案，本文的 §N 引用都指向它） · [README.md](./README.md) · [本期改动审计清单](../changelist/2026-09-12-cli-frontend.md)
 > 编号说明：**M9.x 是 CLI 自己的里程碑序列**，接在 Phase 5 的 M8 之后编号只为避免歧义，CLI 不属于 Phase 5。
 > **CLI 不阻塞 Phase 5 发版**（合并 `main` + 打 tag `v0.6.0`），两条线可并行。
 

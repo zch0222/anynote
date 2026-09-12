@@ -1,7 +1,7 @@
 # Anynote CLI 技术方案（可执行版）
 
 > 文档版本：v1.1 | 创建日期：2026-09-12 | 状态：**M9.0-M9.3 已实施**（M9.2 部分、M9.4 未开工）
-> 关联文档：[README.md](./README.md) · [CLI_MILESTONES.md](./CLI_MILESTONES.md) · [CHANGELIST.md](./CHANGELIST.md) · [`docs/refactor/FRONTEND_MILESTONES.md`](../refactor/FRONTEND_MILESTONES.md)（M5.10 / M7.6 的后端缺口）
+> 关联文档：[README.md](./README.md) · [CLI_MILESTONES.md](./CLI_MILESTONES.md) · [本期改动审计清单](../changelist/2026-09-12-cli-frontend.md) · [`docs/refactor/FRONTEND_MILESTONES.md`](../refactor/FRONTEND_MILESTONES.md)（M5.10 / M7.6 的后端缺口）
 > 本文是**方案 + 代码骨架**。执行顺序与验收标准在 [CLI_MILESTONES.md](./CLI_MILESTONES.md)。
 >
 > ⚠️ **实施期与本方案有 10 处偏差**（退出码增加 6 = NOT_FOUND、`mutating` 拆出 `confirm`、

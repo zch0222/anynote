@@ -2,7 +2,7 @@
 
 > 文档版本：v1.1 | 创建 2026-09-12 | 最近更新 2026-09-12
 > 状态：**M9.0-M9.3 已实施并通过真实栈端到端验收**；知识库与笔记的增删改查闭环可用，doc / ai / MCP 推下一期。
-> 关联文档：[CLI_PLAN.md](./CLI_PLAN.md)（技术方案与代码骨架） · [CLI_MILESTONES.md](./CLI_MILESTONES.md)（里程碑与实施偏差） · [CHANGELIST.md](./CHANGELIST.md)（本期改动审计表） · [COMMANDS.md](./COMMANDS.md)（命令速查，生成物）
+> 关联文档：[CLI_PLAN.md](./CLI_PLAN.md)（技术方案与代码骨架） · [CLI_MILESTONES.md](./CLI_MILESTONES.md)（里程碑与实施偏差） · [本期改动审计清单](../changelist/2026-09-12-cli-frontend.md) · [COMMANDS.md](./COMMANDS.md)（命令速查，生成物）
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 测试节](../../README.md#测试)、[`openapi/WORKFLOW.md`](../../openapi/WORKFLOW.md)
 
 ## 这是什么
@@ -28,7 +28,7 @@ Anynote 的**第四个前端**，与 `apps/web`（浏览器）、`apps/desktop`�
 |------|------|
 | [CLI_PLAN.md](./CLI_PLAN.md) | 目标与非目标、既有事实盘点、架构、技术选型与被否方案、目录结构、工程配置、七个核心模块的代码骨架、命令面映射表、skills 设计、测试计划、CI、安全合规、风险、待拍板决策点 |
 | [CLI_MILESTONES.md](./CLI_MILESTONES.md) | M9.0-M9.4 的执行状态、**与方案的偏差**、实现期发现的缺陷、验收记录 |
-| [CHANGELIST.md](./CHANGELIST.md) | 本期新增/修改文件的逐条说明，按 git diff 编写，供人工审计 |
+| [../changelist/2026-09-12-cli-frontend.md](../changelist/2026-09-12-cli-frontend.md) | 本期新增/修改文件的逐条说明，按 git diff 编写，供人工审计；编写规范见 [docs/changelist/README.md](../changelist/README.md) |
 | [COMMANDS.md](./COMMANDS.md)（生成物） | `anynote manifest --format=markdown` 的输出，**不要手改**；CI 卡 diff |
 
 ## 30 秒上手

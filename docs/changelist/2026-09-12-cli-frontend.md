@@ -1,18 +1,20 @@
-# CLI 本期改动清单（人工审计用）
+# 2026-09-12 CLI 前端改动清单
 
-> 生成日期：2026-09-12 | 分支：`dev`（尚未提交）
-> **本表严格按 `git status --porcelain` / `git diff --stat` 的实际结果编写**，不是凭印象罗列。
-> 复核命令：`git status --porcelain | sort` 与 `git diff --stat`。
+> 对比基线：`dev` → `feat/cli-frontend` | 编写规范见 [README.md](./README.md)
+> **本表严格按 git 的实际输出编写**，不是凭印象罗列。
+> 复核命令：`git diff --stat dev...feat/cli-frontend` 与 `git diff --name-status dev...feat/cli-frontend`。
 
 ## 0. 概览
 
 | 项 | 数值 |
 |----|------|
-| 新增文件 | 61 个（7472 行，含本文件） |
-| 修改文件 | 11 个（+931 / −155，其中 `pnpm-lock.yaml` 占 856 行） |
+| 新增文件 | 62 个 |
+| 修改文件 | 11 个（其中 `pnpm-lock.yaml` 占 856 行） |
 | 删除文件 | 0 |
+| 合计 | 73 个文件，+8480 / −155 |
 
-按目录：`apps/cli` 38 · `packages/api-core` 11 · `docs/cli` 5 · `.claude/skills` 4 · `.claude/openspec` 2 · `services/note` 1。
+按目录：`apps/cli` 38 · `packages/api-core` 11 · `apps/web` 6 · `.claude/skills` 4 · `docs/cli` 4 ·
+`.claude/openspec` 2 · `docs/changelist` 2 · `services/note` 2 · 根目录 4（`CLAUDE.md`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`.github/workflows/test.yml`）。
 
 > 构建产物 `apps/cli/dist/` 已被 gitignore 覆盖，不在上表内。
 
@@ -160,7 +162,7 @@
 
 ---
 
-## 11. 文档（docs/cli）
+## 11. 文档（docs/cli、docs/changelist）
 
 | 文件 | 状态 | 作用与原因 |
 |------|------|-----------|
@@ -168,7 +170,8 @@
 | `docs/cli/CLI_PLAN.md` | 新增 | 技术方案（事实盘点、架构、选型、代码骨架、风险、决策点） |
 | `docs/cli/CLI_MILESTONES.md` | 新增 | M9.0-M9.4 里程碑与本期实际执行记录（含与方案的偏差） |
 | `docs/cli/COMMANDS.md` | 新增（**生成物**） | 命令速查表，与 skills reference 同源生成 |
-| `docs/cli/CHANGELIST.md` | 新增 | 本文件 |
+| `docs/changelist/README.md` | 新增 | changelist 的编写规范与命名规则（`YYYY-MM-DD-<slug>.md`），后续所有改动清单都落在该目录 |
+| `docs/changelist/2026-09-12-cli-frontend.md` | 新增 | 本文件 |
 
 ---
 

@@ -272,7 +272,8 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `.claude/openspec/changes/` — API 变更提案归档
 - `CONTRIBUTING.md` — 代码规范要点
 - `apps/desktop/README.md` — 桌面壳的令牌交换流程、构建前置条件与未验证项
-- `docs/cli/` — CLI 前端：`CLI_PLAN.md`（技术方案）、`CLI_MILESTONES.md`（M9.x 进度）、`COMMANDS.md`（**生成物**）、`CHANGELIST.md`（本期改动审计表）
+- `docs/cli/` — CLI 前端：`CLI_PLAN.md`（技术方案）、`CLI_MILESTONES.md`（M9.x 进度）、`COMMANDS.md`（**生成物**）
+- `docs/changelist/` — 各批改动的逐文件审计清单；`README.md` 是编写规范与命名规则（`YYYY-MM-DD-<slug>.md`）
 - `apps/cli/README.md` — CLI 的构建、环境变量、凭据安全与测试命令
 - `.claude/skills/anynote-*` — 给 Claude Code 的 CLI / 笔记配方 / 仓库操作手册（`anynote-cli` 的 `reference/commands.md` 是生成物）
 - `docs/refactor/REFACTOR_PLAN.md` / `FRONTEND_REFACTOR_PLAN.md` / `FRONTEND_MILESTONES.md` — 重构决策与执行计划
