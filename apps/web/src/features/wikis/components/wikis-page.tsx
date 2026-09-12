@@ -47,8 +47,11 @@ export function WikisPage() {
   const error = bases.isError ? bases.error.message : notes.isError ? notes.error.message : null;
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-6" data-testid="wikis-page">
-      <div className="space-y-2">
+    <section
+      className="mx-auto flex w-full max-w-6xl flex-col gap-6 lg:h-[calc(100svh-9rem)] lg:min-h-0"
+      data-testid="wikis-page"
+    >
+      <div className="shrink-0 space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">知识库</h1>
         <p className="text-sm text-muted-foreground">连接知识，构建属于你的知识库。</p>
       </div>
@@ -58,9 +61,9 @@ export function WikisPage() {
           加载失败：{error}
         </p>
       ) : bases.isPending ? (
-        <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
-          <Skeleton className="h-96 rounded-xl" />
-          <Skeleton className="h-96 rounded-xl" />
+        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[16rem_1fr] lg:grid-rows-1">
+          <Skeleton className="h-96 rounded-xl lg:h-full" />
+          <Skeleton className="h-96 rounded-xl lg:h-full" />
         </div>
       ) : (bases.data?.length ?? 0) === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
@@ -69,8 +72,8 @@ export function WikisPage() {
           <p className="mt-1 text-sm text-muted-foreground">先到「笔记」页创建一个知识库。</p>
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
-          <div className="space-y-3">
+        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[16rem_1fr] lg:grid-rows-1">
+          <div className="space-y-3 lg:min-h-0 lg:overflow-y-auto">
             <nav aria-label="知识库列表" className="space-y-1">
               {bases.data?.map((base) => (
                 <BaseRow
@@ -110,11 +113,11 @@ export function WikisPage() {
             </nav>
           </div>
 
-          <div className="min-h-80 min-w-0">
+          <div className="min-h-80 min-w-0 lg:min-h-0">
             {noteId ? (
               <WikiNoteView noteId={noteId} />
             ) : (
-              <div className="flex h-64 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+              <div className="flex h-full min-h-64 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground lg:min-h-0">
                 选择左侧笔记开始阅读。
               </div>
             )}
@@ -154,7 +157,7 @@ function WikiNoteView({ noteId }: { noteId: number }) {
 
   if (note.isPending) {
     return (
-      <div className="space-y-3 rounded-xl border p-6">
+      <div className="h-full space-y-3 overflow-y-auto rounded-xl border p-6">
         <Skeleton className="h-8 w-1/3" />
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-5/6" />
@@ -164,13 +167,16 @@ function WikiNoteView({ noteId }: { noteId: number }) {
   }
   if (note.isError) {
     return (
-      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+      <div className="h-full overflow-y-auto rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
         笔记加载失败：{note.error.message}
       </div>
     );
   }
   return (
-    <article className="rounded-xl border bg-card p-6" data-testid="wiki-note-view">
+    <article
+      className="h-full overflow-y-auto rounded-xl border bg-card p-6"
+      data-testid="wiki-note-view"
+    >
       <h2 className="mb-4 text-xl font-semibold">{note.data?.title ?? "未命名笔记"}</h2>
       <TiptapEditor preset="readonly" value={note.data?.content ?? ""} />
     </article>
