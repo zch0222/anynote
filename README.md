@@ -548,6 +548,20 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 | `pnpm --filter web bundle:budget` | 各路由首屏 JS（含各级 layout chunk）与编辑器整包的 gzip 体积 | 首屏 ≤ 300KB、编辑器 ≤ 250KB |
 | `pnpm --filter web lighthouse:budget` | `/login`、`/dashboard`、`/notes`、`/docs`、`/ai/chat` 五条路由 | Performance ≥ 90、Accessibility ≥ 95 |
 
+移动端（M10.x，方案见 [`docs/mobile/`](docs/mobile/)）另有一套同口径门禁：
+
+| 命令 | 内容 | 门槛 |
+|------|------|------|
+| `pnpm --filter web test:e2e -- --project=mobile` | Pixel 5 视口下的 29 条移动端用例：入口分流与逃生口、tab 导航、13 条路由无横向滚动、笔记三级导航与自动保存、工具条横滑与 40px 触摸目标、AI 与 PDF 形态、搜索跳转 | 全绿 |
+| `pnpm --filter web bundle:budget` | 同一条命令：`/m/*` 路由按**路径段**单独分桶判定 | `/m/*` 首屏 ≤ 250KB，其余仍 ≤ 300KB |
+| `pnpm --filter web lighthouse:budget:mobile` | `/login`、`/m/dashboard`、`/m/notes`、`/m/docs`、`/m/ai/chat` | Performance ≥ 85、Accessibility ≥ 95 |
+
+移动端 Performance 门槛低于桌面是**口径差异不是退化**：Lighthouse 移动预设自带 4× CPU 降速与 150ms RTT 节流，
+同一份产物在移动口径下必然低于桌面分数（理由见 [`docs/mobile/MOBILE_PLAN.md`](docs/mobile/MOBILE_PLAN.md) D8）。
+
+两个 project 按**文件名**分工：`mobile-*.spec.ts` 只在 `mobile` 下跑，其余只在 `chromium` 下跑。
+`workers: 1` 时这样能避免全量 E2E 时间翻倍；跑 `pnpm --filter web test:e2e` 会依次跑完两边（20 + 29 条）。
+
 注意事项：
 
 - **E2E 每轮新建一个随机 `e2e` 前缀账号**并把登录态存到 `apps/web/e2e/.auth/`（已 gitignore）。账号不删（后端无注销端点），不要在生产环境跑。

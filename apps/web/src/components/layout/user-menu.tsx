@@ -13,14 +13,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useLogoutMutation } from "@/features/auth/use-logout-mutation";
 import { useMe } from "@/features/auth/use-me";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, Smartphone } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { toast } from "sonner";
+import { toMobileHref } from "./navigation";
 
 export function UserMenu() {
   const { data } = useMe();
   const logout = useLogoutMutation();
+  const pathname = usePathname();
   const name = data?.nickname || data?.username || "我的账户";
+  // 当前页面在移动端的对应地址；没有对应页时退到移动端工作台。
+  // `?mobile=1` 让 middleware 把选择写进偏好，否则下次进来又被 UA 判回桌面版。
+  const mobileHref = `${toMobileHref(pathname) ?? "/m/dashboard"}?mobile=1`;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -42,6 +48,10 @@ export function UserMenu() {
           <DropdownMenuItem render={<Link href="/settings/profile" />}>
             <Settings />
             个人设置
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href={mobileHref} prefetch={false} />}>
+            <Smartphone />
+            手机版
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

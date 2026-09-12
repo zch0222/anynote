@@ -91,7 +91,7 @@ export function ConversationList({ activeId }: ConversationListProps) {
             >
               <button
                 type="button"
-                className="min-w-0 flex-1 cursor-pointer truncate text-left outline-none"
+                className="min-h-10 min-w-0 flex-1 cursor-pointer truncate text-left outline-none"
                 title={summary.title ?? "未命名会话"}
                 onClick={() => {
                   router.push(`/ai/chat/${summary.id}`);
@@ -105,7 +105,7 @@ export function ConversationList({ activeId }: ConversationListProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-7 shrink-0 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
+                      className="size-9 shrink-0 md:size-7 md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
                       disabled={deleteMutation.isPending}
                     />
                   }

@@ -19,6 +19,7 @@ import {
   useUploadPdfMutation,
 } from "@/features/ai/use-docs";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
+import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, FileText, Loader2, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -26,15 +27,22 @@ import { toast } from "sonner";
 import { ChatPanel } from "../chat-panel";
 import { PdfViewer } from "./pdf-viewer";
 
+/** 小屏（< lg）一次只显示一个面板，用顶部切换控件在两者之间来回。 */
+type PdfPane = "docs" | "chat";
+
 /**
  * Chat PDF：左侧文档库（选知识库 → 上传/列表），中间 PDF 预览，右侧文档问答。
  * 上传链路：multipart 直传 note 服务 → 自动触发 RAG 索引（异步）→ 轮询索引状态。
+ *
+ * 版式：`lg` 以上是三栏；`lg` 以下预览栏隐藏，文档库与问答**不并排**，
+ * 由 `pane` 决定显示哪一个——两者并排时宽度之和恒大于手机视口，会把整页顶出横向滚动条。
  */
 export function PdfChatPage() {
   const bases = useKnowledgeBasesQuery();
   const [baseId, setBaseId] = useState<number | null>(null);
   const [docId, setDocId] = useState<number | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
+  const [pane, setPane] = useState<PdfPane>("docs");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -111,8 +119,47 @@ export function PdfChatPage() {
   };
 
   return (
-    <div className="flex h-[calc(100svh-9rem)] min-h-0" data-testid="pdf-chat-page">
-      <aside className="flex w-72 shrink-0 flex-col gap-3 border-r p-3">
+    <div
+      className="flex h-[calc(100svh-9rem)] min-h-0 flex-col lg:flex-row"
+      data-testid="pdf-chat-page"
+    >
+      <div
+        role="tablist"
+        aria-label="文档库与问答切换"
+        className="flex shrink-0 gap-1 border-b p-2 lg:hidden"
+        data-testid="pdf-pane-switch"
+      >
+        {(
+          [
+            ["docs", "文档库"],
+            ["chat", "问答"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={pane === key}
+            onClick={() => {
+              setPane(key);
+            }}
+            className={cn(
+              "min-h-10 flex-1 rounded-lg px-3 text-sm transition-colors",
+              pane === key ? "bg-accent text-accent-foreground" : "text-muted-foreground",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <aside
+        data-testid="pdf-pane-docs"
+        className={cn(
+          "flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 p-3 lg:w-72 lg:flex-none lg:shrink-0 lg:border-r",
+          pane !== "docs" && "hidden lg:flex",
+        )}
+      >
         <DropdownMenu>
           <DropdownMenuTrigger
             render={<Button variant="outline" className="w-full justify-between" />}
@@ -206,9 +253,11 @@ export function PdfChatPage() {
               >
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left outline-none"
+                  className="flex min-h-10 min-w-0 flex-1 cursor-pointer items-center gap-2 text-left outline-none"
                   onClick={() => {
                     setDocId(row.id);
+                    // 小屏选中文档后直接进问答：预览栏在这个宽度下不显示，停在列表没有下一步
+                    setPane("chat");
                   }}
                 >
                   <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -233,7 +282,8 @@ export function PdfChatPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-6 shrink-0 opacity-0 group-hover:opacity-100"
+                  // 触摸端没有 hover：md 以下常显，md 以上才保持原来的「悬停才出现」
+                  className="size-8 shrink-0 md:size-6 md:opacity-0 md:group-hover:opacity-100"
                   aria-label={`删除「${row.docName ?? "未命名文档"}」`}
                   disabled={deleteDoc.isPending}
                   onClick={() => {
@@ -275,7 +325,13 @@ export function PdfChatPage() {
         )}
       </section>
 
-      <div className="flex w-full min-w-72 shrink-0 flex-col border-l lg:w-96">
+      <div
+        data-testid="pdf-pane-chat"
+        className={cn(
+          "flex min-h-0 w-full min-w-0 flex-1 flex-col lg:w-96 lg:min-w-72 lg:flex-none lg:shrink-0 lg:border-l",
+          pane !== "chat" && "hidden lg:flex",
+        )}
+      >
         {docId ? (
           <DocChatPanel docId={docId} />
         ) : (

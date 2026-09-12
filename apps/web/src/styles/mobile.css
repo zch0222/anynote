@@ -1,0 +1,93 @@
+/*
+ * 移动端外壳的骨架样式（M10.1 / 方案 D6）。
+ *
+ * 这里**只放三类规则**：安全区、统一高度变量、工具条横滑。
+ * 业务样式一律写在组件的 Tailwind 类里——放进来就会变成第二套真相。
+ */
+
+.mobile-shell {
+  /* 顶栏 56px；底栏 52px 再垫一层 home 条高度（无刘海设备上 env() 取 0） */
+  --mobile-header-h: 3.5rem;
+  --mobile-tabbar-h: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  /*
+   * 可视视口高度。默认 100svh；MobileShell 拿到 visualViewport.height 后会用内联样式
+   * 覆盖它——软键盘弹出时这是唯一可靠的"用户真能看到多高"（见 hooks/use-visual-viewport.ts）。
+   */
+  --mobile-viewport-h: 100svh;
+  /* 页面内容可用高度。编辑器、对话这类"内部滚动"的页面直接用它，不再各算 calc */
+  --mobile-content-h: calc(
+    var(--mobile-viewport-h) -
+    var(--mobile-header-h) -
+    var(--mobile-tabbar-h)
+  );
+
+  min-height: var(--mobile-viewport-h);
+  /* tab bar 是 fixed 的，内容底部要留出等高的空档，否则最后一行被挡住 */
+  padding-bottom: var(--mobile-tabbar-h);
+}
+
+/* 沉浸式路由（编辑器 / 对话 / 阅读）不显示 tab bar，可用高度随之变大 */
+.mobile-shell[data-immersive="true"] {
+  --mobile-tabbar-h: 0px;
+}
+
+.mobile-title-bar {
+  height: var(--mobile-header-h);
+  /* 刘海屏横屏时左右也有安全区 */
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+.mobile-tab-bar {
+  height: var(--mobile-tabbar-h);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* 内容区：高度交给外层 flex，这里只负责把长内容的滚动留在自己身上 */
+.mobile-content {
+  min-height: var(--mobile-content-h);
+}
+
+.mobile-content[data-fill="true"] {
+  height: var(--mobile-content-h);
+  min-height: 0;
+}
+
+/*
+ * 编辑器工具条的移动端形态（M10.3 会用到）：单行横滑，不换行。
+ * 桌面的 .anynote-toolbar 规则不受影响——只有 data-variant="mobile" 时才生效。
+ */
+.anynote-toolbar[data-variant="mobile"] {
+  position: sticky;
+  top: auto;
+  bottom: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.anynote-toolbar[data-variant="mobile"]::-webkit-scrollbar {
+  display: none;
+}
+
+.anynote-toolbar[data-variant="mobile"] .anynote-toolbar__button {
+  /* 触摸目标 40px：28px 的桌面尺寸在手指下几乎点不中 */
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.anynote-toolbar[data-variant="mobile"] .anynote-toolbar__button svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* "更多"弹层里的命令图标 */
+.anynote-toolbar__sheet-icon svg {
+  width: 20px;
+  height: 20px;
+}

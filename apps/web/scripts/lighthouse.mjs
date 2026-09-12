@@ -1,7 +1,8 @@
-// M8.3 Lighthouse 门禁：Performance ≥ 90、Accessibility ≥ 95。
+// Lighthouse 门禁：桌面 Performance ≥ 90 / 移动 ≥ 85，Accessibility 两边都 ≥ 95。
 //
 // 用法（需要先起生产前端；要审计登录后的页面还需先跑过一次 E2E 以生成会话）：
-//   node scripts/lighthouse.mjs                        # 审计默认路由
+//   node scripts/lighthouse.mjs                        # 审计默认路由（桌面口径）
+//   node scripts/lighthouse.mjs --mobile               # 移动 form factor + /m/* 路由
 //   node scripts/lighthouse.mjs --url http://localhost:3000/notes
 //   node scripts/lighthouse.mjs --budget               # 不达标以非零退出码失败
 import { readFileSync } from "node:fs";
@@ -14,18 +15,18 @@ import lighthouse from "lighthouse";
 // 那样量出来的是「桌面页面跑在移动网络上」，与 M8.3 的桌面门槛对不上。
 import desktopConfig from "lighthouse/core/config/desktop-config.js";
 import {
-  DEFAULT_ROUTES,
-  DEFAULT_THRESHOLDS,
   cookieHeaderFromState,
   evaluateScores,
   formatScore,
   parseArgs,
+  selectProfile,
 } from "./lib/lighthouse.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const origin = process.env.E2E_BASE_URL ?? "http://localhost:3000";
-const { urls, enforce } = parseArgs(process.argv.slice(2));
-const targets = urls.length > 0 ? urls : DEFAULT_ROUTES.map((route) => `${origin}${route}`);
+const { urls, enforce, mobile } = parseArgs(process.argv.slice(2));
+const profile = selectProfile(mobile);
+const targets = urls.length > 0 ? urls : profile.routes.map((route) => `${origin}${route}`);
 
 function readCookieHeader() {
   try {
@@ -55,10 +56,11 @@ try {
         port: chrome.port,
         output: "json",
         logLevel: "error",
-        onlyCategories: Object.keys(DEFAULT_THRESHOLDS),
+        onlyCategories: Object.keys(profile.thresholds),
         ...(cookieHeader ? { extraHeaders: { Cookie: cookieHeader } } : {}),
       },
-      desktopConfig,
+      // 移动口径下不传 config：Lighthouse 默认就是移动 form factor + 对应节流
+      profile.useDesktopConfig ? desktopConfig : undefined,
     );
 
     const categories = runnerResult?.lhr?.categories ?? {};
@@ -74,9 +76,11 @@ try {
   await chrome.kill();
 }
 
-const verdict = evaluateScores(results, DEFAULT_THRESHOLDS);
+const verdict = evaluateScores(results, profile.thresholds);
 
-console.log("=== Lighthouse（M8.3 门槛：Performance ≥ 90 / Accessibility ≥ 95） ===");
+console.log(
+  `=== Lighthouse（${profile.name} 口径，门槛：Performance ≥ ${formatScore(profile.thresholds.performance).trim()} / Accessibility ≥ ${formatScore(profile.thresholds.accessibility).trim()}） ===`,
+);
 for (const result of results) {
   const redirected = result.finalUrl !== result.url ? `  → ${result.finalUrl}` : "";
   console.log(`\n${result.url}${redirected}`);

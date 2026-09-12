@@ -16,7 +16,9 @@
     "bundle:report": "node scripts/bundle-report.mjs",
     "bundle:budget": "node scripts/bundle-report.mjs --budget",
     "lighthouse": "node scripts/lighthouse.mjs",
-    "lighthouse:budget": "node scripts/lighthouse.mjs --budget"
+    "lighthouse:budget": "node scripts/lighthouse.mjs --budget",
+    "lighthouse:mobile": "node scripts/lighthouse.mjs --mobile",
+    "lighthouse:budget:mobile": "node scripts/lighthouse.mjs --budget --mobile"
   },
   "dependencies": {
     "@anynote/api-client": "workspace:^",
