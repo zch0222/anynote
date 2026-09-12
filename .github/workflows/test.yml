@@ -73,6 +73,45 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+  cli:
+    name: CLI manifest drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # CLI 单测已经由上面的 web job（pnpm test 经 turbo 覆盖全 workspace）跑过，
+    # 这里只做生成物漂移检查：manifest 只读命令注册表，不需要后端。
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build CLI
+        run: pnpm --filter @anynote/cli build
+
+      - name: Regenerate command reference
+        run: pnpm --filter @anynote/cli manifest:write
+
+      - name: Detect manifest drift
+        run: |
+          if ! git diff --exit-code docs/cli/COMMANDS.md .claude/skills/anynote-cli/reference/; then
+            echo ""
+            echo "::error::CLI 命令文档漂移。本地跑 pnpm --filter @anynote/cli build && pnpm --filter @anynote/cli manifest:write，并提交生成物。"
+            exit 1
+          fi
+          echo "CLI command reference matches generated output."
+
   deployment:
     name: Deployment configuration tests
     runs-on: ubuntu-latest
