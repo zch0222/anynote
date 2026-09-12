@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@anynote/api-client": "workspace:^",
+    "@anynote/api-core": "workspace:^",
     "@base-ui/react": "^1.5.0",
     "@dnd-kit/core": "6.3.1",
     "@hookform/resolvers": "^5.4.0",

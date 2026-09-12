@@ -2,6 +2,7 @@
 
 import { ApiError, unwrapEnvelope } from "@/lib/api/errors";
 import { noteApi } from "@/lib/api/openapi";
+import { RES_CODE } from "@anynote/api-core/codes";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { noteQueryKeys } from "./query-keys";
@@ -14,7 +15,7 @@ import {
 } from "./schemas";
 
 /** 后端乐观并发冲突的业务码，与 ResCode.RESOURCE_VERSION_CONFLICT 一致。 */
-export const VERSION_CONFLICT_CODE = "A0409";
+export const VERSION_CONFLICT_CODE = RES_CODE.VERSION_CONFLICT;
 
 export const AUTOSAVE_DEBOUNCE_MS = 1500;
 /** 保存失败后的重试间隔；只重试网络/服务端故障，冲突不重试。 */
