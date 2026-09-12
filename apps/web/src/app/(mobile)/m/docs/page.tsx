@@ -1,5 +1,5 @@
-import { MobilePlaceholder } from "@/components/layout/mobile/mobile-placeholder";
+import { MobileCollabDocLibrary } from "@/features/collab/components/collab-loader";
 
 export default function Page() {
-  return <MobilePlaceholder title="文档" description="协同文档库（页面建设中）" />;
+  return <MobileCollabDocLibrary />;
 }

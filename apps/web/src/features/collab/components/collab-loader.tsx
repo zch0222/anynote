@@ -30,3 +30,9 @@ export const CollabDocWorkspace = dynamic(
   () => import("./doc-workspace").then((mod) => mod.CollabDocWorkspace),
   { ssr: false, loading: LoadingCard },
 );
+
+/** 移动端文档库（M10.2）：与桌面同样走懒加载，yjs 不进 `/m/docs` 首屏。 */
+export const MobileCollabDocLibrary = dynamic(
+  () => import("./mobile/doc-library-mobile").then((mod) => mod.MobileDocLibrary),
+  { ssr: false, loading: LoadingCard },
+);
