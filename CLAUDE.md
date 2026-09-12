@@ -273,6 +273,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `CONTRIBUTING.md` — 代码规范要点
 - `apps/desktop/README.md` — 桌面壳的令牌交换流程、构建前置条件与未验证项
 - `docs/cli/` — CLI 前端：`CLI_PLAN.md`（技术方案）、`CLI_MILESTONES.md`（M9.x 进度）、`COMMANDS.md`（**生成物**）
+- `docs/mobile/` — 移动端适配：`MOBILE_PLAN.md`（技术方案）、`MOBILE_MILESTONES.md`（M10.0–M10.5 进度）、`UI_INVENTORY.md`（现状逐页核对证据）。**决策已于 2026-09-12 拍板**：移动端落在 `apps/web` 的 `app/(mobile)/m/**` 路由段、不新开应用（认证 Cookie 是 host-only + `sameSite=strict`，刷新锁是进程级）；入口从一开始就做 UA 分流（`?desktop=1` 逃生口 + 非身份的 `anynote_view` 偏好 Cookie），登录后落 `/m/dashboard`。契约登记见 `.claude/openspec/changes/2026-09-12-mobile-route-segment.md`
 - `docs/changelist/` — 各批改动的逐文件审计清单；`README.md` 是编写规范与命名规则（`YYYY-MM-DD-<slug>.md`）
 - `apps/cli/README.md` — CLI 的构建、环境变量、凭据安全与测试命令
 - `.claude/skills/anynote-*` — 给 Claude Code 的 CLI / 笔记配方 / 仓库操作手册（`anynote-cli` 的 `reference/commands.md` 是生成物）
