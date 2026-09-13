@@ -129,3 +129,56 @@ test.describe("笔记图片：分片直传到 MinIO 并渲染", () => {
     );
   });
 });
+
+/**
+ * 上传过程必须有可见反馈（本次新增）。
+ *
+ * 上传本身很快（1×1 PNG 只有一个分片），指示器会在几十毫秒内消失，
+ * 直接断言必然是 flaky 的。所以这里**人为拖慢第 1 步**（建上传任务）的响应，
+ * 把那个瞬态窗口撑开——这正是用户在慢网络下的真实体感。
+ */
+test.describe("笔记图片：上传过程有 loading 提示", () => {
+  test("上传期间显示「上传中」指示器，完成后被图片替换", async ({ page }) => {
+    await createNote(page, "E2E 上传提示笔记");
+
+    const indicator = page.locator('[data-testid="image-upload-indicator"]');
+
+    // 建任务请求延迟 1.5s，让指示器有足够时间被观察到
+    await page.route("**/images/uploadTasks", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.continue();
+    });
+
+    await uploadImageThroughToolbar(page);
+
+    // 上传途中：指示器可见，且明确写着"上传中"（不是静默等待）
+    await expect(indicator).toBeVisible({ timeout: 30_000 });
+    await expect(indicator).toContainText("上传中");
+
+    // 完成之后：指示器消失，换成真正的图片
+    await expect(indicator).toHaveCount(0, { timeout: 45_000 });
+    await expect(insertedImage(page).first()).toBeVisible({ timeout: 45_000 });
+  });
+
+  test("上传失败时指示器被清理，不会永远转圈", async ({ page }) => {
+    await createNote(page, "E2E 上传失败提示笔记");
+
+    const indicator = page.locator('[data-testid="image-upload-indicator"]');
+
+    // 让建任务直接失败（业务错误码 + HTTP 200，与后端真实错误形态一致）
+    await page.route("**/images/uploadTasks", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "B0001", msg: "模拟上传失败", data: null }),
+      });
+    });
+
+    await uploadImageThroughToolbar(page);
+
+    await expect(indicator).toBeVisible({ timeout: 30_000 });
+    // 失败后必须收尾，否则正文里会留下一个永远转圈的占位
+    await expect(indicator).toHaveCount(0, { timeout: 30_000 });
+    await expect(insertedImage(page)).toHaveCount(0);
+  });
+});

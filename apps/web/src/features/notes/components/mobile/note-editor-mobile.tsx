@@ -77,9 +77,9 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
   // 图片走 file 服务的分片直传；实现只在真的插图时才下载（静态 import 会压进首屏）。
   // 引用须稳定，否则每次渲染都会重建编辑器实例。
   const uploadFn = useMemo<UploadFn>(
-    () => async (file) => {
+    () => async (file, options) => {
       const { createNoteImageUploader } = await import("@/lib/editor/upload");
-      return createNoteImageUploader(noteId)(file);
+      return createNoteImageUploader(noteId, options?.onProgress)(file);
     },
     [noteId],
   );

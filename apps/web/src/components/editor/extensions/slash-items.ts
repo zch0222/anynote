@@ -1,4 +1,4 @@
-import type { UploadFn } from "@/components/editor/extensions/anynote-image";
+import { type UploadFn, uploadImageAt } from "@/components/editor/extensions/anynote-image";
 import type { AiContinueFn } from "@/components/editor/presets/types";
 import type { Editor, Range } from "@tiptap/core";
 import { toast } from "sonner";
@@ -31,19 +31,13 @@ function pickImageFile(uploadFn: UploadFn | undefined, editor: Editor, range: Ra
       return;
     }
     editor.chain().focus().deleteRange(range).run();
-    const at = editor.state.selection.from;
-    uploadFn(file)
-      .then((src) => {
-        editor
-          .chain()
-          .focus()
-          .insertContentAt(at, { type: "image", attrs: { src, alt: file.name } })
-          .run();
-      })
-      .catch((error: unknown) => {
+    // 走与工具栏 / 粘贴 / 拖拽同一个入口，上传期间在光标处显示「上传中」指示器
+    void uploadImageAt(editor.view, uploadFn, file, {
+      onError: (error) => {
         console.error(error);
         toast.error("图片上传失败");
-      });
+      },
+    });
   });
   input.click();
 }
