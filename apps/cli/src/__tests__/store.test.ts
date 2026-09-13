@@ -158,22 +158,30 @@ describe("刷新", () => {
       "utf8",
     );
 
+    // ⚠️ 时钟必须是被控的假时钟。等锁循环用 now() 判超时、用真实 fs 读 owner.json 判陈旧，
+    // 两者混用真实时间时，机器一忙（CI / 并行跑其它包）就会在"持锁者写入新凭据"之前超时，
+    // 表现为随机的 null。这里让 now() 每次调用前进 10ms，配合 sleep 打桩，
+    // 循环推进完全确定，与机器负载无关。
+    let clock = 1_700_000_000_002;
     let rotated = false;
     const blocked = new CredentialStore({
       configDir: dir,
       profile: "default",
-      now: () => 1_700_000_000_002,
+      now: () => clock,
       refreshTokens: async () => {
         throw new Error("等锁的进程不应该自己发起刷新");
       },
       lockOptions: {
         timeoutMs: 40,
         pollMs: 5,
+        // 陈旧判定用的也是 now()：把 staleMs 设得远大于本次推进量，锁不会被抢占
         staleMs: 10_000,
-        // 等锁期间持锁进程完成了刷新
+        now: () => clock,
         sleep: async () => {
+          clock += 10;
           if (rotated) return;
           rotated = true;
+          // 等锁期间持锁进程完成了刷新
           await writer.saveProfile(
             profile({ accessToken: "at-by-other", refreshToken: "rt-by-other" }),
           );

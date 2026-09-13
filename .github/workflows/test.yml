@@ -100,17 +100,23 @@ jobs:
       - name: Build CLI
         run: pnpm --filter @anynote/cli build
 
-      - name: Regenerate command reference
+      - name: Regenerate command reference and skill bundle
         run: pnpm --filter @anynote/cli manifest:write
 
-      - name: Detect manifest drift
+      - name: Detect generated-artifact drift
         run: |
-          if ! git diff --exit-code docs/cli/COMMANDS.md .claude/skills/anynote-cli/reference/; then
+          # 三个生成物：命令速查两份 + 打包进产物的 skill 快照。
+          # 注意 reference/commands.md 同时又是 src/bundled.ts 的输入，
+          # `manifest:write` 结尾会再刷新一次 bundled.ts，所以顺序不会打架。
+          if ! git diff --exit-code \
+              docs/cli/COMMANDS.md \
+              .claude/skills/anynote-cli/reference/commands.md \
+              apps/cli/src/bundled.ts; then
             echo ""
-            echo "::error::CLI 命令文档漂移。本地跑 pnpm --filter @anynote/cli build && pnpm --filter @anynote/cli manifest:write，并提交生成物。"
+            echo "::error::CLI 生成物漂移。本地跑 pnpm --filter @anynote/cli build && pnpm --filter @anynote/cli manifest:write，并提交生成物。"
             exit 1
           fi
-          echo "CLI command reference matches generated output."
+          echo "CLI command reference and skill bundle match generated output."
 
   deployment:
     name: Deployment configuration tests

@@ -1,7 +1,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { type CliRun, ensureBuilt, expectOk, makeHome, randomAccount, runCli } from "./helpers";
+import {
+  type CliRun,
+  GATEWAY,
+  ensureBuilt,
+  expectOk,
+  makeHome,
+  randomAccount,
+  runCli,
+} from "./helpers";
 
 /**
  * CLI 端到端用例：驱动构建产物打真实的本地 Anynote 栈（docker compose 全栈）。
@@ -22,10 +30,13 @@ let home: string;
 let baseId: number;
 let noteId: number;
 let secondBaseId: number;
+/** skill 安装用例的隔离根目录：三家 agent 的全局目录都指到这里 */
+let agentHome: string;
 
 beforeAll(async () => {
   await ensureBuilt();
   home = await makeHome();
+  agentHome = await makeHome();
   const registered = await runCli(
     home,
     [
@@ -47,7 +58,20 @@ afterAll(async () => {
   if (!home) return;
   await runCli(home, ["auth", "logout"]);
   await fs.rm(home, { recursive: true, force: true });
+  if (agentHome) await fs.rm(agentHome, { recursive: true, force: true });
 });
+
+/** 跑 CLI 时把 agent 的全局 skill 目录隔离到 agentHome 下。 */
+function runSkill(args: string[], options: { stdin?: string } = {}) {
+  return runCli(home, args, {
+    ...options,
+    extraEnv: {
+      CLAUDE_CONFIG_DIR: path.join(agentHome, "claude"),
+      CODEX_HOME: path.join(agentHome, "codex"),
+      DSH_HOME: path.join(agentHome, "dsh"),
+    },
+  });
+}
 
 function dataOf(run: CliRun, label: string) {
   return expectOk(run, label) as Record<string, unknown>;
@@ -412,5 +436,186 @@ describe("清理与删除权限", () => {
     // 因此这里是 A0404（退出码 6）；而从未存在过的 id 会更早被切面拦成 A0301（退出码 3）
     expect(gone.code).toBe(6);
     expect(gone.error?.code).toBe("A0404");
+  });
+});
+
+describe("skill 一键安装", () => {
+  const skills = ["anynote-cli", "anynote-notes"];
+
+  it("doctor 报告三家 agent 的 skill 安装情况", async () => {
+    const data = dataOf(await runCli(home, ["doctor"]), "doctor") as {
+      skills: Array<{ agent: string; installed: number; total: number; drifted: boolean }>;
+    };
+    expect(data.skills.map((row) => row.agent)).toEqual(["claude", "codex", "dsh"]);
+    // 本用例的隔离目录还是空的
+    expect(data.skills.every((row) => row.installed === 0)).toBe(true);
+  });
+
+  it("install 把两个 skill 复制到三家全局目录", async () => {
+    const data = dataOf(await runSkill(["skill", "install"]), "skill install") as {
+      version: string;
+      skills: string[];
+      installed: Array<{ agent: string; action: string; path: string }>;
+    };
+    expect(data.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(data.skills).toEqual(skills);
+    expect(data.installed).toHaveLength(skills.length * 3);
+    expect(data.installed.every((entry) => entry.action === "installed")).toBe(true);
+
+    for (const agent of ["claude", "codex", "dsh"]) {
+      for (const skill of skills) {
+        const root = path.join(agentHome, agent, "skills", skill, "SKILL.md");
+        const body = await fs.readFile(root, "utf8");
+        // 版本戳必须等于本次 CLI 的版本：这正是"skill 与 CLI 版本匹配"的落地形式
+        expect(body).toContain(`anynote-cli-version: ${data.version}`);
+      }
+    }
+  });
+
+  it("装出来的目录里带 reference/commands.md（agent 加载 skill 时要读）", async () => {
+    const reference = path.join(
+      agentHome,
+      "claude",
+      "skills",
+      "anynote-cli",
+      "reference",
+      "commands.md",
+    );
+    const body = await fs.readFile(reference, "utf8");
+    expect(body).toContain("anynote skill install");
+  });
+
+  it("重复 install 是幂等的", async () => {
+    const data = dataOf(await runSkill(["skill", "install"]), "skill install again") as {
+      installed: Array<{ action: string }>;
+    };
+    expect(data.installed.every((entry) => entry.action === "unchanged")).toBe(true);
+  });
+
+  it("skill list 报告已安装且版本一致", async () => {
+    const data = dataOf(await runSkill(["skill", "list"]), "skill list") as {
+      rows: Array<{ installed: boolean; drifted: boolean; installedVersion: string | null }>;
+    };
+    expect(data.rows).toHaveLength(skills.length * 3);
+    expect(data.rows.every((row) => row.installed && !row.drifted)).toBe(true);
+    expect(data.rows.every((row) => row.installedVersion !== null)).toBe(true);
+  });
+
+  it("用户手写的同名 skill 不会被覆盖，也不会被卸载", async () => {
+    const dshSkills = path.join(agentHome, "dsh", "skills");
+    // 先把 dsh 清空，只留用户手写的那一个，避免与前面用例的安装状态纠缠
+    await fs.rm(dshSkills, { recursive: true, force: true });
+    const foreign = path.join(dshSkills, "anynote-cli");
+    await fs.mkdir(foreign, { recursive: true });
+    await fs.writeFile(
+      path.join(foreign, "SKILL.md"),
+      "---\nname: anynote-cli\ndescription: 用户自己写的\n---\n",
+      "utf8",
+    );
+
+    // 安装：dsh 因为 anynote-cli 撞名而被整体跳过，另外两家照装
+    const installed = dataOf(
+      await runSkill(["skill", "install"]),
+      "skill install (dsh occupied)",
+    ) as {
+      installed: Array<{ agent: string }>;
+      skipped: string[];
+    };
+    expect(installed.installed.every((entry) => entry.agent !== "dsh")).toBe(true);
+    expect(installed.skipped.join()).toContain("不是 anynote CLI 安装的");
+    await expect(fs.readFile(path.join(foreign, "SKILL.md"), "utf8")).resolves.toContain(
+      "用户自己写的",
+    );
+
+    // 卸载是删除操作，非交互环境必须显式 --yes（与其它写操作同一套守卫）
+    const refused = await runSkill(["skill", "uninstall", "--agent=dsh"]);
+    expect(refused.code).toBe(2);
+    expect(refused.error?.message).toContain("--yes");
+
+    // 卸载：只该删本 CLI 装的，用户手写的那个原封不动
+    const removed = dataOf(
+      await runSkill(["skill", "uninstall", "--agent=dsh", "--yes"]),
+      "skill uninstall (dsh occupied)",
+    ) as { removed: unknown[]; kept: Array<{ path: string }> };
+    expect(removed.removed).toHaveLength(0);
+    expect(removed.kept.map((entry) => entry.path)).toEqual([foreign]);
+    await expect(fs.readFile(path.join(foreign, "SKILL.md"), "utf8")).resolves.toContain(
+      "用户自己写的",
+    );
+
+    // 复原：清掉手写的那份，让后面的 uninstall 用例拿到干净的三家安装
+    await fs.rm(dshSkills, { recursive: true, force: true });
+    dataOf(await runSkill(["skill", "install", "--agent=dsh"]), "skill install (dsh restored)");
+  });
+
+  it("uninstall 删除本 CLI 装的全部 skill", async () => {
+    const data = dataOf(await runSkill(["skill", "uninstall", "--yes"]), "skill uninstall") as {
+      removed: unknown[];
+    };
+    expect(data.removed).toHaveLength(skills.length * 3);
+    for (const agent of ["claude", "codex", "dsh"]) {
+      await expect(
+        fs.access(path.join(agentHome, agent, "skills", "anynote-cli")),
+      ).rejects.toThrow();
+    }
+  });
+});
+
+describe("配置持久化", () => {
+  it("config set 落盘后，后续命令没有环境变量也用它", async () => {
+    const persisted = await makeHome();
+    try {
+      const stored = dataOf(
+        await runCli(persisted, ["config", "set", "api-url", GATEWAY]),
+        "config set",
+      ) as { settingsPath: string; value: string };
+      expect(stored.value).toBe(GATEWAY);
+      const raw = JSON.parse(await fs.readFile(stored.settingsPath, "utf8")) as { apiUrl: string };
+      expect(raw.apiUrl).toBe(GATEWAY);
+
+      // 关键：这一跑不带 ANYNOTE_API_URL，地址只能来自设置文件
+      const data = dataOf(
+        await runCli(persisted, ["config", "path"], { withoutApiUrl: true }),
+        "config path",
+      ) as { apiUrl: string; apiUrlSource: string };
+      expect(data.apiUrlSource).toBe("file");
+      expect(data.apiUrl).toBe(GATEWAY);
+    } finally {
+      await fs.rm(persisted, { recursive: true, force: true });
+    }
+  });
+
+  it("config set 拒绝非法 URL", async () => {
+    const run = await runCli(home, ["config", "set", "api-url", "192.168.3.90:8080"]);
+    expect(run.code).toBe(2);
+    expect(run.error?.message).toContain("URL");
+  });
+
+  it("config unset 之后设置文件里的键被删掉", async () => {
+    const persisted = await makeHome();
+    try {
+      await runCli(persisted, ["config", "set", "api-url", GATEWAY]);
+      dataOf(await runCli(persisted, ["config", "unset", "api-url"]), "config unset");
+      const stored = JSON.parse(
+        await fs.readFile(path.join(persisted, "settings.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(stored.apiUrl).toBeUndefined();
+      const data = dataOf(
+        await runCli(persisted, ["config", "get"], { withoutApiUrl: true }),
+        "config get",
+      ) as { apiUrlSource: string; apiUrl: string };
+      expect(data.apiUrlSource).toBe("default");
+      expect(data.apiUrl).toBe("http://localhost:8080");
+    } finally {
+      await fs.rm(persisted, { recursive: true, force: true });
+    }
+  });
+
+  it("登录态跨进程持久化：新进程直接 whoami 成功", async () => {
+    // 每次 runCli 都是一次独立的 node 进程，凭据只能来自 credentials.json
+    const data = dataOf(await runCli(home, ["auth", "whoami"]), "auth whoami") as {
+      username: string;
+    };
+    expect(data.username).toBe(account.username);
   });
 });

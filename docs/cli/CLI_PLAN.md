@@ -817,9 +817,39 @@ CLI 位于 `apps/cli`，先构建一次：`pnpm --filter @anynote/cli build`
 - `reference/commands.md` 是**生成物**，SKILL.md 里只写判断规则与约束，两者职责不混。
 - `anynote-dev` 值得单列：CLAUDE.md 里 "dev 必须 `--env-file=/dev/null`"、"prod 必须显式三件套" 这类**踩坑型知识**做成 skill，比让每个 agent 通读 CLAUDE.md 再自行领悟可靠得多。
 
-### 10.3 漂移门禁
+### 10.3 分发到各 agent 的全局目录（M9.5 实现，方案原文没有）
+
+项目级 `.claude/skills` 只在**本仓库里**干活时可见。用户在别的目录里想让 Claude Code / Codex / dsh
+调用 `anynote`，需要把 skill 装到各家的**全局**目录：
+
+| agent | 根目录 | 覆盖方式 |
+|-------|--------|---------|
+| Claude Code | `~/.claude/skills` | `CLAUDE_CONFIG_DIR` |
+| Codex | `$CODEX_HOME/skills`（默认 `~/.codex/skills`） | `CODEX_HOME` |
+| dsh | `$DSH_HOME/skills`（默认 `~/.dsh/skills`） | `DSH_HOME` |
+
+```bash
+anynote skill install            # 三家都装（复制）
+anynote skill install --agent=claude --agent=dsh
+anynote skill list               # 看装没装、版本对不对
+anynote skill uninstall --yes    # 只删本 CLI 装的
+```
+
+三条硬约束（详见 `.claude/openspec/changes/2026-09-13-cli-skill-install.md`）：
+
+1. **复制而非符号链接**：CLI 常在 nvm 的全局包里，软链源一旦被清理就是断链；Windows 建软链还要特权。
+2. **skill 打包进 CLI**：构建期把 `.claude/skills/anynote-{cli,notes}` 烘焙进 `src/bundled.ts`，
+   安装时共享 `package.json` 的版本号写进 `SKILL.md` 的版本戳，所以装出去的版本一定匹配；
+   `skill list` / `doctor` 对比版本戳报漂移。
+3. **不碰用户自己的 skill**：卸载只删带版本戳的目录；安装遇到同名但无版本戳的会跳过该 agent，
+   要覆盖必须显式 `--force`。
+
+### 10.4 漂移门禁
 
 与 `openapi/specs/*.json` baseline 同思路：生成物入库，CI 重新生成后 diff 必须为空。
+生成物现在是**三个**：`docs/cli/COMMANDS.md`、`.claude/skills/anynote-cli/reference/commands.md`、
+`apps/cli/src/bundled.ts`（skill 快照）。注意前两者中的 reference 又是第三者的输入，
+所以顺序必须是 `build` → `manifest:write`（它结尾会再刷新 `bundled.ts`）。
 
 ```yaml
 # .github/workflows/test.yml 追加一个 job
@@ -853,15 +883,16 @@ CLI 位于 `apps/cli`，先构建一次：`pnpm --filter @anynote/cli build`
 
 | agent | 接入方式 | 需要我们做什么 |
 |-------|----------|---------------|
-| Claude Code | `.claude/skills/anynote-*` | §10 |
-| Codex / dsh / Cursor / 任意 MCP 客户端 | `anynote mcp` stdio server | §7.7 + README 里的配置片段 |
+| Claude Code | `.claude/skills/anynote-*`（项目级）+ `anynote skill install --agent=claude`（全局） | §10 |
+| Codex / dsh | `anynote skill install --agent=codex / --agent=dsh`（全局，M9.5 已实现） | §10.3 |
+| Codex / dsh / Cursor / 任意 MCP 客户端 | `anynote mcp` stdio server | §7.7 + README 里的配置片段（**未实现**） |
 | 任意能跑 shell 的 agent | `anynote <cmd> --json`；`anynote manifest --format=json` 自描述 | §7.3 / §7.6 |
 | 读仓库文档的 agent | `AGENTS.md` → `CLAUDE.md` → 本目录 | 在 CLAUDE.md 的「上下文文档导航」加一行指针（M9.0 任务） |
 
 ⚠️ `AGENTS.md` 按仓库约定**保持纯指针**，不要在里面追加 CLI 规约内容。
 
-可选（M9.4）：打成 Claude Code plugin，把 skills + `.mcp.json` 一起分发，换机器一条命令装齐。
-plugin 清单格式以当时的 Claude Code 文档为准，本方案不预设其字段。
+~~可选（M9.4）：打成 Claude Code plugin~~ —— **M9.5 改为直接复制目录**：plugin 清单格式随 agent 版本变动，
+而"把 skill 目录复制到全局根目录"是三家的公共子集，不依赖任何 plugin API。MCP server 仍留给 M9.4。
 
 ---
 

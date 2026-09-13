@@ -5,11 +5,8 @@ description: Anynote 笔记与知识库的常见任务配方——批量导出�
 
 # Anynote 笔记配方
 
-前置：先读 [anynote-cli](../anynote-cli/SKILL.md) 的输出契约与退出码。以下所有片段都假设
-
-```bash
-CLI="node apps/cli/dist/anynote.mjs"
-```
+前置：先读 [anynote-cli](../anynote-cli/SKILL.md) 的输出契约与退出码。以下片段都假设 `anynote` 在 PATH 上；
+在本仓库里没装全局命令时，用 `node apps/cli/dist/anynote.mjs` 替代。
 
 ## 正文格式
 
@@ -24,10 +21,10 @@ CLI="node apps/cli/dist/anynote.mjs"
 ```bash
 BASE=70
 mkdir -p out
-$CLI note list --base "$BASE" --limit 100 \
+anynote note list --base "$BASE" --limit 100 \
   | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{for(const r of JSON.parse(s).data) console.log(r.id+'\t'+r.title)})" \
   | while IFS=$'\t' read -r id title; do
-      $CLI note get "$id" --out "out/${id}-${title}.md"
+      anynote note get "$id" --out "out/${id}-${title}.md"
     done
 ```
 
@@ -37,10 +34,10 @@ $CLI note list --base "$BASE" --limit 100 \
 
 ```bash
 NOTE=1024
-$CLI note get "$NOTE" --json > /tmp/before.json
+anynote note get "$NOTE" --json > /tmp/before.json
 VERSION=$(node -p "require('/tmp/before.json').data.version")
 # …编辑 /tmp/new.md…
-$CLI note set "$NOTE" --file /tmp/new.md --version "$VERSION" --yes
+anynote note set "$NOTE" --file /tmp/new.md --version "$VERSION" --yes
 ```
 
 退出码 **5** = 有人先改了。正确处理是：
@@ -56,8 +53,8 @@ $CLI note set "$NOTE" --file /tmp/new.md --version "$VERSION" --yes
 `note create` 只建标题（后端限制 3-15 字），正文要再调一次 `note set`：
 
 ```bash
-ID=$($CLI note create --base 70 --title "会议纪要" --yes | node -p "JSON.parse(require('fs').readFileSync(0)).data.id")
-$CLI note set "$ID" --content "# 会议纪要
+ID=$(anynote note create --base 70 --title "会议纪要" --yes | node -p "JSON.parse(require('fs').readFileSync(0)).data.id")
+anynote note set "$ID" --content "# 会议纪要
 
 - 议题一" --force --yes
 ```
@@ -67,7 +64,7 @@ $CLI note set "$ID" --content "# 会议纪要
 ## 配方 4：迁移笔记到别的知识库
 
 ```bash
-$CLI note mv 1024 --base 71 --yes
+anynote note mv 1024 --base 71 --yes
 ```
 
 需要对目标知识库有编辑权限；失败时会是业务错误（退出码 1）。
@@ -75,10 +72,10 @@ $CLI note mv 1024 --base 71 --yes
 ## 知识库操作
 
 ```bash
-$CLI base list --fields id,knowledgeBaseName        # 列表（默认前 20）
-$CLI base create --name "新知识库" --detail "简介" --yes
-$CLI base update 70 --name "改名" --yes             # 内部会自动回填 cover
-$CLI base rm 70 --yes                                # 只有创建者能删
+anynote base list --fields id,knowledgeBaseName        # 列表（默认前 20）
+anynote base create --name "新知识库" --detail "简介" --yes
+anynote base update 70 --name "改名" --yes             # 内部会自动回填 cover
+anynote base rm 70 --yes                                # 只有创建者能删
 ```
 
 ⚠️ `base update` 必须带 cover，否则后端 `@Url` 切面会 NPE 成 `B0001`。CLI 已经帮你

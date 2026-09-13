@@ -74,15 +74,27 @@ pnpm --filter web lighthouse:budget   # 性能 ≥ 90 / 无障碍 ≥ 95
 
 ## CLI 的生成物
 
-改了 `apps/cli/src/commands/**` 之后：
+改了 `apps/cli/src/commands/**`、`src/core/exit.ts` 或 `.claude/skills/anynote-{cli,notes}/**` 之后：
 
 ```bash
 pnpm --filter @anynote/cli build
 pnpm --filter @anynote/cli manifest:write
-git diff --exit-code docs/cli/COMMANDS.md .claude/skills/anynote-cli/reference/
+git diff --exit-code docs/cli/COMMANDS.md .claude/skills/anynote-cli/reference/ apps/cli/src/bundled.ts
 ```
 
-生成物必须一起提交，CI 的 `cli` job 会卡 diff。
+三个生成物都要一起提交，CI 的 `cli` job 会卡 diff：
+
+| 生成物 | 来源 |
+|--------|------|
+| `docs/cli/COMMANDS.md` | 命令注册表 |
+| `.claude/skills/anynote-cli/reference/commands.md` | 命令注册表（同时又随 skill 分发） |
+| `apps/cli/src/bundled.ts` | `.claude/skills/anynote-{cli,notes}/**` + `package.json` 的 version |
+
+⚠️ **顺序不能反**：`reference/commands.md` 既是命令文档，又是 `bundled.ts` 的输入；
+`build` 会先刷新 `bundled.ts` 再打包，`manifest:write` 结尾也会再刷一次，所以按上面两条命令跑完即可。
+
+⚠️ `bundled.ts` 是构建期快照，**不要手改**；要改 skill 就改 `.claude/skills/` 下的源文再重新构建。
+`src/version.ts` 只是它的再导出，也**不要**再写一份版本号字面量（版本号只在 `package.json` 写一次）。
 
 ## 提交
 

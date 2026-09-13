@@ -3,6 +3,7 @@ import { createAnonymousAuthClient, createApiClients, createAuthFetch } from "..
 import type { RegisteredCommand } from "../core/command";
 import type { CliContext } from "../core/context";
 import type { CliIo, OutputMode } from "../core/output";
+import { SettingsStore } from "../core/settings";
 
 export type RecordedCall = {
   method: string;
@@ -106,8 +107,10 @@ export function makeContext(options: TestContextOptions) {
     api: createApiClients(apiUrl, createAuthFetch(credentials, stub.fetch)),
     authApi: createAnonymousAuthClient(apiUrl, stub.fetch),
     credentials,
+    settings: new SettingsStore(options.configDir),
     env: {
       apiUrl,
+      apiUrlSource: "env",
       token: options.envToken,
       profile: "default",
       configDir: options.configDir,

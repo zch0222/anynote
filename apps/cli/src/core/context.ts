@@ -11,6 +11,7 @@ import {
 import type { RegisteredCommand } from "./command";
 import type { CliEnv } from "./env";
 import type { CliIo, OutputMode } from "./output";
+import { SettingsStore } from "./settings";
 
 export type CliContext = {
   /** 整个命令注册表；manifest / doctor 这类元命令需要读它，由入口注入避免模块循环 */
@@ -19,6 +20,8 @@ export type CliContext = {
   /** 不带 Bearer 的认证客户端：登录 / 注册 / 刷新 / 登出 */
   authApi: AnonymousAuthClient;
   credentials: CredentialStore;
+  /** 持久化设置（apiUrl 等非敏感项），与凭据分开两个文件 */
+  settings: SettingsStore;
   env: CliEnv;
   io: CliIo;
   now: () => number;
@@ -55,6 +58,8 @@ export type ContextOptions = {
   dryRun: boolean;
   version: string;
   now?: () => number;
+  /** 已有实例时复用（run.ts 在构造 env 之前就要读它拿 apiUrl） */
+  settings?: SettingsStore;
 };
 
 export function createContext(options: ContextOptions): CliContext {
@@ -72,6 +77,7 @@ export function createContext(options: ContextOptions): CliContext {
     api: createApiClients(options.env.apiUrl, createAuthFetch(credentials)),
     authApi,
     credentials,
+    settings: options.settings ?? new SettingsStore(options.env.configDir),
     env: options.env,
     io: options.io,
     now,

@@ -2,12 +2,13 @@ import { Command, CommanderError } from "commander";
 import type { z } from "zod";
 import type { RegisteredCommand } from "./core/command";
 import { createContext } from "./core/context";
-import { readEnv } from "./core/env";
+import { readEnv, resolveConfigDir } from "./core/env";
 import { ExitCode, type ExitCodeValue, UsageError, exitCodeFor } from "./core/exit";
 import type { CliIo, OutputMode } from "./core/output";
 import { writeFailure, writeSuccess } from "./core/output";
 import { registry } from "./core/registry";
-import { describeField, isBooleanField, optionFlag, shapeOf } from "./core/schema-introspect";
+import { describeField, isArrayField, isBooleanField, optionFlag, shapeOf } from "./core/schema-introspect";
+import { SettingsStore } from "./core/settings";
 import { CLI_VERSION } from "./version";
 
 const GLOBAL_OPTIONS: Array<[string, string]> = [
@@ -26,6 +27,11 @@ type Selection = { command: RegisteredCommand; leaf: Command };
 function addGlobalOptions(target: Command): Command {
   for (const [flags, description] of GLOBAL_OPTIONS) target.option(flags, description);
   return target;
+}
+
+/** 可重复数组选项的收集器：`--agent=a --agent=b` → `["a", "b"]`。 */
+function collectValues(value: string, previous: string[] = []): string[] {
+  return [...previous, value];
 }
 
 export function buildProgram(
@@ -69,7 +75,15 @@ export function buildProgram(
     for (const [key, field] of Object.entries(shape)) {
       if (command.positional.includes(key)) continue;
       const flag = optionFlag(key);
-      leaf.option(isBooleanField(field) ? flag : `${flag} <value>`, describeField(field));
+      if (isBooleanField(field)) leaf.option(flag, describeField(field));
+      // 数组字段必须声明成**可重复选项**，否则 `--agent=a --agent=b` 只会留下最后一个
+      // 字符串，撞上 zod 的 array 校验报 "expected array, received string"。
+      // 用收集函数而不是变参 `<value...>`：变参会把紧跟其后的位置参数也吞掉。
+      // 也**不给 commander 默认值**：给了 `[]` 就会盖掉 zod 里的 default，
+      // "没传 --agent" 与 "传了空的" 必须能区分开。
+      else if (isArrayField(field)) {
+        leaf.option(`${flag} <value>`, describeField(field), collectValues);
+      } else leaf.option(`${flag} <value>`, describeField(field));
     }
     addGlobalOptions(leaf);
     leaf.action(() => onSelect({ command, leaf }));
@@ -169,13 +183,18 @@ export async function run(options: RunOptions): Promise<ExitCodeValue> {
   const commandName = selection.command.name;
 
   try {
+    // 设置文件里存着 apiUrl，而解析 env 又需要它，所以顺序是"先定目录 → 读设置 → 读 env"
+    const source = options.env ?? process.env;
+    const configDir = resolveConfigDir(source, options.platform ?? process.platform);
+    const settings = new SettingsStore(configDir);
     const env = readEnv(
       {
-        ...(options.env ?? process.env),
+        ...source,
         ...(globals.profile ? { ANYNOTE_PROFILE: globals.profile } : {}),
         ...(globals.apiUrl ? { ANYNOTE_API_URL: globals.apiUrl } : {}),
       },
       options.platform ?? process.platform,
+      await settings.read(),
     );
     const outputMode: OutputMode = env.forceJson ? "json" : mode;
 
@@ -208,6 +227,7 @@ export async function run(options: RunOptions): Promise<ExitCodeValue> {
       yes: globals.yes,
       dryRun: globals.dryRun,
       version: CLI_VERSION,
+      settings,
       ...(options.now ? { now: options.now } : {}),
     });
 

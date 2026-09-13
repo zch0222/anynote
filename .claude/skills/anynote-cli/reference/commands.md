@@ -175,15 +175,50 @@ anynote base rm 70 --yes
 anynote base update 70 --name "新名字" --yes
 ```
 
+### `anynote config get`
+
+查看持久化设置与环境变量的生效结果（稳定）
+
+打印设置文件内容，以及 apiUrl 的**生效值与其来源**（env / file / default）。凭据不在这个文件里，见 config path 给出的 credentials.json。
+
 ### `anynote config path`
 
-打印配置与凭据文件路径（稳定）
+打印配置、设置与凭据文件路径（稳定）
+
+### `anynote config set`
+
+把网关地址等设置持久化到 settings.json（稳定 · 写操作）
+
+支持 api-url。写进 `<configDir>/settings.json`，之后所有命令都会用它，无需再设环境变量；优先级仍是 `--api-url` / `ANYNOTE_API_URL` 更高。传空串等于恢复默认值。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| `<key>` | api-url | 是 | - | 设置项，当前只有 api-url |
+| `<value>` | string | 是 | - | 设置值；api-url 需要是合法 URL，传空串恢复默认 http://localhost:8080 |
+
+```bash
+anynote config set api-url http://192.168.3.90:8080
+# 恢复默认网关地址
+anynote config set api-url ''
+```
+
+### `anynote config unset`
+
+删除持久化设置项，恢复内置默认值（稳定 · 写操作）
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| `<key>` | api-url | 是 | - | 设置项，当前只有 api-url |
+
+```bash
+anynote config unset api-url
+```
 
 ### `anynote doctor`
 
-自检：网关可达性与本地凭据状态（稳定）
+自检：网关可达性、本地凭据与 skill 安装状态（稳定）
 
-网关不可达时退出码 4；凭据缺失或失效时退出码 3。不会打印 token 本身。
+网关不可达时退出码 4；凭据缺失或失效时退出码 3。不会打印 token 本身。同时报告三家 agent 全局目录里 skill 的安装与版本匹配情况。
 
 ### `anynote manifest`
 
@@ -328,4 +363,53 @@ anynote note rm 2571 --yes
 ```bash
 anynote note set 2571 --file note.md --version 1789148175000 --yes
 anynote note set 2571 --content "# 标题" --force --yes
+```
+
+### `anynote skill install`
+
+把 CLI 自带的 skill 一键安装到各 agent 的全局目录（稳定 · 写操作）
+
+支持 Claude Code（~/.claude/skills，可用 CLAUDE_CONFIG_DIR 覆盖）、Codex（$CODEX_HOME/skills，默认 ~/.codex/skills）、dsh（$DSH_HOME/skills，默认 ~/.dsh/skills）。**复制而非符号链接**；skill 内容随 CLI 一起打包，所以装出来的版本与当前 CLI 一定匹配，CLI 升级后重跑一次即完成升级。可重复执行，内容没变时是幂等的。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| `--agent` | array | 否 | ["all"] | 目标 agent，可重复给；all = 三个都装 |
+| `--force` | boolean | 否 | false | 目标位置已有同名但不是本 CLI 装的 skill 时也覆盖 |
+| `--root` | string | 否 | - | 临时覆盖 Claude Code 的配置根目录 |
+
+```bash
+# 装到 Claude Code / Codex / dsh 三家的全局目录
+anynote skill install
+anynote skill install --agent=claude --agent=dsh
+# 查看各家的安装状态与版本漂移
+anynote skill list
+```
+
+### `anynote skill list`
+
+列出各 agent 全局目录里的 anynote skill 与版本匹配情况（稳定）
+
+只读检查每个 skill 是否已安装、磁盘上记录的版本，以及是否与当前 CLI 打包的版本不一致（drifted=true 表示需要重跑 anynote skill install）。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| `--root` | string | 否 | - | 临时覆盖 Claude Code 的配置根目录 |
+
+```bash
+anynote skill list
+```
+
+### `anynote skill uninstall`
+
+从各 agent 全局目录移除本 CLI 安装的 skill（稳定 · 写操作）
+
+只删带 anynote CLI 版本戳的目录；同名但不是本 CLI 安装的（用户手写）一律保留并如实报告，不会误删用户自己的 skill。
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|------|------|------|------|------|
+| `--agent` | array | 否 | ["all"] | 目标 agent，可重复给；all = 三个都检查 |
+| `--root` | string | 否 | - | 临时覆盖 Claude Code 的配置根目录 |
+
+```bash
+anynote skill uninstall --agent=claude
 ```

@@ -1,6 +1,6 @@
-# Anynote CLI 可执行里程碑（M9.0 - M9.4）
+# Anynote CLI 可执行里程碑（M9.0 - M9.5）
 
-> 文档版本：v2.0 | 创建 2026-09-12 | 最近更新 2026-09-12（M9.0-M9.3 主体完成）
+> 文档版本：v2.1 | 创建 2026-09-12 | 最近更新 2026-09-13（M9.5 skill 分发与配置持久化完成）
 > 关联文档：[CLI_PLAN.md](./CLI_PLAN.md)（技术方案，本文的 §N 引用都指向它） · [README.md](./README.md) · [本期改动审计清单](../changelist/2026-09-12-cli-frontend.md)
 > 编号说明：**M9.x 是 CLI 自己的里程碑序列**，接在 Phase 5 的 M8 之后编号只为避免歧义，CLI 不属于 Phase 5。
 > **CLI 不阻塞 Phase 5 发版**（合并 `main` + 打 tag `v0.6.0`），两条线可并行。
@@ -16,13 +16,15 @@
 | **M9.2** | 命令面 | M9.1 | 🟡 部分完成 | auth + base + note 全套已完成并端到端验证；**doc / ai / notify 本期未做** |
 | **M9.3** | Skills 与漂移门禁 | M9.2 | ✅ 完成 | 3 个 skill + 生成物入库 + CI `cli` job |
 | **M9.4** | MCP 与分发 | M9.3 | ⬜ 未开工 | `anynote mcp` 尚未实现 |
+| **M9.5** | Skill 一键安装与配置持久化 | M9.3 | ✅ 完成 | `anynote skill install/list/uninstall`、skill 打包进 CLI、`config set/unset` |
 
 **本期交付边界**（用户指定"先实现主要流程，至少完成知识库与笔记的增删改查"）：
 
 - ✅ 知识库：create / get / list / update / rm
 - ✅ 笔记：create / list / recent / get / set / mv / rm
 - ✅ 认证：register / login / logout / whoami / status
-- ✅ 元命令：manifest / doctor / config path
+- ✅ 元命令：manifest / doctor / config path / config get / config set / config unset
+- ✅ Skill 分发：skill install / list / uninstall（Claude Code / Codex / dsh）
 - ❌ 文档库与 RAG、AI 对话、通知、文件上传 —— 推到下一期
 - ❌ MCP server —— 推到 M9.4
 
@@ -163,6 +165,60 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
 未开工。`anynote mcp`、MCP 客户端接入文档、可选的 plugin 打包都推到下一期。
 届时可直接复用 `registry` 与 `manifest/json.ts` 的 `toJsonSchema`。
 
+> 注：M9.5 已经把"skill 分发"这一半做完了（`anynote skill install`），剩下的是 MCP server 与 plugin 打包。
+
+---
+
+## M9.5 Skill 一键安装与配置持久化 ✅
+
+2026-09-13 用户要求：CLI 增加一键安装 skill 的命令，支持 dsh / Claude Code / Codex，装到**全局**目录，
+**复制**模式，skill **打包进 CLI** 以保证版本匹配；同时要求 CLI 的远程地址与登录状态都持久化。
+
+契约登记：[`.claude/openspec/changes/2026-09-13-cli-skill-install.md`](../../.claude/openspec/changes/2026-09-13-cli-skill-install.md)。
+
+### 完成项
+
+- [x] `src/skills/agents.ts`：三个 agent 的全局 skill 根目录解析与覆盖变量
+- [x] `src/skills/stamp.ts`：版本戳的写入 / 读取（幂等替换）、frontmatter `name` 解析
+- [x] `src/skills/install.ts`：复制安装、幂等与升级、路径穿越防护、用户同名 skill 保护、卸载
+- [x] `src/commands/skill.ts`：`skill install` / `skill list` / `skill uninstall`
+- [x] `scripts/build-bundled.mjs` + `src/bundled.ts`：构建期把 `.claude/skills/anynote-{cli,notes}` 烘焙进产物
+- [x] `src/core/settings.ts`：`<configDir>/settings.json` 的设置存储（原子写、损坏即忽略）
+- [x] `config set` / `config unset` / `config get`；`doctor` 汇报 apiUrl 来源与三家 skill 安装情况
+- [x] `run.ts`：先定目录 → 读设置 → 读环境变量的启动顺序；`--api-url` 保持最高优先级
+- [x] `run.ts`：数组字段声明成**可重复选项**（`--agent=a --agent=b`）
+
+### 与方案的偏差
+
+| # | 方案原文 | 实际做法 | 原因 |
+|---|---------|---------|------|
+| 1 | `CLI_PLAN.md` §11 把分发留给"M9.4 可选 plugin 打包" | 先做 `skill install`，直接复制进各 agent 的全局目录 | plugin 清单格式随 agent 版本变动，而"复制 skill 目录"是三家的公共子集，不依赖任何 plugin API |
+| 2 | （未涉及） | `--root` 只重定向 Claude Code | 只有它的配置根目录能被单个环境变量（`CLAUDE_CONFIG_DIR`）整体搬家；Codex / dsh 由 `CODEX_HOME` / `DSH_HOME` 决定，语义更清楚 |
+| 3 | （未涉及） | 版本号只在 `package.json` 写一次，`src/version.ts` 改为再导出 | 版本号出现在 manifest、`--cli-version`、skill 版本戳三处，多一份副本就多一处漂移点；构建脚本会拒绝第二份字面量 |
+
+### 实现期发现并修复的缺陷（均已补回归用例）
+
+| 缺陷 | 现象 | 用例 |
+|------|------|------|
+| 数组字段被当成普通取值选项 | `--agent=claude --agent=dsh` 只留下最后一个字符串，zod 报 `expected array, received string` | `run.test.ts`「可重复选项（数组字段）」四条、`schema-introspect.test.ts` |
+| 收集函数给了 commander 默认值 `[]` | `[]` 盖掉 zod 的 `default(["all"])`，不传 `--agent` 时所有 agent 都不装 | `run.test.ts`「不给 --agent 时走 zod 默认值」 |
+| 变参 `<value...>` 会吞掉后续参数 | `--agent claude --force` 把 `--force` 当成了第二个 agent 值 | `run.test.ts`「数组选项不会吞掉紧随其后的布尔开关」 |
+
+### 顺带修复的既有缺陷（与本期无关，但被新增用例的负载暴露）
+
+| 缺陷 | 现象 | 修复 |
+|------|------|------|
+| `store.test.ts` 的"等锁超时"用例混用真实时间与假时钟 | 机器一忙（CI / 并行跑其它包）就在持锁者写入新凭据**之前**超时，随机返回 null；实测并行负载下 4 次跑挂 3 次 | 等锁循环的 `now()` 换成每次前进 10ms 的假时钟，并给 `lockOptions` 也注入同一个 `now`，推进过程完全确定 |
+
+### 验收（2026-09-13）
+
+- `pnpm --filter @anynote/cli test` —— **216 条全绿**（M9.3 时为 137 条）
+- `pnpm test` —— 5 任务全绿，共 1210 条（web 876 · CLI 216 · collab 75 · api-core 23 · openapi-tools 20）
+- `pnpm typecheck` —— 5 任务通过；`biome check` 干净（`src/bundled.ts` 作为生成物加入 ignore）
+- `pnpm --filter @anynote/cli test:e2e` —— **43 条全绿**（真实 docker 全栈，M9.3 时为 32 条），
+  新增 skill 安装闭环与配置持久化共 11 条
+- 手工烟测：真实 `node dist/anynote.mjs skill install` 装进隔离目录，SKILL.md 带 `anynote-cli-version: 0.1.0`
+
 ---
 
 ## 1. 回滚与风险控制
@@ -185,6 +241,9 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
 | 2026-09-12 | M9.2 | 知识库与笔记增删改查完成；doc / ai / notify 未做 |
 | 2026-09-12 | M9.3 | 3 个 skill + 生成物入库 + CI `cli` job |
 | 2026-09-12 | 全量验证 | `pnpm test` 5 任务全绿，共 850 条（web 595 · CLI 137 · collab 75 · api-core 23 · openapi-tools 20）；`pnpm typecheck` 5 任务通过；`biome check` 344 文件干净；CLI e2e 32 用例全绿 |
+| 2026-09-13 | M9.5 | skill 一键安装（三家 agent、复制模式、打包进 CLI）与配置持久化完成；3 个实现期缺陷 + 1 个既有 flaky 用例修复；CLI 单测 216、e2e 43 条全绿 |
 
-**尚未做的收尾**：改动仍在工作区，未提交、未开分支。提交前请按 README 的 Git 工作流拆分 commit
-（后端 / api-core / CLI / 文档与 skills 分开）。
+**M9.0-M9.3 的收尾**：改动由 `docs/changelist/2026-09-12-cli-frontend.md` 记录，已按 README 的 Git 工作流
+拆分成 后端 / api-core / CLI / 文档与 skills 四个 commit 合入。
+
+**M9.5 的收尾**：见 `docs/changelist/2026-09-13-cli-skill-install.md`，单个 `feat(cli)` commit 合入 `dev`。

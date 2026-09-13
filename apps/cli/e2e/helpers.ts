@@ -50,20 +50,25 @@ export function randomAccount() {
 /**
  * 跑一次真实 CLI 进程。stdout 非 TTY，因此命令默认走 JSON 信封，
  * 这正是 agent 看到的形态。
+ *
+ * `extraEnv` 用于把 agent 的全局 skill 根目录也隔离到临时目录：
+ * skill 安装类用例**绝不能**写到开发者真实的 `~/.claude` / `~/.codex` / `~/.dsh`。
  */
 export async function runCli(
   home: string,
   args: string[],
-  options: { stdin?: string } = {},
+  options: { stdin?: string; extraEnv?: Record<string, string>; withoutApiUrl?: boolean } = {},
 ): Promise<CliRun> {
   const child = execFileAsync(process.execPath, [CLI_ENTRY, ...args], {
     env: {
       ...process.env,
       ANYNOTE_CONFIG_DIR: home,
-      ANYNOTE_API_URL: GATEWAY,
+      // withoutApiUrl：验证"地址只配过一次就再也不用管"，此时不能有环境变量压着设置文件
+      ...(options.withoutApiUrl ? { ANYNOTE_API_URL: "" } : { ANYNOTE_API_URL: GATEWAY }),
       // 避免宿主机上真实的 token 泄漏进测试
       ANYNOTE_TOKEN: "",
       ANYNOTE_PROFILE: "default",
+      ...options.extraEnv,
     },
     maxBuffer: 16 * 1024 * 1024,
   });
