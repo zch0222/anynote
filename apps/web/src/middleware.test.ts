@@ -47,6 +47,8 @@ describe("中间件 matcher", () => {
     "/api/auth/refresh",
     "/api/auth/logout",
     "/api/auth/me",
+    "/api/auth/cli-token",
+    "/api/auth/cli-exchange",
     "/api/proxy/note/notes",
     "/_next/static/chunks/app.js",
     "/_next/image?url=/avatar.png",
@@ -54,6 +56,31 @@ describe("中间件 matcher", () => {
     "/file.svg",
   ])("排除公开页面、API 或静态资源 %s", (url) => {
     expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url })).toBe(false);
+  });
+});
+
+describe("CLI 授权页不受登录中间件保护", () => {
+  // 未登录用户必须能落到授权页，由页面自己带着完整参数跳登录页——
+  // 走中间件的话重定向不带 next，登录后就回不到授权流程了。
+  it.each(["/cli", "/cli/authorize", "/cli/authorize?port=51234&state=s&challenge=c"])(
+    "matcher 不覆盖 %s",
+    (url) => {
+      expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url })).toBe(false);
+    },
+  );
+
+  it("直接调用 middleware 时未登录仍会跳登录页——保护完全靠 matcher 排除", () => {
+    // 说明为什么上面那组 matcher 断言是**必要条件**：middleware 函数体本身并不知道
+    // 自己被哪条 matcher 覆盖，未登录时它一律跳 /login（且不带 next）。
+    // Next 只在 matcher 命中时调用它，所以排除 /cli 才是保护授权页的正确手段。
+    const response = middleware(
+      new NextRequest("https://notes.example.com/cli/authorize?port=1&state=s&challenge=c"),
+    );
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://notes.example.com/login");
+    // 关键差异：中间件跳转**不携带 next**，登录后就回不到授权页——
+    // 因此授权页必须由页面自己带着完整参数跳登录（见 cli/authorize/page.tsx）。
+    expect(response.headers.get("location")).not.toContain("next=");
   });
 });
 

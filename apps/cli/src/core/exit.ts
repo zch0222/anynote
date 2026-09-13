@@ -42,6 +42,19 @@ export class NetworkError extends Error {
 /** 资源不存在的后端业务码。 */
 const NOT_FOUND_CODES = new Set(["A0404"]);
 
+/**
+ * 登录流程本身失败：等待授权超时、用户取消、state 不匹配、回环端口被占用。
+ *
+ * 语义上归到 `AUTH`（退出码 3）而不是通用业务失败：这三种情况对 agent 的结论是同一个
+ * ——**当前没有拿到可用凭据，应该让用户重跑 `anynote auth login`**。
+ */
+export class AuthFlowError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthFlowError";
+  }
+}
+
 const CODE_EXIT: Record<string, ExitCodeValue> = {
   [RES_CODE.UNAUTHORIZED]: ExitCode.AUTH,
   [RES_CODE.MISSING_TOKEN]: ExitCode.AUTH,
@@ -68,6 +81,7 @@ export function isNetworkFailure(error: unknown): boolean {
 
 export function exitCodeFor(error: unknown): ExitCodeValue {
   if (error instanceof UsageError) return ExitCode.USAGE;
+  if (error instanceof AuthFlowError) return ExitCode.AUTH;
   if (error instanceof ApiError) {
     if (NOT_FOUND_CODES.has(error.code)) return ExitCode.NOT_FOUND;
     const mapped = CODE_EXIT[error.code];

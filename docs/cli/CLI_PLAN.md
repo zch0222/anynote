@@ -680,10 +680,37 @@ export async function startMcpServer(ctx: CliContext) {
 
 | 命令 | 端点 | 说明 |
 |------|------|------|
-| `auth login` | `POST /api/auth/login` | `--username` + `--password-stdin`（推荐）/ `--password`；TTY 下可交互 |
+| `auth login` | `GET /cli/authorize` + `POST /api/auth/cli/token` | **默认打开浏览器授权**（M9.6，见 §8.1.1）；无浏览器环境用 `--username` + `--password-stdin` / `--password`，或 `--password-only` 显式要求口令路径 |
 | `auth logout` | `POST /api/auth/logout` | 送 `{accessToken?, refreshToken?}`，至少一个；本地清 profile |
 | `auth whoami` | `GET /api/system/user/mine` | 校验凭据是否真的可用 |
 | `auth status` | — | 纯本地：当前 profile、apiUrl、token 是否存在与获取时间 |
+
+#### 8.1.1 浏览器授权登录（M9.6）
+
+CLI 是本地进程、没有 Cookie jar，也不该把 Token 送进浏览器地址栏，因此采用
+**回环重定向 + 一次性授权码 + PKCE** 的公开客户端模式（RFC 8252 风格）：
+
+```
+CLI                                              浏览器 / BFF                        后端 auth
+ │ 起回环 HTTP 服务 127.0.0.1:<内核分配端口>
+ │ 生成 state + PKCE verifier/S256 challenge
+ │ 打开 <web>/cli/authorize?port&state&challenge
+ │                                                 │ 未登录 → 307 /login?next=<完整授权地址>
+ │                                                 │ 已登录 → 展示当前账号 + 「授权」按钮
+ │                                                 │ 点授权 → POST /api/auth/cli-token
+ │                                                 │   ├─ 同源校验 / 会话 Cookie 校验
+ │                                                 │   └─ POST /api/auth/cli/token（Bearer）──►│ 另发一对令牌
+ │                                                 │◄──────── Token（存服务端内存）───────────│
+ │                                                 │ 返回 {code, state, redirectTo}（无 Token）
+ │ 回环收到 state + code（校验 state、一次性、60s）
+ │ POST /api/auth/cli-exchange {code, codeVerifier}
+ │◄──────── accessToken / refreshToken ────────────│
+ │ 落盘 credentials.json → 关回环服务
+```
+
+硬约束：回环只绑 `127.0.0.1`；回调必须通过 state 校验；授权码一次性且 60 秒过期；
+兑换需要只在 CLI 进程内的 PKCE verifier；**授权必须由用户点一次按钮**（不做静默跳转）。
+完整安全边界见 [`.claude/openspec/changes/2026-09-13-cli-browser-login.md`](../../.claude/openspec/changes/2026-09-13-cli-browser-login.md)。
 
 ### 8.2 知识库 `anynote base`
 

@@ -2,6 +2,7 @@ package com.anynote.auth.service;
 
 import com.anynote.auth.model.dto.RegisterDTO;
 import com.anynote.auth.model.dto.ResetPasswordDTO;
+import com.anynote.auth.model.vo.CliTokenVO;
 import com.anynote.system.api.model.bo.LoginUser;
 import com.anynote.system.api.model.bo.Token;
 
@@ -36,4 +37,15 @@ public interface LoginService {
      * @param refreshToken 当前会话 refreshToken（可选，可单独提供）
      */
     void logout(String accessToken, String refreshToken);
+
+    /**
+     * 为 CLI 授权登录**另发**一对令牌。
+     *
+     * <p>与 {@link #login} 的区别是它不校验口令：调用方身份已由网关用 Bearer
+     * accessToken 验证过（浏览器会话用户点了「授权」）。新令牌与浏览器会话那一对
+     * 在 Redis 里各占一个 key，因此 CLI 登出不会把网页踢下线，反之亦然。
+     *
+     * @return 携带新令牌与被授权用户名的响应体
+     */
+    CliTokenVO issueCliToken();
 }

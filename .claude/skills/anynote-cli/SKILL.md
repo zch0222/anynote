@@ -52,8 +52,14 @@ anynote skill uninstall --yes      # 只删本 CLI 装的，用户手写的同�
 （`src/bundled.ts` 的输入），不能被安装副本覆盖。这是预期行为，不要加 `--force` 去硬闯；
 本仓库请改用全局安装，或只装另外两家（`--agent=dsh --agent=codex`）。
 
-**认证**：先跑 `anynote auth status`。未登录时**让用户自己执行** `anynote auth login --username <名> --password-stdin`，
-不要代替用户输入口令。CI / 沙箱可用 `ANYNOTE_TOKEN` 环境变量提供 token（不落盘、不自动刷新）。
+**认证**：先跑 `anynote auth status`。未登录时分两种情况：
+
+- **无头环境（你所在的环境，CI / 沙箱 / ssh）**：让用户自己执行
+  `anynote auth login --username <名> --password-stdin`，不要代替用户输入口令；
+  或直接用 `ANYNOTE_TOKEN` 环境变量提供 token（不落盘、不自动刷新）。
+- **用户坐在有浏览器的机器前**：`anynote auth login`（不带参数）会打开浏览器授权页，
+  让用户点一下「授权」即可，全程不接触口令。这一条**必须由用户本人操作**——
+  它需要人工点击，你等不到结果。
 
 ## 输出契约
 
@@ -73,7 +79,7 @@ stdout 不是 TTY 时自动输出 JSON 信封，agent 无需加 `--json`：
 | 0 | 成功 | 继续 |
 | 1 | 业务失败 | 读 `error.message`，通常不可自动重试 |
 | 2 | 参数/用法错误（含写操作缺 `--yes`） | 改命令行重试 |
-| 3 | 未认证或无权限 | 见下方「易错点 1」，不要贸然要求重新登录 |
+| 3 | 未认证或无权限（含 `auth login` 授权超时/取消） | 见下方「易错点 1」，不要贸然要求重新登录；若是登录流程本身失败，让用户重跑 `anynote auth login` |
 | 4 | 网关不可达 | 让用户起后端，或检查 `ANYNOTE_API_URL` / `anynote config set api-url` |
 | 5 | 版本冲突 | **重读 → 合并 → 带新 version 重试**，禁止盲目覆盖 |
 | 6 | 资源不存在 | 确认 ID |
@@ -91,6 +97,7 @@ stdout 不是 TTY 时自动输出 JSON 信封，agent 无需加 `--json`：
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `ANYNOTE_API_URL` | `http://localhost:8080` | Gateway 地址，优先级高于设置文件 |
+| `ANYNOTE_WEB_URL` | `http://localhost:3000` | 浏览器授权登录打开的 Web 前端地址 |
 | `ANYNOTE_TOKEN` | — | 直接提供 accessToken，**不落盘、不刷新**，过期即退出码 3 |
 | `ANYNOTE_PROFILE` | `default` | 凭据 profile，等价于 `--profile` |
 | `ANYNOTE_CONFIG_DIR` | `%APPDATA%\anynote` / `~/.anynote` | 凭据、设置与锁文件目录 |

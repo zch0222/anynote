@@ -1,6 +1,6 @@
-# Anynote CLI 可执行里程碑（M9.0 - M9.5）
+# Anynote CLI 可执行里程碑（M9.0 - M9.6）
 
-> 文档版本：v2.1 | 创建 2026-09-12 | 最近更新 2026-09-13（M9.5 skill 分发与配置持久化完成）
+> 文档版本：v2.2 | 创建 2026-09-12 | 最近更新 2026-09-13（M9.6 浏览器授权登录完成）
 > 关联文档：[CLI_PLAN.md](./CLI_PLAN.md)（技术方案，本文的 §N 引用都指向它） · [README.md](./README.md) · [本期改动审计清单](../changelist/2026-09-12-cli-frontend.md)
 > 编号说明：**M9.x 是 CLI 自己的里程碑序列**，接在 Phase 5 的 M8 之后编号只为避免歧义，CLI 不属于 Phase 5。
 > **CLI 不阻塞 Phase 5 发版**（合并 `main` + 打 tag `v0.6.0`），两条线可并行。
@@ -17,6 +17,7 @@
 | **M9.3** | Skills 与漂移门禁 | M9.2 | ✅ 完成 | 3 个 skill + 生成物入库 + CI `cli` job |
 | **M9.4** | MCP 与分发 | M9.3 | ⬜ 未开工 | `anynote mcp` 尚未实现 |
 | **M9.5** | Skill 一键安装与配置持久化 | M9.3 | ✅ 完成 | `anynote skill install/list/uninstall`、skill 打包进 CLI、`config set/unset` |
+| **M9.6** | 浏览器授权登录 | M9.1 | ✅ 完成 | `apps/web` 新增 `/cli/authorize` 授权页 + 后端 `POST /api/auth/cli/token` 独立签发 + 回环回调与 PKCE |
 
 **本期交付边界**（用户指定"先实现主要流程，至少完成知识库与笔记的增删改查"）：
 
@@ -314,3 +315,53 @@ skill 里也写死了同一个路径。本期改为真正的全局安装：
 拆分成 后端 / api-core / CLI / 文档与 skills 四个 commit 合入。
 
 **M9.5 的收尾**：见 `docs/changelist/2026-09-13-cli-skill-install.md`，单个 `feat(cli)` commit 合入 `dev`。
+
+---
+
+## M9.6 浏览器授权登录 ✅
+
+2026-09-13 用户要求：在 `apps/web` 新增一个**专门给 CLI 用的登录页**，`auth login` 跳转到该页面，
+**已登录就直接颁发 token，未登录就先要求登录**。
+
+契约登记：[`.claude/openspec/changes/2026-09-13-cli-browser-login.md`](../../.claude/openspec/changes/2026-09-13-cli-browser-login.md)。
+逐文件审计清单：[`docs/changelist/2026-09-13-cli-browser-login.md`](../changelist/2026-09-13-cli-browser-login.md)。
+
+### 三项已确认决策（2026-09-13 用户拍板）
+
+| # | 决策 | 影响 |
+|---|------|------|
+| 1 | 新增后端 `POST /api/auth/cli/token`，为当前会话用户签发**独立**令牌对 | CLI 与浏览器各自登出互不影响；需改 Java + 重跑 OpenAPI baseline + 重建 auth 镜像 |
+| 2 | 已登录时**需点一次「授权」**并展示当前账号 | 阻止本机恶意进程借用户浏览器**静默**骗取凭据 |
+| 3 | `auth login` **默认走浏览器**，保留 `--password-stdin` | 与需求原话一致；agent 无浏览器场景不受影响 |
+
+### 完成项
+
+- [x] 后端 `LoginServiceImpl.issueCliToken()` + `TokenController` 的 `POST /cli/token`；
+      **显式 new 一个 LoginUser 再签发**，避免 `TokenUtil.createToken` 把 token 回写到请求上下文对象
+- [x] `apps/web` 授权页 `app/(auth)/cli/authorize/page.tsx`（RSC）+ 客户端组件 `CliAuthorize`
+- [x] BFF `POST /api/auth/cli-token`（同源 + 会话 Cookie → 换一次性授权码）与
+      `POST /api/auth/cli-exchange`（code + PKCE verifier → 换令牌）
+- [x] `middleware.ts` matcher 排除 `/cli`，授权页自己带完整参数跳 `/login?next=...`
+- [x] `lib/auth/redirect.ts`：`?next=` 只接受站内路径（防开放重定向）
+- [x] CLI `auth/browser.ts` / `pkce.ts` / `loopback.ts` / `browser-login.ts`：回环回调 + S256 PKCE
+- [x] CLI `ANYNOTE_WEB_URL` 环境变量；`auth login` 参数重构为 `--password-only` / `--timeout`
+- [x] 生成物同步：`openapi/specs/auth.json`、`docs/cli/COMMANDS.md`、
+      `.claude/skills/anynote-cli/reference/commands.md`、`apps/cli/src/bundled.ts`
+
+### 与方案的偏差
+
+| 项 | 方案原文 | 实际实现 | 原因 |
+|----|---------|---------|------|
+| 兑换端点归属 | 未明确 | 兑换走 BFF `/api/auth/cli-exchange`，非后端 | 授权码本来就存在 BFF 进程内存里，只有它能兑换；后端 `/cli/token` 已在用户点授权时被 BFF 调用过 |
+| 浏览器拿到的东西 | "颁发一个 token" | 一次性授权码（60s，一次性），Token 由 CLI 用 code+PKCE 直接换 | Token 一旦进地址栏就会留在历史记录 / Referer / 中间层日志 |
+| `--no-browser` | 计划用否定式选项 | 改为 `--password-only` | `run.ts` 的通用选项构造器生成 `--<kebab>`，commander 会把 `--no-x` 当取反选项，字段名对不上 |
+
+### 验证
+
+| 命令 | 结果 |
+|------|------|
+| `mvn -B test -pl auth -am` | 50 通过（含新增 `LoginServiceImplCliTokenTest` 5 条） |
+| `pnpm --filter web test` | 982 通过 / 100 文件 |
+| `pnpm --filter @anynote/cli test` | 268 通过 / 19 文件 |
+| `pnpm --filter web test:e2e -- cli-authorize.spec.ts` | 见 changelist「验证结果」节 |
+| `pnpm openapi:generate` | 仅 `openapi/specs/auth.json` 变化，其余 5 份逐字节一致 |

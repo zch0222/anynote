@@ -1,5 +1,6 @@
 import { unwrapEnvelope } from "@anynote/api-core";
 import { z } from "zod";
+import { browserLogin } from "../auth/browser-login";
 import { defineCommand, result } from "../core/command";
 import type { CliContext } from "../core/context";
 import { UsageError } from "../core/exit";
@@ -53,30 +54,57 @@ export const authLogin = defineCommand({
   name: "auth login",
   summary: "登录并把凭据写入本地 profile",
   description:
-    "用用户名口令换取 accessToken / refreshToken 并落盘到 profile。口令优先用 --password-stdin 从标准输入读取。" +
-    "不想落盘时改用环境变量 ANYNOTE_TOKEN。",
-  endpoint: "POST /api/auth/login",
+    "默认打开浏览器授权页：已登录的浏览器直接点「授权」即可，无需在终端输口令（口令路径永远接触不到用户口令）。" +
+    "无浏览器环境（CI / ssh / agent）用 --password-stdin 从标准输入读口令，" +
+    "或用 ANYNOTE_TOKEN 直接提供令牌（不落盘）。",
+  endpoint: "POST /api/auth/login | GET /cli/authorize",
   mutating: true,
   confirm: false,
   args: z.object({
-    username: z.string().min(1).describe("用户名"),
+    username: z.string().min(1).optional().describe("用户名（仅口令登录需要）"),
     password: z.string().min(1).optional().describe("口令（不推荐，会进 shell history）"),
     passwordStdin: z.boolean().default(false).describe("从标准输入读取口令"),
+    // 刻意用正向命名：run.ts 的通用选项构造器生成的是 `--<kebab>`，
+    // `--no-browser` 这种否定式前缀会被 commander 当成取反选项，字段名对不上。
+    passwordOnly: z
+      .boolean()
+      .default(false)
+      .describe("跳过浏览器授权，强制用口令登录（等价于给出 --username）"),
+    timeout: z.coerce.number().int().min(10).max(1800).default(300).describe("浏览器授权等待秒数"),
   }),
-  examples: [{ cmd: "anynote auth login --username alice --password-stdin < pw.txt" }],
+  examples: [
+    { cmd: "anynote auth login", note: "推荐：打开浏览器点一下授权即可" },
+    { cmd: "anynote auth login --username alice --password-stdin < pw.txt", note: "无浏览器环境" },
+  ],
   run: async (ctx, args) => {
+    // 给了口令相关参数（或显式要求口令登录）就走口令路径，否则走浏览器授权。
+    const wantsPassword =
+      args.passwordOnly ||
+      args.passwordStdin ||
+      args.password !== undefined ||
+      args.username !== undefined;
+
+    if (!wantsPassword) {
+      return browserLoginCommand(ctx, args.timeout);
+    }
+
+    if (args.username === undefined) {
+      throw new UsageError(
+        "口令登录需要 --username；只想用浏览器授权就直接执行 anynote auth login",
+      );
+    }
+
     const password = await resolvePassword(ctx, args);
     const { response } = await ctx.authApi.POST("/login", {
       body: { username: args.username, password },
       parseAs: "stream",
     });
     const login = await unwrapEnvelope(response, loginSchema.parse);
-    await ctx.credentials.saveProfile({
-      apiUrl: ctx.env.apiUrl,
+    await saveLogin(ctx, {
       accessToken: login.token.accessToken,
       refreshToken: login.token.refreshToken,
       username: login.username ?? args.username,
-      obtainedAt: ctx.now(),
+      nickname: login.nickname ?? null,
     });
     return result(
       {
@@ -85,11 +113,84 @@ export const authLogin = defineCommand({
         nickname: login.nickname ?? null,
         apiUrl: ctx.env.apiUrl,
         credentialsPath: ctx.credentials.filePath,
+        method: "password",
       },
       { render: (data) => `已登录 ${data.username}，凭据写入 ${data.credentialsPath}` },
     );
   },
 });
+
+/** 浏览器授权登录：交给 `auth/browser-login.ts` 跑协议，这里只做落盘与渲染。 */
+async function browserLoginCommand(ctx: CliContext, timeoutSeconds: number) {
+  const credentialsPath = ctx.credentials.filePath;
+  const login = await browserLogin({
+    webUrl: ctx.env.webUrl,
+    // 兑换接口与授权页同源，避免 Cookie 作用域与 CORS 问题。
+    webOrigin: new URL(ctx.env.webUrl).origin,
+    timeoutMs: timeoutSeconds * 1_000,
+    openBrowser: ctx.openBrowser,
+    fetchImpl: ctx.webFetch,
+    onNotice: (message) => ctx.io.err(message),
+  });
+
+  // 先落盘再校验身份：`createAuthFetch` 一律用**凭据存储里**的 accessToken 覆盖
+  // Authorization 头（它的职责就是注入 Bearer），所以想用新令牌打后端就必须先存。
+  await saveLogin(ctx, {
+    accessToken: login.accessToken,
+    refreshToken: login.refreshToken,
+    // BFF 的回显只能当临时值；下面 whoami 成功会用后端返回的真实用户名覆盖。
+    username: login.username ?? "unknown",
+    nickname: null,
+  });
+
+  const username = (await resolveUsername(ctx)) ?? login.username ?? "unknown";
+  if (username !== (login.username ?? "unknown")) {
+    const profile = await ctx.credentials.readProfile();
+    if (profile) await ctx.credentials.saveProfile({ ...profile, username });
+  }
+
+  return result(
+    {
+      profile: ctx.credentials.profileName,
+      username,
+      nickname: null,
+      apiUrl: ctx.env.apiUrl,
+      credentialsPath,
+      method: "browser",
+    },
+    { render: (data) => `已通过浏览器授权登录 ${data.username}，凭据写入 ${data.credentialsPath}` },
+  );
+}
+
+/**
+ * 用刚落盘的凭据问一次后端"我是谁"。
+ *
+ * 授权响应里的 username 只是 BFF 的善意回显，不能当身份依据；`/user/mine` 既确认
+ * 令牌真的可用，也拿到权威的用户名。拿不到就返回 null 让调用方保留回显值——
+ * 不该因为一次探测失败就让已经到手的登录作废。
+ */
+async function resolveUsername(ctx: CliContext): Promise<string | null> {
+  try {
+    const { response } = await ctx.api.system.GET("/user/mine", { parseAs: "stream" });
+    const user = await unwrapEnvelope(response, userSchema.parse);
+    return user.username ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveLogin(
+  ctx: CliContext,
+  input: { accessToken: string; refreshToken: string; username: string; nickname: string | null },
+) {
+  await ctx.credentials.saveProfile({
+    apiUrl: ctx.env.apiUrl,
+    accessToken: input.accessToken,
+    refreshToken: input.refreshToken,
+    username: input.username,
+    obtainedAt: ctx.now(),
+  });
+}
 
 export const authRegister = defineCommand({
   name: "auth register",

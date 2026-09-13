@@ -111,8 +111,13 @@ Claude Code / Codex 若没立刻出现，新开一个会话即可。
 - CLI 还需要网关地址与登录态才能读写数据，两者都会持久化（配一次即可）：
   ```bash
   anynote config set api-url http://localhost:8080     # 写入 <configDir>/settings.json
+  anynote auth login                                   # 打开浏览器点一下「授权」（推荐）
+  # 无浏览器环境（CI / ssh / 容器）改用口令：
   anynote auth login --username <你的用户名> --password-stdin
   ```
+  浏览器授权把 Web 前端的 `/cli/authorize` 页面当作登录入口：未登录先引导登录，已登录则展示当前账号
+  并要求点一次「授权」，随后为 CLI **另发**一对独立令牌（与网页会话各自登出互不影响）。
+  Web 前端地址默认 `http://localhost:3000`，部署在别处时用 `ANYNOTE_WEB_URL` 覆盖。
   细节见 [`apps/cli/README.md`](apps/cli/README.md) 与 [`docs/cli/`](docs/cli/)。
 
 ---

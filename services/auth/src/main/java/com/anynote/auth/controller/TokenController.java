@@ -6,6 +6,7 @@ import com.anynote.auth.model.dto.LogoutDTO;
 import com.anynote.auth.model.dto.RefreshTokenDTO;
 import com.anynote.auth.model.dto.RegisterDTO;
 import com.anynote.auth.model.dto.ResetPasswordDTO;
+import com.anynote.auth.model.vo.CliTokenVO;
 import com.anynote.auth.service.LoginService;
 import com.anynote.auth.service.impl.LoginServiceImpl;
 import com.anynote.common.security.utils.SecurityUtils;
@@ -75,6 +76,15 @@ public class TokenController {
     public ResData<Void> logout(@RequestBody @Valid LogoutDTO logoutDTO) {
         loginService.logout(logoutDTO.getAccessToken(), logoutDTO.getRefreshToken());
         return ResData.success(null);
+    }
+
+    @Operation(summary = "为 CLI 签发独立令牌",
+            description = "浏览器授权页调用：身份取自本次请求的 Bearer accessToken（网关已校验），"
+                    + "为 CLI **另发**一对 accessToken / refreshToken。新令牌与浏览器会话那一对在 Redis 里"
+                    + "各占一个 key，因此 CLI 登出不会影响网页会话，反之亦然。")
+    @PostMapping("cli/token")
+    public ResData<CliTokenVO> cliToken() {
+        return ResData.success(loginService.issueCliToken());
     }
 
 //    public static void main(String[] args) {
