@@ -12,14 +12,25 @@
 | 项 | 值 |
 |---|---|
 | 修改文件数 | 26 |
-| 新增文件数 | 28（不含本文件） |
+| 新增文件数 | 29（含本文件） |
 | 删除文件数 | 0 |
-| 增删行数（已跟踪文件） | 593 insertions / 33 deletions（`git diff --stat`，不含新增文件） |
-| 新增文件行数 | 3 254 行（`git ls-files --others` + `wc -l`，不含本文件） |
+| 增删行数（仅已跟踪文件） | 593 insertions / 33 deletions（`git diff --stat`，不含新增文件） |
+| 本批 4 个 commit 合计 | 55 files changed, 4056 insertions(+), 33 deletions(-)（`git diff --shortstat 1ebe872..HEAD`） |
+| 新增文件行数 | 3 463 行（`git diff --name-only --diff-filter=A \| xargs wc -l`） |
 | 代码改动 | Java（auth 服务）+ Next BFF/页面 + TypeScript CLI，三端均有单测 |
 
 对应契约提案：[`.claude/openspec/changes/2026-09-13-cli-browser-login.md`](../../.claude/openspec/changes/2026-09-13-cli-browser-login.md)。
 里程碑记录：[`docs/cli/CLI_MILESTONES.md`](../cli/CLI_MILESTONES.md) 的 M9.6。
+
+本批改动在 `feat/cli-browser-login` 分支上拆成 4 个原子 commit（按"一次只动一个
+service / package、跨语言不混"的规约）：
+
+| commit | 内容 |
+|--------|------|
+| `50b1f87` | `feat(auth)`：后端端点 + OpenSpec 提案 + OpenAPI baseline |
+| `19b07cc` | `feat(web)`：授权页、BFF 两路由、middleware、`?next=` 收敛 + 单测 |
+| `7aea897` | `feat(cli)`：回环/PKCE/浏览器流程 + `auth login` 改造 + 生成物 + 单测 |
+| `6feadc7` | `docs`：里程碑、方案、skills、README 与本 changelist |
 
 > ⚠️ 本文件**不包含** `infra/docker-compose.yaml` 的改动与
 > `docs/changelist/2026-09-13-{nginx-tls,web-lan-origin}.md`——那三项在本批工作开始前
