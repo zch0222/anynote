@@ -22,6 +22,13 @@ anynote doctor     # 自检：网关可达性 + 本地凭据 + skill 安装情�
 ```
 
 `doctor` 的 `gateway` 不是 `UP` 时，先让用户把后端起起来，不要继续往下猜。
+但**要看它具体报什么**——`doctor` 会区分两种失败：
+
+- `unreachable: ...` / `HTTP 404`：网关没起或地址不通；
+- `HTTP 307 → /login（被重定向，这个地址不是网关）`：`api-url` 指到了 **Web 前端**，
+  不是网关（详见「易错点 6」）。
+
+`doctor` 还会分别打印 `apiUrl` 与 `webUrl` 的生效值和来源，配混时一眼可辨。
 
 **若提示 `anynote: command not found`**：说明 CLI 还没装到全局。让用户自己在 Anynote 仓库里执行
 `pnpm --filter @anynote/cli build && pnpm --filter @anynote/cli pack:global`，再
@@ -80,7 +87,7 @@ stdout 不是 TTY 时自动输出 JSON 信封，agent 无需加 `--json`：
 | 1 | 业务失败 | 读 `error.message`，通常不可自动重试 |
 | 2 | 参数/用法错误（含写操作缺 `--yes`） | 改命令行重试 |
 | 3 | 未认证或无权限（含 `auth login` 授权超时/取消） | 见下方「易错点 1」，不要贸然要求重新登录；若是登录流程本身失败，让用户重跑 `anynote auth login` |
-| 4 | 网关不可达 | 让用户起后端，或检查 `ANYNOTE_API_URL` / `anynote config set api-url` |
+| 4 | 网关不可达 | 让用户起后端，或检查 `ANYNOTE_API_URL` / `anynote config set api-url`；若 `doctor` 报"被重定向/不是网关"，说明 `api-url` 指到了 Web 前端，见易错点 6 |
 | 5 | 版本冲突 | **重读 → 合并 → 带新 version 重试**，禁止盲目覆盖 |
 | 6 | 资源不存在 | 确认 ID |
 
@@ -91,21 +98,30 @@ stdout 不是 TTY 时自动输出 JSON 信封，agent 无需加 `--json`：
 3. **`note list` 与 `note recent` 不是一回事**：`note list --base <id>` 是知识库内的笔记，新建后立即可见；`note recent` 来自操作日志，**刚创建还没编辑过的笔记不会出现**。
 4. **Markdown 往返有损**：文本对齐等没有 Markdown 表达的属性在保存时会丢失。改动用户笔记前提醒这一点。
 5. **列表默认只取 20 条**，用 `--page` / `--limit` 翻页，用 `--fields` 裁剪字段控制上下文。
+6. **`api-url` 与 `web-url` 是两个不同的地址，别配混**。CLI 走 `api-url`（Gateway 数据面），
+   浏览器授权页在 `web-url`（Web 前端站点）；生产上两者**通常不同域**。把站点域当 `api-url`
+   配下去时，`auth login` 仍会成功（令牌确实拿到了），但**后续每条数据命令都会失败**
+   ——症状是 `B0500 服务响应格式异常` 或 404，因为前端对 `/api/<domain>/*` 回的是 HTML 而不是网关的 JSON。
+   `anynote doctor` 能一眼区分：`gateway` 字段应为 `"UP"`；报"被重定向，这个地址不是网关"就是配错了。
+   `auth login` 的 JSON 输出里 `verified: false` 是同一个信号（登录成功了但数据面不通）。
 
 ## 环境变量与持久化
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `ANYNOTE_API_URL` | `http://localhost:8080` | Gateway 地址，优先级高于设置文件 |
-| `ANYNOTE_WEB_URL` | `http://localhost:3000` | 浏览器授权登录打开的 Web 前端地址 |
+| `ANYNOTE_API_URL` | `http://localhost:8080` | Gateway 地址（数据面），优先级高于设置文件 |
+| `ANYNOTE_WEB_URL` | `http://localhost:3000` | 浏览器授权登录打开的 Web 前端地址（授权面），优先级高于设置文件 |
 | `ANYNOTE_TOKEN` | — | 直接提供 accessToken，**不落盘、不刷新**，过期即退出码 3 |
 | `ANYNOTE_PROFILE` | `default` | 凭据 profile，等价于 `--profile` |
 | `ANYNOTE_CONFIG_DIR` | `%APPDATA%\anynote` / `~/.anynote` | 凭据、设置与锁文件目录 |
 | `ANYNOTE_JSON` | — | 置 `1` 强制 JSON 输出 |
+| `ANYNOTE_OPEN_BROWSER` | 开 | 置 `0` 只打印授权链接、不拉起浏览器（无桌面环境用） |
 
-**远程地址与登录态都是持久化的**：`anynote config set api-url <url>` 写 `<configDir>/settings.json`，
-`auth login` 写 `<configDir>/credentials.json`，之后所有命令直接复用，无需重复指定。
-优先级：`--api-url` / `ANYNOTE_API_URL` > 设置文件 > 内置默认值。
+**两个地址与登录态都是持久化的**：`anynote config set api-url <url>` 与
+`anynote config set web-url <url>` 分别写 `<configDir>/settings.json`，`auth login` 写
+`<configDir>/credentials.json`，之后所有命令直接复用，无需重复指定。
+两项各自的优先级都是：`--api-url` / `ANYNOTE_API_URL`（或 `ANYNOTE_WEB_URL`）> 设置文件 > 内置默认值。
+`anynote config get` 会分别打印两个生效值与来源（`env` / `file` / `default`）。
 
 ## 标准写入流程（务必照做）
 

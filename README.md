@@ -110,14 +110,16 @@ Claude Code / Codex 若没立刻出现，新开一个会话即可。
   ```
 - CLI 还需要网关地址与登录态才能读写数据，两者都会持久化（配一次即可）：
   ```bash
-  anynote config set api-url http://localhost:8080     # 写入 <configDir>/settings.json
+  anynote config set api-url http://localhost:8080     # 网关（数据面），写入 <configDir>/settings.json
   anynote auth login                                   # 打开浏览器点一下「授权」（推荐）
   # 无浏览器环境（CI / ssh / 容器）改用口令：
   anynote auth login --username <你的用户名> --password-stdin
   ```
   浏览器授权把 Web 前端的 `/cli/authorize` 页面当作登录入口：未登录先引导登录，已登录则展示当前账号
   并要求点一次「授权」，随后为 CLI **另发**一对独立令牌（与网页会话各自登出互不影响）。
-  Web 前端地址默认 `http://localhost:3000`，部署在别处时用 `ANYNOTE_WEB_URL` 覆盖。
+  **授权页与网关是两个独立地址**，生产上通常不同域：前者用 `config set web-url`（默认
+  `http://localhost:3000`）或 `ANYNOTE_WEB_URL` 指定，后者用 `config set api-url`。
+  `anynote doctor` 会分别打印两者的生效值与来源，并校验网关真的可达。
   细节见 [`apps/cli/README.md`](apps/cli/README.md) 与 [`docs/cli/`](docs/cli/)。
 
 ---
@@ -361,17 +363,29 @@ docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docke
 
 #### C.4 安装容器外 Nginx
 
-模板：[`infra/nginx/nginx.conf`](infra/nginx/nginx.conf) 与 [`infra/nginx/snippets/sse-common.conf`](infra/nginx/snippets/sse-common.conf)。Nginx >= 1.25.1，把主配置放进 `http {}` 下加载的目录，snippet 放 `/etc/nginx/snippets/`，替换域名和证书后执行 `nginx -t` 再 reload。
+模板：[`infra/nginx/nginx.conf`](infra/nginx/nginx.conf)（**自包含单文件，不依赖任何 snippet**）。Nginx >= 1.25.1，把它放进 `http {}` 下加载的目录，替换域名与证书路径后执行 `nginx -t` 再 reload。
 
 | 外部路径 | 宿主机 upstream | 说明 |
 |---|---|---|
 | `/`、`/_next/*` | `127.0.0.1:3000` | Next.js 页面与静态资源 |
 | `/api/*` | `127.0.0.1:3000` | BFF 登录、Cookie、代理及 SSE；关闭缓冲 |
 | `/collab/*` | `127.0.0.1:1234` | 去掉 `/collab/` 前缀并保留 Upgrade；不记录含令牌的请求 URL |
+| `api.你的域名` 的 `/api/*`、`/actuator/health` | `127.0.0.1:8080` | Gateway 直连入口，**只给 CLI 用** |
 
 `/api/` 不能转发到 8080：新前端需要先经过 BFF，内部才请求 `http://anynote-gateway:8080`。使用 HTTPS 保持 Secure Cookie；请求 Host/Origin 必须与配置的站点来源一致。Next 自己设置静态缓存头，不对错误响应强加长期缓存。
 
-默认 Nginx 与 Docker 同机，两个入口只绑定回环。如 Nginx 在另一台内网主机，将 `WEB_BIND_IP` / `COLLAB_BIND_IP` 改成 **Docker 主机的私网 IP**，upstream 同步修改，防火墙只允许 Nginx 来源访问 3000/1234，TLS 仍在 Nginx 终止。只有 Nginx 对客户端暴露 80/443。
+**为什么另开 `api.` 子域**：CLI **不经 BFF**，直接打 `apiUrl + /api/<domain>/*`（见 [`docs/cli/CLI_PLAN.md`](docs/cli/CLI_PLAN.md)）。站点域的 `/api/` 已经是 BFF 的地盘，而两者路径前缀重叠、上游不同（`/api/auth/cli-exchange` 属 BFF，`/api/auth/login` 属 Gateway），无法用同一个 server 块按路径区分，所以只能用独立 `server_name`。该 server 只做 TLS 终止与转发，鉴权仍由网关的 `AuthFilter` 负责；`/actuator/*` 只放通 `health`，其余端点与 Springdoc 一律 404。
+
+配套：`anynote-gateway` 在 prod override 里保留了**回环**端口（`127.0.0.1:8080`）供 Nginx 反代，其余 Java 服务仍不发布宿主机端口。部署后配置 CLI：
+
+```bash
+anynote config set api-url https://api.你的域名    # 数据面：Gateway
+anynote doctor                                     # gateway 应为 "UP"
+```
+
+若把 `api-url` 误设成站点域（Web 前端），`doctor` 会明确报"被重定向，这个地址不是网关"，而不是误报 `UP`。
+
+默认 Nginx 与 Docker 同机，各入口默认只绑定回环。如 Nginx 在另一台内网主机，将 `WEB_BIND_IP` / `COLLAB_BIND_IP` / `GATEWAY_BIND_IP` 改成 **Docker 主机的私网 IP**，upstream 同步修改，防火墙只允许 Nginx 来源访问 3000/1234/8080，TLS 仍在 Nginx 终止。只有 Nginx 对客户端暴露 80/443。
 
 网络架构图与访问链路见 [`docs/deployment-network.md`](docs/deployment-network.md)。
 
@@ -409,8 +423,8 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同文档均保留命名�
 | `NEXT_PUBLIC_COLLAB_WS_URL` | `wss://192.168.3.90:3000/collab` | 生产为同源 `wss://域名/collab` |
 | `COLLAB_ALLOWED_ORIGINS` | `https://192.168.3.90:3000` | 协同服务允许的握手来源，必须与 `NEXT_PUBLIC_APP_URL` 同源（精确匹配，写错一位即 403） |
 | `COLLAB_TOKEN_SECRET` | 开发密钥 | 生产必须独立生成至少 32 字符，web/collab 共用 |
-| `WEB_BIND_IP` / `COLLAB_BIND_IP` | `127.0.0.1` | 只发布外部 Nginx 所需入口 |
-| `WEB_PORT` / `COLLAB_PORT` | `3000` / `1234` | 改动后同步 Nginx upstream |
+| `WEB_BIND_IP` / `COLLAB_BIND_IP` / `GATEWAY_BIND_IP` | `127.0.0.1` | 只发布外部 Nginx 所需入口 |
+| `WEB_PORT` / `COLLAB_PORT` / `GATEWAY_PORT` | `3000` / `1234` / `8080` | 改动后同步 Nginx upstream |
 | `APP_DOCKERFILE` | `infra/Dockerfile.local` | 构建用 Dockerfile 路径 |
 
 ### 数据库（MySQL）
@@ -481,9 +495,13 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同文档均保留命名�
 
 ### Java 服务宿主机端口（可选覆盖）
 
+> **仅 dev / IDEA 场景生效**：`docker-compose.prod.yaml` 里这些 Java 服务全部 `ports: !reset []`，
+> **唯一例外是 `GATEWAY_PORT`**——生产需要它给容器外 Nginx 的 `api.<域名>` 反代（CLI 直连网关用），
+> 且默认只绑回环。详见「场景 C：生产部署 → C.4」。
+
 | 变量 | 默认值 | 服务 |
 |------|--------|------|
-| `GATEWAY_PORT` | `8080` | API 网关 |
+| `GATEWAY_PORT` | `8080` | API 网关（**生产也保留**，绑 `GATEWAY_BIND_IP`） |
 | `AUTH_PORT` | `8083` | 认证服务 |
 | `SYSTEM_PORT` | `8091` | 用户/权限服务 |
 | `NOTE_PORT` | `18091` | 笔记服务 |

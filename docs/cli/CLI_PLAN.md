@@ -44,6 +44,10 @@
   证据：`infra/docker/nacos/configs/anynote-gateway-dev.yml`。
 - **外部私有请求仅接受 `Authorization: Bearer <token>`**（Phase 5 M2 已确认并实现），旧 `accessToken` 请求头兼容已取消。
 - 因此 CLI 直连 Gateway 的 base URL 形如 `http://localhost:8080/api/note`，与 `apps/web/src/lib/auth/backend.ts` 的服务端客户端同构。
+- **生产部署要求**：Gateway 必须有一个对外可达的地址给 CLI（模板见 `infra/nginx/nginx.conf` 的
+  `api.YOUR_DOMAIN` server 块，`anynote-gateway` 在 prod override 里保留 `127.0.0.1:8080` 供其回源）。
+  站点域的 `/api/` 归 Next BFF，**不能**当作 CLI 的 `api-url`：两者路径前缀重叠但上游不同
+  （`/api/auth/cli-exchange` 属 BFF、`/api/auth/login` 属 Gateway），且 BFF 不认 CLI 的凭据模型（见 §2.2）。
 
 ### 2.2 BFF 不适合 CLI
 
@@ -549,11 +553,19 @@ export function createAuthFetch(store: CredentialStore): typeof fetch {
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `ANYNOTE_API_URL` | `http://localhost:8080` | Gateway 地址 |
+| `ANYNOTE_API_URL` | `http://localhost:8080` | Gateway 地址（数据面），优先级高于 `settings.json` |
+| `ANYNOTE_WEB_URL` | `http://localhost:3000` | 浏览器授权登录打开的 Web 前端地址（授权面），优先级高于 `settings.json` |
 | `ANYNOTE_TOKEN` | — | 直接提供 accessToken，跳过凭据文件 |
 | `ANYNOTE_PROFILE` | `default` | 等价于 `--profile` |
 | `ANYNOTE_CONFIG_DIR` | 见上 | 凭据与配置目录 |
 | `ANYNOTE_JSON` | — | 置 `1` 强制 JSON 输出 |
+| `ANYNOTE_OPEN_BROWSER` | 开 | 置 `0` / `false` 只打印授权链接，不拉起浏览器 |
+
+> **两个地址必须分开配**。CLI 直连 Gateway（数据面），授权页在 Web 前端（授权面），
+> 生产上通常不同域。`config set api-url` 与 `config set web-url` 各自落盘、各自独立解析
+> （`webUrlSource` / `apiUrlSource` 分开报告）。把 `api-url` 误设成 Web 前端时，
+> `doctor` 会报"被重定向，这个地址不是网关"而不是误报 `UP`；`auth login` 成功后也会
+> 立刻探测一次数据面，不通就在 stderr 警告并给 `verified: false`。
 
 **跨进程刷新锁**（本方案最容易写错的一段，务必按此实现）：
 
@@ -770,8 +782,8 @@ anynote note set 1024 --file /tmp/n.md --version "$(jq -r .data.version /tmp/n.j
 | `notify list` | `GET /api/notify/notices` |
 | `manifest` | §7.6 |
 | `mcp` | §7.7 |
-| `doctor` | 本地自检：Gateway 可达性、凭据有效性、CLI 版本、api-client 是否已生成 |
-| `config path` / `config set apiUrl <url>` | 配置读写 |
+| `anynote doctor` | 本地自检：Gateway 可达性（**校验响应确属网关**，不只判 200）、凭据有效性、CLI 版本、api-client 是否已生成；并分别报告 `apiUrl` / `webUrl` 的生效值与来源 |
+| `config path` / `config get` / `config set api-url\|web-url <url>` / `config unset` | 配置读写；两项地址各自落盘、互不覆盖 |
 
 ---
 

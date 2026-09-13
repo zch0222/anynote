@@ -56,7 +56,7 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 要点速查（强制约束，**违反这些会踩坑**）：
 
 - **dev 场景 `docker compose` 命令必须加 `--env-file=/dev/null`**。原因：`infra/.env.idea`（IDEA 在宿主机跑 Java 时用）含 `127.0.0.1` 类 host 覆盖；若被 compose 自动加载，`ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 广播错误地址，容器内 app 连不上 broker。
-- **prod 必须显式 `--env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml`**，不带 dev override。生产关闭 Java/中间件宿主机端口，使用 `restart: unless-stopped`，只给容器外 Nginx 发布 web:3000 / collab:1234。
+- **prod 必须显式 `--env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml`**，不带 dev override。生产关闭业务服务/中间件宿主机端口，使用 `restart: unless-stopped`，只给容器外 Nginx 发布**回环**入口 web:3000 / collab:1234 / gateway:8080（gateway 仅供 `api.YOUR_DOMAIN` 反代，见下方「CLI 直连 Gateway」）。
 - **dev 全栈推荐命令**：
 
   ```bash
@@ -68,7 +68,8 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 
   `docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便日志排查；中间件保留原 restart 策略。
 - **前端容器化**：`infra/Dockerfile.web` 从入库 OpenAPI baseline 派生类型并构建 Next standalone；不挂载宿主机 `.next`，容器内不含 Nginx。`NEXT_PUBLIC_*` 是构建参数，域名变化要重建；运行时只注入服务端密钥。`docker-compose.web-dev.yaml` 提供前端 HMR；IDEA 中间件模式叠加 `docker-compose.middleware-idea.yaml`，宿主机前端读取 `apps/web/.env.local`。完整步骤仍以 README 为准。
-- **新前端外部路由**：`/api/*` 和页面必须经 Next BFF，再由 Docker 内网调用 Gateway；外部 Nginx `/collab/*` 单独转协同容器，不能沿用旧模板把 `/api/` 直连 Gateway。架构图见 [`docs/deployment-network.md`](docs/deployment-network.md)。
+- **新前端外部路由**：站点域（`YOUR_DOMAIN`）的 `/api/*` 和页面必须经 Next BFF，再由 Docker 内网调用 Gateway；外部 Nginx `/collab/*` 单独转协同容器，不能沿用旧模板把站点域的 `/api/` 直连 Gateway。**唯一例外**是给 CLI 用的独立子域 `api.YOUR_DOMAIN`（CLI 不经 BFF，见下条）。架构图见 [`docs/deployment-network.md`](docs/deployment-network.md)。
+- **CLI 直连 Gateway**：`apps/cli` 不走 BFF，直接请求 `apiUrl + /api/<domain>/*`，因此生产需要一个 `api.YOUR_DOMAIN` 入口（模板 `infra/nginx/nginx.conf`），`anynote-gateway` 也是 prod 唯一保留回环端口的 Java 服务。**`api-url` 与 `web-url`（授权页所在站点）是两个独立配置**，`config set` 分别持久化；把站点域当 `api-url` 会让所有数据命令 404，`anynote doctor` 会报"被重定向，这个地址不是网关"。详见 [`apps/cli/README.md`](apps/cli/README.md)。
 - **OpenAPI / TS 客户端**：后端 Controller 改完跑 `pnpm openapi:generate`，必须把 `openapi/specs/*.json` 一并提交（baseline 入库）；CI `openapi-check.yml` 会对 baseline diff 阻断漂移。`packages/api-client/src/` 仍 gitignored，从 specs 派生。
 
 ### 单服务 / 单模块
@@ -277,7 +278,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `.claude/openspec/changes/` — API 变更提案归档
 - `CONTRIBUTING.md` — 代码规范要点
 - `apps/desktop/README.md` — 桌面壳的令牌交换流程、构建前置条件与未验证项
-- `docs/cli/` — CLI 前端：`CLI_PLAN.md`（技术方案）、`CLI_MILESTONES.md`（M9.x 进度，**M9.5 skill 一键安装与配置持久化已完成**）、`COMMANDS.md`（**生成物**）
+- `docs/cli/` — CLI 前端：`CLI_PLAN.md`（技术方案）、`CLI_MILESTONES.md`（M9.x 进度，**M9.7 地址配置与网关自检修复已完成**——`api-url`/`web-url` 两项独立持久化、`doctor` 探针不再假阳性、生产新增 `api.YOUR_DOMAIN` 网关入口）、`COMMANDS.md`（**生成物**）
 - `docs/mobile/` — 移动端适配：`MOBILE_PLAN.md`（技术方案）、`MOBILE_MILESTONES.md`（M10.0–M10.5 进度 + 验收记录 + 与方案的偏差）、`UI_INVENTORY.md`（开工前逐页核对证据）。**M10.0–M10.4 已实现**（2026-09-12，分支 `feat/mobile-foundation`，未并 `dev`）：21 条 `/m/*` 路由落在 `apps/web` 的 `app/(mobile)/m/**` 路由段、不新开应用（认证 Cookie 是 host-only + `sameSite=strict`，刷新锁是进程级）；入口做 UA 分流（`?desktop=1` 逃生口 + 非身份的 `anynote_view` 偏好 Cookie），登录后落 `/m/dashboard`。**未做**：E2E / Lighthouse 实跑与真机验收（见里程碑「验收记录」）。契约登记见 `.claude/openspec/changes/2026-09-12-mobile-route-segment.md`，逐文件清单见 `docs/changelist/2026-09-12-mobile-adaptation.md`
 - `docs/minio/` — 对象存储链路：`MINIO_PLAN.md`（MinIO 修复方案 v1.0，2026-09-12）+ `MINIO_MILESTONES.md`（**M11.0–M11.5 已实施**，含逐项验收记录）。覆盖 note 侧上传任务端点补齐、MinIO 双 endpoint（内网 `endPoint` + 浏览器 `publicEndPoint`）、compose 建桶初始化、独立子域的 Nginx 反代与 CORS；§2 记录 9 条已核对的现状事实（含 `fileSize` 单位 bug 与 7 天预签名 URL 问题），§11 的 4 项待拍板已按建议落地（D3 仍为「本期不接」，协同文档图片另开工单）；逐文件清单见 `docs/changelist/2026-09-12-minio-note-image-upload.md`
 - `docs/changelist/` — 各批改动的逐文件审计清单；`README.md` 是编写规范与命名规则（`YYYY-MM-DD-<slug>.md`）
