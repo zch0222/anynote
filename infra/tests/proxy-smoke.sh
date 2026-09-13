@@ -41,9 +41,9 @@ docker run --rm -d --name "$collab" --network "${ANYNOTE_TEST_NETWORK:-anynote_a
     -e COLLAB_TOKEN_SECRET=local-proxy-test-secret-32-characters anynote/anynote-collab:local >/dev/null
 docker run --rm --network "${ANYNOTE_TEST_NETWORK:-anynote_anynote-net}" --entrypoint nginx \
     -v "$scratch/anynote.conf:/etc/nginx/conf.d/default.conf:ro" \
-    -v "$root/infra/nginx/snippets:/etc/nginx/snippets:ro" -v "$scratch:/certs:ro" nginx:1.28-alpine -t
+    -v "$scratch:/certs:ro" nginx:1.28-alpine -t
 docker run --rm -d --name "$proxy" --network "${ANYNOTE_TEST_NETWORK:-anynote_anynote-net}" -p 127.0.0.1:3443:443 \
     -v "$scratch/anynote.conf:/etc/nginx/conf.d/default.conf:ro" \
-    -v "$root/infra/nginx/snippets:/etc/nginx/snippets:ro" -v "$scratch:/certs:ro" nginx:1.28-alpine >/dev/null
+    -v "$scratch:/certs:ro" nginx:1.28-alpine >/dev/null
 curl --retry 10 --retry-delay 1 --retry-all-errors -kfsS https://localhost:3443/login -o /dev/null
 python3 infra/tests/smoke_web.py https://localhost:3443 --ws wss://localhost:3443/collab --local-test-tls
