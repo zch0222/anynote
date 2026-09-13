@@ -11,7 +11,11 @@ import {
   type ToolbarCommandId,
   type ToolbarSlot,
 } from "@/components/editor/core/toolbar-commands";
-import type { AnynoteImageOptions } from "@/components/editor/extensions/anynote-image";
+import {
+  type AnynoteImageOptions,
+  type UploadFn,
+  uploadImageAt,
+} from "@/components/editor/extensions/anynote-image";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
@@ -79,7 +83,8 @@ function ToolbarDivider() {
 
 function pickImage(editor: Editor) {
   const image = editor.extensionManager.extensions.find((item) => item.name === "image");
-  const uploadFn = (image?.options as AnynoteImageOptions | undefined)?.uploadFn;
+  const options = image?.options as AnynoteImageOptions | undefined;
+  const uploadFn: UploadFn | undefined = options?.uploadFn;
   if (!uploadFn) {
     toast.error("当前编辑器未配置图片上传");
     return;
@@ -93,19 +98,13 @@ function pickImage(editor: Editor) {
     if (!file) {
       return;
     }
-    const at = editor.state.selection.from;
-    uploadFn(file)
-      .then((src) => {
-        editor
-          .chain()
-          .focus()
-          .insertContentAt(at, { type: "image", attrs: { src, alt: file.name } })
-          .run();
-      })
-      .catch((error: unknown) => {
+    // 走与粘贴 / 拖拽同一个入口：它会先插一个「上传中」指示器，再把图换成 image 节点
+    void uploadImageAt(editor.view, uploadFn, file, {
+      onError: (error) => {
         console.error(error);
         toast.error("图片上传失败");
-      });
+      },
+    });
   });
   input.click();
 }

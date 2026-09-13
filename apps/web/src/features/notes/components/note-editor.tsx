@@ -90,9 +90,9 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   // 图片走 file 服务的分片直传。实现（SHA-256 + 分片签名）只在真的插图时才下载，
   // 静态 import 会把它压进笔记路由的首屏 JS；引用须稳定，否则每次渲染都会重建编辑器实例
   const uploadFn = useMemo<UploadFn>(
-    () => async (file) => {
+    () => async (file, options) => {
       const { createNoteImageUploader } = await import("@/lib/editor/upload");
-      return createNoteImageUploader(noteId)(file);
+      return createNoteImageUploader(noteId, options?.onProgress)(file);
     },
     [noteId],
   );

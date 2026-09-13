@@ -39,7 +39,8 @@ export type UploadResult = {
 export type UploadOptions = {
   /** 目标笔记 id；图片只能挂到某篇笔记下（服务端据此定 path 与权限）。 */
   noteId: string | number;
-  onProgress?: (percent: number) => void;
+  /** 分片进度回调，0–100。显式允许 `undefined`：`exactOptionalPropertyTypes` 下不能缺省传递。 */
+  onProgress?: ((percent: number) => void) | undefined;
   signal?: AbortSignal;
 };
 
@@ -225,6 +226,9 @@ export async function uploadFile(file: File, options: UploadOptions): Promise<Up
 }
 
 /** 编辑器图片上传入口：`AnynoteImage` 的 `uploadFn` 默认实现（返回可长期写入正文的地址）。 */
-export function createNoteImageUploader(noteId: string | number) {
-  return (file: File) => uploadFile(file, { noteId }).then((result) => result.url);
+export function createNoteImageUploader(
+  noteId: string | number,
+  onProgress?: (percent: number) => void,
+) {
+  return (file: File) => uploadFile(file, { noteId, onProgress }).then((result) => result.url);
 }
