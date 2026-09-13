@@ -5,127 +5,222 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Anynote Design System —— 语义化 Token（参考 Apple Human Interface Guidelines）
+ *
+ * 命名分三层，改主题只动最下层：
+ *   1. @theme        → Tailwind 工具类名（bg-surface / text-title / rounded-card）
+ *   2. :root / .dark → 语义 Token 实体（--surface / --label-primary …）
+ *   3. 组件          → 只写 Token 类名，不写 hex、不写 dark: 分支
+ *
+ * 浅色 / 深色是**同一套语义名**的两组取值，所以页面里几乎不需要 `dark:` 前缀；
+ * 出现 `dark:` 通常意味着漏了一个 Token，应该回来补而不是就地打补丁。
+ */
+
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* —— 字体 —— */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  /* —— 语义色（页面级） —— */
+  --color-window: var(--surface-window);
+  --color-grouped: var(--surface-grouped);
+  --color-surface: var(--surface-primary);
+  --color-elevated: var(--surface-elevated);
+  --color-sidebar: var(--surface-sidebar);
+  --color-separator: var(--separator);
+
+  /* —— 语义色（文字） —— */
+  --color-label: var(--label-primary);
+  --color-label-secondary: var(--label-secondary);
+  --color-label-tertiary: var(--label-tertiary);
+
+  /* —— 品牌与状态 —— */
+  --color-accent: var(--accent-primary);
+  --color-accent-soft: var(--accent-tint);
+  --color-success: var(--state-success);
+  --color-warning: var(--state-warning);
+  --color-danger: var(--state-danger);
+  --color-organization: var(--state-organization);
+  --color-info: var(--state-info);
+
+  /* —— shadcn/ui 兼容层 ——
+   * components/ui/ 下的 vendored 原件按这套名字消费，保持一一映射即可，
+   * 页面代码一律用上面的语义名。 */
+  --color-background: var(--surface-grouped);
+  --color-foreground: var(--label-primary);
+  --color-card: var(--surface-primary);
+  --color-card-foreground: var(--label-primary);
+  --color-popover: var(--surface-elevated);
+  --color-popover-foreground: var(--label-primary);
+  --color-primary: var(--accent-primary);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-grouped);
+  --color-secondary-foreground: var(--label-primary);
+  --color-muted: var(--surface-grouped);
+  --color-muted-foreground: var(--label-secondary);
+  --color-accent-foreground: var(--label-primary);
+  --color-destructive: var(--state-danger);
+  --color-border: var(--separator);
+  --color-input: var(--separator);
+  --color-ring: var(--accent-primary);
+  --color-sidebar-foreground: var(--label-primary);
+  --color-sidebar-primary: var(--accent-primary);
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: var(--accent-tint);
+  --color-sidebar-accent-foreground: var(--accent-primary);
+  --color-sidebar-border: var(--separator);
+  --color-sidebar-ring: var(--accent-primary);
+  --color-chart-1: var(--accent-primary);
+  --color-chart-2: var(--state-success);
+  --color-chart-3: var(--state-warning);
+  --color-chart-4: var(--state-organization);
+  --color-chart-5: var(--state-info);
+}
+
+/* 字阶 · Typography（Display 34/41 · Title 22/28 · Body 15/24 · Footnote 13/18） */
+@theme {
+  --text-display: 2.125rem;
+  --text-display--line-height: 2.5625rem;
+  --text-display--font-weight: 600;
+  --text-display--letter-spacing: -0.02em;
+
+  --text-title: 1.375rem;
+  --text-title--line-height: 1.75rem;
+  --text-title--font-weight: 600;
+  --text-title--letter-spacing: -0.01em;
+
+  --text-headline: 1.0625rem;
+  --text-headline--line-height: 1.375rem;
+  --text-headline--font-weight: 600;
+
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5rem;
+
+  --text-footnote: 0.8125rem;
+  --text-footnote--line-height: 1.125rem;
+
+  /* 圆角 · radius 6 / 10 / 14 / 20；卡片 14、输入框 10、按钮全圆 */
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 1.75rem;
+
+  /* 层级 · 卡片与浮层是两个高度 */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.06);
+  --shadow-popover: 0 8px 32px rgb(0 0 0 / 0.16), 0 2px 8px rgb(0 0 0 / 0.08);
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  /* 页面背景三档：窗口 / 分组列表 / 内容卡 */
+  --surface-window: #ffffff;
+  --surface-grouped: #f2f2f7;
+  --surface-primary: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-sidebar: #f7f7f9;
+
+  --separator: #e5e5ea;
+
+  --label-primary: #1d1d1f;
+  --label-secondary: #6e6e73;
+  --label-tertiary: #a1a1a6;
+
+  --accent-primary: #0071e3;
+  --accent-tint: #e8f1fd;
+
+  --state-success: #34c759;
+  --state-warning: #ff9500;
+  --state-danger: #ff3b30;
+  --state-organization: #af52de;
+  --state-info: #5ac8fa;
+
+  color-scheme: light;
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --surface-window: #000000;
+  --surface-grouped: #000000;
+  --surface-primary: #1c1c1e;
+  --surface-elevated: #1c1c1e;
+  --surface-sidebar: #17171a;
+
+  --separator: #3a3a3c;
+
+  --label-primary: #f5f5f7;
+  --label-secondary: #98989d;
+  --label-tertiary: #6e6e73;
+
+  --accent-primary: #0a84ff;
+  --accent-tint: #0a2540;
+
+  --state-success: #30d158;
+  --state-warning: #ff9f0a;
+  --state-danger: #ff453a;
+  --state-organization: #bf5af2;
+  --state-info: #64d2ff;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 16px rgb(0 0 0 / 0.4);
+  --shadow-popover: 0 8px 32px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.4);
+
+  color-scheme: dark;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-separator outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-grouped text-label text-body;
   }
   html {
     @apply font-sans;
+    /* 正文 15px 是设计基线，缩放只作用在根上，组件里不要再改字号 */
+    font-size: 16px;
+  }
+  /* 标题默认收紧字距，避免每个页面各写一遍 tracking-* */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.01em;
+  }
+  /* 数字列（计数、日期）等宽，避免逐行抖动 */
+  :where(.tabular) {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /*
+   * 知识库封面渐变。设计稿里 5 张卡各自一组双色渐变，色相固定、角度固定，
+   * 由 ID 取模选组（见 features/notes/lib/cover-gradient.ts），所以这里只需要
+   * 5 条静态规则——不用内联 style，也就不违反「动态值走 CSS 变量」的约束。
+   */
+  .kb-cover {
+    background-image: linear-gradient(135deg, var(--kb-from), var(--kb-to));
+  }
+  .kb-cover-0 {
+    --kb-from: #33a1ef;
+    --kb-to: #59c6f9;
+  }
+  .kb-cover-1 {
+    --kb-from: #8a58e6;
+    --kb-to: #af59f2;
+  }
+  .kb-cover-2 {
+    --kb-from: #32bc88;
+    --kb-to: #33c659;
+  }
+  .kb-cover-3 {
+    --kb-from: #ff6519;
+    --kb-to: #ff3a30;
+  }
+  .kb-cover-4 {
+    --kb-from: #d842a1;
+    --kb-to: #ff2d54;
   }
 }
