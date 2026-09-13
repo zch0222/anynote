@@ -192,7 +192,7 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
 ### 补充：项目级安装（`--local`）与 AI 自助安装提示词
 
 用户追加要求「在 README 补充一个在 dsh 中让 AI 自己安装 CLI 客户端和 skill 的提示词，在项目中本地安装」，
-因此在本期补做：
+因此在本期补做（**README 最终按用户后续澄清只写全局安装**）：
 
 - [x] `skill install/list/uninstall` 增加 `--local`：装进 `<项目根>/.dsh/skills`（dsh）、
       `<项目根>/.agents/skills`（Codex）、`<项目根>/.claude/skills`（Claude Code）。
@@ -201,13 +201,16 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
 - [x] `doctor` 改为同时报告全局与项目级两组（各 3 行）
 - [x] 本仓库 skill 源文保护：在 anynote 仓库里跑 `--local` 时 `.claude/skills` 会被跳过
       （那是 `bundled.ts` 的输入），且**不受 `--force` 影响**
-- [x] `README.md` 新增「让 AI 自己装好 CLI 与 skill」段：可直接粘给 agent 的四步提示词
+- [x] `README.md` 新增「让 AI 自己装好 CLI 与 skill」段：可直接粘给 agent 的四步提示词。
+      **只写全局安装**——用户明确要求「安装应该是直接全局安装，不需要写本地项目安装的说明」；
+      全局装一次在任何目录都能用，`--local` 仍保留在 CLI 与 `apps/cli/README.md`，
+      供"随仓库分发给团队"的场景使用
 - [x] `.gitignore` 忽略 `--local` 装出来的 `.dsh/skills/` 与 `.agents/skills/`
 
-**关键事实（核对 dsh 源码得出）**：dsh 扫 `<项目根>/.dsh/skills`（rank 100）与
-`<项目根>/.agents/skills`（rank 200），**不扫 `.claude/skills`**。所以只有 `.claude/skills` 的
-仓库里 dsh 看不到这些 skill，必须用 `--local` 或全局安装。该结论已在真实 dsh 会话中验证：
-`--local` 装完后两个 skill 出现在会话的可用 skill 列表里，删掉目录后又消失。
+**关键事实（核对 dsh 源码得出）**：dsh 扫 `<项目根>/.dsh/skills`（rank 100）、
+`<项目根>/.agents/skills`（rank 200）与 `~/.dsh/skills`（rank 400），**不扫 `.claude/skills`**。
+所以只把 skill 放在 `.claude/skills` 的仓库里 dsh 看不到，必须全局安装或 `--local`。
+该结论已在真实 dsh 会话中验证：装完后两个 skill 出现在会话的可用 skill 列表，删掉目录后又消失。
 
 ### 与方案的偏差
 

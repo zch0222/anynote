@@ -47,25 +47,23 @@ anynote/
 
 仓库自带的 `apps/cli`（`anynote`）能直接操作知识库与笔记，并配套两个 skill
 （`anynote-cli`、`anynote-notes`）。**把下面整段提示词粘给 agent**，它会自己完成构建 →
-装到当前项目 → 自检，人不用敲命令：
+全局安装 → 自检，人不用敲命令：
 
 ````text
-请在本仓库（anynote）里完成 anynote CLI 的本地安装，并让它自带的 skill 在本项目可用。
+请在本仓库（anynote）里完成 anynote CLI 的构建，并把它自带的 skill 装到各 agent 的全局目录。
 严格按下面顺序做，每步都要看退出码（非 0 就停下并把原始输出贴给我，不要继续往下猜）：
 
 1. 安装依赖并构建 CLI（产物是单文件 apps/cli/dist/anynote.mjs，已内联全部依赖与 skill）：
      pnpm install
      pnpm --filter @anynote/cli build
 
-2. 把 skill 装进本项目（复制模式，不是符号链接）：
-     node apps/cli/dist/anynote.mjs skill install --local
-   它会写入 <项目根>/.dsh/skills（dsh 用）、<项目根>/.agents/skills（Codex 用）、
-   <项目根>/.claude/skills（Claude Code 用）。dsh/Codex 只需前者，多余目录可以不管。
-   注：本仓库的 .claude/skills 正好是打包源，所以这一步会把 claude 放进 skipped 里跳过
-   （这是预期行为，不是失败）；不要为了让它也装而加 --force。
+2. 把 skill 全局安装（复制模式，不是符号链接）：
+     node apps/cli/dist/anynote.mjs skill install
+   它会写入 ~/.dsh/skills（dsh 用）、~/.codex/skills（Codex 用）、~/.claude/skills（Claude Code 用），
+   装完在任何目录下都能用。
 
 3. 自检（这一步是唯一验收标准，把输出贴给我）：
-     node apps/cli/dist/anynote.mjs skill list --local
+     node apps/cli/dist/anynote.mjs skill list
    要求：dsh 那两行出现 vX.Y.Z 的版本号（不是 "无版本戳"，也不是 "未安装"）。
 
 4. 报告结果：构建产物路径、skill 实际落地路径、CLI 版本号。
@@ -78,10 +76,11 @@ Claude Code / Codex 若没立刻出现，新开一个会话即可。
 
 几点说明：
 
-- **只影响当前项目**：`--local` 装到项目根（从 cwd 向上最近的含 `.git` 的目录）下，不动你的 `~/.claude`、`~/.codex`、`~/.dsh`。
-  想装成全局的（所有项目都能用）就去掉 `--local`。
-- **dsh 不读 `.claude/skills`**：它只看 `.dsh/skills` 与 `.agents/skills`，所以在本仓库里**必须**跑一次
-  `skill install --local`（或全局安装），dsh 才认得这两个 skill——这也正是上面提示词存在的理由。
+- **全局安装，一处生效**：装到 `~/.dsh/skills`、`~/.codex/skills`、`~/.claude/skills`，
+  之后在**任何目录**下都能用，不需要为每个项目重装。
+- **dsh 不读 `~/.claude/skills`**：它只认 `~/.dsh/skills`（以及 `~/.agents/skills`），
+  所以必须跑一次 `skill install` 落到 `~/.dsh/skills`，dsh 才认得这两个 skill——
+  这也正是上面提示词存在的理由。
 - **版本一定匹配**：skill 内容随 CLI 一起打包（构建期写进 `apps/cli/src/bundled.ts`），安装时在 `SKILL.md` 里写入
   `<!-- anynote-cli-version: x.y.z -->`。CLI 升级后重跑一次 `skill install` 即完成升级，`skill list` 会报出漂移。
 - **不会误删你的 skill**：卸载只删带版本戳的目录；同名但没戳的（你自己写的）一律保留。
