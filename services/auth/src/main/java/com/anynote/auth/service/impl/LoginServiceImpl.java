@@ -2,6 +2,7 @@ package com.anynote.auth.service.impl;
 
 import com.anynote.auth.model.dto.RegisterDTO;
 import com.anynote.auth.model.dto.ResetPasswordDTO;
+import com.anynote.auth.model.vo.CliTokenVO;
 import com.anynote.auth.service.LoginService;
 import com.anynote.auth.service.PasswordService;
 import com.anynote.common.security.token.TokenUtil;
@@ -189,6 +190,30 @@ public class LoginServiceImpl implements LoginService {
             throw new LoginException("accessToken 与 refreshToken 至少提供一个非空白值");
         }
         tokenUtil.logout(accessToken, refreshToken);
+    }
+
+    /**
+     * 为 CLI 另发一对令牌。
+     *
+     * <p>不重新校验口令：身份来自本次请求的 Bearer accessToken（网关已验签 + 查 Redis）。
+     * {@code tokenUtil.getLoginUser()} 拿到的 LoginUser 是**请求上下文里的那个对象**，
+     * 直接复用会让 {@code createToken} 把 token 写回该实例——因此这里显式 new 一个
+     * LoginUser 再签发，避免污染当前会话对象（同一个 JVM 内可能还有别的请求在读它）。
+     */
+    @Override
+    public CliTokenVO issueCliToken() {
+        LoginUser loginUser = tokenUtil.getLoginUser();
+        if (StringUtils.isNull(loginUser) || StringUtils.isNull(loginUser.getSysUser())) {
+            throw new LoginException(ResCode.AUTH_ERROR);
+        }
+
+        SysUser sysUser = loginUser.getSysUser();
+        LoginUser cliLoginUser = new LoginUser(sysUser, loginUser.getPermissions(),
+                loginUser.getRole(), loginUser.isLongTerm());
+
+        Token token = tokenUtil.createToken(cliLoginUser);
+
+        return new CliTokenVO(sysUser.getUsername(), sysUser.getNickname(), token);
     }
 
     public static void main(String[] args) {
