@@ -25,22 +25,28 @@ $CLI doctor     # 自检：网关可达性 + 本地凭据 + 各 agent 的 skill 
 
 `doctor` 的 `gateway` 不是 `UP` 时，先让用户把后端起起来，不要继续往下猜。
 
-### 安装到各 agent 的全局目录
+### 安装到各 agent 的 skill 目录
 
 ```bash
-anynote skill install              # Claude Code / Codex / dsh 三家都装
+anynote skill install              # 全局：Claude Code / Codex / dsh 三家都装
+anynote skill install --local      # 项目级：装进当前项目，可随仓库提交给团队共用
 anynote skill install --agent=claude
-anynote skill list                 # 看装没装、版本对不对
-anynote skill uninstall            # 只删本 CLI 装的，用户手写的同名 skill 不动
+anynote skill list                 # 看装没装、版本对不对（也支持 --local）
+anynote skill uninstall --yes      # 只删本 CLI 装的，用户手写的同名 skill 不动
 ```
 
-| agent | 全局 skill 根目录 |
-|-------|------------------|
-| Claude Code | `~/.claude/skills`（或 `$CLAUDE_CONFIG_DIR/skills`） |
-| Codex | `$CODEX_HOME/skills`，默认 `~/.codex/skills` |
-| dsh | `$DSH_HOME/skills`，默认 `~/.dsh/skills` |
+| agent | 全局根目录 | 项目级根目录（`--local`） |
+|-------|-----------|--------------------------|
+| Claude Code | `~/.claude/skills`（或 `$CLAUDE_CONFIG_DIR/skills`） | `<项目根>/.claude/skills` |
+| Codex | `$CODEX_HOME/skills`，默认 `~/.codex/skills` | `<项目根>/.agents/skills` |
+| dsh | `$DSH_HOME/skills`，默认 `~/.dsh/skills` | `<项目根>/.dsh/skills` |
 
-安装是**复制**且 skill 内容随 CLI 一起打包，所以版本一定匹配；CLI 升级后重跑一次 `skill install` 即完成升级。
+**项目根** = 从当前目录向上最近的含 `.git` 的目录。安装是**复制**且 skill 内容随 CLI 一起打包，
+所以版本一定匹配；CLI 升级后重跑一次 `skill install` 即完成升级。
+
+⚠️ **在本仓库（anynote）里跑 `--local` 时，`.claude/skills` 会被跳过**——那正是本仓库的 skill 源文
+（`src/bundled.ts` 的输入），不能被安装副本覆盖。这是预期行为，不要加 `--force` 去硬闯；
+本仓库请改用全局安装，或只装另外两家（`--agent=dsh --agent=codex`）。
 
 **认证**：先跑 `anynote auth status`。未登录时**让用户自己执行** `anynote auth login --username <名> --password-stdin`，
 不要代替用户输入口令。CI / 沙箱可用 `ANYNOTE_TOKEN` 环境变量提供 token（不落盘、不自动刷新）。

@@ -7,7 +7,13 @@ import { ExitCode, type ExitCodeValue, UsageError, exitCodeFor } from "./core/ex
 import type { CliIo, OutputMode } from "./core/output";
 import { writeFailure, writeSuccess } from "./core/output";
 import { registry } from "./core/registry";
-import { describeField, isArrayField, isBooleanField, optionFlag, shapeOf } from "./core/schema-introspect";
+import {
+  describeField,
+  isArrayField,
+  isBooleanField,
+  optionFlag,
+  shapeOf,
+} from "./core/schema-introspect";
 import { SettingsStore } from "./core/settings";
 import { CLI_VERSION } from "./version";
 

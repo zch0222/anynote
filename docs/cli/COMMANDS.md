@@ -367,49 +367,56 @@ anynote note set 2571 --content "# 标题" --force --yes
 
 ### `anynote skill install`
 
-把 CLI 自带的 skill 一键安装到各 agent 的全局目录（稳定 · 写操作）
+把 CLI 自带的 skill 一键安装到各 agent 的 skill 目录（稳定 · 写操作）
 
-支持 Claude Code（~/.claude/skills，可用 CLAUDE_CONFIG_DIR 覆盖）、Codex（$CODEX_HOME/skills，默认 ~/.codex/skills）、dsh（$DSH_HOME/skills，默认 ~/.dsh/skills）。**复制而非符号链接**；skill 内容随 CLI 一起打包，所以装出来的版本与当前 CLI 一定匹配，CLI 升级后重跑一次即完成升级。可重复执行，内容没变时是幂等的。
+支持 Claude Code、Codex、dsh。默认装**全局**目录：~/.claude/skills（可用 CLAUDE_CONFIG_DIR 覆盖）、$CODEX_HOME/skills（默认 ~/.codex/skills）、$DSH_HOME/skills（默认 ~/.dsh/skills）。加 --local 则装进**当前项目**：<项目根>/.claude/skills、<项目根>/.agents/skills、<项目根>/.dsh/skills（项目根 = 从 cwd 向上最近的含 .git 的目录，与 dsh 的判定一致），可随仓库提交给团队共用。**复制而非符号链接**；skill 内容随 CLI 一起打包，所以装出来的版本与当前 CLI 一定匹配，CLI 升级后重跑一次即完成升级。可重复执行，内容没变时是幂等的。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
 | `--agent` | array | 否 | ["all"] | 目标 agent，可重复给；all = 三个都装 |
+| `--local` | boolean | 否 | false | 装进当前项目而不是全局目录 |
 | `--force` | boolean | 否 | false | 目标位置已有同名但不是本 CLI 装的 skill 时也覆盖 |
-| `--root` | string | 否 | - | 临时覆盖 Claude Code 的配置根目录 |
+| `--root` | string | 否 | - | 临时覆盖 Claude Code 的全局配置根目录 |
 
 ```bash
 # 装到 Claude Code / Codex / dsh 三家的全局目录
 anynote skill install
+# 装进当前项目，可随仓库提交给团队共用
+anynote skill install --local
 anynote skill install --agent=claude --agent=dsh
-# 查看各家的安装状态与版本漂移
+# 查看安装状态与版本漂移
 anynote skill list
 ```
 
 ### `anynote skill list`
 
-列出各 agent 全局目录里的 anynote skill 与版本匹配情况（稳定）
+列出各 skill 目录里的 anynote skill 与版本匹配情况（稳定）
 
-只读检查每个 skill 是否已安装、磁盘上记录的版本，以及是否与当前 CLI 打包的版本不一致（drifted=true 表示需要重跑 anynote skill install）。
+只读检查每个 skill 是否已安装、磁盘上记录的版本，以及是否与当前 CLI 打包的版本不一致（drifted=true 表示需要重跑 anynote skill install）。默认查全局；加 --local 查当前项目。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
-| `--root` | string | 否 | - | 临时覆盖 Claude Code 的配置根目录 |
+| `--local` | boolean | 否 | false | 查当前项目而不是全局目录 |
+| `--root` | string | 否 | - | 临时覆盖 Claude Code 的全局配置根目录 |
 
 ```bash
 anynote skill list
+anynote skill list --local
 ```
 
 ### `anynote skill uninstall`
 
-从各 agent 全局目录移除本 CLI 安装的 skill（稳定 · 写操作）
+移除本 CLI 安装的 skill（稳定 · 写操作）
 
-只删带 anynote CLI 版本戳的目录；同名但不是本 CLI 安装的（用户手写）一律保留并如实报告，不会误删用户自己的 skill。
+只删带 anynote CLI 版本戳的目录；同名但不是本 CLI 安装的（用户手写）一律保留并如实报告，不会误删用户自己的 skill。默认处理全局目录；加 --local 处理当前项目。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
 | `--agent` | array | 否 | ["all"] | 目标 agent，可重复给；all = 三个都检查 |
-| `--root` | string | 否 | - | 临时覆盖 Claude Code 的配置根目录 |
+| `--local` | boolean | 否 | false | 处理当前项目而不是全局目录 |
+| `--root` | string | 否 | - | 临时覆盖 Claude Code 的全局配置根目录 |
 
 ```bash
-anynote skill uninstall --agent=claude
+anynote skill uninstall --yes
+anynote skill uninstall --local --yes
 ```

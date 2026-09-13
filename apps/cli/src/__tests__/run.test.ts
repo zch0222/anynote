@@ -156,9 +156,10 @@ describe("可重复选项（数组字段）", () => {
 
   it("--agent 写成两个参数也收集成数组", async () => {
     const { command, seen } = agentCommand();
-    const { code } = await exec(["skill", "install", "--agent", "claude", "--agent", "dsh"], [
-      command,
-    ]);
+    const { code } = await exec(
+      ["skill", "install", "--agent", "claude", "--agent", "dsh"],
+      [command],
+    );
     expect(code).toBe(ExitCode.OK);
     expect(seen[0]?.agent).toEqual(["claude", "dsh"]);
   });

@@ -20,17 +20,24 @@ node apps/cli/dist/anynote.mjs doctor   # 自检网关可达性、本地凭据�
 ## 一键安装 skill（Claude Code / Codex / dsh）
 
 ```bash
-node apps/cli/dist/anynote.mjs skill install      # 三家都装；装到全局目录
-node apps/cli/dist/anynote.mjs skill install --agent=claude --agent=dsh
-node apps/cli/dist/anynote.mjs skill list         # 看装没装、版本对不对
-node apps/cli/dist/anynote.mjs skill uninstall    # 卸载（只删本 CLI 装的）
+CLI="node apps/cli/dist/anynote.mjs"
+$CLI skill install                # 装到三家全局目录（默认）
+$CLI skill install --local        # 装进当前项目（可随仓库提交给团队共用）
+$CLI skill install --agent=claude --agent=dsh
+$CLI skill list                   # 看装没装、版本对不对（同样支持 --local）
+$CLI skill uninstall --yes        # 卸载（只删本 CLI 装的）
 ```
 
-| agent | 全局 skill 根目录 | 覆盖方式 |
-|-------|------------------|---------|
-| Claude Code | `~/.claude/skills` | `CLAUDE_CONFIG_DIR` |
-| Codex | `$CODEX_HOME/skills`（默认 `~/.codex/skills`） | `CODEX_HOME` |
-| dsh | `$DSH_HOME/skills`（默认 `~/.dsh/skills`） | `DSH_HOME` |
+两种范围（互不影响，`skill list` / `skill uninstall` 也认 `--local`）：
+
+| agent | 全局根目录 | 项目级根目录 | 覆盖方式 |
+|-------|-----------|-------------|---------|
+| Claude Code | `~/.claude/skills` | `<项目根>/.claude/skills` | `CLAUDE_CONFIG_DIR`（仅全局） |
+| Codex | `$CODEX_HOME/skills`（默认 `~/.codex/skills`） | `<项目根>/.agents/skills` | `CODEX_HOME`（仅全局） |
+| dsh | `$DSH_HOME/skills`（默认 `~/.dsh/skills`） | `<项目根>/.dsh/skills` | `DSH_HOME`（仅全局） |
+
+**项目根** = 从当前目录向上**最近的含 `.git` 的目录**（与 dsh 判定项目根的规则一致——
+两边算出不同的根就会出现"装了但 agent 看不见"）。全局安装适合"任何目录下都想用"。
 
 三条设计约束（变更前先读 [`2026-09-13-cli-skill-install.md`](../../.claude/openspec/changes/2026-09-13-cli-skill-install.md)）：
 
@@ -41,6 +48,12 @@ node apps/cli/dist/anynote.mjs skill uninstall    # 卸载（只删本 CLI 装�
    `skill list` / `doctor` 会报出版本漂移。
 3. **不动用户自己的 skill**。卸载只删带版本戳的目录；安装遇到同名但没有版本戳的
    （用户手写）会跳过该 agent 并说明原因，要覆盖必须显式 `--force`。
+   另外**本仓库自己的 skill 源文**（`.claude/skills/**`，即 `src/bundled.ts` 的输入）
+   永远不可被安装副本覆盖，且这条**不受 `--force` 影响**：在本仓库跑 `--local` 会把它列进
+   `skipped`（预期行为，不是失败），本仓库请用全局安装或 `--agent=dsh --agent=codex`。
+
+> `doctor` 会**同时**报告全局与项目级两组状态（各 3 行）——只报一边会让用 `--local` 装过的
+> 人误以为没装。
 
 ## 快速上手
 

@@ -57,9 +57,16 @@ export function randomAccount() {
 export async function runCli(
   home: string,
   args: string[],
-  options: { stdin?: string; extraEnv?: Record<string, string>; withoutApiUrl?: boolean } = {},
+  options: {
+    stdin?: string;
+    extraEnv?: Record<string, string>;
+    withoutApiUrl?: boolean;
+    /** 子进程的工作目录；`--local` 靠它向上找项目根 */
+    cwd?: string;
+  } = {},
 ): Promise<CliRun> {
   const child = execFileAsync(process.execPath, [CLI_ENTRY, ...args], {
+    ...(options.cwd ? { cwd: options.cwd } : {}),
     env: {
       ...process.env,
       ANYNOTE_CONFIG_DIR: home,

@@ -43,6 +43,63 @@ anynote/
 
 ---
 
+## 让 AI 自己装好 CLI 与 skill（复制给 dsh / Codex / Claude Code）
+
+仓库自带的 `apps/cli`（`anynote`）能直接操作知识库与笔记，并配套两个 skill
+（`anynote-cli`、`anynote-notes`）。**把下面整段提示词粘给 agent**，它会自己完成构建 →
+装到当前项目 → 自检，人不用敲命令：
+
+````text
+请在本仓库（anynote）里完成 anynote CLI 的本地安装，并让它自带的 skill 在本项目可用。
+严格按下面顺序做，每步都要看退出码（非 0 就停下并把原始输出贴给我，不要继续往下猜）：
+
+1. 安装依赖并构建 CLI（产物是单文件 apps/cli/dist/anynote.mjs，已内联全部依赖与 skill）：
+     pnpm install
+     pnpm --filter @anynote/cli build
+
+2. 把 skill 装进本项目（复制模式，不是符号链接）：
+     node apps/cli/dist/anynote.mjs skill install --local
+   它会写入 <项目根>/.dsh/skills（dsh 用）、<项目根>/.agents/skills（Codex 用）、
+   <项目根>/.claude/skills（Claude Code 用）。dsh/Codex 只需前者，多余目录可以不管。
+   注：本仓库的 .claude/skills 正好是打包源，所以这一步会把 claude 放进 skipped 里跳过
+   （这是预期行为，不是失败）；不要为了让它也装而加 --force。
+
+3. 自检（这一步是唯一验收标准，把输出贴给我）：
+     node apps/cli/dist/anynote.mjs skill list --local
+   要求：dsh 那两行出现 vX.Y.Z 的版本号（不是 "无版本戳"，也不是 "未安装"）。
+
+4. 报告结果：构建产物路径、skill 实际落地路径、CLI 版本号。
+   然后停下来等我确认，不要顺手改仓库里任何其它文件、不要提交 git。
+````
+
+装完之后 `anynote-cli` / `anynote-notes` 就会出现在 agent 的可用 skill 列表里，之后让它操作 Anynote 时
+它会自己去读这两个 skill。**dsh 会监视 skill 目录并即时生效**（实测装完当前会话就能看到）；
+Claude Code / Codex 若没立刻出现，新开一个会话即可。
+
+几点说明：
+
+- **只影响当前项目**：`--local` 装到项目根（从 cwd 向上最近的含 `.git` 的目录）下，不动你的 `~/.claude`、`~/.codex`、`~/.dsh`。
+  想装成全局的（所有项目都能用）就去掉 `--local`。
+- **dsh 不读 `.claude/skills`**：它只看 `.dsh/skills` 与 `.agents/skills`，所以在本仓库里**必须**跑一次
+  `skill install --local`（或全局安装），dsh 才认得这两个 skill——这也正是上面提示词存在的理由。
+- **版本一定匹配**：skill 内容随 CLI 一起打包（构建期写进 `apps/cli/src/bundled.ts`），安装时在 `SKILL.md` 里写入
+  `<!-- anynote-cli-version: x.y.z -->`。CLI 升级后重跑一次 `skill install` 即完成升级，`skill list` 会报出漂移。
+- **不会误删你的 skill**：卸载只删带版本戳的目录；同名但没戳的（你自己写的）一律保留。
+- **在 Windows PowerShell 里 `anynote` 命令别名可能被拦**：`npm link` 生成的 `anynote.ps1` 会被 ExecutionPolicy 拒绝，
+  用 `anynote.cmd` 或直接 `node apps/cli/dist/anynote.mjs` 即可（上面提示词用的就是后者，不受影响）。
+- 想让 `anynote` 成为全局命令（任意目录直接敲）：
+  ```bash
+  cd apps/cli && npm link        # 卸载：npm unlink -g @anynote/cli
+  ```
+- CLI 还需要网关地址与登录态才能读写数据，两者都会持久化（配一次即可）：
+  ```bash
+  anynote config set api-url http://localhost:8080     # 写入 <configDir>/settings.json
+  anynote auth login --username <你的用户名> --password-stdin
+  ```
+  细节见 [`apps/cli/README.md`](apps/cli/README.md) 与 [`docs/cli/`](docs/cli/)。
+
+---
+
 ## 启动指南
 
 仓库支持三种启动方式，按使用频率列出。**先看 [环境变量文件总览](#环境变量文件总览必读)**，再挑场景。
@@ -99,7 +156,9 @@ docker compose --env-file=/dev/null \
 - `--env-file=/dev/null`：强制 compose 忽略本地 `.env`，避免 IDEA 用 host 覆盖污染容器
 - `docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便 `docker logs` 排查；中间件保留原 restart 策略
 - `--build`：首次或代码变更时必带；后续仅起容器可省
-- 浏览器访问 `http://localhost:3000/login`；先停止占用 3000 的宿主机 `next start` / `next dev`。前端健康检查访问 `/login`。前端镜像不含 Nginx。
+- 浏览器访问 `https://192.168.3.90:3000/login`（容器外 Nginx 监听内网 IP，回源 `WEB_BIND_IP:3000`）；先停止占用 3000 的宿主机 `next start` / `next dev`。前端健康检查访问 `/login`。前端镜像不含 Nginx。
+  - `NEXT_PUBLIC_APP_URL` 已默认为 `https://192.168.3.90:3000`，BFF 的 Origin 校验只认这个来源；改用别的地址访问必须在 `up` 时用环境变量覆盖并**重新构建**镜像。
+  - 该地址用**自签名证书**提供 TLS，证书与 CA 在 Nginx 的 `conf/certs/`（生成与导入步骤见该目录的 README）。**必须用 HTTPS**：明文 HTTP 的内网 IP 不是 secure context，`crypto.subtle` 与 `crypto.randomUUID` 不可用，协同建文档、笔记图片上传、Chat PDF 上传会直接崩在浏览器本地、连请求都发不出去。
 - 前端默认运行生产构建；只重建前端可用同一组 `-f` 参数执行 `up -d --build --no-deps anynote-web`。构建与运行目录隔离，不挂载宿主机 `.next`。
 
 启动约需 60–120 秒。
@@ -324,8 +383,9 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同文档均保留命名�
 | `AI_FASTAPI_ADDRESS` | `http://host.docker.internal:8000` | Python AI 服务地址；容器内部署时改为容器名 |
 | `APP_IMAGE_PREFIX` | `anynote` | Docker 镜像名前缀 |
 | `APP_IMAGE_TAG` | `local` | 生产必须显式设置发布标签 |
-| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | 公开来源，构建时内联，生产要求 HTTPS |
-| `NEXT_PUBLIC_COLLAB_WS_URL` | `ws://localhost:1234` | 生产为同源 `wss://域名/collab` |
+| `NEXT_PUBLIC_APP_URL` | `https://192.168.3.90:3000` | 公开来源，构建时内联，生产要求 HTTPS |
+| `NEXT_PUBLIC_COLLAB_WS_URL` | `wss://192.168.3.90:3000/collab` | 生产为同源 `wss://域名/collab` |
+| `COLLAB_ALLOWED_ORIGINS` | `https://192.168.3.90:3000` | 协同服务允许的握手来源，必须与 `NEXT_PUBLIC_APP_URL` 同源（精确匹配，写错一位即 403） |
 | `COLLAB_TOKEN_SECRET` | 开发密钥 | 生产必须独立生成至少 32 字符，web/collab 共用 |
 | `WEB_BIND_IP` / `COLLAB_BIND_IP` | `127.0.0.1` | 只发布外部 Nginx 所需入口 |
 | `WEB_PORT` / `COLLAB_PORT` | `3000` / `1234` | 改动后同步 Nginx upstream |
@@ -438,8 +498,8 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同文档均保留命名�
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `INTERNAL_API_URL` | `http://localhost:8080` | BFF 转发到网关的地址（**服务端专用**，不进浏览器包） |
-| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | 浏览器侧的自身源，用于 Origin 校验 |
-| `NEXT_PUBLIC_COLLAB_WS_URL` | `ws://localhost:1234` | 协同服务地址；容器化部署应指向 Nginx 上的 ws 反代路径 |
+| `NEXT_PUBLIC_APP_URL` | `https://192.168.3.90:3000` | 浏览器侧的自身源，用于 Origin 校验 |
+| `NEXT_PUBLIC_COLLAB_WS_URL` | `wss://192.168.3.90:3000/collab` | 协同服务地址；容器化部署应指向 Nginx 上的 ws 反代路径 |
 | `COLLAB_TOKEN_SECRET` | `anynote-collab-dev-secret` | 签发协同令牌的 HMAC 密钥，**必须与 `anynote-collab` 容器一致**，生产必改 |
 | `DESKTOP_EXCHANGE_KEY` | _(未设置)_ | 桌面端令牌交换密钥。**纯 Web 部署不要配**——不配即关闭该端点 |
 | `DESKTOP_ALLOWED_ORIGINS` | `tauri://localhost,...` | 允许调用令牌交换的来源，仅在上一项已配置时生效 |
@@ -565,8 +625,18 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 注意事项：
 
 - **E2E 每轮新建一个随机 `e2e` 前缀账号**并把登录态存到 `apps/web/e2e/.auth/`（已 gitignore）。账号不删（后端无注销端点），不要在生产环境跑。
-- **协同用例需要 `anynote-collab` 容器在跑**，否则 `/docs` 停在「连接中」。且 `crypto.randomUUID()` 只在 secure context 下存在：web 镜像的构建参数必须是 `http://localhost:3000`（不是 LAN IP，明文 HTTP 不算 secure context），collab 的 `COLLAB_ALLOWED_ORIGINS` 要同步成同一个 Origin。
-- **图片上传用例需要 MinIO 桶已建好**：先 `minio-init` 跑到 `minio-init done`，并确认 Redis 里的 `MIN_IO_CONFIG` 带真实凭据（改完 `sys_config` 要 `restart anynote-modules-system`，见 [`docs/minio/MINIO_PLAN.md`](docs/minio/MINIO_PLAN.md) §2.8 / §6.4）。
+- **协同用例需要 `anynote-collab` 容器在跑**，否则 `/docs` 停在「连接中」。`crypto.randomUUID()` 只在 secure context 下存在，所以 `E2E_BASE_URL` 必须是 `https://192.168.3.90:3000`（自签名证书已就绪，见「启动指南」场景 A）。
+- **E2E 跑 HTTPS 自签名站点需要让 Node 信任本地 CA**，否则 Playwright 的 `webServer` 健康检查与 `global-setup` 的注册/登录请求都会失败（表现为 120s 超时）。两种方式任选：
+
+  ```bash
+  # 方式一：让 Node 信任本地 CA（不改任何代码，推荐）
+  NODE_EXTRA_CA_CERTS="C:/Users/YXLMz/software/nginx-1.31.5/conf/certs/ca.crt" \
+  E2E_BASE_URL=https://192.168.3.90:3000 \
+  pnpm --filter web test:e2e
+  ```
+
+  浏览器侧不需要额外配置——CA 已导入 Windows「受信任的根证书颁发机构」，Chromium 直接信任。
+- **图片上传用例需要 MinIO 桶已建好**：先 `minio-init` 跑到 `minio-init done`，并确认 Redis 里的 `MIN_IO_CONFIG` 带真实凭据（改完 `sys_config` 要 `restart anynote-modules-system`，见 [`docs/minio/MINIO_PLAN.md`](docs/minio/MINIO_PLAN.md) §2.8 / §6.4）。**`MIN_IO_CONFIG.publicEndPoint` 必须是 `https://192.168.3.90:9000`**：预签名 URL 的 Host 计入 SigV4 签名，且页面在 https 下时浏览器会拦掉指向 `http://` 的混合内容，分片 PUT 会被直接 block。
 - **Lighthouse 必须用官方 desktop 预设**（脚本里已固定）。只设 `formFactor: "desktop"` 而不换节流参数，量到的是「桌面页面跑在移动 4G + 4 倍 CPU 降速下」的分数，与桌面门槛对不上。
 - 需要登录的路由靠 E2E 攒下的 `state.json` 提供 Cookie，所以 **Lighthouse 要在 E2E 之后跑**。
 - 跑之前确认没有旧的 `next start` 占着 3000 端口：同一 `.next` 上并行两个实例会产出引用不存在 chunk 的 HTML。
