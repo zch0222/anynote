@@ -11,11 +11,19 @@ import { z } from "zod";
 export type Settings = {
   /** 持久化的网关地址；未设置时由 readEnv 落到默认值 */
   apiUrl?: string;
+  /**
+   * 持久化的 Web 前端地址（浏览器授权登录打开的那个站点）。
+   *
+   * 生产上授权页与网关**通常不同域**（前端是站点子域，网关是另一个子域），
+   * 只靠环境变量意味着每次开终端都要重设，因此这里也让它落盘。
+   */
+  webUrl?: string;
 };
 
 const schema = z.object({
   version: z.literal(1).optional(),
   apiUrl: z.string().url().optional(),
+  webUrl: z.string().url().optional(),
 });
 
 function emptySettings(): Settings {
@@ -41,7 +49,10 @@ export class SettingsStore {
       const raw = await fs.readFile(this.filePath, "utf8");
       const parsed = schema.safeParse(JSON.parse(raw));
       if (!parsed.success) return emptySettings();
-      return parsed.data.apiUrl === undefined ? {} : { apiUrl: parsed.data.apiUrl };
+      return {
+        ...(parsed.data.apiUrl !== undefined ? { apiUrl: parsed.data.apiUrl } : {}),
+        ...(parsed.data.webUrl !== undefined ? { webUrl: parsed.data.webUrl } : {}),
+      };
     } catch {
       return emptySettings();
     }
@@ -52,6 +63,7 @@ export class SettingsStore {
     const payload = {
       version: 1 as const,
       ...(settings.apiUrl !== undefined ? { apiUrl: settings.apiUrl } : {}),
+      ...(settings.webUrl !== undefined ? { webUrl: settings.webUrl } : {}),
     };
     const tmp = `${this.filePath}.${process.pid}.tmp`;
     await fs.writeFile(tmp, `${JSON.stringify(payload, null, 2)}\n`, "utf8");

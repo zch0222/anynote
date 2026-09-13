@@ -95,8 +95,7 @@ export function createContext(options: ContextOptions): CliContext {
     dryRun: options.dryRun,
     version: options.version,
     // ANYNOTE_OPEN_BROWSER=0 时强制走"打不开"分支：仍然打印链接，但不 spawn 浏览器。
-    openBrowser:
-      options.openBrowser ?? (options.env.openBrowser ? openBrowser : async () => false),
+    openBrowser: options.openBrowser ?? (options.env.openBrowser ? openBrowser : async () => false),
     webFetch: options.webFetch ?? fetch,
   };
 }

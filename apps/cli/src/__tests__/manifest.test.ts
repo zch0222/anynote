@@ -114,6 +114,45 @@ describe("renderManifestMarkdown", () => {
     expect(markdown).toContain("`anynote base list`");
     expect(markdown).toContain("`anynote note set`");
   });
+
+  it("枚举参数的竖线必须转义，否则会撑破 Markdown 表格", () => {
+    // 回归护栏：类型列曾直接 join(" | ")，`enum: [api-url, web-url]` 渲染成
+    // `| api-url | web-url |`——多出一个单元格，整张表错位（真实注册表里的
+    // `manifest --format` 与 `config set --key` 都中招）。
+    const withEnum = [
+      defineCommand({
+        name: "config set",
+        summary: "写设置",
+        args: z.object({
+          key: z.enum(["api-url", "web-url"]).describe("设置项"),
+        }),
+        positional: ["key"],
+        run: async () => result(null),
+      }),
+    ];
+    const markdown = renderManifestMarkdown(buildManifest(withEnum, "1.2.3", exitCodes));
+
+    const row = markdown.split("\n").find((line) => line.includes("`<key>`"));
+    expect(row).toBeDefined();
+    // 未转义的 " | " 会被当作单元格分隔；转义后是 "\|"
+    expect(row).toContain("\\|");
+    expect(row).toContain("api-url");
+    expect(row).toContain("web-url");
+    // 数据行固定 5 个单元格 → 6 个**未转义**的分隔竖线（含首尾）
+    expect(row?.replace(/\\\|/g, "").split("|").length).toBe(7);
+  });
+
+  it("真实注册表里每一行参数表的单元格数都正确", () => {
+    // 覆盖真实命令，而不是只测构造的样例
+    const markdown = renderManifestMarkdown(buildManifest(registry, CLI_VERSION, exitCodes));
+    const rows = markdown.split("\n").filter((line) => line.startsWith("| ") && line.includes("`"));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      // 表格行形如 | a | b | c | d | e |，去掉转义后的 \| 再数分隔符
+      const cells = row.replace(/\\\|/g, "").split("|");
+      expect(cells.length).toBe(7);
+    }
+  });
 });
 
 describe("版本号", () => {

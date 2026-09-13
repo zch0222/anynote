@@ -8,6 +8,17 @@ const STATUS_LABEL: Record<string, string> = {
 
 type ArgRow = { name: string; type: string; required: boolean; default: string; note: string };
 
+/**
+ * 转义表格单元格里的竖线。
+ *
+ * Markdown 表格以 `|` 分列，未转义的值会把一行撑成多列、整张表错位。
+ * 枚举类型（`api-url | web-url`）与描述里带竖线的内容都会踩到——真实注册表里的
+ * `manifest --format`、`config set --key` 就中过招。
+ */
+function escapeCell(value: string): string {
+  return value.replace(/\|/g, "\\|");
+}
+
 function jsonSchemaRows(command: ManifestCommand): ArgRow[] {
   const schema = command.args as {
     properties?: Record<string, Record<string, unknown>>;
@@ -55,9 +66,15 @@ function renderCommand(command: ManifestCommand): string[] {
     for (const row of rows) {
       const positional = command.positional.includes(row.name);
       const label = positional ? `\`<${row.name}>\`` : `\`${optionFlag(row.name)}\``;
-      lines.push(
-        `| ${label} | ${row.type} | ${row.required ? "是" : "否"} | ${row.default || "-"} | ${row.note || "-"} |`,
-      );
+      // 每个单元格都过一遍转义：类型列有枚举竖线，说明列可能是用户写的描述
+      const cells = [
+        label,
+        row.type,
+        row.required ? "是" : "否",
+        row.default || "-",
+        row.note || "-",
+      ];
+      lines.push(`| ${cells.map(escapeCell).join(" | ")} |`);
     }
     lines.push("");
   }

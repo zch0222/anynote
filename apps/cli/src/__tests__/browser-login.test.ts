@@ -227,6 +227,46 @@ describe("auth login 浏览器授权", () => {
     });
   });
 
+  it("whoami 不通时必须在 stderr 警告，且 verified=false（别把数据面问题盖住）", async () => {
+    // 回归护栏：api-url 误设成 Web 前端时，登录"成功"但下一条命令必然 404。
+    // 旧实现只用回显的 username，输出里看不出任何异常。
+    const exchange = exchangeStub(
+      envelope({ accessToken: "cli-at", refreshToken: "cli-rt", username: "alice" }),
+    );
+    const { ctx, io } = makeContext({
+      configDir: dir,
+      // 不打 whoami 桩 → 探测失败
+      openBrowser: fakeBrowser().open,
+      webFetch: exchange.webFetch,
+    });
+
+    const output = await authLogin.run(ctx, { passwordOnly: false, timeout: 30 });
+
+    expect(output.data).toMatchObject({ verified: false });
+    expect(io.stderr).toContain("警告");
+    expect(io.stderr).toContain("Gateway");
+    // 探测失败不该让到手的登录作废
+    await expect(ctx.credentials.readProfile()).resolves.toMatchObject({ accessToken: "cli-at" });
+  });
+
+  it("whoami 通时 verified=true 且不打警告", async () => {
+    const exchange = exchangeStub(
+      envelope({ accessToken: "cli-at", refreshToken: "cli-rt", username: "alice" }),
+    );
+    const { ctx, io } = makeContext({
+      configDir: dir,
+      routes: [profileRoute],
+      openBrowser: fakeBrowser().open,
+      webFetch: exchange.webFetch,
+    });
+
+    const output = await authLogin.run(ctx, { passwordOnly: false, timeout: 30 });
+
+    expect(output.data).toMatchObject({ verified: true, username: "alice" });
+    expect(io.stderr).not.toContain("警告");
+    expect(output.render?.(output.data)).not.toContain("尚未通过网关校验");
+  });
+
   it("显式给 --username 时走口令路径，不启动回环服务", async () => {
     const exchange = exchangeStub(envelope({ accessToken: "x", refreshToken: "y" }));
     let browserOpened = false;

@@ -111,13 +111,18 @@ anynote note rm "$ID" --yes
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `ANYNOTE_API_URL` | `http://localhost:8080` | Gateway 地址，**优先级高于设置文件** |
-| `ANYNOTE_WEB_URL` | `http://localhost:3000` | 浏览器授权登录打开的 Web 前端地址 |
+| `ANYNOTE_WEB_URL` | `http://localhost:3000` | 浏览器授权登录打开的 Web 前端地址，**优先级高于设置文件** |
 | `ANYNOTE_TOKEN` | — | 直接提供 accessToken，**不落盘、不刷新**，过期即退出码 3 |
 | `ANYNOTE_PROFILE` | `default` | 凭据 profile，等价于 `--profile` |
 | `ANYNOTE_CONFIG_DIR` | `%APPDATA%\anynote` / `~/.anynote` | 凭据、设置与锁文件目录 |
 | `ANYNOTE_JSON` | — | 置 `1` 强制 JSON 输出 |
+| `ANYNOTE_OPEN_BROWSER` | 开 | 置 `0` / `false` 只打印授权链接、不拉起浏览器（无桌面环境与 E2E 用） |
 
 空字符串一律按"未设置"处理。
+
+> **两个地址是独立的**。CLI 直连 Gateway（数据面），而浏览器授权页在 Web 前端（授权面），
+> 生产上它们通常**不同域**（如 `api.example.com` vs `notes.example.com`）。两者各有
+> `config set` 可持久化，见下节。
 
 ## 登录
 
@@ -129,6 +134,18 @@ anynote auth login --username alice --password-stdin < pw.txt   # 无浏览器�
 **默认走浏览器授权**：CLI 在本机回环地址（`127.0.0.1`，端口由内核分配）起一个一次性回调服务，
 打开 Web 的 `/cli/authorize`；未登录时页面先引导登录，已登录则展示当前账号并要求点一次「授权」。
 授权后 CLI 拿到**独立的**一对令牌，与浏览器会话互不影响——CLI 登出不会把网页踢下线。
+
+授权页地址来自 `web-url`（`config set web-url` / `ANYNOTE_WEB_URL`），与数据面的
+`api-url` 相互独立。**两者都配错时症状很像**：`auth login` 会"成功"（令牌确实拿到了），
+但紧接着的每条命令都报错。所以登录后 CLI 会立刻调一次 `auth whoami` 校验数据面，
+不通时在 stderr 打警告并在 JSON 输出里给 `verified: false`。
+先跑 `anynote doctor` 看 `gateway` 与两个地址的来源最快：
+
+```bash
+anynote config set api-url https://api.example.com    # Gateway（数据面）
+anynote config set web-url https://notes.example.com  # 授权页（Web 前端）
+anynote doctor                                        # gateway 应为 "UP"
+```
 
 为什么不是"把浏览器的 token 复制过来"：Token 一旦经过浏览器地址栏就会留在历史记录、
 Referer 与中间层日志里。这里改成浏览器只传一个 60 秒有效的一次性授权码，Token 由 CLI 带
@@ -145,11 +162,11 @@ PKCE verifier 直接向 BFF 换取。协议与安全边界见
 
 | 文件 | 内容 | 写入命令 |
 |------|------|---------|
-| `<configDir>/settings.json` | 网关地址等非敏感设置 | `config set` / `config unset` |
+| `<configDir>/settings.json` | `apiUrl`（网关）与 `webUrl`（Web 前端）等非敏感设置 | `config set` / `config unset` |
 | `<configDir>/credentials.json` | 各 profile 的 token 与用户名 | `auth login` / `auth register` / `auth logout` |
 
-网关地址优先级：`--api-url` > `ANYNOTE_API_URL` > `settings.json` > 内置默认值；
-`config get` 与 `doctor` 会打印生效值与来源（`env` / `file` / `default`）。
+两项地址各自的优先级都是：`--api-url` / `ANYNOTE_API_URL`（或 `ANYNOTE_WEB_URL`）> `settings.json` > 内置默认值；
+`config get` 与 `doctor` 会分别打印生效值与来源（`env` / `file` / `default`）。
 两份文件互不干扰——登出只清凭据，不会顺手抹掉地址。
 
 ## 凭据与安全
