@@ -5,8 +5,8 @@ import { cliTokenRequestSchema } from "@/lib/auth/cli-schemas";
 import { setAuthCookies } from "@/lib/auth/cookies";
 import { authResponse, checkOrigin, readAuthResult, upstreamUnavailable } from "@/lib/auth/http";
 import { loadSessionProfile } from "@/lib/auth/profile";
-import { z } from "zod";
 import type { NextRequest } from "next/server";
+import { z } from "zod";
 
 /** 后端 `POST /api/auth/cli/token` 的响应；只取 BFF 需要的字段。 */
 const cliTokenSchema = z.object({

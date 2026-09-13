@@ -43,9 +43,9 @@ export default async function CliAuthorizePage({ searchParams }: PageProps) {
     return (
       <>
         <h1 className="text-2xl font-semibold">授权链接无效</h1>
-        <p className="mb-6 mt-2 text-sm text-muted-foreground">{parsed.reason}。</p>
-        <p className="text-sm text-muted-foreground">
-          请在终端重新执行 <code className="rounded bg-muted px-1">anynote auth login</code>，
+        <p className="mb-6 mt-2 text-sm text-label-secondary">{parsed.reason}。</p>
+        <p className="text-sm text-label-secondary">
+          请在终端重新执行 <code className="rounded bg-grouped px-1">anynote auth login</code>，
           不要手工修改或复用旧链接。
         </p>
       </>

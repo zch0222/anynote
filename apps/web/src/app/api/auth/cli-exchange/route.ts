@@ -1,8 +1,8 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { consumeCliCode } from "@/lib/auth/cli-code-store";
 import { cliExchangeRequestSchema } from "@/lib/auth/cli-schemas";
 import { authResponse } from "@/lib/auth/http";
 import { decodeJwt } from "jose";
-import { createHash, timingSafeEqual } from "node:crypto";
 
 /** RFC 7636 §4.2：`BASE64URL(SHA256(ASCII(code_verifier)))`。 */
 export function pkceChallengeOf(codeVerifier: string): string {

@@ -88,7 +88,7 @@ export function EditorPlayground() {
     <section className="mx-auto w-full max-w-6xl space-y-6">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">TipTap 编辑器 playground</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-label-secondary">
           仅开发环境可用。切换预设与示例内容，右侧查看实时序列化的 Markdown。
         </p>
       </header>
@@ -103,8 +103,8 @@ export function EditorPlayground() {
             className={cn(
               "rounded-md border px-3 py-1.5 text-sm",
               preset === item.name
-                ? "border-transparent bg-primary text-primary-foreground"
-                : "border-border bg-card text-muted-foreground hover:text-foreground",
+                ? "border-transparent bg-accent text-accent-foreground"
+                : "border-separator bg-surface text-label-secondary hover:text-label",
             )}
           >
             {item.label}
@@ -119,8 +119,8 @@ export function EditorPlayground() {
             className={cn(
               "rounded-md border px-3 py-1.5 text-sm",
               sample === name
-                ? "border-transparent bg-secondary text-secondary-foreground"
-                : "border-border bg-card text-muted-foreground hover:text-foreground",
+                ? "border-transparent bg-grouped text-label"
+                : "border-separator bg-surface text-label-secondary hover:text-label",
             )}
           >
             {name}
@@ -130,7 +130,7 @@ export function EditorPlayground() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-2">
-          <h2 className="text-sm font-medium text-muted-foreground">编辑器（{preset}）</h2>
+          <h2 className="text-sm font-medium text-label-secondary">编辑器（{preset}）</h2>
           <TiptapEditor
             preset={preset}
             value={markdown}
@@ -142,12 +142,12 @@ export function EditorPlayground() {
           />
         </div>
         <div className="space-y-2">
-          <h2 className="text-sm font-medium text-muted-foreground">
+          <h2 className="text-sm font-medium text-label-secondary">
             序列化输出（{lastEdited ? "实时" : "初始内容"}）
           </h2>
           <pre
             data-testid="playground-output"
-            className="h-[420px] overflow-auto rounded-xl border bg-muted p-4 text-xs leading-relaxed"
+            className="h-[420px] overflow-auto rounded-xl border bg-grouped p-4 text-xs leading-relaxed"
           >
             {markdown}
           </pre>
