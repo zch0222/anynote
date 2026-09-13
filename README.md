@@ -622,7 +622,7 @@ pnpm --filter web test:integration:auth     # 真实本地认证链路（需先�
 
 # 端到端与性能（都需要「生产构建 + 真实后端栈」，不进默认 pnpm test 与 CI）
 pnpm --filter web build                     # 先出生产产物
-pnpm --filter web test:e2e                  # Playwright 22 条用例（关键路径 + 编辑器回归 + 协同双端同步 + 图片直传）
+pnpm --filter web test:e2e                  # Playwright（关键路径 + UI 重设计 + 编辑器回归 + 协同双端同步 + 图片直传）
 pnpm --filter web bundle:budget             # 产物体积预算（超标退出码非零）
 pnpm --filter web lighthouse:budget         # Lighthouse 门禁（需生产前端在跑）
 
@@ -644,15 +644,15 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 
 | 命令 | 内容 | 门槛 |
 |------|------|------|
-| `pnpm --filter web test:e2e` | 登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 暗色切换 6 条关键路径，笔记编辑器的高度、保存冲突与代码块回归，协同编辑的双上下文实时同步，外加笔记图片分片直传 MinIO 并渲染（含刷新后仍可加载），共 22 条 | 全绿 |
+| `pnpm --filter web test:e2e` | 登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 浅深色切换 6 条关键路径，UI 重设计的语义 Token、知识库信息架构、画廊与编辑器版式，笔记编辑器的高度、保存冲突与代码块回归，协同编辑的双上下文实时同步，外加笔记图片分片直传 MinIO 并渲染（含刷新后仍可加载） | 全绿 |
 | `pnpm --filter web bundle:budget` | 各路由首屏 JS（含各级 layout chunk）与编辑器整包的 gzip 体积 | 首屏 ≤ 300KB、编辑器 ≤ 250KB |
-| `pnpm --filter web lighthouse:budget` | `/login`、`/dashboard`、`/notes`、`/docs`、`/ai/chat` 五条路由 | Performance ≥ 90、Accessibility ≥ 95 |
+| `pnpm --filter web lighthouse:budget` | `/login`、`/notes`、`/docs`、`/ai/chat` 四条路由 | Performance ≥ 90、Accessibility ≥ 95 |
 
 移动端（M10.x，方案见 [`docs/mobile/`](docs/mobile/)）另有一套同口径门禁：
 
 | 命令 | 内容 | 门槛 |
 |------|------|------|
-| `pnpm --filter web test:e2e -- --project=mobile` | Pixel 5 视口下的 29 条移动端用例：入口分流与逃生口、tab 导航、13 条路由无横向滚动、笔记三级导航与自动保存、工具条横滑与 40px 触摸目标、AI 与 PDF 形态、搜索跳转 | 全绿 |
+| `pnpm --filter web test:e2e -- --project=mobile` | Pixel 5 视口下的移动端用例：入口分流与逃生口、4 格 tab 导航与胶囊选中态、多条路由无横向滚动、知识库两级导航与自动保存、工具条横滑与 40px 触摸目标、AI 与 PDF 形态、搜索跳转 | 全绿 |
 | `pnpm --filter web bundle:budget` | 同一条命令：`/m/*` 路由按**路径段**单独分桶判定 | `/m/*` 首屏 ≤ 250KB，其余仍 ≤ 300KB |
 | `pnpm --filter web lighthouse:budget:mobile` | `/login`、`/m/dashboard`、`/m/notes`、`/m/docs`、`/m/ai/chat` | Performance ≥ 85、Accessibility ≥ 95 |
 
@@ -660,13 +660,14 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 同一份产物在移动口径下必然低于桌面分数（理由见 [`docs/mobile/MOBILE_PLAN.md`](docs/mobile/MOBILE_PLAN.md) D8）。
 
 两个 project 按**文件名**分工：`mobile-*.spec.ts` 只在 `mobile` 下跑，其余只在 `chromium` 下跑。
-`workers: 1` 时这样能避免全量 E2E 时间翻倍；跑 `pnpm --filter web test:e2e` 会依次跑完两边（22 + 29 条）。
+`workers: 1` 时这样能避免全量 E2E 时间翻倍；跑 `pnpm --filter web test:e2e` 会依次跑完两边。
 
 注意事项：
 
 - **E2E 每轮新建一个随机 `e2e` 前缀账号**并把登录态存到 `apps/web/e2e/.auth/`（已 gitignore）。账号不删（后端无注销端点），不要在生产环境跑。
-- **协同用例需要 `anynote-collab` 容器在跑**，否则 `/docs` 停在「连接中」。`crypto.randomUUID()` 只在 secure context 下存在，所以 `E2E_BASE_URL` 必须是 `https://192.168.3.90:3000`（自签名证书已就绪，见「启动指南」场景 A）。
-- **E2E 跑 HTTPS 自签名站点需要让 Node 信任本地 CA**，否则 Playwright 的 `webServer` 健康检查与 `global-setup` 的注册/登录请求都会失败（表现为 120s 超时）。两种方式任选：
+- **默认跑在 `http://localhost:3000`**，compose 的 `NEXT_PUBLIC_APP_URL` 保持默认值即可。若要跑自签 HTTPS 域名（如 `https://192.168.3.90:3000`），**必须同时重建镜像**：`NEXT_PUBLIC_APP_URL` 是构建期内联的，而 BFF 的 `checkOrigin` 会拿它与请求 Origin 逐字比对，两者不一致时所有 BFF 端点都返回 403（表现为登录、CLI 授权全挂）。
+- **协同用例需要 `anynote-collab` 容器在跑**，否则 `/docs` 停在「连接中」。`crypto.randomUUID()` 只在 secure context 下存在，所以 `E2E_BASE_URL` 必须是 `https://192.168.3.90:3000`（自签名证书已就绪，见「启动指南」场景 A）；此时按上一条把镜像也构到该域名。
+- **跑 HTTPS 自签名站点需要让 Node 信任本地 CA**（Playwright 的 `global-setup` 与 CLI 子进程都走 Node 的 TLS 栈），否则注册/登录请求直接失败。两种方式任选：
 
   ```bash
   # 方式一：让 Node 信任本地 CA（不改任何代码，推荐）
@@ -675,7 +676,7 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
   pnpm --filter web test:e2e
   ```
 
-  浏览器侧不需要额外配置——CA 已导入 Windows「受信任的根证书颁发机构」，Chromium 直接信任。
+  浏览器侧不需要额外配置——CA 已导入 Windows「受信任的根证书颁发机构」，Chromium 直接信任。`playwright.config.ts` 只在 `E2E_BASE_URL` 显式为 `https:` 时才设 `ignoreHTTPSErrors`；显式给了该变量时也不再尝试拉起本地 `next start`（自签地址上的健康检查必然超时）。
 - **图片上传用例需要 MinIO 桶已建好**：先 `minio-init` 跑到 `minio-init done`，并确认 Redis 里的 `MIN_IO_CONFIG` 带真实凭据（改完 `sys_config` 要 `restart anynote-modules-system`，见 [`docs/minio/MINIO_PLAN.md`](docs/minio/MINIO_PLAN.md) §2.8 / §6.4）。**`MIN_IO_CONFIG.publicEndPoint` 必须是 `https://192.168.3.90:9000`**：预签名 URL 的 Host 计入 SigV4 签名，且页面在 https 下时浏览器会拦掉指向 `http://` 的混合内容，分片 PUT 会被直接 block。
 - **Lighthouse 必须用官方 desktop 预设**（脚本里已固定）。只设 `formFactor: "desktop"` 而不换节流参数，量到的是「桌面页面跑在移动 4G + 4 倍 CPU 降速下」的分数，与桌面门槛对不上。
 - 需要登录的路由靠 E2E 攒下的 `state.json` 提供 Cookie，所以 **Lighthouse 要在 E2E 之后跑**。

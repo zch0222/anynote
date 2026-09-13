@@ -1,6 +1,61 @@
 # 前端架构速查
 
 > 框架：Next.js 15 · React 19 · TypeScript 5 · Tailwind CSS 4 · shadcn/ui
+>
+> **2026-09-14 起信息架构与设计系统按 `docs/ui/Anynote 新前端 UI 重设计.pdf` 重构**，
+> 详见 `docs/changelist/2026-09-14-ui-redesign.md`。
+
+---
+
+## 信息架构：知识库是唯一的顶层对象
+
+后端 `n_knowledge_base` 是入口实体，笔记 / 慕课 / 任务 / 资料 / 成员全部通过
+`knowledge_base_id` 归属其下。导航层级复刻这个结构，不再把四类子资源平铺成同级入口：
+
+| 层级 | 内容 |
+|------|------|
+| L0（侧栏动态列表） | 知识库 —— 来自 `useKnowledgeBasesQuery()` 的缓存，**不是静态路由表** |
+| L1（知识库内二级 Tab） | 概览 / 笔记 / 慕课 / 任务 / 资料 / 成员 |
+| 跨库能力（侧栏固定分组） | AI 对话 · AI 工作流 · PDF 问答 · 协同文档 |
+| 设置 | 收在侧栏页脚的用户卡里，不占一级导航 |
+
+二级 Tab 的地址由 `knowledgeBaseSectionHref(baseId, section)` 生成（`notes` 是裸路径
+`/notes/:id`，其余各占一段）。段名都是**静态词**，Next 的路由优先级会把它们排在
+`[noteId]` 之前；笔记 id 恒为正整数，因此不会互抢。
+
+> `/dashboard` 保留为登录后的稳定落地地址（middleware 入口分流与既有书签在用），
+> 内容 redirect 到 `/notes`，**query 原样带走**（`?desktop=1` 是版式逃生口）。
+
+---
+
+## 设计系统（Token 三层）
+
+```
+@theme        → Tailwind 工具类名（bg-surface / text-title / rounded-card）
+:root / .dark → 语义 Token 实体（--surface-primary / --label-primary …）
+组件          → 只写 Token 类名
+```
+
+**页面里不写 `dark:` 分支**：浅色 / 深色是同一套语义名的两组取值。出现 `dark:`
+通常意味着漏了一个 Token，应该回来补而不是就地打补丁。
+
+| 组 | Token | 用途 |
+|----|-------|------|
+| 背景 | `window` / `grouped` / `surface` / `elevated` / `sidebar` | 窗口 / 分组列表 / 内容卡 / 浮层 / 侧栏 |
+| 分隔 | `separator` | 分割线、输入框描边 |
+| 文字 | `label` / `label-secondary` / `label-tertiary` | 主 / 次 / 弱 |
+| 品牌 | `accent` / `accent-soft` | 主按钮与选中态（浅蓝底） |
+| 状态 | `success` / `warning` / `danger` / `organization` / `info` | 语义色 |
+| 字阶 | `text-display` / `title` / `headline` / `body` / `footnote` | 34 / 22 / 17 / 15 / 13 |
+| 圆角 | `rounded-xs` `md` `lg` `xl` `2xl` | 6 / 10 / 14 / 20 / 20 |
+| 投影 | `shadow-card` / `shadow-popover` | 卡片与浮层两个高度 |
+
+**踩坑提醒**：旧 shadcn 的 `accent` 是"浅灰 hover 底"，新系统里 `accent` 是**品牌蓝**。
+写 `bg-accent` 前先想清楚要的是品牌强调还是 hover 底——后者应该用 `bg-grouped`。
+
+知识库封面渐变由 `features/notes/lib/cover-gradient.ts` 按 **id 取模**选组
+（`.kb-cover-0..4` 定义在 `globals.css`）：后端 `cover` 字段是一张全站默认图，
+一屏卡片会长得一模一样。改色组要同时改 CSS 与 `KB_COVER_VARIANTS`。
 
 ---
 
@@ -10,20 +65,22 @@
 apps/web/
 ├── src/
 │   ├── app/                  Next.js App Router 页面
-│   │   ├── (auth)/           登录 / 注册路由组
-│   │   ├── (workspace)/      主工作区路由组（dashboard / notes / docs / ai / mooc / tasks / wikis / settings）
-│   │   ├── api/auth/*        BFF 认证路由（login / register / logout / refresh / me / collab-token / exchange）
+│   │   ├── (auth)/           登录 / 注册 / CLI 授权
+│   │   ├── (workspace)/      桌面工作区（notes 下是知识库画廊与二级 Tab）
+│   │   ├── (mobile)/m/**     移动端（21 条 /m/* 路由）
+│   │   ├── api/auth/*        BFF 认证路由（login / register / logout / refresh / me / collab-token / exchange / cli-*）
 │   │   ├── api/proxy/[...]   带鉴权的网关代理（含 SSE 透传）
 │   │   ├── layout.tsx        根布局（字体、Provider）
 │   │   └── providers.tsx     Provider 树（QueryClient、Theme）
 │   ├── components/           通用组件
 │   │   ├── ui/               shadcn 原子组件（vendored，不改不测）
 │   │   ├── editor/           TipTap 编辑器（core / extensions / presets）
-│   │   ├── layout/           AppShell、侧栏、命令面板、主题切换
+│   │   ├── layout/           AppShell、侧栏（`sidebar-nav.tsx`）、顶栏、命令面板、`navigation.ts`
 │   │   └── note/             笔记域共享组件
-│   ├── features/             功能模块（auth / notes / collab / ai / mooc / tasks / wikis / settings）
+│   ├── features/             功能模块
 │   │   └── <feature>/
-│   │       ├── components/   模块内组件
+│   │       ├── components/   模块内组件（`mobile/` 子目录放移动端变体）
+│   │       ├── lib/          纯函数（如 `notes/lib/cover-gradient.ts`）
 │   │       ├── use-*.ts      Query / Mutation hooks（**平铺，不建 hooks/ 子目录**）
 │   │       ├── query-keys.ts key 工厂
 │   │       └── schemas.ts    zod 校验
@@ -33,10 +90,12 @@ apps/web/
 │   │   ├── collab/           协同房间命名、会话、索引文档
 │   │   ├── desktop/          桌面壳桥接（令牌交换 + 本地保管）
 │   │   ├── editor/           Markdown 桥接、Shiki、KaTeX、上传
+│   │   ├── mobile/           移动端 UA 分流与搜索（纯函数，middleware 与单测共用）
+│   │   ├── format-time.ts    相对时间与卡片元信息行（纯函数）
 │   │   └── utils.ts          cn()、格式化工具
 │   ├── stores/               Zustand stores（仅 UI 状态）
 │   └── types/                全局类型声明
-├── e2e/                      Playwright 端到端用例（M8.3）
+├── e2e/                      Playwright 端到端用例
 ├── scripts/                  构建期脚本（产物预算、Lighthouse、资源同步）
 ├── integration/              真实链路的 vitest 用例（认证 / 代理）
 ├── public/
