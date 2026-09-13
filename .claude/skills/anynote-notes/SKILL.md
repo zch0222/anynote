@@ -5,8 +5,8 @@ description: Anynote 笔记与知识库的常见任务配方——批量导出�
 
 # Anynote 笔记配方
 
-前置：先读 [anynote-cli](../anynote-cli/SKILL.md) 的输出契约与退出码。以下片段都假设 `anynote` 在 PATH 上；
-在本仓库里没装全局命令时，用 `node apps/cli/dist/anynote.mjs` 替代。
+前置：先读 [anynote-cli](../anynote-cli/SKILL.md) 的输出契约与退出码。以下片段都假设 `anynote` 在 PATH 上
+（即已按 anynote-cli 的「准备」装到全局）。若命令不存在，照那里的步骤装一次，不要改用相对路径。
 
 ## 正文格式
 

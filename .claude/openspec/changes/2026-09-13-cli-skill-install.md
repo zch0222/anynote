@@ -89,16 +89,40 @@ skill 与 CLI 的命令面、退出码是**强耦合**契约：skill 写错退�
   `--local` 装到项目根且**不碰全局目录**、本地/全局 list 与 uninstall 互不干扰、
   **源文保护（含 `--force` 不放行、且报错不误导用户去加 `--force`）**、`doctor` 的 skill 汇总
   （全部写在临时目录，绝不碰开发者真实的 `~/.claude`）。
+- `apps/cli/src/__tests__/install-mode.test.ts`：`detectInstallMode` 认出全局包（scoped / unscoped /
+  Windows 路径）、仓库产物、其它位置；`isSelfContained` 只有 `repo` 为 false。
 - `apps/cli/e2e/cli.live.test.ts`：真实 CLI 进程在隔离的 `CLAUDE_CONFIG_DIR` / `CODEX_HOME` / `DSH_HOME`
   下完成 install → list → 重装幂等 → uninstall 闭环；另有一条从**假项目的深层子目录**跑
   `--local`，验证项目根判定、落点正确、全局未被污染、卸载只删项目级。
 
+## 全局安装形态（`npm install -g <tgz>`）
+
+`scripts/pack-global.mjs` 产出只含 `package.json` + 单文件 `dist/anynote.mjs` 的 tarball。
+选它而不是别的安装方式，是因为**只有它真正复制**：
+
+| 方式 | 实测结果 | 删掉仓库后 |
+|------|---------|-----------|
+| `npm install -g <tgz>` | 全局包是普通目录（`LinkType` 为空） | ✅ 照常运行 |
+| `npm install -g <目录>` | `LinkType=Junction`，Target 指向源目录 | ❌ 断链 |
+| `npm link` | 同样是符号链接 | ❌ 断链 |
+| `node apps/cli/dist/anynote.mjs` | 直接读仓库产物 | ❌ 文件不存在 |
+
+已实测：用 `npm install -g <tgz>` 装完后，**把整个仓库目录移走**，`anynote --cli-version`、
+`anynote doctor`（`installMode=global`、`selfContained=true`）、`anynote skill install` 全部正常。
+产物内也不含任何指向本仓库的绝对路径。
+
+`doctor` 增加 `installMode` / `selfContained` / `executable` 三个字段，让"我跑的是独立副本还是仓库产物"
+一眼可辨（`repo` 即依赖当前目录）。
+
 ## 需要同步的文档
 
-- `README.md`（仓库根）：新增「让 AI 自己装好 CLI 与 skill」提示词段（复制给 dsh / Codex / Claude Code）。
-- `apps/cli/README.md`：安装命令、两种范围的根目录表、复制与版本匹配的理由、源文保护。
-- `docs/cli/CLI_PLAN.md` §10.3 / §11 与 `docs/cli/CLI_MILESTONES.md` M9.5：补记两种范围。
-- `.claude/skills/anynote-cli/SKILL.md`：给 agent 看的安装与根目录表。
+- `README.md`（仓库根）：新增「让 AI 自己装好 CLI 与 skill」提示词段（复制给 dsh / Codex / Claude Code），
+  **只写全局安装**（用户明确要求），安装走 `npm install -g <tgz>`，不使用任何项目相对路径。
+- `apps/cli/README.md`：安装一节改为 tgz 流程 + 开发期直接跑的说明、两种范围的根目录表、
+  复制与版本匹配的理由、源文保护。
+- `docs/cli/CLI_PLAN.md` §10.3 / §11 与 `docs/cli/CLI_MILESTONES.md` M9.5：补记两种范围与全局安装形态。
+- `.claude/skills/anynote-cli/SKILL.md`：给 agent 看的安装与根目录表；**去掉写死的仓库相对路径**
+  （装到全局后那个路径不存在），改为"命令不在 PATH 时按本文档装一次"。
 - CLAUDE.md：禁止清单的生成物条目补上 `src/bundled.ts`。
 - `.gitignore`：忽略 `--local` 在本仓库装出来的 `.dsh/skills/` 与 `.agents/skills/`
   （它们只是 `.claude/skills` 源文的派生副本，入库会产生两份拷贝与漂移）。

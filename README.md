@@ -46,49 +46,67 @@ anynote/
 ## 让 AI 自己装好 CLI 与 skill（复制给 dsh / Codex / Claude Code）
 
 仓库自带的 `apps/cli`（`anynote`）能直接操作知识库与笔记，并配套两个 skill
-（`anynote-cli`、`anynote-notes`）。**把下面整段提示词粘给 agent**，它会自己完成构建 →
-全局安装 → 自检，人不用敲命令：
+（`anynote-cli`、`anynote-notes`）。**把下面整段提示词粘给 agent**，它会自己完成打包 →
+全局安装 → 装 skill → 自检，人不用敲命令。
+
+安装走 `npm install -g <tgz>`，效果与 `npm install -g` 一个已发布的包相同：CLI 被**复制**到全局目录，
+之后**与仓库、与当前工作目录都无关**——删掉仓库照常运行。
 
 ````text
-请在本仓库（anynote）里完成 anynote CLI 的构建，并把它自带的 skill 装到各 agent 的全局目录。
+请在 Anynote 仓库里打包并全局安装 anynote CLI，再把它自带的 skill 装到各 agent 的全局目录。
 严格按下面顺序做，每步都要看退出码（非 0 就停下并把原始输出贴给我，不要继续往下猜）：
 
-1. 安装依赖并构建 CLI（产物是单文件 apps/cli/dist/anynote.mjs，已内联全部依赖与 skill）：
+1. 安装依赖、构建、打包成一个可全局安装的 tgz：
      pnpm install
      pnpm --filter @anynote/cli build
+     pnpm --filter @anynote/cli pack:global
+   产物是 apps/cli/dist/anynote-cli-<版本>.tgz（单文件 CLI，已内联全部依赖与 skill）。
 
-2. 把 skill 全局安装（复制模式，不是符号链接）：
-     node apps/cli/dist/anynote.mjs skill install
-   它会写入 ~/.dsh/skills（dsh 用）、~/.codex/skills（Codex 用）、~/.claude/skills（Claude Code 用），
-   装完在任何目录下都能用。
+2. 全局安装（等价于 npm install -g 一个已发布的包）：
+     npm install -g apps/cli/dist/anynote-cli-<版本>.tgz
+   ⚠️ 必须装这个 tgz。不要用 npm install -g apps/cli（npm 对本地目录会建 junction 指回仓库，
+   删掉仓库就失效），也不要用 npm link（同样是链接）。
 
-3. 自检（这一步是唯一验收标准，把输出贴给我）：
-     node apps/cli/dist/anynote.mjs skill list
-   要求：dsh 那两行出现 vX.Y.Z 的版本号（不是 "无版本戳"，也不是 "未安装"）。
+3. 把 skill 装到各 agent 的全局目录：
+     anynote skill install
+   它会写入 ~/.dsh/skills（dsh 用）、~/.codex/skills（Codex 用）、~/.claude/skills（Claude Code 用）。
 
-4. 报告结果：构建产物路径、skill 实际落地路径、CLI 版本号。
+4. 自检（这一步是唯一验收标准，把输出贴给我）：
+     anynote doctor
+     anynote skill list
+   要求：doctor 的 installMode 是 "global"、selfContained 是 true；
+   skill list 里 dsh 那两行出现 vX.Y.Z 的版本号（不是 "无版本戳"，也不是 "未安装"）。
+
+5. 报告结果：tgz 路径、全局安装位置、skill 落地路径、CLI 版本号。
    然后停下来等我确认，不要顺手改仓库里任何其它文件、不要提交 git。
 ````
 
-装完之后 `anynote-cli` / `anynote-notes` 就会出现在 agent 的可用 skill 列表里，之后让它操作 Anynote 时
-它会自己去读这两个 skill。**dsh 会监视 skill 目录并即时生效**（实测装完当前会话就能看到）；
+装完之后 `anynote` 就是 PATH 上的普通全局命令，`anynote-cli` / `anynote-notes` 也会出现在 agent 的
+可用 skill 列表里。**dsh 会监视 skill 目录并即时生效**（实测装完当前会话就能看到）；
 Claude Code / Codex 若没立刻出现，新开一个会话即可。
 
 几点说明：
 
-- **全局安装，一处生效**：装到 `~/.dsh/skills`、`~/.codex/skills`、`~/.claude/skills`，
-  之后在**任何目录**下都能用，不需要为每个项目重装。
+- **全局安装、一处生效、不依赖项目目录**：CLI 复制到全局 `node_modules`，skill 复制到各家 skill 目录。
+  之后在任何目录都能用；换到别的项目、甚至删掉 Anynote 仓库都照常工作。
+  用 `anynote doctor` 确认：`installMode: "global"` + `selfContained: true`
+  （若是 `"repo"`，说明你跑的是仓库里的 `dist/anynote.mjs`，那种用法依赖当前目录）。
+- **必须装 tgz，不要 `npm install -g <目录>` / `npm link`**：npm 对本地目录参数会建
+  junction / symlink 指回仓库（Windows 上实测是 Junction），仓库一删就断链。
+  `npm pack` 出的 tarball 走解包复制，实测全局包是普通目录，删掉源目录后照常运行。
 - **dsh 不读 `~/.claude/skills`**：它只认 `~/.dsh/skills`（以及 `~/.agents/skills`），
   所以必须跑一次 `skill install` 落到 `~/.dsh/skills`，dsh 才认得这两个 skill——
   这也正是上面提示词存在的理由。
 - **版本一定匹配**：skill 内容随 CLI 一起打包（构建期写进 `apps/cli/src/bundled.ts`），安装时在 `SKILL.md` 里写入
   `<!-- anynote-cli-version: x.y.z -->`。CLI 升级后重跑一次 `skill install` 即完成升级，`skill list` 会报出漂移。
 - **不会误删你的 skill**：卸载只删带版本戳的目录；同名但没戳的（你自己写的）一律保留。
-- **在 Windows PowerShell 里 `anynote` 命令别名可能被拦**：`npm link` 生成的 `anynote.ps1` 会被 ExecutionPolicy 拒绝，
-  用 `anynote.cmd` 或直接 `node apps/cli/dist/anynote.mjs` 即可（上面提示词用的就是后者，不受影响）。
-- 想让 `anynote` 成为全局命令（任意目录直接敲）：
+- **升级 / 卸载**：
   ```bash
-  cd apps/cli && npm link        # 卸载：npm unlink -g @anynote/cli
+  # 升级：重新 build + pack + install -g，然后刷新 skill
+  pnpm --filter @anynote/cli build && pnpm --filter @anynote/cli pack:global
+  npm install -g apps/cli/dist/anynote-cli-<版本>.tgz && anynote skill install
+  # 卸载
+  anynote skill uninstall --yes && npm uninstall -g @anynote/cli
   ```
 - CLI 还需要网关地址与登录态才能读写数据，两者都会持久化（配一次即可）：
   ```bash
