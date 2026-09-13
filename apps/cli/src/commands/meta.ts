@@ -4,6 +4,7 @@ import { z } from "zod";
 import { defineCommand, result } from "../core/command";
 import { DEFAULT_API_URL, trimTrailingSlashes } from "../core/env";
 import { ExitCode, UsageError } from "../core/exit";
+import { detectInstallMode, isSelfContained } from "../core/install-mode";
 import { buildManifest } from "../manifest/json";
 import { renderManifestMarkdown } from "../manifest/markdown";
 import { summarizeSkillStatus } from "./skill";
@@ -63,10 +64,11 @@ export function resolveRepoRoot(moduleUrl: string = import.meta.url): string {
 
 export const doctor = defineCommand({
   name: "doctor",
-  summary: "自检：网关可达性、本地凭据与 skill 安装状态",
+  summary: "自检：安装方式、网关可达性、本地凭据与 skill 安装状态",
   description:
     "网关不可达时退出码 4；凭据缺失或失效时退出码 3。不会打印 token 本身。" +
-    "同时报告三家 agent 全局目录里 skill 的安装与版本匹配情况。",
+    "同时报告三家 agent 全局目录里 skill 的安装与版本匹配情况，" +
+    "以及本次运行的是全局安装的独立副本还是仓库里的构建产物。",
   args: z.object({}),
   run: async (ctx) => {
     const health = await fetch(`${ctx.env.apiUrl}/actuator/health`, {
@@ -76,8 +78,12 @@ export const doctor = defineCommand({
       .catch((error: Error) => `unreachable: ${error.message}`);
     const profile = await ctx.credentials.readProfile();
     const skills = await summarizeSkillStatus(ctx);
+    const installMode = detectInstallMode(process.argv[1] ?? "");
     return result({
       version: ctx.version,
+      installMode,
+      selfContained: isSelfContained(installMode),
+      executable: process.argv[1] ?? null,
       apiUrl: ctx.env.apiUrl,
       apiUrlSource: ctx.env.apiUrlSource,
       gateway: health,

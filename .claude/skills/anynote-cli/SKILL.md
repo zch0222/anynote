@@ -5,7 +5,7 @@ description: 用 anynote CLI 操作 Anynote 的知识库与笔记。当用户要
 
 # Anynote CLI
 
-Anynote 的命令行前端（`apps/cli`，包名 `@anynote/cli`，bin `anynote`）。它直连 Gateway（不经 Next BFF），
+Anynote 的命令行前端（包名 `@anynote/cli`，bin `anynote`）。它直连 Gateway（不经 Next BFF），
 输出对 agent 友好的 JSON 信封与固定退出码。
 
 ## 何时用
@@ -13,17 +13,21 @@ Anynote 的命令行前端（`apps/cli`，包名 `@anynote/cli`，bin `anynote`�
 - 用户要读写 Anynote 的**知识库**或**笔记**（增删改查、导出正文、改标题、移动笔记）
 - 用户要确认 Anynote 的登录状态或网关是否可达
 
-**不要用于**：修改本仓库的代码（那是普通编辑任务）、协同编辑会话、文件上传（本期未实现）。
+**不要用于**：修改 Anynote 仓库的代码（那是普通编辑任务）、协同编辑会话、文件上传（本期未实现）。
 
 ## 准备
 
 ```bash
-# 本仓库内开发时用构建产物；装到全局后可以直接写 anynote
-CLI="node apps/cli/dist/anynote.mjs"
-$CLI doctor     # 自检：网关可达性 + 本地凭据 + 各 agent 的 skill 安装情况
+anynote doctor     # 自检：网关可达性 + 本地凭据 + skill 安装情况
 ```
 
 `doctor` 的 `gateway` 不是 `UP` 时，先让用户把后端起起来，不要继续往下猜。
+
+**若提示 `anynote: command not found`**：说明 CLI 还没装到全局。让用户自己在 Anynote 仓库里执行
+`pnpm --filter @anynote/cli build && pnpm --filter @anynote/cli pack:global`，再
+`npm install -g apps/cli/dist/anynote-cli-<版本>.tgz`。
+**不要**去猜路径、也不要用 `node apps/cli/dist/anynote.mjs` 这种相对路径——那依赖当前目录，
+换一个项目就失效了。
 
 ### 安装到各 agent 的 skill 目录
 
@@ -99,9 +103,9 @@ stdout 不是 TTY 时自动输出 JSON 信封，agent 无需加 `--json`：
 ## 标准写入流程（务必照做）
 
 ```bash
-$CLI note get 1024 --json > /tmp/note.json            # 1. 取 version 与正文
+anynote note get 1024 --json > /tmp/note.json         # 1. 取 version 与正文
 node -e "…"                                           # 2. 在本地改内容
-$CLI note set 1024 --file /tmp/note.md \
+anynote note set 1024 --file /tmp/note.md \
   --version "$(node -p "require('/tmp/note.json').data.version")" --yes   # 3. 带 version 保存
 ```
 

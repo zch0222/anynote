@@ -8,6 +8,7 @@
   "scripts": {
     "build": "node scripts/build-bundled.mjs && tsup",
     "dev": "node scripts/build-bundled.mjs && tsup --watch",
+    "pack:global": "node scripts/pack-global.mjs",
     "lint": "cd ../.. && biome check apps/cli/src apps/cli/e2e apps/cli/scripts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

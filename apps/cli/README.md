@@ -7,25 +7,49 @@ Anynote 的命令行前端，供人在终端、以及 Claude Code / Codex / dsh 
 - 命令速查（生成物）：[`docs/cli/COMMANDS.md`](../../docs/cli/COMMANDS.md)
 - Skills 源文：`.claude/skills/anynote-cli` / `anynote-notes` / `anynote-dev`（`anynote-dev` 只服务本仓库，不随 CLI 分发）
 
-## 构建与运行
+## 安装（全局，独立于项目目录）
+
+推荐路径：**打包成 tarball → `npm install -g`**，效果与安装一个已发布的包相同。
+装完之后 CLI 被复制到全局 `node_modules`，与仓库、与当前工作目录都无关，删掉仓库照常运行。
 
 ```bash
-pnpm --filter @anynote/cli build        # 产出单文件 dist/anynote.mjs（已内联全部依赖与 skill）
-node apps/cli/dist/anynote.mjs --help
-node apps/cli/dist/anynote.mjs doctor   # 自检网关可达性、本地凭据与 skill 安装状态
+pnpm --filter @anynote/cli build         # 产出单文件 dist/anynote.mjs（已内联全部依赖与 skill）
+pnpm --filter @anynote/cli pack:global   # 产出 dist/anynote-cli-<版本>.tgz
+npm install -g apps/cli/dist/anynote-cli-<版本>.tgz
+
+anynote doctor                           # installMode 应为 "global"、selfContained 为 true
+anynote skill install                    # 把 skill 装到各 agent 的全局目录
 ```
 
-产物是自包含的单文件，可以脱离 pnpm workspace 拷到别处直接 `node anynote.mjs` 运行。
+⚠️ **不要用 `npm install -g apps/cli` 或 `npm link`**：npm 对本地目录参数会建 junction / symlink
+指回仓库（Windows 上实测是 Junction，`LinkType=Junction`、`Target` 指向源目录），**仓库一删就断链**。
+`npm pack` 出的 tarball 走解包复制，实测全局包是普通目录（`LinkType` 为空），删掉源目录后照常运行。
+
+升级就是重跑 `build` → `pack:global` → `install -g`，再 `anynote skill install` 刷新 skill；
+卸载 `anynote skill uninstall --yes && npm uninstall -g @anynote/cli`。
+
+### 开发期直接跑构建产物
+
+改 CLI 源码时不必每次都全局安装，可以直接跑 `dist/anynote.mjs`：
+
+```bash
+node apps/cli/dist/anynote.mjs --help
+node apps/cli/dist/anynote.mjs doctor
+```
+
+⚠️ 这种用法**依赖当前目录**（必须在仓库里跑），只适合开发调试。
+`doctor` 会把这种形态报成 `installMode: "repo"`、`selfContained: false`，以便和全局安装区分开。
+**给 agent 或日常使用请一律走上面的全局安装**，不要让 skill 里出现相对路径。
+
+产物本身是自包含单文件，可以脱离 pnpm workspace 拷到别处直接 `node anynote.mjs` 运行。
 
 ## 一键安装 skill（Claude Code / Codex / dsh）
 
 ```bash
-CLI="node apps/cli/dist/anynote.mjs"
-$CLI skill install                # 装到三家全局目录（默认）
-$CLI skill install --local        # 装进当前项目（可随仓库提交给团队共用）
-$CLI skill install --agent=claude --agent=dsh
-$CLI skill list                   # 看装没装、版本对不对（同样支持 --local）
-$CLI skill uninstall --yes        # 卸载（只删本 CLI 装的）
+anynote skill install             # 装到三家全局目录（默认）
+anynote skill install --agent=claude --agent=dsh
+anynote skill list                # 看装没装、版本对不对
+anynote skill uninstall --yes     # 卸载（只删本 CLI 装的）
 ```
 
 两种范围（互不影响，`skill list` / `skill uninstall` 也认 `--local`）：
@@ -58,27 +82,28 @@ $CLI skill uninstall --yes        # 卸载（只删本 CLI 装的）
 ## 快速上手
 
 ```bash
-CLI="node apps/cli/dist/anynote.mjs"
-
 # 登录（口令从 stdin 读，避免进 shell history）
-echo -n "你的口令" | $CLI auth login --username alice --password-stdin
-$CLI auth whoami
+echo -n "你的口令" | anynote auth login --username alice --password-stdin
+anynote auth whoami
 
 # 网关地址配一次就够（写入 <configDir>/settings.json，之后所有命令复用）
-$CLI config set api-url http://192.168.3.90:8080
-$CLI config get          # 看生效值与来源：env / file / default
+anynote config set api-url http://192.168.3.90:8080
+anynote config get       # 看生效值与来源：env / file / default
 
 # 知识库
-$CLI base create --name "我的知识库" --yes
-$CLI base list --fields id,knowledgeBaseName
-$CLI base update 70 --name "改个名" --yes
-$CLI base rm 70 --yes
+anynote base create --name "我的知识库" --yes
+anynote base list --fields id,knowledgeBaseName
+# 知识库
+anynote base create --name "我的知识库" --yes
+anynote base list --fields id,knowledgeBaseName
+anynote base update 70 --name "改个名" --yes
+anynote base rm 70 --yes
 
 # 笔记：正文就是 Markdown
-ID=$($CLI note create --base 70 --title "会议纪要" --yes | node -p "JSON.parse(require('fs').readFileSync(0)).data.id")
-$CLI note get "$ID" --out note.md
-$CLI note set "$ID" --file note.md --version "$($CLI note get "$ID" --json | node -p "JSON.parse(require('fs').readFileSync(0)).data.version")" --yes
-$CLI note rm "$ID" --yes
+ID=$(anynote note create --base 70 --title "会议纪要" --yes | node -p "JSON.parse(require('fs').readFileSync(0)).data.id")
+anynote note get "$ID" --out note.md
+anynote note set "$ID" --file note.md --version "$(anynote note get "$ID" --json | node -p "JSON.parse(require('fs').readFileSync(0)).data.version")" --yes
+anynote note rm "$ID" --yes
 ```
 
 ## 环境变量
