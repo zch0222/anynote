@@ -178,23 +178,45 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
 
 ### 完成项
 
-- [x] `src/skills/agents.ts`：三个 agent 的全局 skill 根目录解析与覆盖变量
+- [x] `src/skills/agents.ts`：**全局**与**项目级**两套 skill 根目录解析与覆盖变量
 - [x] `src/skills/stamp.ts`：版本戳的写入 / 读取（幂等替换）、frontmatter `name` 解析
-- [x] `src/skills/install.ts`：复制安装、幂等与升级、路径穿越防护、用户同名 skill 保护、卸载
-- [x] `src/commands/skill.ts`：`skill install` / `skill list` / `skill uninstall`
+- [x] `src/skills/install.ts`：复制安装、幂等与升级、路径穿越防护、用户同名 skill 保护、
+      本仓库源文保护、卸载
+- [x] `src/commands/skill.ts`：`skill install` / `skill list` / `skill uninstall`（均支持 `--local`）
 - [x] `scripts/build-bundled.mjs` + `src/bundled.ts`：构建期把 `.claude/skills/anynote-{cli,notes}` 烘焙进产物
 - [x] `src/core/settings.ts`：`<configDir>/settings.json` 的设置存储（原子写、损坏即忽略）
-- [x] `config set` / `config unset` / `config get`；`doctor` 汇报 apiUrl 来源与三家 skill 安装情况
+- [x] `config set` / `config unset` / `config get`；`doctor` 汇报 apiUrl 来源与 skill 安装情况
 - [x] `run.ts`：先定目录 → 读设置 → 读环境变量的启动顺序；`--api-url` 保持最高优先级
 - [x] `run.ts`：数组字段声明成**可重复选项**（`--agent=a --agent=b`）
+
+### 补充：项目级安装（`--local`）与 AI 自助安装提示词
+
+用户追加要求「在 README 补充一个在 dsh 中让 AI 自己安装 CLI 客户端和 skill 的提示词，在项目中本地安装」，
+因此在本期补做：
+
+- [x] `skill install/list/uninstall` 增加 `--local`：装进 `<项目根>/.dsh/skills`（dsh）、
+      `<项目根>/.agents/skills`（Codex）、`<项目根>/.claude/skills`（Claude Code）。
+      **项目根 = 从 cwd 向上最近的含 `.git` 的目录，与 dsh 的 `findProjectRoot` 同规则**
+      （规则不一致会出现「装了但 agent 看不见」）
+- [x] `doctor` 改为同时报告全局与项目级两组（各 3 行）
+- [x] 本仓库 skill 源文保护：在 anynote 仓库里跑 `--local` 时 `.claude/skills` 会被跳过
+      （那是 `bundled.ts` 的输入），且**不受 `--force` 影响**
+- [x] `README.md` 新增「让 AI 自己装好 CLI 与 skill」段：可直接粘给 agent 的四步提示词
+- [x] `.gitignore` 忽略 `--local` 装出来的 `.dsh/skills/` 与 `.agents/skills/`
+
+**关键事实（核对 dsh 源码得出）**：dsh 扫 `<项目根>/.dsh/skills`（rank 100）与
+`<项目根>/.agents/skills`（rank 200），**不扫 `.claude/skills`**。所以只有 `.claude/skills` 的
+仓库里 dsh 看不到这些 skill，必须用 `--local` 或全局安装。该结论已在真实 dsh 会话中验证：
+`--local` 装完后两个 skill 出现在会话的可用 skill 列表里，删掉目录后又消失。
 
 ### 与方案的偏差
 
 | # | 方案原文 | 实际做法 | 原因 |
 |---|---------|---------|------|
-| 1 | `CLI_PLAN.md` §11 把分发留给"M9.4 可选 plugin 打包" | 先做 `skill install`，直接复制进各 agent 的全局目录 | plugin 清单格式随 agent 版本变动，而"复制 skill 目录"是三家的公共子集，不依赖任何 plugin API |
-| 2 | （未涉及） | `--root` 只重定向 Claude Code | 只有它的配置根目录能被单个环境变量（`CLAUDE_CONFIG_DIR`）整体搬家；Codex / dsh 由 `CODEX_HOME` / `DSH_HOME` 决定，语义更清楚 |
+| 1 | `CLI_PLAN.md` §11 把分发留给"M9.4 可选 plugin 打包" | 先做 `skill install`，直接复制进各 agent 的 skill 目录 | plugin 清单格式随 agent 版本变动，而"复制 skill 目录"是三家的公共子集，不依赖任何 plugin API |
+| 2 | （未涉及） | `--root` 只重定向 Claude Code 的**全局**目录 | 只有它的配置根目录能被单个环境变量（`CLAUDE_CONFIG_DIR`）整体搬家；Codex / dsh 由 `CODEX_HOME` / `DSH_HOME` 决定，语义更清楚。项目级范围另由 `--local` 表达 |
 | 3 | （未涉及） | 版本号只在 `package.json` 写一次，`src/version.ts` 改为再导出 | 版本号出现在 manifest、`--cli-version`、skill 版本戳三处，多一份副本就多一处漂移点；构建脚本会拒绝第二份字面量 |
+| 4 | （未涉及） | 项目级安装复刻 dsh 的 `findProjectRoot`（最近 `.git`），而不是用"CLI 运行目录"或"package.json 所在目录" | 两边判定不一致时 dsh 扫的目录与 CLI 写的目录会错位，表现为"装成功了但 skill 不生效"——这是本功能最难排查的失败模式 |
 
 ### 实现期发现并修复的缺陷（均已补回归用例）
 
@@ -203,6 +225,8 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
 | 数组字段被当成普通取值选项 | `--agent=claude --agent=dsh` 只留下最后一个字符串，zod 报 `expected array, received string` | `run.test.ts`「可重复选项（数组字段）」四条、`schema-introspect.test.ts` |
 | 收集函数给了 commander 默认值 `[]` | `[]` 盖掉 zod 的 `default(["all"])`，不传 `--agent` 时所有 agent 都不装 | `run.test.ts`「不给 --agent 时走 zod 默认值」 |
 | 变参 `<value...>` 会吞掉后续参数 | `--agent claude --force` 把 `--force` 当成了第二个 agent 值 | `run.test.ts`「数组选项不会吞掉紧随其后的布尔开关」 |
+| `--local` 会覆盖本仓库的 skill 源文 | 在 anynote 仓库里跑 `--local` 时目标正好是 `.claude/skills/anynote-*`（`bundled.ts` 的输入），覆盖即破坏"快照 == 源文"的一致性门禁 | `skill-commands.test.ts`「拒绝覆盖本仓库的 skill 源文」两条（含 `--force` 也不放行） |
+| 源文被挡时错误提示误导用户加 `--force` | 源文这条不受 `--force` 影响，但提示语与"用户同名 skill"共用一句，会让人白跑一趟 | 同上第二条用例断言 message 不含 `--force` |
 
 ### 顺带修复的既有缺陷（与本期无关，但被新增用例的负载暴露）
 
@@ -212,12 +236,17 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
 
 ### 验收（2026-09-13）
 
-- `pnpm --filter @anynote/cli test` —— **216 条全绿**（M9.3 时为 137 条）
-- `pnpm test` —— 5 任务全绿，共 1210 条（web 876 · CLI 216 · collab 75 · api-core 23 · openapi-tools 20）
-- `pnpm typecheck` —— 5 任务通过；`biome check` 干净（`src/bundled.ts` 作为生成物加入 ignore）
-- `pnpm --filter @anynote/cli test:e2e` —— **43 条全绿**（真实 docker 全栈，M9.3 时为 32 条），
-  新增 skill 安装闭环与配置持久化共 11 条
-- 手工烟测：真实 `node dist/anynote.mjs skill install` 装进隔离目录，SKILL.md 带 `anynote-cli-version: 0.1.0`
+- `pnpm --filter @anynote/cli test` —— **228 条全绿**（M9.3 时为 137 条）
+- `pnpm test` —— 5 任务全绿（web · CLI · collab · api-core · openapi-tools）
+- `pnpm typecheck` —— 5 任务通过；`biome check apps/cli` 干净（`src/bundled.ts` 作为生成物加入 ignore）
+- `pnpm --filter @anynote/cli test:e2e` —— **44 条全绿**（真实 docker 全栈，M9.3 时为 32 条），
+  新增 skill 安装闭环、`--local` 项目级安装与配置持久化
+- 手工烟测（真实进程）：
+  - `skill install --local` 从假项目的**深层子目录**跑，项目根正确识别为假项目根，
+    落点是 `.dsh/skills` / `.agents/skills` / `.claude/skills`，全局目录零改动
+  - 在 anynote 仓库里跑 `--local`，`.claude/skills` 被跳进 `skipped` 且源文 `git status` 无 diff
+  - 真实 dsh 会话：`--local` 装完后 `anynote-cli` / `anynote-notes` 出现在可用 skill 列表，
+    删除 `.dsh/skills` 后列表清空——证明 dsh 读的是项目级根目录而非 `.claude/skills`
 
 ---
 

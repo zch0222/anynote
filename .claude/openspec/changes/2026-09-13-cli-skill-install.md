@@ -13,16 +13,29 @@
 
 ## 已确认契约
 
-### 安装目标（全局根目录）
+### 安装目标（两种范围）
 
-| agent | 根目录 | 覆盖方式 | 依据 |
-|-------|--------|---------|------|
-| Claude Code | `~/.claude/skills` | `CLAUDE_CONFIG_DIR` | Claude Code 的个人 skill 目录 |
-| Codex | `$CODEX_HOME/skills`（默认 `~/.codex/skills`） | `CODEX_HOME` | Codex 的 skill 安装位置（`skill-installer` 亦如此） |
-| dsh | `$DSH_HOME/skills`（默认 `~/.dsh/skills`） | `DSH_HOME` | dsh 的 user 级 skill root |
+| agent | 全局根目录 | 项目级根目录（`--local`） | 覆盖方式 |
+|-------|-----------|--------------------------|---------|
+| Claude Code | `~/.claude/skills` | `<项目根>/.claude/skills` | `CLAUDE_CONFIG_DIR`（仅全局） |
+| Codex | `$CODEX_HOME/skills`（默认 `~/.codex/skills`） | `<项目根>/.agents/skills` | `CODEX_HOME`（仅全局） |
+| dsh | `$DSH_HOME/skills`（默认 `~/.dsh/skills`） | `<项目根>/.dsh/skills` | `DSH_HOME`（仅全局） |
 
 ⚠️ dsh 只扫描 skill 根目录的**直接子项**（`<name>/SKILL.md` 或 `<name>.md`），不递归，
 所以安装的是一个个 skill 目录，不是把整个 `skills/` 塞进某个子目录。
+
+**项目根** = 从 cwd 向上**最近的含 `.git` 的目录**，找不到就用 cwd 本身。
+这条规则**必须与 dsh 的 `findProjectRoot` 一致**（`@deepseek-ai/dsh-skill-filesystem` 的实现）：
+两边算出不同的"项目根"，就会出现「装了但 agent 看不见」。
+
+已核对的三个 agent 的项目级 skill root 依据：
+
+- dsh：扫 `<项目根>/.dsh/skills`（rank 100）与 `<项目根>/.agents/skills`（rank 200）；
+- Codex：二进制内含 `.agents/skills` 与 "repo skills root" 判定；
+- Claude Code：`.claude/skills` 即仓库级 skill 目录。
+
+> ⚠️ **dsh 不扫描 `.claude/skills`**。在只有 `.claude/skills` 的仓库里 dsh 看不到这些 skill，
+> 必须用 `--local`（或全局安装）落到 `.dsh/skills`。
 
 ### 复制模式（明确不用符号链接）
 
@@ -45,9 +58,11 @@ skill 与 CLI 的命令面、退出码是**强耦合**契约：skill 写错退�
 
 | 命令 | 说明 |
 |------|------|
-| `skill install [--agent=...] [--force] [--root]` | 复制安装；可重复执行，内容没变时幂等 |
-| `skill list` | 只读检查安装状态、磁盘版本与漂移 |
-| `skill uninstall [--agent=...]` | 只删带版本戳的目录 |
+| `skill install [--agent=...] [--local] [--force] [--root]` | 复制安装；可重复执行，内容没变时幂等 |
+| `skill list [--local]` | 只读检查安装状态、磁盘版本与漂移 |
+| `skill uninstall [--agent=...] [--local]` | 只删带版本戳的目录 |
+
+`doctor` **同时**报告全局与项目级两组（各 3 行）——只报一边会让用 `--local` 装过的人误以为没装。
 
 ## 安全边界（本提案的核心约束）
 
@@ -55,23 +70,35 @@ skill 与 CLI 的命令面、退出码是**强耦合**契约：skill 写错退�
    同名但没有戳的（用户自己写的）一律保留并如实报告。
 2. **覆盖用户同名 skill 需要显式 `--force`**：`install` 发现目标位置有无戳的同名 skill 时跳过该 agent
    并回报原因；全部目标都被占用且没有 `--force` 时以用法错误（退出码 2）结束，而不是默默覆盖。
-3. **只写进受支持 agent 的全局根目录**，不跟随符号链接、不接受 skill 包内的 `..` 路径。
-4. 不碰任何凭据：skill 安装与 `credentials.json` / `ANYNOTE_TOKEN` 无关。
+3. **本仓库自己的 skill 源文永远不可被覆盖，且不受 `--force` 影响**：在本仓库跑
+   `skill install --local` 时，目标 `apps/../.claude/skills/anynote-*` 正好是 `src/bundled.ts`
+   的**输入**，覆盖它会直接破坏"打包快照 == 源文"的一致性门禁。判据是"无版本戳 **且** 内容与
+   打包进来的 SKILL.md 逐字节相同"（安装副本一定带戳，故只有源文命中）。命中时该 agent 被
+   列进 `skipped` 并给出改用全局安装的提示；`--force` 也不放行——覆盖源文不是用户的合理诉求。
+4. **只写进受支持 agent 的根目录**，不跟随符号链接、不接受 skill 包内的 `..` 路径。
+5. 不碰任何凭据：skill 安装与 `credentials.json` / `ANYNOTE_TOKEN` 无关。
 
 ## 验证
 
-- `apps/cli/src/__tests__/skill-package.test.ts`：版本戳位置与幂等、三个根目录解析与优先级、
-  **打包快照与 `.claude/skills` 源文逐字节一致**（抓"改了 skill 没重新构建"）。
+- `apps/cli/src/__tests__/skill-package.test.ts`：版本戳位置与幂等、**全局与项目级两套根目录**、
+  `findProjectRoot`（最近 `.git`、嵌套仓库取最近、无处可寻回落到起点）、`resolveSkillRoot` 的
+  scope 分支、**打包快照与 `.claude/skills` 源文逐字节一致**（抓"改了 skill 没重新构建"）。
 - `apps/cli/src/__tests__/skill-install.test.ts`：复制而非软链、幂等、升级记原版本、
   三个 agent 互不干扰、路径穿越被拒、用户同名 skill 被识别与保护、卸载只删自己装的那份。
 - `apps/cli/src/__tests__/skill-commands.test.ts`：`resolveTargets` 展开规则、命令层的跳过与 `--force`、
-  `doctor` 的 skill 汇总（全部写在临时目录，绝不碰开发者真实的 `~/.claude`）。
+  `--local` 装到项目根且**不碰全局目录**、本地/全局 list 与 uninstall 互不干扰、
+  **源文保护（含 `--force` 不放行、且报错不误导用户去加 `--force`）**、`doctor` 的 skill 汇总
+  （全部写在临时目录，绝不碰开发者真实的 `~/.claude`）。
 - `apps/cli/e2e/cli.live.test.ts`：真实 CLI 进程在隔离的 `CLAUDE_CONFIG_DIR` / `CODEX_HOME` / `DSH_HOME`
-  下完成 install → list → 重装幂等 → uninstall 闭环。
+  下完成 install → list → 重装幂等 → uninstall 闭环；另有一条从**假项目的深层子目录**跑
+  `--local`，验证项目根判定、落点正确、全局未被污染、卸载只删项目级。
 
 ## 需要同步的文档
 
-- `apps/cli/README.md`：安装命令、根目录表、复制与版本匹配的理由。
-- `docs/cli/CLI_PLAN.md` §10 / §11 与 `docs/cli/CLI_MILESTONES.md` M9.3：补记分发方式。
+- `README.md`（仓库根）：新增「让 AI 自己装好 CLI 与 skill」提示词段（复制给 dsh / Codex / Claude Code）。
+- `apps/cli/README.md`：安装命令、两种范围的根目录表、复制与版本匹配的理由、源文保护。
+- `docs/cli/CLI_PLAN.md` §10.3 / §11 与 `docs/cli/CLI_MILESTONES.md` M9.5：补记两种范围。
 - `.claude/skills/anynote-cli/SKILL.md`：给 agent 看的安装与根目录表。
 - CLAUDE.md：禁止清单的生成物条目补上 `src/bundled.ts`。
+- `.gitignore`：忽略 `--local` 在本仓库装出来的 `.dsh/skills/` 与 `.agents/skills/`
+  （它们只是 `.claude/skills` 源文的派生副本，入库会产生两份拷贝与漂移）。

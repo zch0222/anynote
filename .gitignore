@@ -49,6 +49,14 @@ packages/api-client/src/
 # 注意：openapi/specs/*.json 是 OpenAPI 契约 baseline，**入库**，由 CI 的漂移检测 diff
 # 是否与最新后端注解保持一致（详见 .github/workflows/openapi-check.yml 与 openapi/WORKFLOW.md）。
 
+# `anynote skill install --local` 在本仓库装出来的项目级 skill。
+# **本仓库的 skill 源文是 .claude/skills/**（它同时是 apps/cli/src/bundled.ts 的输入），
+# 这两个目录只是它的派生副本，入库会变成同一份内容的两份拷贝并产生漂移；
+# 需要时重跑 `pnpm --filter @anynote/cli build && anynote skill install --local` 即可。
+# 只忽略 skills 子目录：.dsh/ 下将来若有别的项目配置仍可入库。
+.dsh/skills/
+.agents/skills/
+
 # ===== Rust / Tauri（apps/desktop）=====
 **/src-tauri/target/
 **/src-tauri/gen/
