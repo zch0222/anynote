@@ -212,6 +212,35 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
 所以只把 skill 放在 `.claude/skills` 的仓库里 dsh 看不到，必须全局安装或 `--local`。
 该结论已在真实 dsh 会话中验证：装完后两个 skill 出现在会话的可用 skill 列表，删掉目录后又消失。
 
+### 补充：全局安装形态（等价 `npm install -g`）
+
+用户进一步要求「安装完成之后 cli 就完全不依赖项目目录独立可运行，跟 `npm install -g` 要实现相同效果，
+README.md 中也要有相同的安装方案，不要有任何依赖于项目目录的使用方式」。
+
+原先 README 的用法是 `node apps/cli/dist/anynote.mjs`——**仓库相对路径**，换目录即失效、删仓库即报废；
+skill 里也写死了同一个路径。本期改为真正的全局安装：
+
+- [x] `scripts/pack-global.mjs`（`pnpm --filter @anynote/cli pack:global`）产出
+      `dist/anynote-cli-<版本>.tgz`：只含 `package.json` + 单文件 `anynote.mjs`，
+      不含 node_modules、无需联网，用 `npm install -g <tgz>` 安装
+- [x] `src/core/install-mode.ts` + `doctor` 的 `installMode` / `selfContained` / `executable`：
+      让"跑的是独立副本还是仓库产物"一眼可辨
+- [x] skill 源文去掉写死的仓库相对路径（`anynote-cli`、`anynote-notes` 两处）
+- [x] README 提示词改成打包 → 全局安装 → 装 skill → 自检四步，并写明
+      **必须装 tgz、不要 `npm install -g <目录>` / `npm link`** 及其原因
+
+**实测对比（决定用 tarball 的依据）**：
+
+| 方式 | 全局包形态 | 删掉仓库后 |
+|------|-----------|-----------|
+| `npm install -g <tgz>` | 普通目录（`LinkType` 为空） | ✅ 照常运行 |
+| `npm install -g <目录>` | `LinkType=Junction`，Target 指向源目录 | ❌ 断链 |
+| `npm link` | 符号链接 | ❌ 断链 |
+| `node apps/cli/dist/anynote.mjs` | 直接读仓库产物 | ❌ 文件不存在 |
+
+已在 tgz 安装后**把整个仓库移走**复验：`--cli-version`、`doctor`（`installMode=global`、
+`selfContained=true`）、`skill install` 全部正常；产物内不含任何指向本仓库的绝对路径。
+
 ### 与方案的偏差
 
 | # | 方案原文 | 实际做法 | 原因 |
@@ -230,6 +259,7 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
 | 变参 `<value...>` 会吞掉后续参数 | `--agent claude --force` 把 `--force` 当成了第二个 agent 值 | `run.test.ts`「数组选项不会吞掉紧随其后的布尔开关」 |
 | `--local` 会覆盖本仓库的 skill 源文 | 在 anynote 仓库里跑 `--local` 时目标正好是 `.claude/skills/anynote-*`（`bundled.ts` 的输入），覆盖即破坏"快照 == 源文"的一致性门禁 | `skill-commands.test.ts`「拒绝覆盖本仓库的 skill 源文」两条（含 `--force` 也不放行） |
 | 源文被挡时错误提示误导用户加 `--force` | 源文这条不受 `--force` 影响，但提示语与"用户同名 skill"共用一句，会让人白跑一趟 | 同上第二条用例断言 message 不含 `--force` |
+| README / skill 用仓库相对路径当安装方式 | `node apps/cli/dist/anynote.mjs` 只在仓库里有效；skill 装到全局后 agent 在别处读到这个路径必然找不到文件——"全局安装"名不副实 | README 与两份 skill 源文全部改为 `npm install -g <tgz>` + `anynote <cmd>`；`doctor` 新增 `installMode` 便于识别（`install-mode.test.ts` 8 条） |
 
 ### 顺带修复的既有缺陷（与本期无关，但被新增用例的负载暴露）
 
@@ -239,7 +269,7 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
 
 ### 验收（2026-09-13）
 
-- `pnpm --filter @anynote/cli test` —— **228 条全绿**（M9.3 时为 137 条）
+- `pnpm --filter @anynote/cli test` —— **236 条全绿**（M9.3 时为 137 条）
 - `pnpm test` —— 5 任务全绿（web · CLI · collab · api-core · openapi-tools）
 - `pnpm typecheck` —— 5 任务通过；`biome check apps/cli` 干净（`src/bundled.ts` 作为生成物加入 ignore）
 - `pnpm --filter @anynote/cli test:e2e` —— **44 条全绿**（真实 docker 全栈，M9.3 时为 32 条），
@@ -250,6 +280,11 @@ if (knowledgeBase.getCreateBy().equals(loginUser.getUserId())) { throw ... }
   - 在 anynote 仓库里跑 `--local`，`.claude/skills` 被跳进 `skipped` 且源文 `git status` 无 diff
   - 真实 dsh 会话：`--local` 装完后 `anynote-cli` / `anynote-notes` 出现在可用 skill 列表，
     删除 `.dsh/skills` 后列表清空——证明 dsh 读的是项目级根目录而非 `.claude/skills`
+  - **全局安装独立性**：`pnpm --filter @anynote/cli pack:global` 产出 tgz →
+    `npm install -g <tgz>` 后检查全局包 `LinkType` 为空（真复制）→
+    **把整个仓库目录移走**，`anynote --cli-version` / `doctor` / `skill install` 全部正常；
+    对照实验确认 `npm install -g <目录>` 的 `LinkType=Junction`、`Target` 指向源目录
+  - 产物静态检查：全局 `anynote.mjs` 内不含任何指向本仓库的绝对路径
 
 ---
 

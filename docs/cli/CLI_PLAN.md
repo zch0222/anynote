@@ -848,7 +848,32 @@ anynote skill uninstall --yes    # 只删本 CLI 装的
 4. **本仓库自己的 skill 源文不可覆盖，且不受 `--force` 影响**：在 anynote 仓库跑 `--local` 时
    `.claude/skills/**` 正是 `bundled.ts` 的输入，命中即跳过并提示改用全局安装。
 
-### 10.4 漂移门禁
+### 10.4 全局安装形态（M9.5 补充，方案原文没有）
+
+装完之后 CLI 必须**完全不依赖项目目录**——等价于 `npm install -g` 一个已发布的包。
+
+```bash
+pnpm --filter @anynote/cli build         # dist/anynote.mjs（单文件，已内联依赖与 skill）
+pnpm --filter @anynote/cli pack:global   # dist/anynote-cli-<版本>.tgz
+npm install -g apps/cli/dist/anynote-cli-<版本>.tgz
+anynote doctor                           # installMode=global, selfContained=true
+```
+
+`pack-global.mjs` 生成的 tarball 只含 `package.json` + 那个单文件：不带 `node_modules`、
+安装时不联网。选 tarball 而不是别的装法，是因为**只有它真正复制**：
+
+| 方式 | 全局包形态 | 删掉仓库后 |
+|------|-----------|-----------|
+| `npm install -g <tgz>` | 普通目录（`LinkType` 为空） | ✅ 照常运行 |
+| `npm install -g <目录>` | `LinkType=Junction`，Target 指向源目录 | ❌ 断链 |
+| `npm link` | 符号链接 | ❌ 断链 |
+| `node apps/cli/dist/anynote.mjs` | 直接读仓库产物 | ❌ 文件不存在 |
+
+因此**代码、skill 与文档里都不允许出现"用仓库相对路径当使用方式"**：
+`doctor` 会用 `installMode`（`global` / `repo` / `unknown`）把这种形态标出来，
+`repo` 即 `selfContained: false`，只适合开发调试。
+
+### 10.5 漂移门禁
 
 与 `openapi/specs/*.json` baseline 同思路：生成物入库，CI 重新生成后 diff 必须为空。
 生成物现在是**三个**：`docs/cli/COMMANDS.md`、`.claude/skills/anynote-cli/reference/commands.md`、
@@ -983,5 +1008,5 @@ CLAUDE.md 的禁止清单目前写的是「前端把 token 写到 `document.cook
 | 2 | 是否抽 `packages/api-core` | ✅ 抽（外加 `codes.ts`） | `packages/api-core/`；`apps/web` 四处改为再导出，595 单测全绿 |
 | 3 | MCP 是否暴露写命令 | ✅ 维持"暴露 + destructiveHint" | **尚未实现**，随 M9.4 一起做 |
 | 4 | 首批命令面范围 | 🔻 收窄为 **auth + base + note 全套**；doc / ai / notify 推下一期 | 用户指定"本期先实现主要流程，至少完成知识库与笔记增删改查" |
-| 5 | 分发方式 | ✅ monorepo 内构建，不发 npm | `pnpm --filter @anynote/cli build` → `apps/cli/dist/anynote.mjs`（单文件，已内联全部依赖） |
+| 5 | 分发方式 | ✅ monorepo 内构建，不发公共 npm；**打包成 tarball 后全局安装**（M9.5 补充） | `pnpm --filter @anynote/cli build && pnpm --filter @anynote/cli pack:global` → `dist/anynote-cli-<版本>.tgz` → `npm install -g <tgz>`。**必须用 tgz**：`npm install -g <目录>` 与 `npm link` 都会建 junction/symlink 指回仓库，删掉仓库即断链（实测 `LinkType=Junction`）。详见 §10.5 |
 | 6 | 是否进默认 `pnpm test` | ✅ 进（e2e 另走 `test:e2e`） | `turbo test` 已自动纳入；CI 另加 `cli` job 卡生成物漂移 |
