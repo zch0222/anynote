@@ -8,9 +8,17 @@ import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useLoginMutation, useRegisterMutation } from "../use-auth-mutation";
 
-const { post, push } = vi.hoisted(() => ({ post: vi.fn(), push: vi.fn() }));
+const { post, push, searchParams } = vi.hoisted(() => ({
+  post: vi.fn(),
+  push: vi.fn(),
+  /** 登录表单读 ?next= 决定登录后去处；默认没有该参数 */
+  searchParams: { current: new URLSearchParams() },
+}));
 vi.mock("openapi-fetch", () => ({ default: vi.fn(() => ({ POST: post })) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  useSearchParams: () => searchParams.current,
+}));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() }, Toaster: () => null }));
 
 const loginInput = { username: "tester01", password: "Password1" };
@@ -21,6 +29,7 @@ function upstream(body: unknown = { code: "00000", data: { nickname: "测试用�
 
 beforeEach(() => {
   post.mockReset();
+  searchParams.current = new URLSearchParams();
 });
 
 describe.each([
@@ -148,6 +157,45 @@ describe.each([
       path === "/login" ? "/register" : "/login",
     );
   });
+});
+
+describe("登录页的 ?next= 处理（CLI 授权流程要用）", () => {
+  function showLogin() {
+    renderWithProviders(
+      <AuthLayout>
+        <LoginPage />
+      </AuthLayout>,
+    );
+  }
+
+  it("带合法的站内 next 时，登录后回到该路径", async () => {
+    searchParams.current = new URLSearchParams({
+      next: "/cli/authorize?port=51234&state=s&challenge=c",
+    });
+    post.mockResolvedValue(upstream());
+    showLogin();
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "tester01" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "Password1" } });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith("/cli/authorize?port=51234&state=s&challenge=c"),
+    );
+  });
+
+  it.each(["https://evil.example/steal", "//evil.example/steal", "javascript:alert(1)"])(
+    "拒绝开放重定向目标 %s，回落到 dashboard",
+    async (next) => {
+      searchParams.current = new URLSearchParams({ next });
+      post.mockResolvedValue(upstream());
+      showLogin();
+      fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "tester01" } });
+      fireEvent.change(screen.getByLabelText("密码"), { target: { value: "Password1" } });
+      fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"));
+    },
+  );
 });
 
 it("注册发送昵称、可选邮箱以及后端约定的性别值（0 男 / 1 女）", async () => {

@@ -3,8 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { safeNextPath } from "@/lib/auth/redirect";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { type LoginInput, loginSchema } from "../schemas";
@@ -12,6 +13,9 @@ import { useLoginMutation } from "../use-auth-mutation";
 
 export function LoginForm() {
   const router = useRouter();
+  // CLI 授权页会把完整参数带进 ?next=，登录后要回到那里继续授权。
+  // 该值用户可控，因此必须过滤成站内路径（见 lib/auth/redirect.ts）。
+  const next = safeNextPath(useSearchParams().get("next"));
   const mutation = useLoginMutation();
   const {
     register,
@@ -25,7 +29,7 @@ export function LoginForm() {
   const submit = handleSubmit(async (input) => {
     try {
       await mutation.mutateAsync(input);
-      router.push("/dashboard");
+      router.push(next);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "登录失败，请稍后重试");
     } finally {

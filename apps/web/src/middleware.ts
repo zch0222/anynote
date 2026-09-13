@@ -37,5 +37,9 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   // API 自行返回鉴权响应，避免 fetch 收到登录页；其余排除公开页面和静态资源。
-  matcher: ["/((?!api(?:/|$)|_next(?:/|$)|login(?:/|$)|register(?:/|$)|.*\\..*).*)"],
+  //
+  // `/cli` 也要排除：CLI 授权页必须对**未登录**用户可见，由页面自己带着完整参数
+  // （port / state / challenge）跳 `/login?next=...`。走中间件的话重定向不带 next，
+  // 用户登录后就回不到授权页，整条 CLI 登录链路断掉。
+  matcher: ["/((?!api(?:/|$)|cli(?:/|$)|_next(?:/|$)|login(?:/|$)|register(?:/|$)|.*\\..*).*)"],
 };
