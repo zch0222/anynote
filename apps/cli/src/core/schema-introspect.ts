@@ -24,6 +24,14 @@ export function isBooleanField(schema: unknown): boolean {
   return baseTypeOf(schema) === "boolean";
 }
 
+/**
+ * 数组字段（如 `skill install --agent`）在命令行上必须可重复给。
+ * 只看最内层类型：`z.array(...).default([...])` 外层是 default 包装。
+ */
+export function isArrayField(schema: unknown): boolean {
+  return baseTypeOf(schema) === "array";
+}
+
 export function describeField(schema: unknown): string {
   return (schema as ZodInternals).description ?? "";
 }

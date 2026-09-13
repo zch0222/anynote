@@ -6,13 +6,14 @@
   "bin": { "anynote": "./dist/anynote.mjs" },
   "engines": { "node": ">=22" },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "lint": "cd ../.. && biome check apps/cli/src",
+    "build": "node scripts/build-bundled.mjs && tsup",
+    "dev": "node scripts/build-bundled.mjs && tsup --watch",
+    "lint": "cd ../.. && biome check apps/cli/src apps/cli/e2e apps/cli/scripts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "manifest:write": "node dist/anynote.mjs manifest --format=markdown --write"
+    "manifest:write": "node dist/anynote.mjs manifest --format=markdown --write && node scripts/build-bundled.mjs",
+    "skills:write": "node scripts/build-bundled.mjs"
   },
   "dependencies": {
     "@anynote/api-client": "workspace:^",

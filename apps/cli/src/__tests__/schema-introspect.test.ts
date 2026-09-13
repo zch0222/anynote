@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { baseTypeOf, describeField, isBooleanField, optionFlag } from "../core/schema-introspect";
+import {
+  baseTypeOf,
+  describeField,
+  isArrayField,
+  isBooleanField,
+  optionFlag,
+} from "../core/schema-introspect";
 
 describe("baseTypeOf", () => {
   it("剥掉 optional / default 拿到底层类型", () => {
@@ -25,6 +31,22 @@ describe("isBooleanField", () => {
     expect(isBooleanField(z.boolean().default(false))).toBe(true);
     expect(isBooleanField(z.string().optional())).toBe(false);
     expect(isBooleanField(z.coerce.number())).toBe(false);
+    expect(isBooleanField(z.array(z.string()))).toBe(false);
+  });
+});
+
+describe("isArrayField", () => {
+  it("剥掉 default 包装后认出数组字段", () => {
+    // 回归护栏：漏判时 `--agent=a --agent=b` 会退化成单个字符串选项，
+    // 只剩最后一个值并撞上 zod 的 "expected array, received string"
+    expect(isArrayField(z.array(z.enum(["a", "b"])).default(["a"]))).toBe(true);
+    expect(isArrayField(z.array(z.string()))).toBe(true);
+  });
+
+  it("非数组字段一律 false", () => {
+    expect(isArrayField(z.boolean().default(false))).toBe(false);
+    expect(isArrayField(z.string().optional())).toBe(false);
+    expect(isArrayField(undefined)).toBe(false);
   });
 });
 

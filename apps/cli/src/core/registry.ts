@@ -1,6 +1,6 @@
 import { authLogin, authLogout, authRegister, authStatus, authWhoami } from "../commands/auth";
 import { baseCreate, baseGet, baseList, baseRemove, baseUpdate } from "../commands/base";
-import { configPath, doctor, manifest } from "../commands/meta";
+import { configGet, configPath, configSet, configUnset, doctor, manifest } from "../commands/meta";
 import {
   noteCreate,
   noteGet,
@@ -10,6 +10,7 @@ import {
   noteRemove,
   noteSet,
 } from "../commands/note";
+import { skillInstall, skillList, skillUninstall } from "../commands/skill";
 import type { RegisteredCommand } from "./command";
 
 /**
@@ -34,9 +35,15 @@ export const registry: RegisteredCommand[] = [
   noteSet,
   noteMove,
   noteRemove,
+  skillInstall,
+  skillList,
+  skillUninstall,
   manifest,
   doctor,
   configPath,
+  configGet,
+  configSet,
+  configUnset,
 ];
 
 export function findCommand(commands: RegisteredCommand[], argv: string[]) {

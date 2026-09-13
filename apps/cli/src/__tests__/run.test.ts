@@ -126,6 +126,58 @@ describe("参数解析", () => {
   });
 });
 
+describe("可重复选项（数组字段）", () => {
+  /** 形状与 skill install --agent 一致：可重复、带默认值、同级还有布尔开关。 */
+  function agentCommand() {
+    const seen: Array<Record<string, unknown>> = [];
+    const command = defineCommand({
+      name: "skill install",
+      summary: "安装 skill",
+      args: z.object({
+        agent: z.array(z.enum(["claude", "codex", "dsh", "all"])).default(["all"]),
+        force: z.boolean().default(false),
+      }),
+      run: async (_ctx, args) => {
+        seen.push(args as Record<string, unknown>);
+        return result({ ok: 1 });
+      },
+    } as Parameters<typeof defineCommand>[0]);
+    return { command, seen };
+  }
+
+  it("--agent 重复给出时收集成数组", async () => {
+    // 回归护栏：漏掉数组声明时这里解析成字符串 "dsh"，zod 会报
+    // "agent: Invalid input: expected array, received string"
+    const { command, seen } = agentCommand();
+    const { code } = await exec(["skill", "install", "--agent=claude", "--agent=dsh"], [command]);
+    expect(code).toBe(ExitCode.OK);
+    expect(seen[0]?.agent).toEqual(["claude", "dsh"]);
+  });
+
+  it("--agent 写成两个参数也收集成数组", async () => {
+    const { command, seen } = agentCommand();
+    const { code } = await exec(["skill", "install", "--agent", "claude", "--agent", "dsh"], [
+      command,
+    ]);
+    expect(code).toBe(ExitCode.OK);
+    expect(seen[0]?.agent).toEqual(["claude", "dsh"]);
+  });
+
+  it("不给 --agent 时走 zod 默认值", async () => {
+    const { command, seen } = agentCommand();
+    await exec(["skill", "install"], [command]);
+    expect(seen[0]?.agent).toEqual(["all"]);
+  });
+
+  it("数组选项不会吞掉紧随其后的布尔开关", async () => {
+    // 变参声明 `<value...>` 会连 --force 一起吃进去，所以用收集函数实现
+    const { command, seen } = agentCommand();
+    const { code } = await exec(["skill", "install", "--agent=claude", "--force"], [command]);
+    expect(code).toBe(ExitCode.OK);
+    expect(seen[0]).toEqual({ agent: ["claude"], force: true });
+  });
+});
+
 describe("写操作守卫", () => {
   it("非 TTY 缺 --yes → 退出码 2 且零请求", async () => {
     const { command, seen } = stubCommand();
@@ -235,6 +287,82 @@ describe("输出模式", () => {
     });
     const { stdout } = await exec(["--fields", "id", "base", "list"], [readonly], true);
     expect(stdout.trim()).toBe("id\n--\n1");
+  });
+});
+
+describe("设置持久化", () => {
+  /** 读回命令实际拿到的 apiUrl：run 的返回值只有退出码，所以从 ctx 里取。 */
+  function envProbe() {
+    const seen: string[] = [];
+    const command = defineCommand({
+      name: "base list",
+      summary: "列知识库",
+      args: z.object({}),
+      run: async (ctx) => {
+        seen.push(`${ctx.env.apiUrl}|${ctx.env.apiUrlSource}`);
+        return result({ apiUrl: ctx.env.apiUrl, source: ctx.env.apiUrlSource });
+      },
+    });
+    return { command, seen };
+  }
+
+  it("设置文件里的 api-url 在没有环境变量时生效", async () => {
+    await fs.writeFile(
+      path.join(dir, "settings.json"),
+      JSON.stringify({ version: 1, apiUrl: "http://192.168.3.90:8080" }),
+      "utf8",
+    );
+    const { command, seen } = envProbe();
+    const { io, state } = makeIo();
+    // 注意：显式不给 ANYNOTE_API_URL，模拟"只配过一次就再也不用管"
+    await run({
+      argv: ["base", "list"],
+      io,
+      env: { ANYNOTE_CONFIG_DIR: dir },
+      platform: "linux",
+      commands: [command],
+    });
+    expect(seen).toEqual(["http://192.168.3.90:8080|file"]);
+    expect(state.stdout).toContain("192.168.3.90");
+  });
+
+  it("ANYNOTE_API_URL 优先级高于设置文件", async () => {
+    await fs.writeFile(
+      path.join(dir, "settings.json"),
+      JSON.stringify({ version: 1, apiUrl: "http://from-file.test" }),
+      "utf8",
+    );
+    const { command, seen } = envProbe();
+    await exec(["base", "list"], [command]);
+    expect(seen).toEqual(["http://gateway.test|env"]);
+  });
+
+  it("--api-url 优先级最高，且只影响本次调用", async () => {
+    await fs.writeFile(
+      path.join(dir, "settings.json"),
+      JSON.stringify({ version: 1, apiUrl: "http://from-file.test" }),
+      "utf8",
+    );
+    const { command, seen } = envProbe();
+    await exec(["base", "list", "--api-url", "http://flag.test"], [command]);
+    expect(seen).toEqual(["http://flag.test|env"]);
+    // 环境变量在，仍是 env；但只要去掉环境变量的那一路，文件值还在
+    const settings = JSON.parse(await fs.readFile(path.join(dir, "settings.json"), "utf8"));
+    expect(settings.apiUrl).toBe("http://from-file.test");
+  });
+
+  it("设置文件损坏时回落默认值，不让所有命令都起不来", async () => {
+    await fs.writeFile(path.join(dir, "settings.json"), "{ 坏的", "utf8");
+    const { command, seen } = envProbe();
+    const { io } = makeIo();
+    await run({
+      argv: ["base", "list"],
+      io,
+      env: { ANYNOTE_CONFIG_DIR: dir },
+      platform: "linux",
+      commands: [command],
+    });
+    expect(seen).toEqual(["http://localhost:8080|default"]);
   });
 });
 
