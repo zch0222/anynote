@@ -33,10 +33,21 @@ async function createNote(page: Page, title: string): Promise<string> {
   return new URL(page.url()).pathname;
 }
 
-/** 工具栏的图片入口：点击后插一个隐藏 input，直接把文件喂给它最稳。 */
+/**
+ * 工具栏的图片入口：点击后插一个隐藏 input，直接把文件喂给它最稳。
+ *
+ * 必须**限定在编辑器工具栏里**再按名字找：左侧笔记目录的每一行都是
+ * `role="button"`（dnd-kit 注入的），笔记标题里带「图片」二字时
+ * 全局 `getByRole("button", { name: /图片/ })` 会先命中目录行，
+ * 于是点到了导航而不是上传按钮（表现为 filechooser 永远不出现）。
+ */
 async function uploadImageThroughToolbar(page: Page) {
   const chooser = page.waitForEvent("filechooser", { timeout: 30_000 });
-  await page.getByRole("button", { name: /图片/ }).first().click();
+  await page
+    .getByRole("toolbar", { name: "编辑器工具栏" })
+    .getByRole("button", { name: /图片/ })
+    .first()
+    .click();
   const fileChooser = await chooser;
   await fileChooser.setFiles({
     name: "e2e-pixel.png",

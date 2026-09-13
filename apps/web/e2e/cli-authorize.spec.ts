@@ -178,7 +178,7 @@ test.describe("CLI 浏览器授权登录", () => {
       await page.getByLabel("用户名").fill(account.username);
       await page.getByLabel("密码").fill(account.password);
       await page.getByRole("button", { name: "登录" }).click();
-      await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+      await expect(page).toHaveURL(/\/notes$/, { timeout: 30_000 });
 
       // 再授权 CLI
       const authorizeUrl = await readAuthorizeUrl(running);
@@ -198,8 +198,8 @@ test.describe("CLI 浏览器授权登录", () => {
       expect(logoutCode).toBe(0);
 
       // 浏览器会话仍然有效
-      await page.goto("/dashboard");
-      await expect(page).toHaveURL(/\/dashboard/);
+      await page.goto("/notes");
+      await expect(page).toHaveURL(/\/notes$/);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     } finally {
       running.kill();

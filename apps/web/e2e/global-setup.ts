@@ -32,7 +32,12 @@ async function globalSetup() {
     sex: 0,
   };
 
-  const context = await request.newContext({ baseURL });
+  // globalSetup 里的 request context 不吃 config 的 use.ignoreHTTPSErrors，
+  // 自签 HTTPS 域名下要在这里显式放开，否则注册请求会卡在证书校验。
+  const context = await request.newContext({
+    baseURL,
+    ignoreHTTPSErrors: baseURL.startsWith("https:"),
+  });
   try {
     // BFF 与网关都校验 Origin，脚本化请求必须显式带上（见 M7.6 环境发现）
     const headers = { origin: baseURL, "content-type": "application/json" };

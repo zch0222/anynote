@@ -52,14 +52,21 @@ async function expectNoHorizontalScroll(page: Page) {
 /** 确保存在一个知识库，返回其名称。复用移动端自己的新建入口（与桌面同一个对话框）。 */
 async function ensureMobileKnowledgeBase(page: Page): Promise<void> {
   await page.goto("/m/notes");
+  // 列表是客户端取数的：`count()` 不会等待，还在加载时会读到 0 而重复建库
+  const list = page.getByTestId("mobile-note-bases");
+  await expect(list).toBeVisible({ timeout: 30_000 });
+  await expect(list).not.toHaveAttribute("data-state", "loading", { timeout: 30_000 });
+
   const existing = page.getByRole("link", { name: new RegExp(BASE_NAME) });
   if ((await existing.count()) > 0) return;
 
-  await page.getByRole("button", { name: /新建知识库/ }).click();
+  // 移动端新建入口是顶栏右侧的圆形「+」，用 testid 定位
+  await page.getByTestId("mobile-base-create").click();
   await page.getByLabel("名称").fill(BASE_NAME);
   await page.getByLabel("简介").fill("移动端 E2E 自动创建");
   await page.getByRole("button", { name: "创建", exact: true }).click();
-  await expect(page.getByText(BASE_NAME).first()).toBeVisible({ timeout: 30_000 });
+  // 创建后会跳进新库的笔记页
+  await expect(page).toHaveURL(/\/m\/notes\/\d+$/, { timeout: 30_000 });
 }
 
 test.describe("移动端入口分流", () => {
@@ -71,15 +78,15 @@ test.describe("移动端入口分流", () => {
 
   test("?desktop=1 能逃生到桌面版，并记住选择", async ({ page }) => {
     await page.goto("/dashboard?desktop=1");
-    // 留在桌面路由，不被 UA 推回移动版
-    await expect(page).toHaveURL(/\/dashboard\?desktop=1/);
+    // 留在桌面形态，不被 UA 推回移动版；/dashboard 会重定向到画廊，query 要跟着走
+    await expect(page).toHaveURL(/\/notes\?desktop=1/, { timeout: 30_000 });
 
     const cookies = await page.context().cookies();
     expect(cookies.find((cookie) => cookie.name === "anynote_view")?.value).toBe("desktop");
 
     // 偏好生效后再访问根路径也不再跳转
     await page.goto("/");
-    await expect(page).toHaveURL(/\/dashboard$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/notes$/, { timeout: 30_000 });
 
     // 清掉偏好，别影响后面的用例
     await page.context().clearCookies({ name: "anynote_view" });
@@ -87,14 +94,13 @@ test.describe("移动端入口分流", () => {
 });
 
 test.describe("移动端外壳与导航", () => {
-  test("五个 tab 互相可达且高亮正确", async ({ page }) => {
+  test("四个 tab 互相可达且高亮正确", async ({ page }) => {
     await page.goto("/m/dashboard");
     const tabBar = page.getByTestId("mobile-tab-bar");
     await expect(tabBar).toBeVisible();
 
     for (const [title, pattern] of [
-      ["笔记", /\/m\/notes$/],
-      ["文档", /\/m\/docs$/],
+      ["知识库", /\/m\/notes$/],
       ["AI", /\/m\/ai\/chat$/],
       ["我的", /\/m\/me$/],
       ["工作台", /\/m\/dashboard$/],
@@ -106,6 +112,22 @@ test.describe("移动端外壳与导航", () => {
         "true",
       );
     }
+  });
+
+  test("选中格是 accent 实心胶囊，未选中格是透明底", async ({ page }) => {
+    await page.goto("/m/notes");
+    const tabBar = page.getByTestId("mobile-tab-bar");
+    const active = tabBar.getByRole("link", { name: "知识库" });
+    const idle = tabBar.getByRole("link", { name: "AI" });
+
+    const backgrounds = await Promise.all(
+      [active, idle].map((link) =>
+        link.evaluate((element) => getComputedStyle(element).backgroundColor),
+      ),
+    );
+    // 选中格有实心底色，未选中格没有——这是设计稿里最显眼的一处状态差
+    expect(backgrounds[0]).not.toBe("rgba(0, 0, 0, 0)");
+    expect(backgrounds[1]).toBe("rgba(0, 0, 0, 0)");
   });
 
   test("触摸目标不小于 40px", async ({ page }) => {
@@ -136,9 +158,14 @@ test.describe("移动端笔记三级导航与编辑", () => {
   let noteUrl = "";
 
   test("知识库 → 笔记列表 → 新建笔记 → 编辑器", async ({ page }) => {
+    // 助手创建后会直接落在这个知识库的笔记页；已存在时它停在列表页，所以这里再点一次
     await ensureMobileKnowledgeBase(page);
-
-    await page.getByRole("link", { name: new RegExp(BASE_NAME) }).click();
+    if (!/\/m\/notes\/\d+$/.test(page.url())) {
+      await page
+        .getByRole("link", { name: new RegExp(BASE_NAME) })
+        .first()
+        .click();
+    }
     await expect(page).toHaveURL(/\/m\/notes\/\d+$/, { timeout: 30_000 });
 
     await page.getByTestId("mobile-note-create").click();

@@ -3,11 +3,13 @@ import { replaceLeadingHeading } from "./support/editor";
 
 test("移动端顶部 H1 同步笔记标题，返回列表和刷新后仍一致", async ({ page }) => {
   await page.goto("/m/notes");
-  await page.getByRole("button", { name: /新建知识库/ }).click();
+  // 移动端新建入口是顶栏右侧的圆形「+」
+  await page.getByTestId("mobile-base-create").click();
   await page.getByLabel("名称").fill("E2E 移动标题");
   await page.getByLabel("简介").fill("标题同步回归");
   await page.getByRole("button", { name: "创建", exact: true }).click();
-  await page.getByRole("link", { name: /E2E 移动标题/ }).click();
+  // 创建后直接落进新库的笔记页
+  await expect(page).toHaveURL(/\/m\/notes\/\d+$/, { timeout: 30_000 });
   await page.getByTestId("mobile-note-create").click();
   await page.getByLabel("标题").fill("移动原始标题");
   await page.getByRole("button", { name: "创建笔记" }).click();

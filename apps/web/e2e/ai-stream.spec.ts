@@ -46,10 +46,10 @@ test.describe("关键路径 4：AI 流式对话", () => {
     await expect(page.getByText("切页不丢消息校验").first()).toBeVisible();
 
     // 必须是 SPA 软导航：整页 goto 会重建 JS 进程，store 本来就会清空，
-    // 那样测的就不是「切页不丢消息」了。侧栏里「工作台」有品牌位与导航位两个
-    // 链接，用 exact 锁定导航位那个。
-    await page.getByRole("link", { name: "工作台", exact: true }).click();
-    await expect(page).toHaveURL(/\/dashboard/);
+    // 那样测的就不是「切页不丢消息」了。重设计后侧栏一级导航里没有「工作台」，
+    // 用品牌位链接回工作区（它指向 /dashboard）。
+    await page.getByRole("link", { name: "Anynote 工作台" }).click();
+    await expect(page).toHaveURL(/\/notes$/, { timeout: 30_000 });
     await page.goBack();
 
     await expect(page.getByText("切页不丢消息校验").first()).toBeVisible({ timeout: 30_000 });

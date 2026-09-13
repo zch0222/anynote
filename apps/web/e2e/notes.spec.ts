@@ -69,17 +69,21 @@ test.describe("关键路径 2/3：创建笔记与编辑保存", () => {
 });
 
 test.describe("笔记编辑器：布局与保存冲突", () => {
-  test("编辑区占满视口高度，长文在编辑器内部滚动而不是顶长整页", async ({ page }) => {
+  test("编辑面板占满视口高度，长文在面板内部滚动而不是顶长整页", async ({ page }) => {
     expect(noteUrl, "缺少可用的笔记").not.toBe("");
     await page.goto(noteUrl);
     await focusEditor(page);
 
     const viewport = page.viewportSize();
     expect(viewport).not.toBeNull();
-    const editorBox = await page.locator(".anynote-editor").first().boundingBox();
-    expect(editorBox).not.toBeNull();
-    // 编辑器要吃掉页头之外的绝大部分高度，而不是缩成固定的 320px 内容框
-    expect(editorBox?.height ?? 0).toBeGreaterThan((viewport?.height ?? 0) * 0.6);
+
+    // 重设计后"占满视口"的职责在编辑面板上（标题与元信息行是文章的一部分，跟着正文滚），
+    // 不再是编辑器自己撑满——所以这里量面板，面板要吃掉页头之外的绝大部分高度。
+    const panel = page.getByTestId("note-panel");
+    await expect(panel).toBeVisible();
+    const panelBox = await panel.boundingBox();
+    expect(panelBox).not.toBeNull();
+    expect(panelBox?.height ?? 0).toBeGreaterThan((viewport?.height ?? 0) * 0.6);
 
     // 灌入足够长的正文，页面本身仍然不该出现纵向滚动条
     await page.keyboard.press("Control+End");
@@ -94,11 +98,11 @@ test.describe("笔记编辑器：布局与保存冲突", () => {
     });
     expect(overflow).toBeLessThanOrEqual(2);
 
-    const surfaceScrollable = await page.evaluate((selector) => {
-      const surface = document.querySelector(selector)?.parentElement;
-      return surface ? surface.scrollHeight > surface.clientHeight : false;
-    }, EDITOR_SURFACE);
-    expect(surfaceScrollable).toBe(true);
+    const scrollIsInner = await page.evaluate(() => {
+      const scroll = document.querySelector<HTMLElement>('[data-testid="note-scroll"]');
+      return scroll ? scroll.scrollHeight > scroll.clientHeight : false;
+    });
+    expect(scrollIsInner).toBe(true);
 
     await expectSaved(page);
   });
@@ -111,11 +115,9 @@ test.describe("笔记编辑器：布局与保存冲突", () => {
     // 不等 debounce 到期就离开：卸载时的 keepalive 落盘会推进服务端版本，
     // 而前端拿不到新版本号——这正是「正常编辑却弹冲突」的来源
     await page.keyboard.type(`离开前 ${Date.now()}`);
-    // 用面包屑而不是侧边栏：两处都有「笔记」链接，这里要的是编辑页内的那一个
-    await page
-      .getByRole("navigation", { name: "面包屑" })
-      .getByRole("link", { name: "笔记", exact: true })
-      .click();
+    // 用顶栏的知识库切换器（客户端路由，保留 TanStack Query 缓存）回到画廊。
+    // 侧栏里也有裸 `/notes` 链接，但切换器是编辑页顶栏里语义最明确的那一个。
+    await page.getByTestId("kb-switcher").click();
     await expect(page).toHaveURL(/\/notes$/, { timeout: 30_000 });
 
     // 走客户端路由回到同一篇笔记（保留 TanStack Query 缓存，才能复现旧版的过期版本号）

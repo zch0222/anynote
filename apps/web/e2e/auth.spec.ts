@@ -6,7 +6,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe("关键路径 1：登录", () => {
   test("未登录访问受保护页面会被中间件挡回登录页", async ({ page }) => {
-    await page.goto("/dashboard");
+    await page.goto("/notes");
     await expect(page).toHaveURL(/\/login/);
   });
 

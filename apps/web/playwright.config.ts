@@ -12,6 +12,13 @@ import { defineConfig, devices } from "@playwright/test";
  */
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
+/**
+ * 本地栈可能挂在自签 HTTPS 域名上（见 `docker-compose.yaml` 的 `NEXT_PUBLIC_APP_URL`）。
+ * 只有**显式声明**了该地址才放宽证书校验，默认的 http://localhost 不受影响——
+ * 否则这个开关会静默削弱所有本地用例的传输安全假设。
+ */
+const allowInsecureTls = baseURL.startsWith("https:");
+
 export default defineConfig({
   testDir: "./e2e",
   outputDir: "./e2e/.output",
@@ -32,6 +39,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "off",
     locale: "zh-CN",
+    ignoreHTTPSErrors: allowInsecureTls,
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] }, testIgnore: /mobile-.*\.spec\.ts/ },
@@ -43,11 +51,22 @@ export default defineConfig({
       testMatch: /mobile-.*\.spec\.ts/,
     },
   ],
-  webServer: {
-    command: "npx next start",
-    url: baseURL,
-    // 本机通常已经起着生产前端，直接复用，避免 M7.6 记录的「同一 .next 上两个 next start」问题
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
+  /**
+   * 只在**没有显式给 E2E_BASE_URL** 时才尝试拉起本地 `next start`。
+   *
+   * 显式给了地址就说明栈已经在别处跑着（Docker 容器、自签 HTTPS 域名、
+   * 局域网机器），此时探测必然失败：`webServer.url` 的健康检查不吃
+   * `use.ignoreHTTPSErrors`，自签证书会让它一直等到 120s 超时。
+   */
+  ...(process.env.E2E_BASE_URL
+    ? {}
+    : {
+        webServer: {
+          command: "npx next start",
+          url: baseURL,
+          // 本机通常已经起着生产前端，直接复用，避免 M7.6 记录的「同一 .next 上两个 next start」问题
+          reuseExistingServer: true,
+          timeout: 120_000,
+        },
+      }),
 });
