@@ -1,5 +1,6 @@
 import { unwrapEnvelope } from "@anynote/api-core";
 import { z } from "zod";
+import { openBrowser } from "../auth/browser";
 import { CredentialStore, type TokenPair } from "../auth/store";
 import {
   type AnonymousAuthClient,
@@ -31,6 +32,10 @@ export type CliContext = {
   /** --dry-run：只打印将要发送的请求 */
   dryRun: boolean;
   version: string;
+  /** 打开系统浏览器；单测注入假实现 */
+  openBrowser: (url: string) => Promise<boolean>;
+  /** 访问 Web 前端（兑换授权码）用的 fetch；单测打桩，避免真的打网络 */
+  webFetch: typeof fetch;
 };
 
 const tokenSchema = z.object({
@@ -60,6 +65,10 @@ export type ContextOptions = {
   now?: () => number;
   /** 已有实例时复用（run.ts 在构造 env 之前就要读它拿 apiUrl） */
   settings?: SettingsStore;
+  /** 打开浏览器的实现；单测注入假实现，避免真的弹窗 */
+  openBrowser?: (url: string) => Promise<boolean>;
+  /** 访问 Web 前端的 fetch；单测注入打桩实现 */
+  webFetch?: typeof fetch;
 };
 
 export function createContext(options: ContextOptions): CliContext {
@@ -85,5 +94,9 @@ export function createContext(options: ContextOptions): CliContext {
     yes: options.yes,
     dryRun: options.dryRun,
     version: options.version,
+    // ANYNOTE_OPEN_BROWSER=0 时强制走"打不开"分支：仍然打印链接，但不 spawn 浏览器。
+    openBrowser:
+      options.openBrowser ?? (options.env.openBrowser ? openBrowser : async () => false),
+    webFetch: options.webFetch ?? fetch,
   };
 }

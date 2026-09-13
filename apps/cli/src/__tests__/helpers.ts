@@ -88,6 +88,11 @@ export type TestContextOptions = {
   commands?: RegisteredCommand[];
   envToken?: string;
   now?: () => number;
+  webUrl?: string;
+  /** 注入浏览器打开实现；默认返回 false（等价"无头环境"） */
+  openBrowser?: (url: string) => Promise<boolean>;
+  /** 访问 Web 前端的 fetch 打桩；默认直接抛错，提醒用例显式提供 */
+  webFetch?: typeof fetch;
 };
 
 export function makeContext(options: TestContextOptions) {
@@ -111,10 +116,12 @@ export function makeContext(options: TestContextOptions) {
     env: {
       apiUrl,
       apiUrlSource: "env",
+      webUrl: options.webUrl ?? "http://web.test",
       token: options.envToken,
       profile: "default",
       configDir: options.configDir,
       forceJson: false,
+      openBrowser: true,
     },
     io,
     now,
@@ -122,6 +129,13 @@ export function makeContext(options: TestContextOptions) {
     yes: options.yes ?? true,
     dryRun: false,
     version: "0.0.0-test",
+    // 默认"打不开浏览器"：测试里绝不该真的弹出窗口。
+    openBrowser: options.openBrowser ?? (async () => false),
+    webFetch:
+      options.webFetch ??
+      (async () => {
+        throw new Error("测试没有提供 webFetch 打桩");
+      }),
   };
   return { ctx, io: state, calls: stub.calls };
 }

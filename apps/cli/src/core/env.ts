@@ -8,6 +8,8 @@ const apiUrlSchema = z.string().url();
 const schema = z.object({
   /** Gateway 地址；CLI 直连 Gateway，不经 Next BFF */
   ANYNOTE_API_URL: apiUrlSchema.optional(),
+  /** 浏览器授权登录时打开的 Web 前端地址；`auth login` 默认走这条路 */
+  ANYNOTE_WEB_URL: apiUrlSchema.optional(),
   /** 直接提供 accessToken：不落盘、不刷新，过期即 exit 3。CI / agent 沙箱用 */
   ANYNOTE_TOKEN: z.string().min(1).optional(),
   /** 凭据 profile 名 */
@@ -16,18 +18,30 @@ const schema = z.object({
   ANYNOTE_CONFIG_DIR: z.string().min(1).optional(),
   /** 置 1 强制 JSON 输出（等价于 --json） */
   ANYNOTE_JSON: z.string().optional(),
+  /**
+   * 置 0 禁止 `auth login` 自动拉起浏览器（只打印授权链接）。
+   * 无桌面环境的服务器上避免 spawn 失败噪声；端到端测试也靠它不弹窗。
+   */
+  ANYNOTE_OPEN_BROWSER: z.string().optional(),
 });
 
 export const DEFAULT_API_URL = "http://localhost:8080";
+
+/** 默认 Web 前端地址，与 `infra/docker-compose.yaml` 的 `NEXT_PUBLIC_APP_URL` 默认值对齐。 */
+export const DEFAULT_WEB_URL = "http://localhost:3000";
 
 export type CliEnv = {
   apiUrl: string;
   /** apiUrl 的来源：环境变量 / 设置文件 / 内置默认值，供 doctor 与 config path 展示 */
   apiUrlSource: "env" | "file" | "default";
+  /** 浏览器授权登录跳转的 Web 前端地址 */
+  webUrl: string;
   token: string | undefined;
   profile: string;
   configDir: string;
   forceJson: boolean;
+  /** 是否允许 `auth login` 自动打开浏览器 */
+  openBrowser: boolean;
 };
 
 /** 默认配置目录：Windows 用 APPDATA，其余用 ~/.anynote。 */
@@ -102,9 +116,14 @@ export function readEnv(
   return {
     apiUrl: resolved.url,
     apiUrlSource: resolved.source,
+    // Web 前端地址只有环境变量一个来源：它不影响任何鉴权判定，不值得落盘，
+    // 也就不进 settings.json（那是给"连哪个后端"这类长期配置用的）。
+    webUrl: trimTrailingSlashes(value.ANYNOTE_WEB_URL ?? DEFAULT_WEB_URL),
     token: value.ANYNOTE_TOKEN,
     profile: value.ANYNOTE_PROFILE,
     configDir: value.ANYNOTE_CONFIG_DIR ?? defaultConfigDir(platform, source),
     forceJson: value.ANYNOTE_JSON === "1" || value.ANYNOTE_JSON === "true",
+    // 默认允许开浏览器；显式置 0 / false 才关掉。
+    openBrowser: value.ANYNOTE_OPEN_BROWSER !== "0" && value.ANYNOTE_OPEN_BROWSER !== "false",
   };
 }

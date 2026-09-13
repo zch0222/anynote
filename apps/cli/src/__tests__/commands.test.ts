@@ -61,6 +61,8 @@ describe("auth", () => {
       username: "alice",
       password: "pw",
       passwordStdin: false,
+      passwordOnly: true,
+      timeout: 300,
     });
     expect(JSON.stringify(output.data)).not.toContain("at-new");
     await expect(ctx.credentials.readProfile()).resolves.toMatchObject({
@@ -81,7 +83,13 @@ describe("auth", () => {
         },
       ],
     });
-    await authLogin.run(ctx, { username: "alice", password: "pw", passwordStdin: false });
+    await authLogin.run(ctx, {
+      username: "alice",
+      password: "pw",
+      passwordStdin: false,
+      passwordOnly: true,
+      timeout: 300,
+    });
     expect(io.stderr).toContain("--password-stdin");
   });
 
@@ -93,7 +101,13 @@ describe("auth", () => {
       ],
     });
     await expect(
-      authLogin.run(ctx, { username: "alice", password: "bad", passwordStdin: false }),
+      authLogin.run(ctx, {
+        username: "alice",
+        password: "bad",
+        passwordStdin: false,
+        passwordOnly: true,
+        timeout: 300,
+      }),
     ).rejects.toMatchObject({ code: "A0201" });
   });
 

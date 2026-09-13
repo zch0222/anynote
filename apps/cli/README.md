@@ -111,12 +111,33 @@ anynote note rm "$ID" --yes
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `ANYNOTE_API_URL` | `http://localhost:8080` | Gateway 地址，**优先级高于设置文件** |
+| `ANYNOTE_WEB_URL` | `http://localhost:3000` | 浏览器授权登录打开的 Web 前端地址 |
 | `ANYNOTE_TOKEN` | — | 直接提供 accessToken，**不落盘、不刷新**，过期即退出码 3 |
 | `ANYNOTE_PROFILE` | `default` | 凭据 profile，等价于 `--profile` |
 | `ANYNOTE_CONFIG_DIR` | `%APPDATA%\anynote` / `~/.anynote` | 凭据、设置与锁文件目录 |
 | `ANYNOTE_JSON` | — | 置 `1` 强制 JSON 输出 |
 
 空字符串一律按"未设置"处理。
+
+## 登录
+
+```bash
+anynote auth login                    # 推荐：打开浏览器点一下「授权」
+anynote auth login --username alice --password-stdin < pw.txt   # 无浏览器环境
+```
+
+**默认走浏览器授权**：CLI 在本机回环地址（`127.0.0.1`，端口由内核分配）起一个一次性回调服务，
+打开 Web 的 `/cli/authorize`；未登录时页面先引导登录，已登录则展示当前账号并要求点一次「授权」。
+授权后 CLI 拿到**独立的**一对令牌，与浏览器会话互不影响——CLI 登出不会把网页踢下线。
+
+为什么不是"把浏览器的 token 复制过来"：Token 一旦经过浏览器地址栏就会留在历史记录、
+Referer 与中间层日志里。这里改成浏览器只传一个 60 秒有效的一次性授权码，Token 由 CLI 带
+PKCE verifier 直接向 BFF 换取。协议与安全边界见
+[`.claude/openspec/changes/2026-09-13-cli-browser-login.md`](../../.claude/openspec/changes/2026-09-13-cli-browser-login.md)。
+
+`--password-stdin` 路径完全保留且**仍是 agent / CI 的推荐做法**（没有浏览器可开）。
+省略 `--username` 之外的口令参数时走浏览器；给了 `--username`、`--password` 或
+`--password-stdin` 就走口令。`--password-only` 可显式要求口令路径。
 
 ## 持久化
 
@@ -137,6 +158,8 @@ anynote note rm "$ID" --yes
 - ⚠️ **Windows 上没有等价的权限保护**，同机其它进程可以读到该文件。介意就用 `ANYNOTE_TOKEN`。
 - 任何输出都不会打印 token；`auth status` 只报告存在性与获取时间。
 - 口令优先用 `--password-stdin`；用 `--password` 会在 stderr 收到告警（它会进 shell history 与进程列表）。
+- 浏览器授权路径**不接触用户口令**；回环服务只绑 `127.0.0.1`，回调必须通过 state 校验，
+  授权码一次性且 60 秒过期，兑换还需要 CLI 进程内私藏的 PKCE verifier。
 - 刷新走跨进程文件锁，多个 agent 并发调用不会把会话互相刷掉。设计见
   [`.claude/openspec/changes/2026-09-12-cli-credential-storage.md`](../../.claude/openspec/changes/2026-09-12-cli-credential-storage.md)。
 

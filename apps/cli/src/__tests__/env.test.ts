@@ -36,6 +36,20 @@ describe("readEnv", () => {
     expect(readEnv({ ANYNOTE_CONFIG_DIR: "/tmp/x" }, "linux").configDir).toBe("/tmp/x");
   });
 
+  it("ANYNOTE_WEB_URL 缺省回落到本地前端地址，并可覆盖", () => {
+    expect(readEnv({}, "linux").webUrl).toBe("http://localhost:3000");
+    expect(readEnv({ ANYNOTE_WEB_URL: "https://notes.example.com/" }, "linux").webUrl).toBe(
+      "https://notes.example.com",
+    );
+  });
+
+  it("ANYNOTE_OPEN_BROWSER 默认开启，只有显式 0 / false 才关闭", () => {
+    expect(readEnv({}, "linux").openBrowser).toBe(true);
+    expect(readEnv({ ANYNOTE_OPEN_BROWSER: "1" }, "linux").openBrowser).toBe(true);
+    expect(readEnv({ ANYNOTE_OPEN_BROWSER: "0" }, "linux").openBrowser).toBe(false);
+    expect(readEnv({ ANYNOTE_OPEN_BROWSER: "false" }, "linux").openBrowser).toBe(false);
+  });
+
   it("空字符串一律视为未设置", () => {
     // Windows / CI 常见写法：ANYNOTE_TOKEN="" 表示不要用环境变量里的 token
     const env = readEnv(

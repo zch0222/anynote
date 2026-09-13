@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -122,4 +122,98 @@ export function expectOk(run: CliRun, label: string): unknown {
     );
   }
   return run.data;
+}
+
+export type RunningCli = {
+  /** 已收到的 stderr，用于轮询授权链接是否打印出来 */
+  stderr: () => string;
+  stdout: () => string;
+  /** 等待进程退出；拿不到授权链接时用作超时兜底 */
+  wait: (timeoutMs?: number) => Promise<CliRun>;
+  kill: () => void;
+};
+
+/**
+ * 起一个**长驻**的 CLI 进程（浏览器授权登录这类命令要等用户操作，不能同步跑完）。
+ *
+ * stderr 里会先出现授权链接，测试据此拿到回环端口去投递回调——
+ * 这正是"用户在某台机器上打开浏览器"的那一步，只不过由测试来扮演浏览器。
+ */
+export function startCli(
+  home: string,
+  args: string[],
+  options: { extraEnv?: Record<string, string> } = {},
+): RunningCli {
+  const child = spawn(process.execPath, [CLI_ENTRY, ...args], {
+    env: {
+      ...process.env,
+      ANYNOTE_CONFIG_DIR: home,
+      ANYNOTE_API_URL: GATEWAY,
+      ANYNOTE_TOKEN: "",
+      ANYNOTE_PROFILE: "default",
+      ...options.extraEnv,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout?.on("data", (chunk) => {
+    stdout += String(chunk);
+  });
+  child.stderr?.on("data", (chunk) => {
+    stderr += String(chunk);
+  });
+
+  const settled = new Promise<CliRun>((resolve) => {
+    child.on("close", (code) => {
+      let parsed: { ok?: boolean; data?: unknown; error?: CliRun["error"] } | undefined;
+      try {
+        parsed = JSON.parse(stdout.trim());
+      } catch {
+        parsed = undefined;
+      }
+      resolve({
+        code: code ?? 0,
+        stdout,
+        stderr,
+        data: parsed?.ok ? parsed.data : undefined,
+        error: parsed?.ok === false ? parsed.error : undefined,
+      });
+    });
+  });
+
+  return {
+    stdout: () => stdout,
+    stderr: () => stderr,
+    wait: (timeoutMs = 60_000) =>
+      Promise.race([
+        settled,
+        new Promise<CliRun>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(`CLI 进程未在 ${timeoutMs}ms 内退出；stderr=${stderr.slice(0, 500)}`),
+              ),
+            timeoutMs,
+          ),
+        ),
+      ]),
+    kill: () => child.kill("SIGKILL"),
+  };
+}
+
+/** 轮询等待条件成立（用于等子进程把授权链接打到 stderr）。 */
+export async function waitFor<T>(
+  read: () => T | undefined,
+  label: string,
+  timeoutMs = 30_000,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = read();
+    if (value !== undefined) return value;
+    if (Date.now() > deadline) throw new Error(`等待 ${label} 超时（${timeoutMs}ms）`);
+    await new Promise((done) => setTimeout(done, 100));
+  }
 }

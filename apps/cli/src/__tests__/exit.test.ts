@@ -1,10 +1,29 @@
 import { ApiError } from "@anynote/api-core";
 import { describe, expect, it } from "vitest";
-import { ExitCode, NetworkError, UsageError, exitCodeFor, isNetworkFailure } from "../core/exit";
+import { LoopbackError } from "../auth/loopback";
+import {
+  AuthFlowError,
+  ExitCode,
+  NetworkError,
+  UsageError,
+  exitCodeFor,
+  isNetworkFailure,
+} from "../core/exit";
 
 describe("exitCodeFor", () => {
   it("用法错误 → 2", () => {
     expect(exitCodeFor(new UsageError("参数不对"))).toBe(ExitCode.USAGE);
+  });
+
+  it("登录流程失败 → 3（对 agent 的结论是「没有可用凭据，重跑 auth login」）", () => {
+    expect(exitCodeFor(new AuthFlowError("等待授权超时（300 秒）"))).toBe(ExitCode.AUTH);
+    expect(exitCodeFor(new AuthFlowError("授权已取消"))).toBe(ExitCode.AUTH);
+    // 回环服务的失败都归到同一类，包括端口被占用与 state 不匹配
+    expect(exitCodeFor(new LoopbackError("回环端口被占用"))).toBe(ExitCode.AUTH);
+  });
+
+  it("登录流程失败不是用法错误——用户没写错参数，不该提示去看 --help", () => {
+    expect(exitCodeFor(new AuthFlowError("等待授权超时（300 秒）"))).not.toBe(ExitCode.USAGE);
   });
 
   it("未授权与缺少 token → 3", () => {
