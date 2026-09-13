@@ -184,7 +184,7 @@ anynote base update 70 --name "新名字" --yes
 
 查看持久化设置与环境变量的生效结果（稳定）
 
-打印设置文件内容，以及 apiUrl 的**生效值与其来源**（env / file / default）。凭据不在这个文件里，见 config path 给出的 credentials.json。
+打印设置文件内容，以及 apiUrl / webUrl 的**生效值与其来源**（env / file / default）。这两项常指向不同站点（网关与前端通常不同域），所以分开报告。凭据不在这个文件里，见 config path 给出的 credentials.json。
 
 ### `anynote config path`
 
@@ -192,17 +192,20 @@ anynote base update 70 --name "新名字" --yes
 
 ### `anynote config set`
 
-把网关地址等设置持久化到 settings.json（稳定 · 写操作）
+把网关地址 / Web 前端地址持久化到 settings.json（稳定 · 写操作）
 
-支持 api-url。写进 `<configDir>/settings.json`，之后所有命令都会用它，无需再设环境变量；优先级仍是 `--api-url` / `ANYNOTE_API_URL` 更高。传空串等于恢复默认值。
+支持 api-url（Gateway 地址）与 web-url（浏览器授权登录打开的 Web 前端地址）。写进 `<configDir>/settings.json`，之后所有命令都会用它，无需再设环境变量；优先级仍是 `--api-url` / `ANYNOTE_API_URL` / `ANYNOTE_WEB_URL` 更高。传空串等于恢复默认值。
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
-| `<key>` | api-url | 是 | - | 设置项，当前只有 api-url |
-| `<value>` | string | 是 | - | 设置值；api-url 需要是合法 URL，传空串恢复默认 http://localhost:8080 |
+| `<key>` | api-url \| web-url | 是 | - | 设置项：api-url（网关）或 web-url（前端站点） |
+| `<value>` | string | 是 | - | 设置值，需要是合法 URL；传空串恢复该键的内置默认值 |
 
 ```bash
-anynote config set api-url http://192.168.3.90:8080
+# 网关地址
+anynote config set api-url https://api.note.example.com
+# 授权登录页所在站点
+anynote config set web-url https://note.example.com
 # 恢复默认网关地址
 anynote config set api-url ''
 ```
@@ -213,10 +216,11 @@ anynote config set api-url ''
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
-| `<key>` | api-url | 是 | - | 设置项，当前只有 api-url |
+| `<key>` | api-url \| web-url | 是 | - | 设置项：api-url 或 web-url |
 
 ```bash
 anynote config unset api-url
+anynote config unset web-url
 ```
 
 ### `anynote doctor`
@@ -233,7 +237,7 @@ anynote config unset api-url
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
-| `--format` | json | markdown | 否 | "json" | 输出格式 |
+| `--format` | json \| markdown | 否 | "json" | 输出格式 |
 | `--write` | boolean | 否 | false | 写入仓库内的生成物落点（仅 markdown） |
 | `--root` | string | 否 | - | 仓库根目录，默认由可执行文件位置推导 |
 

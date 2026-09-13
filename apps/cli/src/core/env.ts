@@ -36,6 +36,8 @@ export type CliEnv = {
   apiUrlSource: "env" | "file" | "default";
   /** 浏览器授权登录跳转的 Web 前端地址 */
   webUrl: string;
+  /** webUrl 的来源，与 apiUrlSource 同构；两者常指向不同站点，必须各自可辨 */
+  webUrlSource: "env" | "file" | "default";
   token: string | undefined;
   profile: string;
   configDir: string;
@@ -106,6 +108,25 @@ export function resolveApiUrl(
   return { url: DEFAULT_API_URL, source: "default" };
 }
 
+/**
+ * Web 前端地址的优先级与 {@link resolveApiUrl} 同构：
+ * `ANYNOTE_WEB_URL` > 设置文件 > 默认值。
+ *
+ * 生产部署里授权页与网关**通常不同域**（例如前站在 `notes.example.com`、网关在
+ * `api.example.com`），所以这两项必须各自独立解析——早先 webUrl 只认环境变量，
+ * 用户 `config set api-url` 之后 `auth login` 仍然打开 localhost:3000，正是这个原因。
+ */
+export function resolveWebUrl(
+  env: NodeJS.ProcessEnv,
+  settings: Settings,
+): { url: string; source: "env" | "file" | "default" } {
+  const fromEnv = parse(env).ANYNOTE_WEB_URL;
+  if (fromEnv !== undefined) return { url: trimTrailingSlashes(fromEnv), source: "env" };
+  const fromFile = apiUrlSchema.safeParse(settings.webUrl);
+  if (fromFile.success) return { url: trimTrailingSlashes(fromFile.data), source: "file" };
+  return { url: DEFAULT_WEB_URL, source: "default" };
+}
+
 export function readEnv(
   source: NodeJS.ProcessEnv = process.env,
   platform: string = process.platform,
@@ -113,12 +134,12 @@ export function readEnv(
 ): CliEnv {
   const value = parse(source);
   const resolved = resolveApiUrl(source, settings);
+  const resolvedWeb = resolveWebUrl(source, settings);
   return {
     apiUrl: resolved.url,
     apiUrlSource: resolved.source,
-    // Web 前端地址只有环境变量一个来源：它不影响任何鉴权判定，不值得落盘，
-    // 也就不进 settings.json（那是给"连哪个后端"这类长期配置用的）。
-    webUrl: trimTrailingSlashes(value.ANYNOTE_WEB_URL ?? DEFAULT_WEB_URL),
+    webUrl: resolvedWeb.url,
+    webUrlSource: resolvedWeb.source,
     token: value.ANYNOTE_TOKEN,
     profile: value.ANYNOTE_PROFILE,
     configDir: value.ANYNOTE_CONFIG_DIR ?? defaultConfigDir(platform, source),

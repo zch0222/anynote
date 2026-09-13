@@ -41,6 +41,40 @@ describe("readEnv", () => {
     expect(readEnv({ ANYNOTE_WEB_URL: "https://notes.example.com/" }, "linux").webUrl).toBe(
       "https://notes.example.com",
     );
+    expect(readEnv({}, "linux").webUrlSource).toBe("default");
+    expect(readEnv({ ANYNOTE_WEB_URL: "https://notes.example.com" }, "linux").webUrlSource).toBe(
+      "env",
+    );
+  });
+
+  it("设置文件里的 webUrl 在没有环境变量时生效（授权页与网关常不同域，必须能落盘）", () => {
+    const settings = { webUrl: "https://notes.example.com/" };
+    const env = readEnv({}, "linux", settings);
+    expect(env.webUrl).toBe("https://notes.example.com");
+    expect(env.webUrlSource).toBe("file");
+  });
+
+  it("ANYNOTE_WEB_URL 优先级高于设置文件里的 webUrl", () => {
+    const settings = { webUrl: "https://from-file.test" };
+    const env = readEnv({ ANYNOTE_WEB_URL: "https://from-env.test" }, "linux", settings);
+    expect(env.webUrl).toBe("https://from-env.test");
+    expect(env.webUrlSource).toBe("env");
+  });
+
+  it("设置文件里的 webUrl 非法时回落默认值，不让所有命令起不来", () => {
+    const env = readEnv({}, "linux", { webUrl: "不是 URL" });
+    expect(env.webUrl).toBe("http://localhost:3000");
+    expect(env.webUrlSource).toBe("default");
+  });
+
+  it("webUrl 与 apiUrl 各自独立解析，互不覆盖", () => {
+    const env = readEnv({ ANYNOTE_API_URL: "https://api.test" }, "linux", {
+      webUrl: "https://web.test",
+    });
+    expect(env.apiUrl).toBe("https://api.test");
+    expect(env.apiUrlSource).toBe("env");
+    expect(env.webUrl).toBe("https://web.test");
+    expect(env.webUrlSource).toBe("file");
   });
 
   it("ANYNOTE_OPEN_BROWSER 默认开启，只有显式 0 / false 才关闭", () => {

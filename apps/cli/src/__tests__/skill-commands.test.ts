@@ -6,6 +6,7 @@ import { bundledSkills } from "../bundled";
 import { configGet, configPath, configSet, configUnset, doctor } from "../commands/meta";
 import { resolveTargets, skillInstall, skillList, skillUninstall } from "../commands/skill";
 import { UsageError } from "../core/exit";
+import { SettingsStore } from "../core/settings";
 import { makeContext } from "./helpers";
 
 let dir: string;
@@ -471,5 +472,72 @@ describe("config 命令", () => {
     await configUnset.run(context(), { key: "api-url" });
     const raw = JSON.parse(await fs.readFile(path.join(dir, "settings.json"), "utf8"));
     expect(raw.apiUrl).toBeUndefined();
+  });
+
+  it("config set web-url 落盘，与 api-url 互不覆盖", async () => {
+    // 生产上授权页与网关常不同域，两个键必须能各自设置
+    await configSet.run(context(), { key: "api-url", value: "https://api.test" });
+    await configSet.run(context(), { key: "web-url", value: "https://web.test" });
+    const raw = JSON.parse(await fs.readFile(path.join(dir, "settings.json"), "utf8"));
+    expect(raw).toMatchObject({ apiUrl: "https://api.test", webUrl: "https://web.test" });
+  });
+
+  it("config set api-url 不会抹掉已有的 web-url（反之亦然）", async () => {
+    await configSet.run(context(), { key: "web-url", value: "https://web.test" });
+    await configSet.run(context(), { key: "api-url", value: "https://api.test" });
+    const store = new SettingsStore(dir);
+    await expect(store.read()).resolves.toEqual({
+      webUrl: "https://web.test",
+      apiUrl: "https://api.test",
+    });
+  });
+
+  it("config set web-url 空串只清这一项，api-url 仍在", async () => {
+    await configSet.run(context(), { key: "api-url", value: "https://api.test" });
+    await configSet.run(context(), { key: "web-url", value: "https://web.test" });
+    await configSet.run(context(), { key: "web-url", value: "" });
+    const store = new SettingsStore(dir);
+    await expect(store.read()).resolves.toEqual({ apiUrl: "https://api.test" });
+  });
+
+  it("config unset web-url 不误删 api-url", async () => {
+    await configSet.run(context(), { key: "api-url", value: "https://api.test" });
+    await configSet.run(context(), { key: "web-url", value: "https://web.test" });
+    await configUnset.run(context(), { key: "web-url" });
+    const store = new SettingsStore(dir);
+    await expect(store.read()).resolves.toEqual({ apiUrl: "https://api.test" });
+  });
+
+  it("config set web-url 同样校验协议与合法性", async () => {
+    await expect(configSet.run(context(), { key: "web-url", value: "web.test" })).rejects.toThrow(
+      /合法 URL/,
+    );
+    await expect(
+      configSet.run(context(), { key: "web-url", value: "ftp://web.test" }),
+    ).rejects.toThrow(/http/);
+  });
+
+  it("config get 报告 webUrl 与来源，且与 apiUrl 各自独立", async () => {
+    await configSet.run(context(), { key: "web-url", value: "https://web.test" });
+    const ctx = makeContext({ configDir: dir }).ctx;
+    const fresh = {
+      ...ctx,
+      env: { ...ctx.env, webUrl: "https://web.test", webUrlSource: "file" as const },
+    };
+    const output = await configGet.run(fresh, {});
+    expect(output.data).toMatchObject({
+      webUrl: "https://web.test",
+      webUrlSource: "file",
+      defaultWebUrl: "http://localhost:3000",
+      settings: { webUrl: "https://web.test" },
+    });
+  });
+
+  it("config path 同时给出 webUrl 与来源", async () => {
+    const output = await configPath.run(context(), {});
+    expect(output.data).toMatchObject({
+      webUrl: "http://web.test",
+      webUrlSource: "env",
+    });
   });
 });

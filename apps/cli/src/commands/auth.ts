@@ -143,10 +143,25 @@ async function browserLoginCommand(ctx: CliContext, timeoutSeconds: number) {
     nickname: null,
   });
 
-  const username = (await resolveUsername(ctx)) ?? login.username ?? "unknown";
+  const identity = await resolveIdentity(ctx);
+  const username = identity?.username ?? login.username ?? "unknown";
   if (username !== (login.username ?? "unknown")) {
     const profile = await ctx.credentials.readProfile();
     if (profile) await ctx.credentials.saveProfile({ ...profile, username });
+  }
+
+  // whoami 打不通说明**数据面没配好**（最常见：api-url 指到了 Web 前端而不是网关）。
+  // 此时凭据其实已经落盘、登录是成功的，但用户下一条命令必然失败——必须在 stderr
+  // 明确说清，否则"登录成功"这句提示会把真正的问题盖住。
+  if (!identity) {
+    ctx.io.err(
+      [
+        `警告：已拿到令牌，但无法通过 ${ctx.env.apiUrl} 校验身份。`,
+        "若后续命令报错，请确认 api-url 指向的是 Gateway 而不是 Web 前端：",
+        "  anynote config get            # 看 apiUrl 与来源",
+        "",
+      ].join("\n"),
+    );
   }
 
   return result(
@@ -155,10 +170,18 @@ async function browserLoginCommand(ctx: CliContext, timeoutSeconds: number) {
       username,
       nickname: null,
       apiUrl: ctx.env.apiUrl,
+      webUrl: ctx.env.webUrl,
       credentialsPath,
       method: "browser",
+      // 让 agent 不必解析 stderr 就能知道数据面是否已通
+      verified: identity !== null,
     },
-    { render: (data) => `已通过浏览器授权登录 ${data.username}，凭据写入 ${data.credentialsPath}` },
+    {
+      render: (data) =>
+        `已通过浏览器授权登录 ${data.username}，凭据写入 ${data.credentialsPath}${
+          data.verified ? "" : "\n⚠️ 尚未通过网关校验，见上方警告"
+        }`,
+    },
   );
 }
 
@@ -167,13 +190,13 @@ async function browserLoginCommand(ctx: CliContext, timeoutSeconds: number) {
  *
  * 授权响应里的 username 只是 BFF 的善意回显，不能当身份依据；`/user/mine` 既确认
  * 令牌真的可用，也拿到权威的用户名。拿不到就返回 null 让调用方保留回显值——
- * 不该因为一次探测失败就让已经到手的登录作废。
+ * 不该因为一次探测失败就让已经到手的登录作废，但调用方**必须**把这件事告诉用户。
  */
-async function resolveUsername(ctx: CliContext): Promise<string | null> {
+async function resolveIdentity(ctx: CliContext): Promise<{ username: string | null } | null> {
   try {
     const { response } = await ctx.api.system.GET("/user/mine", { parseAs: "stream" });
     const user = await unwrapEnvelope(response, userSchema.parse);
-    return user.username ?? null;
+    return { username: user.username ?? null };
   } catch {
     return null;
   }

@@ -170,7 +170,7 @@ services:
       SPRING_APPLICATION_NAME: anynote-gateway
       SERVER_PORT: 8080
     ports:
-      - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"
+      - "${GATEWAY_BIND_IP:-127.0.0.1}:${GATEWAY_PORT:-8080}:8080"
 
   anynote-auth:
     <<: *app-common

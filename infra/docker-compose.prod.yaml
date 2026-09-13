@@ -55,6 +55,12 @@ services:
       COLLAB_ALLOWED_ORIGINS: ${NEXT_PUBLIC_APP_URL:?请配置 HTTPS 站点来源}
   anynote-gateway:
     <<: *java-prod
+    # 唯一保留宿主机端口的 Java 服务，且**默认只绑回环**：容器外 Nginx 需要一个可反代的
+    # 上游（CLI 直连 Gateway，见 docs/cli/CLI_PLAN.md）。
+    # 这不等于把网关暴露到公网——TLS 与访问控制仍在 Nginx 的 api.YOUR_DOMAIN server 块里。
+    # 其余服务继续保持 `ports: !reset []`。
+    ports:
+      - "${GATEWAY_BIND_IP:-127.0.0.1}:${GATEWAY_PORT:-8080}:8080"
   anynote-auth:
     <<: *java-prod
   anynote-modules-system:

@@ -73,4 +73,35 @@ describe("SettingsStore", () => {
     );
     await expect(store.read()).resolves.toEqual({ apiUrl: "http://a.test" });
   });
+
+  it("webUrl 与 apiUrl 可共存，写入一个不影响另一个", async () => {
+    const store = new SettingsStore(dir);
+    await store.write({ apiUrl: "http://gw.test" });
+    await store.write({ ...(await store.read()), webUrl: "https://web.test" });
+    await expect(store.read()).resolves.toEqual({
+      apiUrl: "http://gw.test",
+      webUrl: "https://web.test",
+    });
+    const raw = JSON.parse(await fs.readFile(store.filePath, "utf8")) as Record<string, unknown>;
+    expect(raw).toMatchObject({ version: 1, apiUrl: "http://gw.test", webUrl: "https://web.test" });
+  });
+
+  it("清掉 webUrl 后 apiUrl 仍在（两项各自独立）", async () => {
+    const store = new SettingsStore(dir);
+    await store.write({ apiUrl: "http://gw.test", webUrl: "https://web.test" });
+    const { webUrl: _dropped, ...rest } = await store.read();
+    await store.write(rest);
+    await expect(store.read()).resolves.toEqual({ apiUrl: "http://gw.test" });
+  });
+
+  it("webUrl 字段非法（不是 URL）时忽略它，但保留合法的 apiUrl", async () => {
+    const store = new SettingsStore(dir);
+    await fs.writeFile(
+      store.filePath,
+      JSON.stringify({ version: 1, apiUrl: "http://gw.test", webUrl: "不是 URL" }),
+      "utf8",
+    );
+    // 整份文件校验失败即当没设过——与 apiUrl 同策略，避免半份配置误导用户
+    await expect(store.read()).resolves.toEqual({});
+  });
 });

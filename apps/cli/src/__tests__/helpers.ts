@@ -89,6 +89,7 @@ export type TestContextOptions = {
   envToken?: string;
   now?: () => number;
   webUrl?: string;
+  webUrlSource?: "env" | "file" | "default";
   /** 注入浏览器打开实现；默认返回 false（等价"无头环境"） */
   openBrowser?: (url: string) => Promise<boolean>;
   /** 访问 Web 前端的 fetch 打桩；默认直接抛错，提醒用例显式提供 */
@@ -117,6 +118,7 @@ export function makeContext(options: TestContextOptions) {
       apiUrl,
       apiUrlSource: "env",
       webUrl: options.webUrl ?? "http://web.test",
+      webUrlSource: options.webUrlSource ?? "env",
       token: options.envToken,
       profile: "default",
       configDir: options.configDir,

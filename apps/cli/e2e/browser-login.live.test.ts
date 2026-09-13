@@ -28,7 +28,15 @@ async function registrationHome(): Promise<string> {
   const home = await makeHome();
   const registered = await runCli(
     home,
-    ["auth", "register", "--username", account.username, "--nickname", account.nickname, "--password-stdin"],
+    [
+      "auth",
+      "register",
+      "--username",
+      account.username,
+      "--nickname",
+      account.nickname,
+      "--password-stdin",
+    ],
     { stdin: account.password },
   );
   if (registered.code !== 0) {
@@ -184,9 +192,9 @@ describe("浏览器授权登录（协议面）", () => {
 
       await runCli(home, ["auth", "logout"]);
       // 登出后 profile 被清掉，凭据文件里不再有这个 profile
-      const after = JSON.parse(
-        await fs.readFile(path.join(home, "credentials.json"), "utf8"),
-      ) as { profiles: Record<string, unknown> };
+      const after = JSON.parse(await fs.readFile(path.join(home, "credentials.json"), "utf8")) as {
+        profiles: Record<string, unknown>;
+      };
       expect(after.profiles.default).toBeUndefined();
     } finally {
       session.running.kill();

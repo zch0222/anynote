@@ -365,3 +365,66 @@ skill 里也写死了同一个路径。本期改为真正的全局安装：
 | `pnpm --filter @anynote/cli test` | 268 通过 / 19 文件 |
 | `pnpm --filter web test:e2e -- cli-authorize.spec.ts` | 见 changelist「验证结果」节 |
 | `pnpm openapi:generate` | 仅 `openapi/specs/auth.json` 变化，其余 5 份逐字节一致 |
+
+---
+
+## M9.7 地址配置与网关自检修复 ✅
+
+2026-09-13 用户报告：`anynote config set api-url https://notes.example.com` 之后执行
+`anynote auth login`，浏览器打开的却是 `http://localhost:3000/cli/authorize...`。
+
+### 根因（两个独立问题叠在一起）
+
+| # | 问题 | 根因 |
+|---|------|------|
+| 1 | 授权页地址不对 | CLI 有**两个独立地址**：数据面 `apiUrl`（Gateway）与授权面 `webUrl`（Web 前端）。`config set` 只认 `api-url`（`z.enum(["api-url"])`），而 `webUrl` 只读 `ANYNOTE_WEB_URL` 环境变量、不落盘，于是永远回落到默认 `localhost:3000` |
+| 2 | 把 Web 前端当作网关 | 该域名是 Next 前端（`/api/*` 归 BFF），而 CLI 直连 Gateway 打 `/api/<domain>/*`。实测该域 `/api/system/user/mine` 返回 404 HTML，且 8080/3000/1234 公网均不可达——**生产没有给 CLI 用的网关入口** |
+
+### 修复项
+
+- [x] `settings.json` 增加 `webUrl`；`config set` / `unset` 的 key 扩为 `api-url` 与 `web-url`
+      （集中到 `SETTING_KEYS` 表，避免三处命令各自硬编码 key 再次漂移）
+- [x] `resolveWebUrl()`：与 `resolveApiUrl()` 同构的优先级链（`ANYNOTE_WEB_URL` > 文件 > 默认），
+      `CliEnv` 新增 `webUrlSource`，`config get` / `config path` / `doctor` 分开报告两个来源
+- [x] **修复 `doctor` 假阳性**：旧实现只判 `response.ok`，而 fetch 默认跟随重定向，
+      前端的 `307 → /login → 200 HTML` 被当成 `UP`。新增 `core/health.ts` 的 `probeGateway()`：
+      `redirect: "manual"` + 校验 JSON content-type + 要求 body 有 `status`
+- [x] **修复 `auth login` 假成功**：数据面不通时旧实现仍打印"已登录"（`resolveUsername` 吞掉所有异常）。
+      现在返回 `verified: false` 并在 stderr 明确警告，指向 `anynote config get`
+- [x] 顺带修复 `manifest` markdown 生成器：枚举类型的 `|` 未转义，撑破参数表（
+      `manifest --format`、`config set --key` 都中招；这是 HEAD 上就存在的缺陷）
+- [x] 基础设施：`anynote-gateway` 在 prod override 保留宿主机入口
+      （`${GATEWAY_BIND_IP:-127.0.0.1}:${GATEWAY_PORT:-8080}`，唯一有宿主机端口的 Java 服务，默认只绑回环，
+      与 web/collab 的 `*_BIND_IP` 命名一致）；`infra/.env.example` 补这两个变量；
+      `infra/nginx/nginx.conf` 新增 `api.YOUR_DOMAIN` server 块（只放通 `/api/*` 与 `/actuator/health`，
+      Springdoc 与其余 actuator 端点 404）。**同时删除 `snippets/sse-common.conf`，配置改为自包含单文件**：
+      该片段自带 `proxy_pass`，而两个 `/api/` 上游（站点域→BFF、api 域→Gateway）无法共用一个
+      写死上游的片段（`proxy_pass` 每个 location 只允许一次），抽取复用的维护成本高于就地重复几行
+
+### 用户拍板（2026-09-13）
+
+| # | 决策 |
+|---|------|
+| 1 | 给 Gateway 开公网子域（而非改 CLI 走 BFF `/api/proxy/*`） |
+| 2 | 让 `web-url` 可落盘到 `settings.json`（而非维持"只认环境变量"） |
+
+### 验证
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm --filter @anynote/cli test` | 299 通过 / 20 文件（新增 `health.test.ts` 9 条及若干回归用例） |
+| `pnpm --filter @anynote/cli lint` / `typecheck` | 通过 |
+| `docker compose -f ... -f ... prod.yaml config` | gateway 发布 `127.0.0.1:8080`，其余 Java/中间件无宿主机端口；覆盖 `GATEWAY_BIND_IP=0.0.0.0` 后如期变化 |
+| `docker compose ... dev.yaml config` | dev 仍 `127.0.0.1:8080` + `restart: no`，未被破坏 |
+| 真实域名复验 | `doctor` 由误报 `UP` 改为 `HTTP 307 → /login（被重定向，这个地址不是网关）` |
+| nginx 结构校验 | 花括号平衡、6 个 server 块、无重复 `listen+server_name`；全文件**零 `include`**、10 个 location 各恰好 0/1 条 `proxy_pass` |
+| **`nginx -t`（真实执行）** | 用本机 nginx 1.31.5 对入库配置跑通：`syntax is ok` + `test is successful`（占位符 `YOUR_DOMAIN`/证书路径/日志路径替换到临时 prefix，仓库文件未改） |
+| 反证：重复 `proxy_pass` | 故意在 api 域 `/api/` 加第二条 → `"proxy_pass" directive is duplicate`，**证实"片段自带 proxy_pass 就无法服务第二个上游"** |
+| `proxy_set_header` 继承审计 | 10 个 location 中 9 个为 0 条（继承 server 级整组），`/collab/` 为 6 条（整组重写）——无"部分覆盖"导致的静默丢头 |
+
+> **已解除的验证限制**：先前记录"本机无 nginx 二进制、未跑 `nginx -t`"有误——nginx 1.31.5 装在
+> `C:\Users\YXLMz\software\nginx-1.31.5`（该目录只读，故校验走临时 prefix）。现已真实跑过 `nginx -t`。
+> **仍未验证**：真实 `api.` 子域的端到端（需部署侧 DNS 与证书），以及 `infra/tests/proxy-smoke.sh`
+> 的完整链路（需 Docker daemon 与生产前端镜像）。
+
+逐文件清单：[`docs/changelist/2026-09-13-cli-address-config.md`](../changelist/2026-09-13-cli-address-config.md)。

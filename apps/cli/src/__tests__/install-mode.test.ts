@@ -9,7 +9,11 @@ describe("detectInstallMode", () => {
   });
 
   it("识别全局安装的包（unscoped，改包名后仍认）", () => {
-    const p = path.join("/home/a/.nvm/versions/node/v22/lib/node_modules", "anynote-cli", "anynote.mjs");
+    const p = path.join(
+      "/home/a/.nvm/versions/node/v22/lib/node_modules",
+      "anynote-cli",
+      "anynote.mjs",
+    );
     expect(detectInstallMode(p)).toBe("global");
   });
 
@@ -33,7 +37,9 @@ describe("detectInstallMode", () => {
   });
 
   it("node_modules 但不是本包，不算 global", () => {
-    expect(detectInstallMode(path.join("/repo", "node_modules", "zod", "index.js"))).toBe("unknown");
+    expect(detectInstallMode(path.join("/repo", "node_modules", "zod", "index.js"))).toBe(
+      "unknown",
+    );
   });
 });
 
