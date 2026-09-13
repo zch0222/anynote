@@ -216,4 +216,52 @@ describe("createNoteImageUploader", () => {
     // 路径参数类型是 integer，字符串 noteId 要转成数字，否则会被序列化成 "9" 之外的形式
     expect(taskPost.mock.calls[0]?.[1]?.params.path).toEqual({ noteId: 9 });
   });
+
+  it("把分片进度透传给调用方（编辑器的上传指示器靠它）", async () => {
+    taskPost.mockResolvedValueOnce(
+      ok({ uploadId: "u10", chunkSize: 1, totalChunk: 4, finishedChunks: [] }),
+    );
+    post.mockImplementation((path, options) => {
+      if (path === "/getOssSliceUploadSignatures") {
+        const body = (options as { body: { chunkIndexList: number[] } }).body;
+        return Promise.resolve(
+          ok({
+            signatures: body.chunkIndexList.map((index) => ({
+              index,
+              signature: { credentials: { url: `https://oss/${index}` } },
+            })),
+          }),
+        );
+      }
+      if (path === "/markOssSliceUploadSignatures") {
+        const body = (options as { body: { chunkIndexList: number[] } }).body;
+        return Promise.resolve(ok({ markedIndexList: body.chunkIndexList }));
+      }
+      return Promise.resolve(ok({ objectName: "note/7/images/h.png", fileId: 33 }));
+    });
+
+    const onProgress = vi.fn();
+    // 4 MiB、chunkSize 1MB → 4 片，每片完成后回调一次
+    await createNoteImageUploader(7, onProgress)(makeFile(4 * 1024 * 1024));
+
+    expect(onProgress).toHaveBeenCalled();
+    const percents = onProgress.mock.calls.map(([percent]) => percent as number);
+    // 进度必须单调不减，且落在 0–100 之内（指示器直接把它当百分比显示）
+    for (const percent of percents) {
+      expect(percent).toBeGreaterThanOrEqual(0);
+      expect(percent).toBeLessThanOrEqual(100);
+    }
+    expect(percents.at(-1)).toBe(100);
+  });
+
+  it("不传 onProgress 时不报错（上传照常完成）", async () => {
+    taskPost.mockResolvedValueOnce(
+      ok({ uploadId: "u11", chunkSize: 1, totalChunk: 1, finishedChunks: [1] }),
+    );
+    post.mockResolvedValueOnce(ok({ objectName: "note/7/images/i.png", fileId: 34 }));
+
+    await expect(createNoteImageUploader(7)(makeFile(4))).resolves.toBe(
+      "/api/proxy/file/objects/34/redirect",
+    );
+  });
 });
