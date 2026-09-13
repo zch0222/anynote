@@ -31,17 +31,22 @@
 
 登录并把凭据写入本地 profile（稳定 · 写操作）
 
-用用户名口令换取 accessToken / refreshToken 并落盘到 profile。口令优先用 --password-stdin 从标准输入读取。不想落盘时改用环境变量 ANYNOTE_TOKEN。
+默认打开浏览器授权页：已登录的浏览器直接点「授权」即可，无需在终端输口令（口令路径永远接触不到用户口令）。无浏览器环境（CI / ssh / agent）用 --password-stdin 从标准输入读口令，或用 ANYNOTE_TOKEN 直接提供令牌（不落盘）。
 
-后端端点：`POST /api/auth/login`
+后端端点：`POST /api/auth/login | GET /cli/authorize`
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
-| `--username` | string | 是 | - | 用户名 |
+| `--username` | string | 否 | - | 用户名（仅口令登录需要） |
 | `--password` | string | 否 | - | 口令（不推荐，会进 shell history） |
 | `--password-stdin` | boolean | 否 | false | 从标准输入读取口令 |
+| `--password-only` | boolean | 否 | false | 跳过浏览器授权，强制用口令登录（等价于给出 --username） |
+| `--timeout` | integer | 否 | 300 | 浏览器授权等待秒数 |
 
 ```bash
+# 推荐：打开浏览器点一下授权即可
+anynote auth login
+# 无浏览器环境
 anynote auth login --username alice --password-stdin < pw.txt
 ```
 
