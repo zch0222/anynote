@@ -8,19 +8,20 @@ const presentation: Record<
   NoteSaveStatus,
   { label: string; icon: typeof Check; className: string; spin?: boolean }
 > = {
-  saved: { label: "已保存", icon: Check, className: "text-muted-foreground" },
-  pending: { label: "待保存", icon: PenLine, className: "text-muted-foreground" },
-  saving: { label: "保存中", icon: Loader2, className: "text-muted-foreground", spin: true },
-  offline: {
-    label: "离线，改动已暂存",
-    icon: CloudOff,
-    className: "text-amber-600 dark:text-amber-500",
-  },
-  error: { label: "保存失败，正在重试", icon: AlertTriangle, className: "text-destructive" },
-  conflict: { label: "内容有冲突", icon: GitCompareArrows, className: "text-destructive" },
+  saved: { label: "已保存", icon: Check, className: "text-success" },
+  pending: { label: "待保存", icon: PenLine, className: "text-label-secondary" },
+  saving: { label: "保存中", icon: Loader2, className: "text-label-secondary", spin: true },
+  offline: { label: "离线，改动已暂存", icon: CloudOff, className: "text-warning" },
+  error: { label: "保存失败，正在重试", icon: AlertTriangle, className: "text-danger" },
+  conflict: { label: "内容有冲突", icon: GitCompareArrows, className: "text-danger" },
 };
 
-/** 编辑器页头的保存状态指示；`role="status"` 让屏幕阅读器能播报变化。 */
+/**
+ * 编辑器页头的保存状态指示；`role="status"` 让屏幕阅读器能播报变化。
+ *
+ * 设计稿里它是一个**胶囊徽标**（`已保存` 绿底），不是一行裸文字：
+ * 正文区域信息密度高，状态需要靠底色从文字流里跳出来。
+ */
 export function SaveStatusBadge({
   status,
   lastSavedAt,
@@ -40,7 +41,14 @@ export function SaveStatusBadge({
       : null;
   return (
     // <output> 的隐式 role 就是 status（等价 aria-live="polite"），屏幕阅读器可播报状态变化
-    <output className={cn("inline-flex items-center gap-1.5 text-xs", tone, className)}>
+    <output
+      data-status={status}
+      className={cn(
+        "tabular inline-flex min-h-6 items-center gap-1.5 rounded-full bg-grouped px-2.5 text-xs font-medium",
+        tone,
+        className,
+      )}
+    >
       <Icon className={cn("size-3.5", spin && "animate-spin")} aria-hidden="true" />
       {savedAt ? `${label} ${savedAt}` : label}
     </output>

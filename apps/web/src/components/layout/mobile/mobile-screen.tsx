@@ -29,6 +29,24 @@ export type MobileScreenProps = {
 };
 
 /**
+ * 站内是否已经有可返回的历史。
+ *
+ * **不能用 `history.length`**：直接 `goto` 一个详情页后 `length` 就是 2
+ * （多出来的那条是 `about:blank`），`back()` 会把人退回空白页——
+ * 这正是「详情页点返回变成 about:blank」的成因。
+ *
+ * Next App Router 会在 `history.state.idx` 里维护自己在会话历史中的位置：
+ * 首次加载是 `0`，每次客户端导航递增。`idx > 0` 才是"确实从站内走进来的"。
+ * 拿不到 `idx` 时保守地认为没有站内历史，退回兜底地址——宁可多一次跳转，
+ * 也不要退回空白页。
+ */
+export function hasInAppHistory(state: unknown): boolean {
+  if (!state || typeof state !== "object") return false;
+  const idx = (state as { idx?: unknown }).idx;
+  return typeof idx === "number" && idx > 0;
+}
+
+/**
  * 每个移动端页面的统一外框：顶栏 + 内容区。
  *
  * 标题与返回键由页面自己给，而不是由 shell 从路由猜——详情页的标题是数据
@@ -46,8 +64,9 @@ export function MobileScreen({
   const router = useRouter();
 
   const goBack = () => {
-    // history.length <= 1 说明是直接打开的（分享链接 / 新标签页），back() 会退出站点
-    if (typeof back === "string" && window.history.length <= 1) {
+    if (typeof back === "string" && !hasInAppHistory(window.history.state)) {
+      // 直接打开的（分享链接 / 新标签页 / E2E 的 goto）：没有站内上一页，
+      // back() 会退出站点，改用兜底地址
       router.push(back);
       return;
     }
@@ -56,14 +75,14 @@ export function MobileScreen({
 
   return (
     <>
-      <header className="mobile-title-bar sticky top-0 z-20 flex items-center gap-2 border-b bg-background">
+      <header className="mobile-title-bar sticky top-0 z-20 flex items-center gap-2 border-b bg-surface">
         {back ? (
           <button
             type="button"
             onClick={goBack}
             aria-label="返回"
             data-testid="mobile-back"
-            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-grouped focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ChevronLeft className="size-5" aria-hidden="true" />
           </button>
@@ -72,7 +91,7 @@ export function MobileScreen({
         {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
       </header>
       {toolbar ? (
-        <div className="sticky top-[var(--mobile-header-h)] z-10 border-b bg-background px-3 py-2">
+        <div className="sticky top-[var(--mobile-header-h)] z-10 border-b bg-surface px-3 py-2">
           {toolbar}
         </div>
       ) : null}

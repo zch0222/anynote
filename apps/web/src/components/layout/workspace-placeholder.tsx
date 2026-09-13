@@ -8,11 +8,11 @@ export function WorkspacePlaceholder({
     <section className="mx-auto w-full max-w-6xl space-y-8">
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p className="text-sm text-label-secondary">{description}</p>
       </div>
-      <div className="rounded-xl border bg-card p-5 sm:p-8">
+      <div className="rounded-xl border bg-surface p-5 sm:p-8">
         <div className="mb-8 flex items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground">功能准备中，敬请期待</p>
+          <p className="text-sm text-label-secondary">功能准备中，敬请期待</p>
           <Skeleton className="h-8 w-20" />
         </div>
         <div aria-hidden="true" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

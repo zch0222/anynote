@@ -33,7 +33,7 @@ export function KnowledgeBaseSelect({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-64 w-56 overflow-y-auto">
         {bases.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-muted-foreground">暂无知识库</p>
+          <p className="px-2 py-3 text-sm text-label-secondary">暂无知识库</p>
         ) : (
           bases.map((base) => (
             <DropdownMenuItem

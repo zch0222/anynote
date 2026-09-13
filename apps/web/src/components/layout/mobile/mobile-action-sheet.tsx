@@ -98,8 +98,8 @@ export function MobileActionSheet({
                   onClick={() => handleSelect(action)}
                   className={cn(
                     "flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-left text-sm outline-none transition-colors",
-                    "hover:bg-accent focus-visible:bg-accent disabled:pointer-events-none disabled:opacity-50",
-                    action.destructive && "text-destructive",
+                    "hover:bg-grouped focus-visible:bg-grouped disabled:pointer-events-none disabled:opacity-50",
+                    action.destructive && "text-danger",
                   )}
                 >
                   {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}

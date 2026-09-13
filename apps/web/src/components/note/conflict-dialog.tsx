@@ -17,8 +17,8 @@ import { useMemo } from "react";
 
 const lineTone: Record<string, string> = {
   added: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  removed: "bg-destructive/10 text-destructive",
-  equal: "text-muted-foreground",
+  removed: "bg-danger/10 text-danger",
+  equal: "text-label-secondary",
 };
 
 const linePrefix: Record<string, string> = { added: "+", removed: "-", equal: " " };

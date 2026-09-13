@@ -1,43 +1,76 @@
 import {
   BookOpen,
   Bot,
+  CheckSquare,
   FileText,
-  GraduationCap,
+  FolderOpen,
   LayoutDashboard,
-  ListTodo,
   MessageSquare,
-  Network,
   NotebookPen,
   Settings,
+  Sparkles,
   UserRound,
+  Users,
   Workflow,
 } from "lucide-react";
 
-export const navigationGroups = [
-  {
-    label: "工作空间",
-    items: [
-      {
-        title: "工作台",
-        href: "/dashboard",
-        icon: LayoutDashboard,
-        description: "从这里开始，记录与整理你的想法。",
-      },
-      {
-        title: "笔记",
-        href: "/notes",
-        icon: NotebookPen,
-        description: "捕捉灵感，让每一个想法都有归处。",
-      },
-      { title: "文档", href: "/docs", icon: FileText, description: "集中整理和阅读你的文档。" },
-      {
-        title: "知识库",
-        href: "/wikis",
-        icon: BookOpen,
-        description: "连接知识，构建属于你的知识库。",
-      },
-    ],
-  },
+/* ------------------------------------------------------------------ *
+ * 信息架构（对齐 UI 重设计 §2）
+ *
+ * 后端 `n_knowledge_base` 是入口实体：笔记 / 慕课 / 任务 / 资料 / 成员
+ * 全部通过 `knowledge_base_id` 归属其下。导航层级必须复刻这个结构，
+ * 而不是把四类子资源平铺成同级入口——那会让人看不出从属关系。
+ *
+ * 因此一级导航只有三类：
+ *   1. 知识库（动态列表，来自 `useKnowledgeBasesQuery`）
+ *   2. AI 助手（跨知识库能力）
+ *   3. 协作（跨知识库能力：协同文档库）
+ * 设置不进一级导航，它在侧栏页脚的用户卡里。
+ * ------------------------------------------------------------------ */
+
+export type NavItem = {
+  title: string;
+  href: string;
+  icon: typeof BookOpen;
+  description: string;
+};
+
+/** 知识库为根之后的二级 Tab。`overview` 是页内锚点，其余各自是路由。 */
+export const knowledgeBaseSections = [
+  { key: "overview", title: "概览", icon: LayoutDashboard },
+  { key: "notes", title: "笔记", icon: NotebookPen },
+  { key: "mooc", title: "慕课", icon: BookOpen },
+  { key: "tasks", title: "任务", icon: CheckSquare },
+  { key: "docs", title: "资料", icon: FolderOpen },
+  { key: "members", title: "成员", icon: Users },
+] as const;
+
+export type KnowledgeBaseSection = (typeof knowledgeBaseSections)[number]["key"];
+
+/**
+ * 二级 Tab 的地址。
+ *
+ * 「笔记」是知识库的默认落地页，走裸路径 `/notes/:id`；其余各占一段。
+ * 段名都是**静态**的，Next 的路由优先级会把它们排在 `[noteId]` 之前，
+ * 而笔记 id 恒为正整数，因此不会与编辑器路由互抢。
+ */
+export function knowledgeBaseSectionHref(baseId: number, section: KnowledgeBaseSection) {
+  return section === "notes" ? `/notes/${baseId}` : `/notes/${baseId}/${section}`;
+}
+
+/** 反解当前命中哪个二级 Tab；`noteId` 存在时说明在编辑器里。 */
+export function parseKnowledgeBaseSection(segment: string | undefined): KnowledgeBaseSection {
+  const found = knowledgeBaseSections.find((section) => section.key === segment);
+  return found ? found.key : "notes";
+}
+
+/** 移动端二级 Tab 的地址前缀与桌面不同（要多一层 `/m`）。 */
+export function mobileKnowledgeBaseSectionHref(baseId: number, section: KnowledgeBaseSection) {
+  return section === "notes" ? `/m/notes/${baseId}` : `/m/notes/${baseId}/${section}`;
+}
+
+/** AI 助手与协作：不挂在任何单个知识库下的能力，单独成组。 */
+export const toolGroups = [
   {
     label: "AI 助手",
     items: [
@@ -62,40 +95,56 @@ export const navigationGroups = [
     ],
   },
   {
-    label: "学习与计划",
+    label: "协作",
     items: [
       {
-        title: "课程",
-        href: "/mooc",
-        icon: GraduationCap,
-        description: "整理课程与学习资料，持续积累。",
-      },
-      {
-        title: "任务",
-        href: "/tasks",
-        icon: ListTodo,
-        description: "把想法拆成行动，让计划逐步实现。",
+        title: "协同文档",
+        href: "/docs",
+        icon: FileText,
+        description: "多人实时协作的文档库。",
       },
     ],
   },
-] as const;
+] as const satisfies readonly { label: string; items: readonly NavItem[] }[];
 
-export const settingsRoute = {
+/**
+ * 一级「知识库」入口本身也是可点的（去画廊页）。
+ * 它是侧栏动态列表的表头，所以不进 `workspaceRoutes`。
+ */
+export const knowledgeBaseRoute: NavItem = {
+  title: "知识库",
+  href: "/notes",
+  icon: BookOpen,
+  description: "为一组相关的笔记、慕课与任务创建独立空间。",
+};
+
+export const settingsRoute: NavItem = {
   title: "设置",
   href: "/settings/profile",
   icon: Settings,
   description: "管理你的个人资料与使用偏好。",
 };
-export const workspaceRoutes = [
-  ...navigationGroups.flatMap((group) => [...group.items]),
-  settingsRoute,
-];
-export const newNoteRoute = {
+
+/** 画廊页「新建知识库」之外的次级入口，保留 `/notes/new` 的深链与命令面板可达性。 */
+export const newNoteRoute: NavItem = {
   title: "创建笔记",
   href: "/notes/new",
-  icon: Network,
+  icon: Sparkles,
   description: "新的想法，从这里开始。",
 };
+
+/**
+ * 命令面板与「当前页属于哪个入口」的扁平注册表。
+ *
+ * 只收**跨知识库**的固定路由：知识库本身是数据驱动的（每个库的地址都要
+ * 带上它的 id），由面板单独从 query 缓存里取，不在这里写死。
+ */
+export const workspaceRoutes: readonly NavItem[] = [
+  knowledgeBaseRoute,
+  ...toolGroups.flatMap((group) => [...group.items]),
+  newNoteRoute,
+  settingsRoute,
+];
 
 export function isRouteActive(pathname: string, href: string) {
   const root = href === settingsRoute.href ? "/settings" : href;
@@ -108,13 +157,13 @@ export function getWorkspaceRoute(pathname: string) {
 }
 
 export const themeOptions = [
-  { value: "light", label: "亮色" },
-  { value: "dark", label: "暗色" },
+  { value: "light", label: "浅色" },
+  { value: "dark", label: "深色" },
   { value: "system", label: "跟随系统" },
 ] as const;
 
 /* ------------------------------------------------------------------ *
- * 移动端（M10.1 / 方案 D3）
+ * 移动端
  *
  * 移动端不另立一份路由真相：tab 与映射都从上面的桌面注册表推导，
  * 新增桌面路由时只需要在 MOBILE_ROUTE_PREFIXES 里决定"移动端有没有对应页"。
@@ -124,17 +173,19 @@ export const themeOptions = [
 export const MOBILE_PREFIX = "/m";
 
 /**
- * 底部 tab。5 格是 375px 下的硬上限（再多每格不足 72px），
- * 因此"待办"不占格：入口在工作台卡片与「我的」里。
+ * 底部 tab（对齐 UI 重设计 §移动端：工作台 / 知识库 / AI / 我的）。
+ *
+ * 4 格而不是 5 格：设计稿把「文档」收进「我的」，因为协同文档库是低频入口，
+ * 而知识库才是移动端的核心对象。每格因此宽到 96px（375px 下），
+ * 触摸目标与文字都不再挤。
  *
  * `match` 是高亮用的前缀集合，让子路由也能点亮所属 tab
- * （如 `/m/wikis/3/7` 归"笔记"、`/m/settings/ai` 归"我的"）。
+ * （如 `/m/notes/3/7` 归「知识库」、`/m/settings/ai` 归「我的」）。
  */
 export const mobileTabs = [
   { title: "工作台", href: "/m/dashboard", icon: LayoutDashboard, match: ["/m/dashboard"] },
-  { title: "笔记", href: "/m/notes", icon: NotebookPen, match: ["/m/notes", "/m/wikis"] },
-  { title: "文档", href: "/m/docs", icon: FileText, match: ["/m/docs"] },
-  { title: "AI", href: "/m/ai/chat", icon: MessageSquare, match: ["/m/ai"] },
+  { title: "知识库", href: "/m/notes", icon: BookOpen, match: ["/m/notes", "/m/wikis"] },
+  { title: "AI", href: "/m/ai/chat", icon: Sparkles, match: ["/m/ai"] },
   { title: "我的", href: "/m/me", icon: UserRound, match: ["/m/me", "/m/settings"] },
 ] as const;
 
@@ -143,7 +194,7 @@ export type MobileTab = (typeof mobileTabs)[number];
 /**
  * 有移动端对应页的桌面路由前缀。
  *
- * `/ai/workflow` 不在列内（决策 4：移动端不提供画布），`/playground` 同理。
+ * `/ai/workflow` 不在列内（画布需要拖拽与大屏），`/playground` 同理。
  * 匹配按**整段**比较，避免 `/ai/chat` 的前缀吃掉 `/ai/chatroom` 这类将来的路由。
  */
 const MOBILE_ROUTE_PREFIXES = [
@@ -222,13 +273,13 @@ export function isImmersiveMobileRoute(pathname: string): boolean {
 
 /** 「我的」页里的更多入口：tab 放不下、但移动端仍然可用的页面。 */
 export const mobileMoreRoutes = [
-  { title: "知识库", href: "/m/wikis", icon: BookOpen, description: "浏览知识库里的笔记。" },
-  { title: "任务", href: "/m/tasks", icon: ListTodo, description: "查看并提交我的任务。" },
-  { title: "课程", href: "/m/mooc", icon: GraduationCap, description: "继续未看完的课程。" },
+  { title: "协同文档", href: "/m/docs", icon: FileText, description: "多人实时协作的文档库。" },
+  { title: "任务", href: "/m/tasks", icon: CheckSquare, description: "查看并提交我的任务。" },
+  { title: "慕课", href: "/m/mooc", icon: BookOpen, description: "继续未看完的课程。" },
   { title: "PDF 问答", href: "/m/ai/pdf", icon: Bot, description: "围绕 PDF 文档提问。" },
 ] as const;
 
-/** 只在桌面版提供的能力：移动端给说明 + 桌面版链接（决策 4）。 */
+/** 只在桌面版提供的能力：移动端给说明 + 桌面版链接。 */
 export const mobileUnavailableRoutes = [
   {
     title: "AI 工作流",

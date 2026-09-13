@@ -29,7 +29,7 @@ export function ViewSwitch({ className }: { className?: string }) {
       prefetch={false}
       data-testid="view-switch"
       className={cn(
-        "inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+        "inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-label-secondary outline-none transition-colors hover:bg-grouped hover:text-label focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
     >

@@ -1,6 +1,7 @@
 "use client";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { coverAvatarClassName } from "@/features/notes/lib/cover-gradient";
 import { cn } from "@/lib/utils";
 import {
   DndContext,
@@ -13,7 +14,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { ChevronRight, FileText, Library } from "lucide-react";
+import { ChevronRight, FileText } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -32,10 +33,13 @@ export type NoteTreeProps = {
 };
 
 /**
- * 左侧目录：知识库 → 笔记两层结构。
+ * 编辑器左侧目录：知识库 → 笔记两层结构。
  *
  * 拖拽的语义是「移动到别的知识库」而不是排序——`n_note` 没有排序列，
  * 同库内的顺序无法落库，假装能拖排序只会骗人。
+ *
+ * 版式对齐设计稿：知识库行是**展开态的主行**（渐变缩略图 + 名称 + 折叠箭头），
+ * 笔记行缩进挂在它下面，当前笔记用 accent 底色标出。
  */
 export function NoteTree(props: NoteTreeProps) {
   const { bases, activeBaseId, activeNoteId, notes, isLoading, onMoveNote } = props;
@@ -63,7 +67,7 @@ export function NoteTree(props: NoteTreeProps) {
       onDragEnd={handleDragEnd}
       onDragCancel={() => setDraggingNote(null)}
     >
-      <nav aria-label="笔记目录" className="space-y-1">
+      <nav aria-label="笔记目录" className="space-y-0.5">
         {bases.map((base) => (
           <BaseNode
             key={base.id}
@@ -72,14 +76,14 @@ export function NoteTree(props: NoteTreeProps) {
             isDragging={draggingNote !== null}
           >
             {isLoading ? (
-              <div className="space-y-2 py-1 pl-7">
+              <div className="space-y-1.5 py-1 pl-8" aria-busy="true">
                 <Skeleton className="h-6 w-full" />
                 <Skeleton className="h-6 w-4/5" />
               </div>
             ) : notes.length === 0 ? (
-              <p className="py-2 pl-7 text-xs text-muted-foreground">还没有笔记</p>
+              <p className="py-1.5 pl-8 text-xs text-label-tertiary">还没有笔记</p>
             ) : (
-              <ul className="space-y-0.5">
+              <ul className="space-y-px">
                 {notes.map((note) => (
                   <li key={note.id}>
                     <NoteNode
@@ -97,7 +101,7 @@ export function NoteTree(props: NoteTreeProps) {
       </nav>
       <DragOverlay>
         {draggingNote ? (
-          <span className="rounded-md border bg-popover px-2 py-1 text-sm shadow-md">
+          <span className="rounded-md bg-elevated px-2 py-1 text-footnote text-label shadow-popover">
             {draggingNote.title}
           </span>
         ) : null}
@@ -124,17 +128,21 @@ function BaseNode({
         href={`/notes/${base.id}`}
         aria-current={expanded ? "true" : undefined}
         className={cn(
-          "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors",
-          expanded ? "bg-muted font-medium" : "hover:bg-muted/60",
+          "flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 text-footnote transition-colors",
+          expanded ? "bg-grouped font-medium text-label" : "text-label hover:bg-grouped/60",
           // 拖拽中给所有可放置的知识库一点视觉提示，命中时再加深
-          isDragging && !expanded && "ring-1 ring-dashed ring-border",
-          isOver && "ring-2 ring-primary",
+          isDragging && !expanded && "ring-1 ring-dashed ring-separator",
+          isOver && "ring-2 ring-accent",
         )}
       >
         <ChevronRight
-          className={cn("size-3.5 shrink-0 transition-transform", expanded && "rotate-90")}
+          className={cn(
+            "size-3.5 shrink-0 text-label-tertiary transition-transform",
+            expanded && "rotate-90",
+          )}
+          aria-hidden="true"
         />
-        <Library className="size-4 shrink-0 text-muted-foreground" />
+        <span className={coverAvatarClassName(base.id, "size-4 rounded-xs")} aria-hidden="true" />
         <span className="truncate">{base.name}</span>
       </Link>
       {expanded ? <div className="mt-0.5">{children}</div> : null}
@@ -163,14 +171,14 @@ function NoteNode({
       href={`/notes/${baseId}/${note.id}`}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex items-center gap-1.5 rounded-md py-1.5 pl-7 pr-2 text-sm transition-colors",
-        active ? "bg-primary/10 text-primary" : "hover:bg-muted/60",
+        "flex min-h-8 items-center gap-2 rounded-md py-1.5 pl-8 pr-2 text-footnote transition-colors",
+        active ? "bg-accent-soft font-medium text-accent" : "text-label-secondary hover:bg-grouped",
         isDragging && "opacity-40",
       )}
       {...listeners}
       {...attributes}
     >
-      <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+      <FileText className="size-3.5 shrink-0" aria-hidden="true" />
       <span className="truncate">{note.title}</span>
     </Link>
   );

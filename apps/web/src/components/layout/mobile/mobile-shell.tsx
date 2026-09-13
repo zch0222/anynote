@@ -26,7 +26,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className="mobile-shell bg-background"
+      className="mobile-shell bg-surface"
       data-testid="mobile-shell"
       data-immersive={immersive ? "true" : undefined}
       style={
@@ -37,7 +37,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
     >
       <a
         href="#mobile-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:p-3"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-surface focus:p-3"
       >
         跳转到内容
       </a>

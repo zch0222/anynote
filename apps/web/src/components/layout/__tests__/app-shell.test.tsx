@@ -4,34 +4,53 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "../app-shell";
 
-const { push, replace, setTheme, refetch, mutate, profile } = vi.hoisted(() => ({
+const { push, replace, setTheme, refetch, bases, profile } = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
   setTheme: vi.fn(),
   refetch: vi.fn(),
-  mutate: vi.fn(),
+  bases: {
+    data: [
+      { id: 1, knowledgeBaseName: "产品设计知识库" },
+      { id: 2, knowledgeBaseName: "算法与工程实践" },
+    ],
+    isPending: false,
+    isError: false,
+    error: null as Error | null,
+  },
   profile: {
-    data: { nickname: "测试用户", username: "tester", avatar: null },
+    data: { nickname: "陈可", username: "chenke", avatar: null },
     isPending: false,
     isError: false,
     error: null as Error | null,
   },
 }));
+
+const pathname = vi.hoisted(() => ({ current: "/notes" }));
+
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/notes/new",
+  usePathname: () => pathname.current,
   useRouter: () => ({ push, replace }),
 }));
 vi.mock("next-themes", () => ({ useTheme: () => ({ theme: "system", setTheme }) }));
 vi.mock("@/features/auth/use-me", () => ({ useMe: () => ({ ...profile, refetch }) }));
-vi.mock("@/features/auth/use-logout-mutation", () => ({
-  useLogoutMutation: () => ({ mutate, isPending: false }),
+vi.mock("@/features/notes/use-knowledge-bases", () => ({
+  useKnowledgeBasesQuery: () => bases,
+  useKnowledgeBaseQuery: () => ({ data: { knowledgeBaseName: "产品设计知识库" } }),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  pathname.current = "/notes";
   profile.isError = false;
   profile.isPending = false;
   profile.error = null;
+  bases.data = [
+    { id: 1, knowledgeBaseName: "产品设计知识库" },
+    { id: 2, knowledgeBaseName: "算法与工程实践" },
+  ];
+  bases.isPending = false;
+  bases.isError = false;
   localStorage.clear();
   useUIStore.setState({ sidebarOpen: true, commandPaletteOpen: false });
   vi.stubGlobal(
@@ -50,31 +69,81 @@ beforeEach(() => {
 });
 
 describe("AppShell 交互", () => {
-  it("导航、面包屑、分组折叠与侧栏持久化", async () => {
+  it("侧栏把知识库铺成一级入口，而不是四个平铺的静态页", async () => {
     render(
       <AppShell>
         <h1>页面内容</h1>
       </AppShell>,
     );
     const navigation = screen.getByRole("navigation", { name: "主导航" });
-    expect(within(navigation).getByRole("link", { name: "笔记" })).toHaveAttribute(
+    // 动态的知识库列表来自 query 缓存
+    expect(within(navigation).getByRole("link", { name: /产品设计知识库/ })).toHaveAttribute(
+      "href",
+      "/notes/1",
+    );
+    expect(within(navigation).getByRole("link", { name: /算法与工程实践/ })).toHaveAttribute(
+      "href",
+      "/notes/2",
+    );
+    // 跨库能力单独成组，不再是"笔记/文档/知识库"三连
+    expect(within(navigation).getByRole("link", { name: "AI 对话" })).toHaveAttribute(
+      "href",
+      "/ai/chat",
+    );
+    expect(within(navigation).getByRole("link", { name: "协同文档" })).toHaveAttribute(
+      "href",
+      "/docs",
+    );
+    // 四类子资源降为知识库内的二级 Tab，不出现在一级导航
+    expect(within(navigation).queryByRole("link", { name: "慕课" })).toBeNull();
+    expect(within(navigation).queryByRole("link", { name: "任务" })).toBeNull();
+  });
+
+  it("当前知识库在侧栏高亮，且只高亮它一个", () => {
+    pathname.current = "/notes/2/tasks";
+    render(<AppShell>内容</AppShell>);
+    expect(screen.getByTestId("sidebar-base-2")).toHaveAttribute("data-active", "true");
+    expect(screen.getByTestId("sidebar-base-1")).toHaveAttribute("data-active", "false");
+  });
+
+  it("知识库内页的顶栏给切换器与二级 Tab，而不是裸面包屑", () => {
+    pathname.current = "/notes/7";
+    render(<AppShell>内容</AppShell>);
+
+    expect(screen.getByTestId("kb-switcher")).toHaveAttribute("href", "/notes");
+    const tabs = screen.getByRole("navigation", { name: "知识库内容" });
+    expect(within(tabs).getByRole("link", { name: "概览" })).toHaveAttribute(
+      "href",
+      "/notes/7/overview",
+    );
+    expect(within(tabs).getByRole("link", { name: "笔记" })).toHaveAttribute("href", "/notes/7");
+    expect(within(tabs).getByRole("link", { name: "成员" })).toHaveAttribute(
+      "href",
+      "/notes/7/members",
+    );
+    // 笔记是当前 Tab
+    expect(within(tabs).getByRole("link", { name: "笔记" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    expect(within(navigation).getAllByRole("link")).toHaveLength(9);
-    expect(
-      within(screen.getByRole("navigation", { name: "面包屑" })).getByText("创建笔记"),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "AI 助手" }));
-    expect(within(navigation).queryByRole("link", { name: "AI 对话" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "AI 助手" }));
-    expect(within(navigation).getByRole("link", { name: "AI 对话" })).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "切换侧边栏" }));
-    expect(useUIStore.getState().sidebarOpen).toBe(false);
-    expect(document.cookie).toBe("");
-    expect(JSON.parse(localStorage.getItem("anynote-ui") || "{}").state).toEqual({
-      sidebarOpen: false,
-    });
+  });
+
+  it("编辑器里「笔记」Tab 仍然高亮", () => {
+    pathname.current = "/notes/7/345";
+    render(<AppShell>内容</AppShell>);
+    const tabs = screen.getByRole("navigation", { name: "知识库内容" });
+    expect(within(tabs).getByRole("link", { name: "笔记" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("知识库外页的顶栏退回面包屑", () => {
+    pathname.current = "/ai/chat";
+    render(<AppShell>内容</AppShell>);
+    const crumb = screen.getByRole("navigation", { name: "面包屑" });
+    expect(within(crumb).getByText("AI 对话")).toBeInTheDocument();
+    expect(screen.queryByTestId("kb-switcher")).toBeNull();
   });
 
   it("Ctrl+K 搜索并执行路由跳转，关闭面板", async () => {
@@ -87,7 +156,13 @@ describe("AppShell 交互", () => {
     expect(useUIStore.getState().commandPaletteOpen).toBe(false);
   });
 
-  it("Cmd+K 可切换开关，空搜索显示提示，新建动作进入占位页", async () => {
+  it("侧栏搜索框派发与 ⌘K 等价的快捷键事件", async () => {
+    render(<AppShell>内容</AppShell>);
+    fireEvent.click(screen.getByTestId("sidebar-search"));
+    expect(await screen.findByRole("combobox", { name: "搜索页面或操作" })).toBeVisible();
+  });
+
+  it("Cmd+K 可切换开关，空搜索显示提示，新建动作进入创建页", async () => {
     render(<AppShell>内容</AppShell>);
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     await screen.findByRole("combobox");
@@ -97,42 +172,37 @@ describe("AppShell 交互", () => {
     const input = await screen.findByRole("combobox");
     fireEvent.change(input, { target: { value: "不存在xyz" } });
     expect(await screen.findByText("没有找到匹配的操作")).toBeVisible();
+    // 「创建笔记」同时在快捷操作与「跳转到」两组里，取第一组那条即可
     fireEvent.change(input, { target: { value: "创建笔记" } });
-    fireEvent.click(await screen.findByRole("option", { name: "创建笔记" }));
+    const [firstNewNote] = await screen.findAllByRole("option", { name: "创建笔记" });
+    fireEvent.click(firstNewNote as HTMLElement);
     expect(push).toHaveBeenCalledExactlyOnceWith("/notes/new");
   });
 
-  it.each(["亮色", "暗色", "跟随系统"])("命令面板可切换主题 %s", async (label) => {
+  it.each(["浅色", "深色", "跟随系统"])("命令面板可切换主题 %s", async (label) => {
     render(<AppShell>内容</AppShell>);
     fireEvent.click(screen.getByRole("button", { name: "打开命令面板" }));
     fireEvent.click(await screen.findByRole("option", { name: `主题：${label}` }));
     expect(setTheme).toHaveBeenCalledWith(
-      { 亮色: "light", 暗色: "dark", 跟随系统: "system" }[label],
+      { 浅色: "light", 深色: "dark", 跟随系统: "system" }[label],
     );
     expect(useUIStore.getState().commandPaletteOpen).toBe(false);
   });
 
-  it("主题菜单显示三种选项，用户菜单提供设置和登出", async () => {
+  it("主题菜单显示三种选项，侧栏用户卡通向个人设置", async () => {
     render(<AppShell>内容</AppShell>);
     fireEvent.click(screen.getByRole("button", { name: "切换主题" }));
     expect(await screen.findByRole("menuitemradio", { name: "跟随系统" })).toHaveAttribute(
       "aria-checked",
       "true",
     );
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "暗色" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "深色" }));
     expect(setTheme).toHaveBeenCalledWith("dark");
-    fireEvent.click(screen.getByRole("button", { name: "用户菜单" }));
-    expect(await screen.findByRole("menuitem", { name: "个人设置" })).toHaveAttribute(
-      "href",
-      "/settings/profile",
-    );
-    // M10.1：桌面头部的手机版入口，指向当前页在移动端的对应地址并记住偏好
-    expect(screen.getByRole("menuitem", { name: "手机版" })).toHaveAttribute(
-      "href",
-      "/m/notes/new?mobile=1",
-    );
-    fireEvent.click(screen.getByRole("menuitem", { name: "退出登录" }));
-    expect(mutate).toHaveBeenCalledOnce();
+
+    // 设置入口收在侧栏页脚的用户卡里，不再占一级导航
+    const userCard = screen.getByTestId("sidebar-user");
+    expect(userCard).toHaveAttribute("href", "/settings/profile");
+    expect(within(userCard).getByText("陈可")).toBeInTheDocument();
   });
 
   it("所有工作区页面受会话保护，失败可重试", async () => {
@@ -147,6 +217,8 @@ describe("AppShell 交互", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     expect(refetch).toHaveBeenCalledOnce();
+    profile.isError = false;
+    profile.error = null;
   });
 
   it("挂载时恢复侧栏，卸载时清空命令面板", async () => {
@@ -159,5 +231,13 @@ describe("AppShell 交互", () => {
     act(() => useUIStore.getState().setCommandPaletteOpen(true));
     unmount();
     expect(useUIStore.getState().commandPaletteOpen).toBe(false);
+  });
+
+  it("侧栏没有知识库时给出空态与唯一入口", () => {
+    bases.data = [];
+    render(<AppShell>内容</AppShell>);
+    const navigation = screen.getByRole("navigation", { name: "主导航" });
+    expect(within(navigation).getByText("还没有知识库")).toBeInTheDocument();
+    expect(screen.getByTestId("sidebar-new-base")).toHaveAttribute("href", "/notes?new=1");
   });
 });

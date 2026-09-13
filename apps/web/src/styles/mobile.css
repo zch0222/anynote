@@ -39,8 +39,8 @@
 }
 
 .mobile-tab-bar {
-  height: var(--mobile-tabbar-h);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* 浮岛形态：底部留出安全区，浮岛本身由内层圆角容器承担 */
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
 }
 
 /* 内容区：高度交给外层 flex，这里只负责把长内容的滚动留在自己身上 */

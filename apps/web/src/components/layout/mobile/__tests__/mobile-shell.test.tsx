@@ -16,7 +16,7 @@ import { MobileShell } from "@/components/layout/mobile/mobile-shell";
 import { renderWithProviders } from "@/test/render";
 
 describe("MobileShell", () => {
-  it("列表页显示底部 tab bar，五个 tab 都可达", () => {
+  it("列表页显示底部 tab bar，四个 tab 都可达", () => {
     pathname.current = "/m/notes";
     renderWithProviders(
       <MobileShell>
@@ -26,7 +26,7 @@ describe("MobileShell", () => {
 
     const tabBar = screen.getByTestId("mobile-tab-bar");
     expect(tabBar).toBeInTheDocument();
-    for (const title of ["工作台", "笔记", "文档", "AI", "我的"]) {
+    for (const title of ["工作台", "知识库", "AI", "我的"]) {
       expect(screen.getByRole("link", { name: title })).toBeInTheDocument();
     }
   });
@@ -38,8 +38,8 @@ describe("MobileShell", () => {
         <p>内容</p>
       </MobileShell>,
     );
-    expect(screen.getByRole("link", { name: "笔记" })).toHaveAttribute("data-active", "true");
-    expect(screen.getByRole("link", { name: "文档" })).toHaveAttribute("data-active", "false");
+    expect(screen.getByRole("link", { name: "知识库" })).toHaveAttribute("data-active", "true");
+    expect(screen.getByRole("link", { name: "AI" })).toHaveAttribute("data-active", "false");
   });
 
   it("沉浸式路由隐藏 tab bar 并把可用高度还给内容", () => {

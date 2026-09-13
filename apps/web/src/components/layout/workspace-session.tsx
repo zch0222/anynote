@@ -24,7 +24,7 @@ export function WorkspaceSession({ children }: { children: ReactNode }) {
   if (isError)
     return (
       <div role="alert" className="space-y-4">
-        <p className="text-sm text-destructive">加载用户信息失败，请稍后重试</p>
+        <p className="text-sm text-danger">加载用户信息失败，请稍后重试</p>
         <Button variant="outline" onClick={() => refetch()}>
           重试
         </Button>
