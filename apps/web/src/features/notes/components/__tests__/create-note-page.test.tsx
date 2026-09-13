@@ -12,6 +12,8 @@ vi.mock("@/lib/api/openapi", () => ({
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn() }),
+  // CreateBaseDialog 按当前版式决定创建后的跳转，会读 pathname
+  usePathname: () => "/notes",
 }));
 
 const get = noteApi.GET as unknown as Mock;
@@ -92,6 +94,30 @@ describe("CreateNotePage", () => {
     await waitFor(() => expect(screen.getByText("标题至少 3 个字符")).toBeInTheDocument());
     expect(post).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("initialBaseId 预选归属库，不再退回第一个", async () => {
+    get.mockResolvedValue(
+      envelope({
+        rows: [
+          { id: 100, knowledgeBaseName: "甲库" },
+          { id: 200, knowledgeBaseName: "乙库" },
+        ],
+      }),
+    );
+    post.mockResolvedValue(envelope(77));
+    renderWithProviders(<CreateNotePage initialBaseId={200} />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /乙库/ })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /乙库/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /甲库/ })).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "预选归属" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建笔记" }));
+
+    await waitFor(() =>
+      expect(post.mock.calls[0]?.[1].body).toEqual({ knowledgeBaseId: 200, title: "预选归属" }),
+    );
   });
 
   it("没有任何知识库时引导先建库", async () => {

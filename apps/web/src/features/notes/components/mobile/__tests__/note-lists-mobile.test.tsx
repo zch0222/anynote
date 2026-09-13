@@ -1,6 +1,8 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+const IDLE_MOCK = { isPending: false, isError: false, isFetching: false, data: [] };
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
   usePathname: () => "/m/notes",
@@ -9,8 +11,13 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/features/notes/use-knowledge-bases", () => ({
   useKnowledgeBasesQuery: vi.fn(),
+  useManagedKnowledgeBasesQuery: vi.fn(() => ({ ...IDLE_MOCK, data: [] })),
+  useOrganizationKnowledgeBasesQuery: vi.fn(() => ({ ...IDLE_MOCK, data: [] })),
   useKnowledgeBaseQuery: vi.fn(() => ({ data: { knowledgeBaseName: "我的库" } })),
   useCreateKnowledgeBaseMutation: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+}));
+vi.mock("@/features/auth/use-me", () => ({
+  useMe: () => ({ data: { id: 1, username: "tester" }, isPending: false, isError: false }),
 }));
 vi.mock("@/features/notes/use-notes", () => ({ useNotesQuery: vi.fn() }));
 

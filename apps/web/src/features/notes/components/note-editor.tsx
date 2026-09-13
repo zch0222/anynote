@@ -16,8 +16,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DEFAULT_PAGE_SIZE, toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
@@ -28,6 +26,7 @@ import { useNoteTitle } from "@/features/notes/use-note-title";
 import { useNotesQuery } from "@/features/notes/use-notes";
 import { useSaveNote } from "@/features/notes/use-save-note";
 import { continueWriting } from "@/lib/ai/sse";
+import { formatRelativeTime } from "@/lib/format-time";
 import { MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -45,6 +44,9 @@ const WORKSPACE_VIEWPORT = "h-[calc(100svh-9rem)]";
  *
  * 编辑器是非受控的：只在笔记切换时喂一次初始内容，之后的每次输入都进自动保存队列。
  * 如果把 query 缓存直接当 `value` 回灌，保存返回的内容会把光标顶回文首。
+ *
+ * 版式对齐设计稿：顶栏一条**文档状态条**（标题 + 保存徽标 + 操作），
+ * 下方是限宽的正文纸面（`max-w-3xl`）——正文行宽超过约 75 字符后回行会丢行。
  */
 export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number }) {
   const router = useRouter();
@@ -114,7 +116,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
     try {
       await remove.mutateAsync(noteId);
       toast.success("笔记已删除");
-      router.push(`/notes/${baseId}`);
+      router.push(`/notes/${baseId}/notes`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "删除失败，请稍后重试");
     }
@@ -137,107 +139,161 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
 
   if (note.isError) {
     return (
-      <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+      <p role="alert" className="rounded-lg bg-danger/5 p-6 text-footnote text-danger">
         笔记加载失败：{note.error.message}
       </p>
     );
   }
 
   return (
-    <div className={`mx-auto flex w-full min-h-0 max-w-7xl gap-6 ${WORKSPACE_VIEWPORT}`}>
-      <aside className="hidden w-64 shrink-0 lg:block">
-        <ScrollArea className="h-full pr-2">
-          <NoteTree
-            bases={(bases.data ?? []).map((base) => ({
-              id: base.id,
-              name: base.knowledgeBaseName ?? "未命名知识库",
-            }))}
-            activeBaseId={baseId}
-            activeNoteId={noteId}
-            notes={(notes.data?.rows ?? []).map((item) => ({
-              id: item.id,
-              title: item.title ?? "未命名笔记",
-            }))}
-            isLoading={notes.isPending}
-            onMoveNote={handleMove}
-          />
-        </ScrollArea>
+    <div className={`flex w-full min-h-0 gap-6 ${WORKSPACE_VIEWPORT}`}>
+      <aside className="hidden w-60 shrink-0 lg:block">
+        <NoteTree
+          bases={(bases.data ?? []).map((base) => ({
+            id: base.id,
+            name: base.knowledgeBaseName?.trim() || "未命名知识库",
+          }))}
+          activeBaseId={baseId}
+          activeNoteId={noteId}
+          notes={(notes.data?.rows ?? []).map((item) => ({
+            id: item.id,
+            title: item.title?.trim() || "未命名笔记",
+          }))}
+          isLoading={notes.isPending}
+          onMoveNote={handleMove}
+        />
       </aside>
 
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-          <nav aria-label="面包屑" className="text-sm text-muted-foreground">
-            <Link href="/notes" className="hover:text-foreground">
-              笔记
-            </Link>
-            <span className="px-1.5">/</span>
-            <Link href={`/notes/${baseId}`} className="hover:text-foreground">
-              {note.data?.knowledgeBaseName ?? "知识库"}
-            </Link>
-          </nav>
-          <div className="flex items-center gap-2">
-            <SaveStatusBadge status={status} lastSavedAt={lastSavedAt} />
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button variant="ghost" size="icon" />}
-                aria-label="笔记操作"
-              >
-                <MoreHorizontal className="size-4" aria-hidden="true" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>移动到知识库</DropdownMenuLabel>
-                  {(bases.data ?? [])
-                    .filter((base) => base.id !== baseId)
-                    .map((base) => (
-                      <DropdownMenuItem
-                        key={base.id}
-                        onClick={() => void handleMove({ noteId, knowledgeBaseId: base.id })}
-                      >
-                        {base.knowledgeBaseName ?? "未命名知识库"}
-                      </DropdownMenuItem>
-                    ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onClick={() => void handleDelete()}>
-                    <Trash2 className="size-4" aria-hidden="true" />
-                    删除笔记
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+      <section
+        data-testid="note-panel"
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-card"
+      >
+        <header className="flex shrink-0 items-center gap-3 px-5 py-3">
+          <SaveStatusBadge status={status} lastSavedAt={lastSavedAt} />
+          <span className="min-w-0 flex-1" />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="icon-sm" />}
+              aria-label="笔记操作"
+              data-testid="note-actions"
+            >
+              <MoreHorizontal className="size-4" aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>移动到知识库</DropdownMenuLabel>
+                {(bases.data ?? [])
+                  .filter((base) => base.id !== baseId)
+                  .map((base) => (
+                    <DropdownMenuItem
+                      key={base.id}
+                      onClick={() => void handleMove({ noteId, knowledgeBaseId: base.id })}
+                    >
+                      {base.knowledgeBaseName?.trim() || "未命名知识库"}
+                    </DropdownMenuItem>
+                  ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={() => void handleDelete()}>
+                  <Trash2 className="size-4" aria-hidden="true" />
+                  删除笔记
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
 
-        {note.isPending || initialContent === null ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <Skeleton className="h-10 w-1/2 shrink-0" />
-            <Skeleton className="min-h-0 flex-1 rounded-xl" />
-          </div>
-        ) : (
-          <>
-            <Input
-              aria-label="笔记标题"
-              value={title}
-              onChange={(event) => handleTitleChange(event.target.value)}
-              placeholder="未命名笔记"
-              className="h-auto shrink-0 border-0 px-0 !text-2xl font-semibold shadow-none focus-visible:ring-0"
-            />
-            <TiptapEditor
-              key={noteId}
-              preset="full"
-              value={initialContent}
-              onChange={handleContentChange}
-              onReady={onEditorReady}
-              aiContinue={handleAiContinue}
-              uploadFn={uploadFn}
-              fill
-              className="min-h-0 flex-1"
-            />
-          </>
-        )}
+        {/*
+          正文的滚动容器。重设计后标题与元信息行属于**文章的一部分**（跟着正文一起滚），
+          所以"占满视口"的职责从编辑器本身移到了这一层：面板吃满剩余高度，内容在这里滚。
+        */}
+        <div data-testid="note-scroll" className="min-h-0 flex-1 overflow-y-auto">
+          {note.isPending || initialContent === null ? (
+            <div className="mx-auto w-full max-w-3xl space-y-4 px-6 py-4">
+              <Skeleton className="h-10 w-1/2" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-64 w-full rounded-lg" />
+            </div>
+          ) : (
+            <article
+              data-testid="note-document"
+              className="mx-auto flex w-full max-w-3xl flex-col px-6 pb-10"
+            >
+              <input
+                aria-label="笔记标题"
+                value={title}
+                onChange={(event) => handleTitleChange(event.target.value)}
+                placeholder="未命名笔记"
+                className="w-full bg-transparent text-display font-semibold text-label outline-none placeholder:text-label-tertiary"
+              />
+              <NoteMeta
+                baseId={baseId}
+                baseName={note.data?.knowledgeBaseName}
+                updateTime={note.data?.updateTime}
+                contentLength={initialContent.length}
+              />
+              <TiptapEditor
+                key={noteId}
+                preset="full"
+                value={initialContent}
+                onChange={handleContentChange}
+                onReady={onEditorReady}
+                aiContinue={handleAiContinue}
+                uploadFn={uploadFn}
+                className="mt-2"
+              />
+            </article>
+          )}
+        </div>
       </section>
 
       <ConflictDialog conflict={conflict} onResolve={(choice) => void resolveConflict(choice)} />
     </div>
+  );
+}
+
+/**
+ * 标题下方的元信息行：作者 / 更新时间 / 字数 / 所属知识库。
+ *
+ * 每一项都可能缺（后端没返回作者时），所以整行用 `·` 拼接而不是固定网格——
+ * 缺项时不会留下一段空白列。
+ */
+function NoteMeta({
+  baseId,
+  baseName,
+  updateTime,
+  contentLength,
+}: {
+  baseId: number;
+  baseName?: string | null | undefined;
+  updateTime?: string | null | undefined;
+  contentLength: number;
+}) {
+  const relative = formatRelativeTime(updateTime);
+  return (
+    <div
+      data-testid="note-meta"
+      className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-footnote text-label-tertiary"
+    >
+      {relative ? <span>{relative}更新</span> : null}
+      <Dot />
+      <span className="tabular" data-testid="note-char-count">
+        {contentLength.toLocaleString("zh-CN")} 字
+      </span>
+      <Dot />
+      <Link
+        href={`/notes/${baseId}`}
+        className="outline-none transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {baseName?.trim() || "知识库"}
+      </Link>
+    </div>
+  );
+}
+
+function Dot() {
+  return (
+    <span aria-hidden="true" className="text-label-tertiary">
+      ·
+    </span>
   );
 }

@@ -17,12 +17,30 @@ import { useCreateNoteMutation } from "@/features/notes/use-create-note";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-/** 在指定知识库下新建笔记，创建成功后直接进入编辑页。 */
-export function CreateNoteDialog({ knowledgeBaseId }: { knowledgeBaseId: number }) {
+/**
+ * 在指定知识库下新建笔记，创建成功后直接进入编辑页。
+ *
+ * `trigger` 是触发元素的**内容**而不是元素本身：`DialogTrigger` 自己渲染那个可点
+ * 元素，在这里再套 `<button>` 会形成非法嵌套，浏览器把内层提出来后点击就落不到
+ * 触发器上（对话框打不开）。
+ */
+export function CreateNoteDialog({
+  knowledgeBaseId,
+  trigger,
+  triggerClassName,
+  triggerLabel,
+  triggerTestId,
+}: {
+  knowledgeBaseId: number;
+  trigger?: ReactNode | undefined;
+  triggerClassName?: string | undefined;
+  triggerLabel?: string | undefined;
+  triggerTestId?: string | undefined;
+}) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const create = useCreateNoteMutation();
@@ -51,9 +69,19 @@ export function CreateNoteDialog({ knowledgeBaseId }: { knowledgeBaseId: number 
         if (!next) form.reset();
       }}
     >
-      <DialogTrigger render={<Button />}>
-        <Plus className="size-4" aria-hidden="true" />
-        新建笔记
+      <DialogTrigger
+        aria-label={triggerLabel}
+        data-testid={triggerTestId}
+        className={triggerClassName}
+        nativeButton={!trigger}
+        render={trigger ? <div /> : <Button />}
+      >
+        {trigger ?? (
+          <>
+            <Plus className="size-4" aria-hidden="true" />
+            新建笔记
+          </>
+        )}
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -65,7 +93,7 @@ export function CreateNoteDialog({ knowledgeBaseId }: { knowledgeBaseId: number 
             <Label htmlFor="note-title">标题</Label>
             <Input id="note-title" autoComplete="off" {...form.register("title")} />
             {form.formState.errors.title ? (
-              <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
+              <p className="text-xs text-danger">{form.formState.errors.title.message}</p>
             ) : null}
           </div>
           <DialogFooter>

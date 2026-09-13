@@ -2,7 +2,7 @@
 
 import { unwrapEnvelope } from "@/lib/api/errors";
 import { noteApi } from "@/lib/api/openapi";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { noteQueryKeys } from "./query-keys";
 import {
   ALL_BASE_PERMISSIONS,
@@ -10,6 +10,8 @@ import {
   DEFAULT_BASE_COVER,
   DEFAULT_PAGE_SIZE,
   type KnowledgeBase,
+  type KnowledgeBaseMember,
+  baseMemberSchema,
   knowledgeBaseSchema,
   pageBeanSchema,
 } from "./schemas";
@@ -48,6 +50,83 @@ export function useKnowledgeBaseQuery(baseId: number) {
         signal: AbortSignal.timeout(15_000),
       });
       return unwrapEnvelope(response, knowledgeBaseSchema.parse);
+    },
+  });
+}
+
+const organizationBasePageSchema = pageBeanSchema(knowledgeBaseSchema);
+
+/**
+ * 当前用户所属**组织**的知识库（设计稿的「组织」分段）。
+ *
+ * 与 `useKnowledgeBasesQuery` 是两个后端端点，口径不同：
+ * `/bases` 是 `type=0`（普通知识库）+ `permissions <= n`，
+ * `/bases/organizations` 是 `type=1`（组织知识库）+ 数据范围过滤。
+ * 因此缓存也分两棵子树，不能互相复用。
+ */
+export function useOrganizationKnowledgeBasesQuery() {
+  return useQuery({
+    queryKey: noteQueryKeys.organizationBases,
+    queryFn: async (): Promise<KnowledgeBase[]> => {
+      const { response } = await noteApi.GET("/bases/organizations", {
+        params: { query: { page: 1, pageSize: DEFAULT_PAGE_SIZE } },
+        parseAs: "stream",
+        signal: AbortSignal.timeout(15_000),
+      });
+      const page = await unwrapEnvelope(response, organizationBasePageSchema.parse);
+      return page.rows;
+    },
+  });
+}
+
+/**
+ * 我**管理**的知识库（设计稿的「我的」分段）。
+ *
+ * 走 `/bases/managerList` 而不是在 `/bases` 上按 `permissions` 过滤：
+ * 后者的 `permissions` 是"我的权限"，`MANAGE=1` 恰好也能筛出我管理的库，
+ * 但 `selectUserKnowledgeBaseList` 里那条 `<if test="permissions != null">`
+ * 套在 `LEFT JOIN n_user_knowledge_base` 上，`permissions` 一旦非空就等于
+ * 把"我参与的"当成全集再取子集——两者结果虽同，语义却依赖 SQL 细节。
+ * `managerList` 是专门为此写的查询（`permissions > 1` 的关联表过滤），
+ * 语义明确，所以用它。
+ */
+export function useManagedKnowledgeBasesQuery(userId: number, organizationId = 0) {
+  return useQuery({
+    queryKey: noteQueryKeys.managedBases(userId, organizationId),
+    enabled: Number.isSafeInteger(userId) && userId > 0,
+    queryFn: async (): Promise<KnowledgeBase[]> => {
+      const { response } = await noteApi.GET("/bases/managerList", {
+        params: {
+          query: { page: 1, pageSize: DEFAULT_PAGE_SIZE, type: 0, status: 0, organizationId },
+        },
+        parseAs: "stream",
+        signal: AbortSignal.timeout(15_000),
+      });
+      const page = await unwrapEnvelope(response, organizationBasePageSchema.parse);
+      return page.rows;
+    },
+  });
+}
+
+const baseMemberPageSchema = pageBeanSchema(baseMemberSchema);
+
+/** 知识库成员列表（设计稿「成员」Tab）。用户名传空串表示不按用户名过滤。 */
+export function useKnowledgeBaseMembersQuery(
+  baseId: number,
+  { page = 1, pageSize = DEFAULT_PAGE_SIZE } = {},
+) {
+  return useQuery({
+    queryKey: noteQueryKeys.baseMembers(baseId),
+    enabled: Number.isFinite(baseId) && baseId > 0,
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<{ rows: KnowledgeBaseMember[]; total: number }> => {
+      const { response } = await noteApi.GET("/bases/users", {
+        params: { query: { knowledgeBaseId: baseId, page, pageSize, username: "" } },
+        parseAs: "stream",
+        signal: AbortSignal.timeout(15_000),
+      });
+      const result = await unwrapEnvelope(response, baseMemberPageSchema.parse);
+      return { rows: result.rows, total: result.total ?? result.rows.length };
     },
   });
 }

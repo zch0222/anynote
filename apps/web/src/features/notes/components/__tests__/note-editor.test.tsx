@@ -100,13 +100,29 @@ describe("NoteEditor 布局与编辑器接线", () => {
     expect(shell.className).toContain("min-h-0");
   });
 
-  it("编辑器声明 fill 并占据剩余高度", async () => {
+  it("编辑器占满纸面宽度，滚动留在中间的正文列里", async () => {
     renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
     await waitFor(() => expect(editorProps).toHaveBeenCalled());
 
     const props = editorProps.mock.calls.at(-1)?.[0];
-    expect(props).toMatchObject({ preset: "full", fill: true });
-    expect(String(props.className)).toContain("flex-1");
+    // `fill` 是把高度交给外层 flex 的信号；这一版改为由中间的滚动列统一承担，
+    // 编辑器本身不再自己撑满视口，否则标题与元信息行会被顶出可视区。
+    expect(props).toMatchObject({ preset: "full" });
+    expect(props.fill).toBeUndefined();
+  });
+
+  it("标题与元信息行在正文之上，字数取自正文长度", async () => {
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
+
+    expect(screen.getByLabelText("笔记标题")).toHaveValue("测试笔记");
+    // 正文 "正文" 两个字符，元信息行按 toLocaleString 渲染
+    expect(screen.getByText("2 字")).toBeInTheDocument();
+    // 「测试库」同时出现在左侧目录与元信息行，取元信息行那一条（正文区域内）
+    const metaLinks = screen
+      .getAllByRole("link", { name: "测试库" })
+      .filter((link) => link.getAttribute("href") === `/notes/${BASE_ID}`);
+    expect(metaLinks.length).toBeGreaterThan(0);
   });
 
   it("给编辑器接上图片上传实现，笔记里才能插图", async () => {

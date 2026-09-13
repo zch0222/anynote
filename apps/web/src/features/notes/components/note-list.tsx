@@ -1,17 +1,23 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DEFAULT_PAGE_SIZE } from "@/features/notes/schemas";
+import { DEFAULT_PAGE_SIZE, type NoteListItem } from "@/features/notes/schemas";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { useNotesQuery } from "@/features/notes/use-notes";
-import { ChevronLeft, ChevronRight, FileText, NotebookPen } from "lucide-react";
+import { formatRelativeTime } from "@/lib/format-time";
+import { cn } from "@/lib/utils";
+import { ChevronLeft, ChevronRight, NotebookPen, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { CreateNoteDialog } from "./create-note-dialog";
 
-/** `/notes/[baseId]`：当前知识库下的笔记分页列表。 */
+/**
+ * 知识库「笔记」Tab（`/notes/[baseId]`）。
+ *
+ * 设计稿里笔记是**列表**而不是卡片网格：一篇笔记的辨识信息主要是标题 + 更新时间，
+ * 用卡片会把一屏能看的条数砍掉一半，而笔记恰恰是最需要快速扫过去的一类。
+ */
 export function NoteList({ baseId }: { baseId: number }) {
   const [page, setPage] = useState(1);
   const base = useKnowledgeBaseQuery(baseId);
@@ -19,74 +25,55 @@ export function NoteList({ baseId }: { baseId: number }) {
   const totalPages = notes.data?.pages ?? 1;
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-2">
-          <nav aria-label="面包屑" className="text-sm text-muted-foreground">
-            <Link href="/notes" className="hover:text-foreground">
-              笔记
-            </Link>
-            <span className="px-1.5">/</span>
-            <span className="text-foreground">{base.data?.knowledgeBaseName ?? "知识库"}</span>
-          </nav>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {base.data?.knowledgeBaseName ?? "知识库"}
-          </h1>
-          {base.data?.detail ? (
-            <p className="text-sm text-muted-foreground">{base.data.detail}</p>
-          ) : null}
+    <div className="mx-auto w-full max-w-4xl space-y-4" data-testid="note-list">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-title text-label">笔记</h1>
+          <p className="text-footnote text-label-secondary">
+            {notes.data?.total
+              ? `${base.data?.knowledgeBaseName?.trim() || "知识库"} · 共 ${notes.data.total} 篇`
+              : "捕捉灵感，让每一个想法都有归处。"}
+          </p>
         </div>
-        <CreateNoteDialog knowledgeBaseId={baseId} />
-      </div>
+        <CreateNoteDialog
+          knowledgeBaseId={baseId}
+          triggerTestId="note-create"
+          trigger={
+            <>
+              <Plus className="size-4" aria-hidden="true" />
+              新建笔记
+            </>
+          }
+          triggerClassName="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-accent px-4 text-footnote font-medium text-white outline-none transition-colors hover:bg-accent/85 focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </header>
 
       {notes.isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((item) => (
-            <Skeleton key={item} className="h-32 rounded-xl" />
-          ))}
-        </div>
+        <NoteListSkeleton />
       ) : notes.isError ? (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+        <p role="alert" className="rounded-lg bg-danger/5 p-6 text-footnote text-danger">
           笔记加载失败：{notes.error.message}
         </p>
       ) : notes.data.rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center">
-          <NotebookPen className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
-          <p className="mt-3 text-sm font-medium">这个知识库还没有笔记</p>
-          <p className="mt-1 text-sm text-muted-foreground">新建一篇，开始记录。</p>
+        <div className="rounded-lg border border-dashed border-separator p-10 text-center">
+          <NotebookPen className="mx-auto size-8 text-label-tertiary" aria-hidden="true" />
+          <p className="mt-3 text-headline text-label">这个知识库还没有笔记</p>
+          <p className="mt-1 text-footnote text-label-secondary">新建一篇，开始记录。</p>
         </div>
       ) : (
         <>
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ul
+            className="divide-y divide-separator overflow-hidden rounded-lg bg-surface shadow-card"
+            data-testid="note-list-items"
+          >
             {notes.data.rows.map((note) => (
               <li key={note.id}>
-                <Card className="h-full transition-colors hover:border-primary/40">
-                  <Link
-                    href={`/notes/${baseId}/${note.id}`}
-                    className="block h-full rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <FileText
-                          className="size-4 shrink-0 text-muted-foreground"
-                          aria-hidden="true"
-                        />
-                        <span className="truncate">{note.title ?? "未命名笔记"}</span>
-                      </CardTitle>
-                      <CardDescription>
-                        {note.updateTime
-                          ? `更新于 ${note.updateTime.slice(0, 16).replace("T", " ")}`
-                          : "暂无更新记录"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent />
-                  </Link>
-                </Card>
+                <NoteRow baseId={baseId} note={note} />
               </li>
             ))}
           </ul>
           {totalPages > 1 ? (
-            <div className="flex items-center justify-center gap-3">
+            <nav aria-label="分页" className="flex items-center justify-center gap-3">
               <Button
                 variant="outline"
                 size="sm"
@@ -96,7 +83,7 @@ export function NoteList({ baseId }: { baseId: number }) {
                 <ChevronLeft className="size-4" aria-hidden="true" />
                 上一页
               </Button>
-              <span className="text-sm text-muted-foreground">
+              <span className="tabular text-footnote text-label-secondary">
                 第 {page} / {totalPages} 页
               </span>
               <Button
@@ -108,10 +95,43 @@ export function NoteList({ baseId }: { baseId: number }) {
                 下一页
                 <ChevronRight className="size-4" aria-hidden="true" />
               </Button>
-            </div>
+            </nav>
           ) : null}
         </>
       )}
-    </section>
+    </div>
+  );
+}
+
+function NoteRow({ baseId, note }: { baseId: number; note: NoteListItem }) {
+  // 列表页优先展示"最后一次动过"的时间；没有操作记录才退回更新时间
+  const touched = note.latestOperationTime ?? note.updateTime;
+  return (
+    <Link
+      href={`/notes/${baseId}/${note.id}`}
+      data-testid={`note-row-${note.id}`}
+      className={cn(
+        "flex min-h-14 items-center gap-3 px-4 py-2.5 outline-none transition-colors",
+        "hover:bg-grouped focus-visible:bg-grouped focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+      )}
+    >
+      <NotebookPen className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate text-body text-label">
+        {note.title?.trim() || "未命名笔记"}
+      </span>
+      <span className="tabular shrink-0 text-xs text-label-tertiary">
+        {formatRelativeTime(touched)}
+      </span>
+    </Link>
+  );
+}
+
+function NoteListSkeleton() {
+  return (
+    <div className="space-y-2" aria-busy="true">
+      {["a", "b", "c", "d", "e"].map((key) => (
+        <Skeleton key={key} className="h-14 rounded-lg" />
+      ))}
+    </div>
   );
 }

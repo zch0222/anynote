@@ -123,7 +123,7 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
   if (note.isError) {
     return (
       <MobileScreen title="笔记" back={`/m/notes/${baseId}`}>
-        <p className="m-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+        <p className="m-4 rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           笔记加载失败：{note.error.message}
         </p>
       </MobileScreen>
@@ -163,7 +163,7 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
               type="button"
               aria-label="笔记操作"
               data-testid="mobile-note-actions"
-              className="flex size-10 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex size-10 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-grouped focus-visible:ring-2 focus-visible:ring-ring"
             >
               <MoreHorizontal className="size-5" aria-hidden="true" />
             </button>

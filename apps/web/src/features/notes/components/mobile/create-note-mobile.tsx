@@ -71,21 +71,21 @@ export function MobileCreateNote() {
             <Skeleton className="h-14 rounded-xl" />
           </div>
         ) : bases.isError ? (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             知识库加载失败：{bases.error.message}
           </p>
         ) : baseList.length === 0 ? (
           <div className="space-y-3 rounded-xl border border-dashed p-6 text-center">
-            <Library className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+            <Library className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
             <p className="text-sm font-medium">还没有知识库</p>
-            <p className="text-sm text-muted-foreground">笔记必须归属一个知识库，先创建一个。</p>
+            <p className="text-sm text-label-secondary">笔记必须归属一个知识库，先创建一个。</p>
             <CreateBaseDialog onCreated={(baseId) => setSelectedBaseId(baseId)} />
           </div>
         ) : (
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <fieldset className="space-y-2">
               <legend className="mb-2 text-sm font-medium">归属知识库</legend>
-              <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+              <ul className="divide-y overflow-hidden rounded-xl border bg-surface">
                 {baseList.map((base) => (
                   <li key={base.id}>
                     <button
@@ -94,7 +94,7 @@ export function MobileCreateNote() {
                       onClick={() => setSelectedBaseId(base.id)}
                       className={cn(
                         "flex min-h-14 w-full items-center gap-3 px-4 text-left text-sm outline-none transition-colors",
-                        base.id === effectiveBaseId ? "bg-primary/5 text-primary" : "",
+                        base.id === effectiveBaseId ? "bg-primary/5 text-accent" : "",
                       )}
                     >
                       <Library className="size-4 shrink-0" aria-hidden="true" />
@@ -117,7 +117,7 @@ export function MobileCreateNote() {
                 {...form.register("title")}
               />
               {form.formState.errors.title ? (
-                <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
+                <p className="text-xs text-danger">{form.formState.errors.title.message}</p>
               ) : null}
             </div>
 
