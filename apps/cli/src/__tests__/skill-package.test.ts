@@ -3,7 +3,15 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { BundledSkill } from "../bundled";
 import { bundledSkills } from "../bundled";
-import { AGENTS, isAgentName, skillRoot, skillRootEnv } from "../skills/agents";
+import {
+  AGENTS,
+  findProjectRoot,
+  isAgentName,
+  projectSkillRoot,
+  resolveSkillRoot,
+  skillRoot,
+  skillRootEnv,
+} from "../skills/agents";
 import { stampFiles } from "../skills/install";
 import { SKILL_VERSION_PREFIX, readVersion, skillName, stamp } from "../skills/stamp";
 
@@ -90,6 +98,61 @@ describe("skillRoot", () => {
   it("三个 agent 的根目录互不相同", () => {
     const roots = AGENTS.map((agent) => skillRoot(agent, { home: at("/home/a") }));
     expect(new Set(roots).size).toBe(3);
+  });
+});
+
+describe("项目级 skill 根目录（--local）", () => {
+  const at = (...parts: string[]) => path.join(...parts);
+
+  it("三家分别落在 .claude / .agents / .dsh 下", () => {
+    const project = at("/repo/proj");
+    expect(projectSkillRoot("claude", project)).toBe(at(project, ".claude", "skills"));
+    expect(projectSkillRoot("codex", project)).toBe(at(project, ".agents", "skills"));
+    expect(projectSkillRoot("dsh", project)).toBe(at(project, ".dsh", "skills"));
+  });
+});
+
+describe("findProjectRoot", () => {
+  // findProjectRoot 内部会 path.resolve，所以期望值也要 resolve 后再比
+  // （Windows 上 at("/repo") 是 "\repo"，resolve 会补成 "C:\repo"）
+  const at = (...parts: string[]) => path.resolve(...parts);
+
+  it("向上找到最近的含 .git 的祖先", () => {
+    const repo = at("/repo");
+    // 只有 /repo 有 .git
+    const exists = (candidate: string) => candidate === at(repo, ".git");
+    expect(findProjectRoot(at(repo, "apps", "cli"), exists)).toBe(repo);
+  });
+
+  it("嵌套仓库取最近的那个，不是最外层", () => {
+    const outer = at("/outer");
+    const inner = at("/outer", "vendor", "inner");
+    const exists = (candidate: string) =>
+      candidate === at(outer, ".git") || candidate === at(inner, ".git");
+    expect(findProjectRoot(at(inner, "src"), exists)).toBe(inner);
+  });
+
+  it("一路到根都没有 .git 时回落到起点本身", () => {
+    const start = at("/no-git-anywhere/deep/dir");
+    expect(findProjectRoot(start, () => false)).toBe(start);
+  });
+});
+
+describe("resolveSkillRoot", () => {
+  const at = (...parts: string[]) => path.resolve(...parts);
+
+  it("默认是全局，不读 cwd", () => {
+    const env = { home: at("/home/a"), cwd: at("/repo/sub") };
+    expect(resolveSkillRoot("dsh", env)).toBe(at("/home/a", ".dsh", "skills"));
+  });
+
+  it("local 时用 cwd 找项目根，再拼项目级目录", () => {
+    const repo = at("/repo");
+    const env = { home: at("/home/a"), cwd: at(repo, "apps", "cli") };
+    const exists = (candidate: string) => candidate === at(repo, ".git");
+    for (const agent of AGENTS) {
+      expect(resolveSkillRoot(agent, env, "local", exists)).toBe(projectSkillRoot(agent, repo));
+    }
   });
 });
 

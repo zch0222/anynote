@@ -5,14 +5,19 @@ import { skillName } from "./stamp";
 /**
  * 支持一键安装 skill 的 agent。
  *
- * | agent | 全局 skill 根目录 | 依据 |
- * |-------|------------------|------|
- * | `claude` | `~/.claude/skills`（可用 `CLAUDE_CONFIG_DIR` 覆盖） | Claude Code 的个人 skill 目录 |
- * | `codex` | `$CODEX_HOME/skills`，默认 `~/.codex/skills` | Codex 的 skill 安装位置 |
- * | `dsh` | `$DSH_HOME/skills`，默认 `~/.dsh/skills` | dsh 的 user 级 skill root |
+ * | agent | 全局 skill 根目录 | 项目级 skill 根目录 |
+ * |-------|------------------|---------------------|
+ * | `claude` | `~/.claude/skills`（`CLAUDE_CONFIG_DIR` 覆盖） | `<项目根>/.claude/skills` |
+ * | `codex` | `$CODEX_HOME/skills`，默认 `~/.codex/skills` | `<项目根>/.agents/skills` |
+ * | `dsh` | `$DSH_HOME/skills`，默认 `~/.dsh/skills` | `<项目根>/.dsh/skills` |
  *
  * ⚠️ dsh 只扫描 skill 根目录的**直接子项**（`<name>/SKILL.md` 或 `<name>.md`），
  * 不递归，所以不能把一整个 `skills/` 目录塞进某个子目录里。
+ *
+ * 项目级（`--local`）的取舍见 `.claude/openspec/changes/2026-09-13-cli-skill-install.md`：
+ * dsh 扫 `.dsh/skills`（rank 100）与 `.agents/skills`（rank 200），Codex 扫
+ * `.agents/skills`；Claude Code 用 `.claude/skills`。项目根的判定与 dsh 一致
+ * （见下文 `findProjectRoot`），这样两边看到的目录是同一个。
  */
 export const AGENTS = ["claude", "codex", "dsh"] as const;
 export type AgentName = (typeof AGENTS)[number];
@@ -30,6 +35,8 @@ export type SkillRootEnv = {
   CLAUDE_CONFIG_DIR?: string | undefined;
   CODEX_HOME?: string | undefined;
   DSH_HOME?: string | undefined;
+  /** 项目级安装的基准目录；`--local` 时由 CLI 传入 cwd */
+  cwd?: string | undefined;
 };
 
 /**
@@ -59,6 +66,53 @@ export function skillRoot(agent: AgentName, env: SkillRootEnv): string {
     case "dsh":
       return path.join(env.DSH_HOME ?? path.join(env.home, ".dsh"), "skills");
   }
+}
+
+/**
+ * 从 `start` 向上找最近的含 `.git` 的祖先目录，找不到就用 `start` 本身。
+ *
+ * **与 dsh 的 `findProjectRoot` 保持同一规则**（nearest ancestor containing `.git`，
+ * 否则用 cwd）：两边算出不同的"项目根"，就会出现"装了但 agent 看不见"。
+ */
+export function findProjectRoot(start: string, exists: (candidate: string) => boolean): string {
+  let current = path.resolve(start);
+  for (;;) {
+    if (exists(path.join(current, ".git"))) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return path.resolve(start);
+    current = parent;
+  }
+}
+
+/** 某个 agent 的**项目级** skill 根目录（`--local`）。 */
+export function projectSkillRoot(agent: AgentName, projectRoot: string): string {
+  switch (agent) {
+    case "claude":
+      return path.join(projectRoot, ".claude", "skills");
+    case "codex":
+      // Codex 的仓库级 skill 根与 dsh 的 project-agents 是同一个约定
+      return path.join(projectRoot, ".agents", "skills");
+    case "dsh":
+      return path.join(projectRoot, ".dsh", "skills");
+  }
+}
+
+/** 安装范围：全局（`~` 下）或项目级（`<项目根>` 下）。 */
+export type SkillScope = "global" | "local";
+
+/**
+ * 解析一次安装/检查的目标根目录。
+ * `--local` 时用 `.git` 定位项目根；`exists` 可注入，便于单测不起真实目录树。
+ */
+export function resolveSkillRoot(
+  agent: AgentName,
+  env: SkillRootEnv,
+  scope: SkillScope = "global",
+  exists: (candidate: string) => boolean = () => false,
+): string {
+  if (scope === "global") return skillRoot(agent, env);
+  const start = env.cwd ?? process.cwd();
+  return projectSkillRoot(agent, findProjectRoot(start, exists));
 }
 
 /**

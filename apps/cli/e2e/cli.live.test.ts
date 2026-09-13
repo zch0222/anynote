@@ -442,13 +442,33 @@ describe("清理与删除权限", () => {
 describe("skill 一键安装", () => {
   const skills = ["anynote-cli", "anynote-notes"];
 
-  it("doctor 报告三家 agent 的 skill 安装情况", async () => {
+  it("doctor 报告三家 agent 的 skill 安装情况（全局 + 项目级各一组）", async () => {
     const data = dataOf(await runCli(home, ["doctor"]), "doctor") as {
-      skills: Array<{ agent: string; installed: number; total: number; drifted: boolean }>;
+      skills: Array<{ agent: string; scope: string; installed: number; total: number }>;
     };
-    expect(data.skills.map((row) => row.agent)).toEqual(["claude", "codex", "dsh"]);
-    // 本用例的隔离目录还是空的
-    expect(data.skills.every((row) => row.installed === 0)).toBe(true);
+    // 全局与项目级各查一遍：只报一边的话，用 --local 装过的用户会误以为没装
+    expect(data.skills.map((row) => `${row.scope}/${row.agent}`)).toEqual([
+      "global/claude",
+      "global/codex",
+      "global/dsh",
+      "local/claude",
+      "local/codex",
+      "local/dsh",
+    ]);
+
+    // 全局那三行在本用例的隔离目录里必然是空的
+    const globalRows = data.skills.filter((row) => row.scope === "global");
+    expect(globalRows.every((row) => row.installed === 0)).toBe(true);
+
+    // 项目级解析到的是**真的本仓库**（e2e 从仓库根跑），所以 local/claude 会看到
+    // 仓库自己的 .claude/skills 源文；local/dsh、local/codex 没有对应目录，应为 0。
+    // 这条顺带钉住"doctor 的项目级不是空转"。
+    const local = new Map(
+      data.skills.filter((row) => row.scope === "local").map((r) => [r.agent, r]),
+    );
+    expect(local.get("claude")?.installed).toBe(skills.length);
+    expect(local.get("dsh")?.installed).toBe(0);
+    expect(local.get("codex")?.installed).toBe(0);
   });
 
   it("install 把两个 skill 复制到三家全局目录", async () => {
@@ -557,6 +577,81 @@ describe("skill 一键安装", () => {
       await expect(
         fs.access(path.join(agentHome, agent, "skills", "anynote-cli")),
       ).rejects.toThrow();
+    }
+  });
+});
+
+describe("skill 本地安装（--local）", () => {
+  const skills = ["anynote-cli", "anynote-notes"];
+
+  it("装进项目根的 .dsh/.agents，不碰全局目录，且能被 dsh 的项目级根目录认到", async () => {
+    // 造一个独立项目：<project>/.git + 深层 cwd，CLI 从深层目录跑（项目根靠 .git 判定）
+    const project = await makeHome();
+    await fs.mkdir(path.join(project, ".git"), { recursive: true });
+    const cwd = path.join(project, "apps", "cli");
+    await fs.mkdir(cwd, { recursive: true });
+
+    const extraEnv = {
+      CLAUDE_CONFIG_DIR: path.join(agentHome, "claude-local"),
+      CODEX_HOME: path.join(agentHome, "codex-local"),
+      DSH_HOME: path.join(agentHome, "dsh-local"),
+    };
+    const runLocal = (args: string[]) => runCli(home, args, { extraEnv, cwd });
+
+    try {
+      const installed = dataOf(
+        await runLocal(["skill", "install", "--local", "--agent=dsh", "--agent=codex"]),
+        "skill install --local",
+      ) as {
+        scope: string;
+        projectRoot: string;
+        installed: Array<{ agent: string; path: string }>;
+      };
+      expect(installed.scope).toBe("local");
+      expect(installed.projectRoot).toBe(project);
+
+      // dsh 读 <项目根>/.dsh/skills，codex 读 <项目根>/.agents/skills
+      for (const [agent, sub] of [
+        ["dsh", ".dsh"],
+        ["codex", ".agents"],
+      ] as const) {
+        for (const skill of skills) {
+          const body = await fs.readFile(
+            path.join(project, sub, "skills", skill, "SKILL.md"),
+            "utf8",
+          );
+          expect(body).toContain("anynote-cli-version");
+        }
+        expect(installed.installed.some((entry) => entry.agent === agent)).toBe(true);
+      }
+
+      // 全局目录完全没被碰
+      for (const sub of ["claude-local", "codex-local", "dsh-local"]) {
+        await expect(fs.access(path.join(agentHome, sub, "skills"))).rejects.toThrow();
+      }
+
+      // 从项目内任意子目录都能查到（项目根靠 .git 判定）
+      const listed = dataOf(await runLocal(["skill", "list", "--local"]), "skill list --local") as {
+        rows: Array<{ agent: string; installed: boolean; installedVersion: string | null }>;
+      };
+      const dshRows = listed.rows.filter((row) => row.agent === "dsh");
+      expect(dshRows.every((row) => row.installed)).toBe(true);
+      expect(dshRows.every((row) => row.installedVersion !== null)).toBe(true);
+
+      // 卸载只删项目级那份
+      const removed = dataOf(
+        await runLocal(["skill", "uninstall", "--local", "--yes"]),
+        "skill uninstall --local",
+      ) as { removed: unknown[] };
+      expect(removed.removed.length).toBeGreaterThan(0);
+      // 删的是 skill 目录本身；空的 skills/ 父目录会留着（卸载不清理空壳）
+      for (const sub of [".dsh", ".agents"]) {
+        for (const skill of skills) {
+          await expect(fs.access(path.join(project, sub, "skills", skill))).rejects.toThrow();
+        }
+      }
+    } finally {
+      await fs.rm(project, { recursive: true, force: true });
     }
   });
 });

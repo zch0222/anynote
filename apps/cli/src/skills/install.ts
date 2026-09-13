@@ -2,7 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { type BundledSkill, bundledSkills } from "../bundled";
 import { UsageError } from "../core/exit";
-import { type AgentName, type SkillRootEnv, findInstalledDir, skillRoot } from "./agents";
+import {
+  type AgentName,
+  type SkillRootEnv,
+  type SkillScope,
+  findInstalledDir,
+  resolveSkillRoot,
+} from "./agents";
 import { readVersion, stamp } from "./stamp";
 
 export type InstallDeps = {
@@ -10,14 +16,19 @@ export type InstallDeps = {
   skills?: BundledSkill[];
   version: string;
   env: SkillRootEnv;
+  /** 安装范围：全局（默认）或项目级 `--local` */
+  scope?: SkillScope;
   /** 仅用于测试注入 rename 失败（Windows 上 rename 会因目录被占用而 EBUSY） */
   rename?: (from: string, to: string) => Promise<void>;
+  /** 仅用于测试注入 `.git` 探测，避免起真实目录树 */
+  pathExists?: (candidate: string) => boolean;
   now?: () => number;
 };
 
 export type InstalledSkill = {
   skill: string;
   agent: AgentName;
+  scope: SkillScope;
   root: string;
   /** 安装后的目录（覆盖安装时与旧目录相同） */
   path: string;
@@ -26,6 +37,11 @@ export type InstalledSkill = {
   previousVersion: string | null;
   files: number;
 };
+
+/** 解析本次操作的根目录；`pathExists` 让项目根探测在单测里可控。 */
+function rootOf(agent: AgentName, deps: InstallDeps): string {
+  return resolveSkillRoot(agent, deps.env, deps.scope ?? "global", deps.pathExists);
+}
 
 /** skill 包内的相对路径必须落在目标目录里；`..` 或绝对路径一律拒绝。 */
 function assertSafeRelative(relative: string): void {
@@ -77,6 +93,23 @@ export function stampFiles(skill: BundledSkill, version: string): Record<string,
 }
 
 /**
+ * 目标目录是不是"CLI 自己的 skill 源文"。
+ *
+ * 在 anynote 仓库里跑 `skill install --local` 时，目标会正好落在
+ * `<repo>/.claude/skills/anynote-cli`——那是 `scripts/build-bundled.mjs` 的**输入**，
+ * 覆盖它等于把源文改成带版本戳的安装副本，会直接破坏 `bundled.ts` 的一致性门禁。
+ *
+ * 判据是"没有版本戳，且内容与打包进来的未盖章内容逐字节相同"：只有源文满足这个条件
+ * （安装副本一定带戳）。这条**不受 `--force` 影响**——覆盖源文不是用户的合理诉求。
+ */
+export async function isOwnSource(target: string, skill: BundledSkill): Promise<boolean> {
+  const file = path.join(target, "SKILL.md");
+  const onDisk = await readIfExists(file);
+  if (onDisk === null || readVersion(onDisk) !== null) return false;
+  return onDisk === skill.files["SKILL.md"];
+}
+
+/**
  * 把**一个** skill 复制到目标根目录。
  *
  * 复制而不是符号链接，是刻意的选择：agent 的全局目录与 CLI 的安装位置没有任何关系
@@ -88,13 +121,18 @@ export async function installSkill(
   skill: BundledSkill,
   deps: InstallDeps,
 ): Promise<InstalledSkill> {
-  const root = skillRoot(agent, deps.env);
+  const root = rootOf(agent, deps);
   const rename = deps.rename ?? fs.rename;
   await assertWritableRoot(root);
 
   const files = stampFiles(skill, deps.version);
   const existing = await findInstalledDir(root, skill.name);
   const target = existing ?? path.join(root, skill.name);
+  if (await isOwnSource(target, skill)) {
+    throw new UsageError(
+      `${target} 是本仓库的 skill 源文（bundled.ts 的输入），不能被安装副本覆盖；请改用 anynote skill install（全局），或在别的项目里用 --local`,
+    );
+  }
   const previous = existing
     ? readVersion((await readIfExists(path.join(existing, "SKILL.md"))) ?? "")
     : null;
@@ -111,6 +149,7 @@ export async function installSkill(
   return {
     skill: skill.name,
     agent,
+    scope: deps.scope ?? "global",
     root,
     path: target,
     action: existing === null ? "installed" : changed ? "updated" : "unchanged",
@@ -129,6 +168,7 @@ export async function installAgent(agent: AgentName, deps: InstallDeps): Promise
 export type SkillStatus = {
   skill: string;
   agent: AgentName;
+  scope: SkillScope;
   root: string;
   /** 未安装时为 null */
   path: string | null;
@@ -141,7 +181,7 @@ export type SkillStatus = {
 /** 只读地比对"磁盘上的 skill"与"打进 CLI 的 skill"，供 `doctor` / `skill list` 用。 */
 export async function inspectAgent(agent: AgentName, deps: InstallDeps): Promise<SkillStatus[]> {
   const skills = deps.skills ?? bundledSkills;
-  const root = skillRoot(agent, deps.env);
+  const root = rootOf(agent, deps);
   const results: SkillStatus[] = [];
   for (const skill of skills) {
     const dir = await findInstalledDir(root, skill.name);
@@ -150,6 +190,7 @@ export async function inspectAgent(agent: AgentName, deps: InstallDeps): Promise
     results.push({
       skill: skill.name,
       agent,
+      scope: deps.scope ?? "global",
       root,
       path: dir,
       installedVersion,
@@ -170,7 +211,7 @@ export async function uninstallSkill(
   skill: BundledSkill,
   deps: InstallDeps,
 ): Promise<{ skill: string; agent: AgentName; path: string | null; removed: boolean }> {
-  const root = skillRoot(agent, deps.env);
+  const root = rootOf(agent, deps);
   const dir = await findInstalledDir(root, skill.name);
   if (!dir) return { skill: skill.name, agent, path: null, removed: false };
   const body = await readIfExists(path.join(dir, "SKILL.md"));

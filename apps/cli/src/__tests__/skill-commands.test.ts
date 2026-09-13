@@ -170,6 +170,169 @@ describe("skill install", () => {
   });
 });
 
+describe("skill install --local", () => {
+  /**
+   * 造一个假的"项目"：<dir>/project 带 .git，命令从 <dir>/project/apps/cli 跑。
+   * installDeps 用 process.cwd() 找项目根，所以这里 stub cwd。
+   */
+  async function makeProject() {
+    const project = path.join(dir, "project");
+    await fs.mkdir(path.join(project, ".git"), { recursive: true });
+    const cwd = path.join(project, "apps", "cli");
+    await fs.mkdir(cwd, { recursive: true });
+    vi.spyOn(process, "cwd").mockReturnValue(cwd);
+    return project;
+  }
+
+  it("装进项目根下的三个项目级目录，而不是全局目录", async () => {
+    const project = await makeProject();
+    const output = await skillInstall.run(context(), {
+      agent: ["all"],
+      local: true,
+      force: false,
+      root: undefined,
+    });
+
+    // codex 的项目级目录是 .agents（与 dsh 的 project-agents 同一约定），claude 是 .claude
+    for (const sub of [".claude", ".agents", ".dsh"]) {
+      for (const skill of bundledSkills) {
+        await expect(
+          fs.access(path.join(project, sub, "skills", skill.name, "SKILL.md")),
+        ).resolves.toBeUndefined();
+      }
+    }
+    expect(output.data).toMatchObject({ scope: "local", projectRoot: project });
+    // 全局目录完全没被碰
+    for (const global of [claudeSkills(), codexSkills(), dshSkills()]) {
+      await expect(fs.access(global)).rejects.toThrow();
+    }
+  });
+
+  it("项目级安装也带版本戳，且幂等", async () => {
+    const project = await makeProject();
+    const first = await skillInstall.run(context(), {
+      agent: ["dsh"],
+      local: true,
+      force: false,
+      root: undefined,
+    });
+    expect(first.data).toMatchObject({ scope: "local", projectRoot: project });
+    const body = await fs.readFile(
+      path.join(project, ".dsh", "skills", "anynote-cli", "SKILL.md"),
+      "utf8",
+    );
+    expect(body).toContain("anynote-cli-version");
+
+    const again = await skillInstall.run(context(), {
+      agent: ["dsh"],
+      local: true,
+      force: false,
+      root: undefined,
+    });
+    const installed = (again.data as { installed: Array<{ action: string }> }).installed;
+    expect(installed.every((entry) => entry.action === "unchanged")).toBe(true);
+  });
+
+  it("本地与全局互不干扰：--local 装的不会出现在全局 list 里", async () => {
+    await makeProject();
+    await skillInstall.run(context(), {
+      agent: ["claude"],
+      local: true,
+      force: false,
+      root: undefined,
+    });
+
+    const localRows = (await skillList.run(context(), { local: true, root: undefined })).data as {
+      rows: Array<{ installed: boolean }>;
+    };
+    expect(localRows.rows.some((row) => row.installed)).toBe(true);
+
+    const globalRows = (await skillList.run(context(), { local: false, root: undefined })).data as {
+      rows: Array<{ installed: boolean }>;
+    };
+    expect(globalRows.rows.every((row) => !row.installed)).toBe(true);
+  });
+
+  it("--local uninstall 只删项目级的", async () => {
+    const project = await makeProject();
+    await skillInstall.run(context(), {
+      agent: ["all"],
+      local: true,
+      force: false,
+      root: undefined,
+    });
+    await skillInstall.run(context(), {
+      agent: ["all"],
+      local: false,
+      force: false,
+      root: undefined,
+    });
+
+    const removed = (
+      await skillUninstall.run(context(), { agent: ["all"], local: true, root: undefined })
+    ).data as { removed: unknown[] };
+    expect(removed.removed).toHaveLength(bundledSkills.length * 3);
+
+    await expect(fs.access(path.join(project, ".dsh", "skills", "anynote-cli"))).rejects.toThrow();
+    // 全局那套还在
+    await expect(fs.access(path.join(dshSkills(), "anynote-cli"))).resolves.toBeUndefined();
+  });
+
+  it("拒绝覆盖本仓库的 skill 源文（bundled.ts 的输入），且 --force 也不行", async () => {
+    // 造一个"源文"：内容与打包进来的 SKILL.md 逐字节相同、且没有版本戳
+    const project = path.join(dir, "project");
+    await fs.mkdir(path.join(project, ".git"), { recursive: true });
+    const cwd = path.join(project, "apps", "cli");
+    await fs.mkdir(cwd, { recursive: true });
+    vi.spyOn(process, "cwd").mockReturnValue(cwd);
+
+    const cli = bundledSkills.find((skill) => skill.name === "anynote-cli");
+    const sourceDir = path.join(project, ".claude", "skills", "anynote-cli");
+    await fs.mkdir(sourceDir, { recursive: true });
+    await fs.writeFile(path.join(sourceDir, "SKILL.md"), cli?.files["SKILL.md"] ?? "", "utf8");
+
+    // --force 也不能覆盖源文；但另外两家没有被挡，照常安装
+    const output = await skillInstall.run(context(), {
+      agent: ["all"],
+      local: true,
+      force: true,
+      root: undefined,
+    });
+    const data = output.data as {
+      installed: Array<{ agent: string }>;
+      skipped: string[];
+    };
+    expect(data.installed.every((entry) => entry.agent !== "claude")).toBe(true);
+    expect(data.installed).toHaveLength(bundledSkills.length * 2);
+    expect(data.skipped.join()).toContain("是本仓库的 skill 源文");
+
+    // 源文原封不动
+    const body = await fs.readFile(path.join(sourceDir, "SKILL.md"), "utf8");
+    expect(body).not.toContain("anynote-cli-version");
+  });
+
+  it("只被源文挡住时报错，且不提示 --force（那条路加 --force 也没用）", async () => {
+    const project = path.join(dir, "project");
+    await fs.mkdir(path.join(project, ".git"), { recursive: true });
+    const cwd = path.join(project, "apps", "cli");
+    await fs.mkdir(cwd, { recursive: true });
+    vi.spyOn(process, "cwd").mockReturnValue(cwd);
+
+    const cli = bundledSkills.find((skill) => skill.name === "anynote-cli");
+    const sourceDir = path.join(project, ".claude", "skills", "anynote-cli");
+    await fs.mkdir(sourceDir, { recursive: true });
+    await fs.writeFile(path.join(sourceDir, "SKILL.md"), cli?.files["SKILL.md"] ?? "", "utf8");
+
+    const error = await skillInstall
+      .run(context(), { agent: ["claude"], local: true, force: true, root: undefined })
+      .catch((thrown: Error) => thrown);
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain("是本仓库的 skill 源文");
+    // 源文这条不受 --force 影响，所以不该让用户白跑一趟去加 --force
+    expect((error as Error).message).not.toContain("--force");
+  });
+});
+
 describe("skill list", () => {
   it("未安装时报告未安装与根目录", async () => {
     const output = await skillList.run(context(), { root: undefined });
