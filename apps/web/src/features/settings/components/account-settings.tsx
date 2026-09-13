@@ -94,14 +94,14 @@ export function AccountSettings() {
       <section className="space-y-4" data-testid="settings-account">
         <div>
           <h2 className="text-lg font-semibold">账号资料</h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-label-secondary">
             用户名 {profile.data?.username ?? "…"}（不可修改）
           </p>
         </div>
         {profile.isPending ? (
           <Skeleton className="h-48 w-full rounded-xl" />
         ) : profile.isError ? (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             资料加载失败：{profile.error.message}
           </p>
         ) : (
@@ -173,7 +173,7 @@ export function AccountSettings() {
       <section className="space-y-4" data-testid="settings-password">
         <div>
           <h2 className="text-lg font-semibold">修改密码</h2>
-          <p className="text-sm text-muted-foreground">8-15 位，需包含大小写字母和数字。</p>
+          <p className="text-sm text-label-secondary">8-15 位，需包含大小写字母和数字。</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">

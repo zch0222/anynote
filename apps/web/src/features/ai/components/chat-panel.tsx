@@ -116,7 +116,7 @@ export function ChatPanel({
           {session.messages.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-lg font-medium">{emptyHint ?? "开始新的对话"}</p>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="mt-2 text-sm text-label-secondary">
                 {docId
                   ? "就当前文档提问，回答基于文档内容。"
                   : "AI 回复支持 Markdown：代码块、表格与公式。"}
@@ -127,7 +127,7 @@ export function ChatPanel({
           )}
           {session.status === "error" && session.error ? (
             <div
-              className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+              className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
               data-testid="chat-error"
             >
               <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -149,7 +149,7 @@ export function ChatPanel({
           }}
           placeholder={placeholder}
         />
-        <p className="mt-2 text-center text-xs text-muted-foreground">内容由 AI 生成，请注意甄别</p>
+        <p className="mt-2 text-center text-xs text-label-secondary">内容由 AI 生成，请注意甄别</p>
       </div>
     </div>
   );

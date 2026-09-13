@@ -145,7 +145,7 @@ export function PdfChatPage() {
             }}
             className={cn(
               "min-h-10 flex-1 rounded-lg px-3 text-sm transition-colors",
-              pane === key ? "bg-accent text-accent-foreground" : "text-muted-foreground",
+              pane === key ? "bg-accent-soft text-accent" : "text-label-secondary",
             )}
           >
             {label}
@@ -208,7 +208,7 @@ export function PdfChatPage() {
           }}
           data-testid="pdf-upload-zone"
         >
-          <Upload className="mx-auto size-6 text-muted-foreground" aria-hidden="true" />
+          <Upload className="mx-auto size-6 text-label-secondary" aria-hidden="true" />
           <p className="mt-2 text-sm">拖拽 PDF 到此处，或</p>
           <Button
             variant="secondary"
@@ -224,13 +224,13 @@ export function PdfChatPage() {
           </Button>
           {progress !== null ? (
             <div className="mt-3" data-testid="pdf-upload-progress">
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-1.5 overflow-hidden rounded-full bg-grouped">
                 <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-200"
+                  className="h-full rounded-full bg-accent transition-[width] duration-200"
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">{progress}%</p>
+              <p className="mt-1 text-xs text-label-secondary">{progress}%</p>
             </div>
           ) : null}
         </div>
@@ -239,15 +239,15 @@ export function PdfChatPage() {
           {docs.isPending ? (
             [0, 1, 2].map((item) => <Skeleton key={item} className="h-12 rounded-lg" />)
           ) : docs.isError ? (
-            <p className="p-2 text-sm text-destructive">文档加载失败：{docs.error.message}</p>
+            <p className="p-2 text-sm text-danger">文档加载失败：{docs.error.message}</p>
           ) : (docs.data?.rows.length ?? 0) === 0 ? (
-            <p className="p-2 text-sm text-muted-foreground">还没有文档，先上传一个 PDF。</p>
+            <p className="p-2 text-sm text-label-secondary">还没有文档，先上传一个 PDF。</p>
           ) : (
             docs.data?.rows.map((row) => (
               <div
                 key={row.id}
                 className={`group flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
-                  row.id === docId ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+                  row.id === docId ? "bg-accent-soft text-accent" : "hover:bg-grouped"
                 }`}
                 data-testid={`doc-item-${row.id}`}
               >
@@ -260,7 +260,7 @@ export function PdfChatPage() {
                     setPane("chat");
                   }}
                 >
-                  <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
                   <span className="min-w-0 flex-1 truncate" title={row.docName ?? "未命名文档"}>
                     {row.docName ?? "未命名文档"}
                   </span>
@@ -271,7 +271,7 @@ export function PdfChatPage() {
                   </Badge>
                 ) : row.id === docId && indexPending ? (
                   <Loader2
-                    className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+                    className="size-3.5 shrink-0 animate-spin text-label-secondary"
                     aria-label="索引构建中"
                   />
                 ) : (
@@ -314,12 +314,12 @@ export function PdfChatPage() {
                 </Badge>
               )}
             </div>
-            <div className="min-h-0 flex-1 bg-muted/30 p-4">
+            <div className="min-h-0 flex-1 bg-grouped/30 p-4">
               <PdfViewer url={doc.data.url} />
             </div>
           </>
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center text-sm text-label-secondary">
             选择左侧文档预览，或上传一个 PDF。
           </div>
         )}
@@ -335,7 +335,7 @@ export function PdfChatPage() {
         {docId ? (
           <DocChatPanel docId={docId} />
         ) : (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-label-secondary">
             上传并选中 PDF 后，可以就文档内容提问。
           </div>
         )}

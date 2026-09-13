@@ -22,7 +22,7 @@ export function CollabStatusBadge({ status }: { status: CollabStatus }) {
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
         status === "connected" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-600",
         status === "connecting" && "border-amber-500/30 bg-amber-500/10 text-amber-600",
-        offline && "border-destructive/30 bg-destructive/10 text-destructive",
+        offline && "border-danger/30 bg-danger/10 text-danger",
       )}
     >
       <Icon className="size-3.5" aria-hidden="true" />
@@ -35,7 +35,7 @@ export function CollabStatusBadge({ status }: { status: CollabStatus }) {
 export function CollabPresence({ peers }: { peers: CollabPeer[] }) {
   if (peers.length === 0) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="inline-flex items-center gap-1.5 text-xs text-label-secondary">
         <Users className="size-3.5" aria-hidden="true" />
         暂无在线成员
       </span>

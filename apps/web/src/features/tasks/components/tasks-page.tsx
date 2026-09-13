@@ -7,39 +7,47 @@ import { useTasksQuery } from "@/features/tasks/use-tasks";
 import { ListTodo } from "lucide-react";
 import { useEffect, useState } from "react";
 
-/** `/tasks`：知识库选择 + 任务表格（@tanstack/react-table）。 */
-export function TasksPage() {
+/**
+ * 任务列表。
+ *
+ * 两种用法与 `MoocPage` 一致：知识库内（`/notes/:id/tasks`）由路由给定 `baseId`，
+ * 跨库（`/tasks`）退回知识库选择器。
+ */
+export function TasksPage({ baseId: fixedBaseId }: { baseId?: number | undefined } = {}) {
   const bases = useKnowledgeBasesQuery();
-  const [baseId, setBaseId] = useState<number | null>(null);
+  const [pickedBaseId, setPickedBaseId] = useState<number | null>(null);
+  const baseId = fixedBaseId ?? pickedBaseId;
   const tasks = useTasksQuery(baseId ?? 0);
 
   const firstBase = bases.data?.[0];
   useEffect(() => {
-    if (baseId === null && firstBase) {
-      setBaseId(firstBase.id);
+    if (fixedBaseId === undefined && pickedBaseId === null && firstBase) {
+      setPickedBaseId(firstBase.id);
     }
-  }, [firstBase, baseId]);
+  }, [fixedBaseId, firstBase, pickedBaseId]);
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-6">
+    <section className="mx-auto w-full max-w-6xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">任务</h1>
-          <p className="text-sm text-muted-foreground">把想法拆成行动，让计划逐步实现。</p>
+        <div className="space-y-1">
+          <h1 className="text-title text-label">任务</h1>
+          <p className="text-footnote text-label-secondary">把想法拆成行动，让计划逐步实现。</p>
         </div>
-        <KnowledgeBaseSelect bases={bases.data ?? []} value={baseId} onChange={setBaseId} />
+        {fixedBaseId === undefined ? (
+          <KnowledgeBaseSelect bases={bases.data ?? []} value={baseId} onChange={setPickedBaseId} />
+        ) : null}
       </div>
 
       {!baseId ? (
-        <div className="rounded-xl border border-dashed p-10 text-center">
-          <ListTodo className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
-          <p className="mt-3 text-sm font-medium">还没有可用的知识库</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            任务挂在知识库下，先到笔记页创建一个。
+        <div className="rounded-lg border border-dashed border-separator p-10 text-center">
+          <ListTodo className="mx-auto size-8 text-label-tertiary" aria-hidden="true" />
+          <p className="mt-3 text-headline text-label">还没有可用的知识库</p>
+          <p className="mt-1 text-footnote text-label-secondary">
+            任务挂在知识库下，先创建一个知识库。
           </p>
         </div>
       ) : tasks.isError ? (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+        <p role="alert" className="rounded-lg bg-danger/5 p-6 text-footnote text-danger">
           任务加载失败：{tasks.error.message}
         </p>
       ) : (

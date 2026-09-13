@@ -86,7 +86,7 @@ export function CollabDocWorkspace({ docId }: { docId: string }) {
             placeholder="未命名文档"
             onChange={(event) => setTitle(event.target.value)}
             onBlur={commitTitle}
-            className="h-9 max-w-md border-transparent bg-transparent text-lg font-semibold shadow-none focus-visible:border-input"
+            className="h-9 max-w-md border-transparent bg-transparent text-lg font-semibold shadow-none focus-visible:border-separator"
           />
         </div>
         <div className="flex items-center gap-3">
@@ -96,7 +96,7 @@ export function CollabDocWorkspace({ docId }: { docId: string }) {
       </header>
 
       {content.status === "error" ? (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+        <p className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-sm text-danger">
           协同服务连接失败：{content.error?.message ?? "未知错误"}。请确认 collab 服务已启动。
         </p>
       ) : collaboration ? (
@@ -109,7 +109,7 @@ export function CollabDocWorkspace({ docId }: { docId: string }) {
           className="min-h-0 flex-1"
         />
       ) : (
-        <div className="space-y-3 rounded-xl border bg-card p-4" aria-busy="true">
+        <div className="space-y-3 rounded-xl border bg-surface p-4" aria-busy="true">
           <Skeleton className="h-8 w-2/3" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-5/6" />

@@ -11,11 +11,11 @@ export type WorkflowFlowNode = Node<WorkflowNodeData & { prompt?: string | undef
 export function StartNode({ data, selected }: NodeProps<WorkflowFlowNode>) {
   return (
     <div
-      className={`rounded-xl border bg-card px-4 py-3 shadow-sm ${selected ? "border-primary ring-2 ring-primary/30" : ""}`}
+      className={`rounded-xl border bg-surface px-4 py-3 shadow-sm ${selected ? "border-primary ring-2 ring-primary/30" : ""}`}
       data-testid="workflow-node-start"
     >
       <div className="flex items-center gap-2 text-sm font-medium">
-        <Play className="size-4 text-primary" aria-hidden="true" />
+        <Play className="size-4 text-accent" aria-hidden="true" />
         {data.label}
       </div>
       <Handle type="source" position={Position.Right} />
@@ -27,15 +27,15 @@ export function StartNode({ data, selected }: NodeProps<WorkflowFlowNode>) {
 export function WhisperNode({ data, selected }: NodeProps<WorkflowFlowNode>) {
   return (
     <div
-      className={`w-56 rounded-xl border bg-card px-4 py-3 shadow-sm ${selected ? "border-primary ring-2 ring-primary/30" : ""}`}
+      className={`w-56 rounded-xl border bg-surface px-4 py-3 shadow-sm ${selected ? "border-primary ring-2 ring-primary/30" : ""}`}
       data-testid="workflow-node-whisper"
     >
       <div className="flex items-center gap-2 text-sm font-medium">
-        <AudioLines className="size-4 text-primary" aria-hidden="true" />
+        <AudioLines className="size-4 text-accent" aria-hidden="true" />
         {data.label}
       </div>
       {data.prompt ? (
-        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground" title={data.prompt}>
+        <p className="mt-1 line-clamp-2 text-xs text-label-secondary" title={data.prompt}>
           {data.prompt}
         </p>
       ) : null}

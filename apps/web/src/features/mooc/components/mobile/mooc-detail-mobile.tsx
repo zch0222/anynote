@@ -56,16 +56,16 @@ export function MobileMoocDetail({ moocId }: { moocId: number }) {
               <Skeleton className="h-12 rounded-lg" />
             </div>
           ) : items.isError ? (
-            <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
               条目加载失败：{items.error.message}
             </p>
           ) : items.data.length === 0 ? (
-            <p className="flex items-center gap-2 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+            <p className="flex items-center gap-2 rounded-xl border border-dashed p-4 text-sm text-label-secondary">
               <ListTree className="size-4" aria-hidden="true" />
               这门课还没有章节内容
             </p>
           ) : (
-            <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+            <ul className="divide-y overflow-hidden rounded-xl border bg-surface">
               {items.data.map((item) => (
                 <MoocItemRow
                   key={item.id}
@@ -84,7 +84,7 @@ export function MobileMoocDetail({ moocId }: { moocId: number }) {
           {selected ? (
             <MoocItemPanel moocId={moocId} item={selected} />
           ) : (
-            <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+            <p className="rounded-xl border border-dashed p-8 text-center text-sm text-label-secondary">
               先从"目录"里选一个章节、视频或文档。
             </p>
           )}
@@ -117,12 +117,12 @@ function MoocItemRow({
         data-testid={`mooc-item-${item.id}`}
         className={cn(
           "flex min-h-12 w-full items-center gap-2 px-4 text-left text-sm outline-none transition-colors",
-          selected && "bg-accent text-accent-foreground",
+          selected && "bg-accent-soft text-accent",
         )}
       >
         <ItemIcon type={item.moocItemType} />
         <span className="min-w-0 flex-1 truncate">{item.title ?? "未命名条目"}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">
+        <span className="shrink-0 text-xs text-label-secondary">
           {moocItemTypeName(item.moocItemType)}
         </span>
         {isChapter ? (
@@ -155,10 +155,10 @@ function ChapterChildren({
   }
   const rows = children.data ?? [];
   if (rows.length === 0) {
-    return <p className="px-10 py-2 text-xs text-muted-foreground">章节下暂无内容</p>;
+    return <p className="px-10 py-2 text-xs text-label-secondary">章节下暂无内容</p>;
   }
   return (
-    <ul className="border-t bg-muted/30">
+    <ul className="border-t bg-grouped/30">
       {rows.map((child) => (
         <li key={child.id}>
           <button
@@ -178,12 +178,12 @@ function ChapterChildren({
 
 function ItemIcon({ type }: { type: number | null | undefined }) {
   if (type === MOOC_ITEM_TYPE.VIDEO) {
-    return <Film className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />;
+    return <Film className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />;
   }
   if (type === MOOC_ITEM_TYPE.DOC) {
-    return <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />;
+    return <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />;
   }
-  return <ListTree className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />;
+  return <ListTree className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />;
 }
 
 /** 视频 / 文档内容面板。播放地址是临时签名 URL，由 `useObjectUrlQuery` 现取现用。 */
@@ -202,7 +202,7 @@ function MoocItemPanel({ moocId, item }: { moocId: number; item: MoocItem }) {
         objectUrl.isPending ? (
           <Skeleton className="aspect-video w-full rounded-lg" />
         ) : objectUrl.isError || !objectUrl.data?.url ? (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             视频地址获取失败，请稍后重试。
           </p>
         ) : (
@@ -211,11 +211,11 @@ function MoocItemPanel({ moocId, item }: { moocId: number; item: MoocItem }) {
       ) : detail.isPending ? (
         <Skeleton className="h-40 w-full rounded-xl" />
       ) : detail.data?.moocItemText?.content ? (
-        <div className="rounded-xl border bg-card p-3">
+        <div className="rounded-xl border bg-surface p-3">
           <TiptapEditor preset="readonly" value={detail.data.moocItemText.content} />
         </div>
       ) : (
-        <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed p-6 text-center text-sm text-label-secondary">
           这个条目还没有内容。
         </p>
       )}

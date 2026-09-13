@@ -28,7 +28,7 @@ export function MobileWikiReader({ baseId, noteId }: { baseId: number; noteId: n
           href={`/m/notes/${baseId}/${noteId}`}
           aria-label="编辑这篇笔记"
           data-testid="wiki-edit-link"
-          className="flex size-10 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex size-10 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-grouped focus-visible:ring-2 focus-visible:ring-ring"
         >
           <PenLine className="size-5" aria-hidden="true" />
         </Link>
@@ -43,7 +43,7 @@ export function MobileWikiReader({ baseId, noteId }: { baseId: number; noteId: n
             <Skeleton className="h-4 w-5/6" />
           </div>
         ) : note.isError ? (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             笔记加载失败：{note.error.message}
           </p>
         ) : (

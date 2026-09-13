@@ -54,11 +54,11 @@ export function MobileMoocList() {
       <div className="space-y-3 p-4" data-testid="mobile-mooc-list">
         {!baseId ? (
           <div className="rounded-xl border border-dashed p-6 text-center">
-            <Library className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+            <Library className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
             <p className="mt-3 text-sm font-medium">
               {bases.isPending ? "正在加载知识库" : "还没有可用的知识库"}
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-label-secondary">
               课程挂在知识库下，先到笔记页创建一个。
             </p>
           </div>
@@ -68,25 +68,25 @@ export function MobileMoocList() {
             <Skeleton className="h-24 rounded-xl" />
           </div>
         ) : moocs.isError ? (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             课程加载失败：{moocs.error.message}
           </p>
         ) : moocs.data.rows.length === 0 ? (
           <div className="rounded-xl border border-dashed p-6 text-center">
-            <GraduationCap className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+            <GraduationCap className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
             <p className="mt-3 text-sm font-medium">这个知识库还没有课程</p>
-            <p className="mt-1 text-sm text-muted-foreground">课程在桌面版创建。</p>
+            <p className="mt-1 text-sm text-label-secondary">课程在桌面版创建。</p>
           </div>
         ) : (
           moocs.data.rows.map((mooc) => (
             <Link
               key={mooc.id}
               href={`/m/mooc/${mooc.id}`}
-              className="block space-y-1 rounded-xl border bg-card p-4 outline-none transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring"
+              className="block space-y-1 rounded-xl border bg-surface p-4 outline-none transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring"
               data-testid={`mooc-card-${mooc.id}`}
             >
               <p className="truncate text-sm font-medium">{mooc.title ?? "未命名课程"}</p>
-              <p className="line-clamp-2 text-sm text-muted-foreground">
+              <p className="line-clamp-2 text-sm text-label-secondary">
                 {mooc.moocDescription?.trim() || "还没有课程简介"}
               </p>
             </Link>

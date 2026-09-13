@@ -74,17 +74,17 @@ export function ConversationList({ activeId }: ConversationListProps) {
         {conversations.isPending ? (
           [0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-10 rounded-lg" />)
         ) : conversations.isError ? (
-          <p className="px-2 py-4 text-sm text-destructive">
+          <p className="px-2 py-4 text-sm text-danger">
             会话加载失败：{conversations.error.message}
           </p>
         ) : rows.length === 0 ? (
-          <p className="px-2 py-4 text-sm text-muted-foreground">还没有历史会话</p>
+          <p className="px-2 py-4 text-sm text-label-secondary">还没有历史会话</p>
         ) : (
           rows.map((summary) => (
             <div
               key={summary.id}
               className={`group flex items-center gap-1 rounded-lg px-2 py-2 text-sm transition-colors ${
-                summary.id === activeId ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+                summary.id === activeId ? "bg-accent-soft text-accent" : "hover:bg-grouped"
               }`}
               data-testid={`conversation-item-${summary.id}`}
               data-active={summary.id === activeId ? "true" : "false"}

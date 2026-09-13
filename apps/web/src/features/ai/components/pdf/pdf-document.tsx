@@ -29,9 +29,9 @@ export function PdfDocument({ url, width, onLoaded }: PdfDocumentProps) {
         setNumPages(pdf.numPages);
         onLoaded?.(pdf.numPages);
       }}
-      loading={<p className="p-6 text-center text-sm text-muted-foreground">PDF 加载中…</p>}
+      loading={<p className="p-6 text-center text-sm text-label-secondary">PDF 加载中…</p>}
       error={
-        <p className="p-6 text-center text-sm text-destructive">
+        <p className="p-6 text-center text-sm text-danger">
           PDF 加载失败：预览链接可能已过期，重新选择文档试试。
         </p>
       }

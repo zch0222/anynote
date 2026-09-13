@@ -55,7 +55,7 @@ export function MobileConversationList() {
           href="/m/ai/chat/new"
           aria-label="新对话"
           data-testid="mobile-conversation-new"
-          className="flex size-10 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex size-10 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-grouped focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Plus className="size-5" aria-hidden="true" />
         </Link>
@@ -68,17 +68,17 @@ export function MobileConversationList() {
             <Skeleton className="h-14 rounded-xl" />
           </div>
         ) : conversations.isError ? (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             会话加载失败：{conversations.error.message}
           </p>
         ) : rows.length === 0 ? (
           <div className="rounded-xl border border-dashed p-6 text-center">
-            <MessageSquare className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+            <MessageSquare className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
             <p className="mt-3 text-sm font-medium">还没有历史会话</p>
-            <p className="mt-1 text-sm text-muted-foreground">从右上角开一段新对话。</p>
+            <p className="mt-1 text-sm text-label-secondary">从右上角开一段新对话。</p>
           </div>
         ) : (
-          <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+          <ul className="divide-y overflow-hidden rounded-xl border bg-surface">
             {rows.map((summary) => (
               <li
                 key={summary.id}
@@ -87,10 +87,10 @@ export function MobileConversationList() {
               >
                 <Link
                   href={`/m/ai/chat/${summary.id}`}
-                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-accent"
+                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-grouped"
                 >
                   <MessageSquare
-                    className="size-4 shrink-0 text-muted-foreground"
+                    className="size-4 shrink-0 text-label-secondary"
                     aria-hidden="true"
                   />
                   <span className="min-w-0 flex-1 truncate">{summary.title ?? "未命名会话"}</span>
@@ -99,7 +99,7 @@ export function MobileConversationList() {
                   type="button"
                   aria-label={`会话「${summary.title ?? "未命名会话"}」操作`}
                   onClick={() => setActing(summary)}
-                  className="flex size-11 shrink-0 items-center justify-center text-muted-foreground outline-none focus-visible:bg-accent"
+                  className="flex size-11 shrink-0 items-center justify-center text-label-secondary outline-none focus-visible:bg-grouped"
                 >
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </button>

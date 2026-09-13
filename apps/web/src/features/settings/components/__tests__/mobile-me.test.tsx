@@ -48,14 +48,16 @@ describe("MobileMePage", () => {
 
   it("tab 放不下的入口都在「更多」里，且都是移动端地址", () => {
     renderWithProviders(<MobileMePage />);
+    // 知识库已经是 tab，不再重复出现在「更多」里
     for (const [title, href] of [
-      ["知识库", "/m/wikis"],
+      ["协同文档", "/m/docs"],
       ["任务", "/m/tasks"],
-      ["课程", "/m/mooc"],
+      ["慕课", "/m/mooc"],
       ["PDF 问答", "/m/ai/pdf"],
     ] as const) {
       expect(screen.getByRole("link", { name: new RegExp(title) })).toHaveAttribute("href", href);
     }
+    expect(screen.queryByRole("link", { name: /^知识库/ })).toBeNull();
   });
 
   it("仅桌面版的能力给出理由与带逃生口的链接（决策 4）", () => {

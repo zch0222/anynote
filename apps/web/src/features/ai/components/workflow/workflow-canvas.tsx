@@ -246,10 +246,10 @@ export function WorkflowCanvas() {
                   />
                 </div>
               ) : null}
-              <p className="text-xs text-muted-foreground">按 Delete / Backspace 删除选中节点。</p>
+              <p className="text-xs text-label-secondary">按 Delete / Backspace 删除选中节点。</p>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">点击节点编辑属性；拖拽节点边缘连线。</p>
+            <p className="text-sm text-label-secondary">点击节点编辑属性；拖拽节点边缘连线。</p>
           )}
         </aside>
       </div>

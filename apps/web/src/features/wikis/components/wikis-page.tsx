@@ -53,11 +53,11 @@ export function WikisPage() {
     >
       <div className="shrink-0 space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">知识库</h1>
-        <p className="text-sm text-muted-foreground">连接知识，构建属于你的知识库。</p>
+        <p className="text-sm text-label-secondary">连接知识，构建属于你的知识库。</p>
       </div>
 
       {error ? (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+        <p className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-sm text-danger">
           加载失败：{error}
         </p>
       ) : bases.isPending ? (
@@ -67,9 +67,9 @@ export function WikisPage() {
         </div>
       ) : (bases.data?.length ?? 0) === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
-          <BookOpen className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+          <BookOpen className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
           <p className="mt-3 text-sm font-medium">还没有知识库</p>
-          <p className="mt-1 text-sm text-muted-foreground">先到「笔记」页创建一个知识库。</p>
+          <p className="mt-1 text-sm text-label-secondary">先到「笔记」页创建一个知识库。</p>
         </div>
       ) : (
         <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[16rem_1fr] lg:grid-rows-1">
@@ -88,14 +88,14 @@ export function WikisPage() {
             </nav>
             <nav aria-label="笔记列表" className="space-y-1 border-t pt-3">
               {notes.data?.rows.length === 0 ? (
-                <p className="px-2 py-1 text-sm text-muted-foreground">这个知识库下还没有笔记</p>
+                <p className="px-2 py-1 text-sm text-label-secondary">这个知识库下还没有笔记</p>
               ) : (
                 notes.data?.rows.map((note) => (
                   <button
                     key={note.id}
                     type="button"
                     className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-none transition-colors ${
-                      note.id === noteId ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+                      note.id === noteId ? "bg-accent-soft text-accent" : "hover:bg-grouped"
                     }`}
                     onClick={() => {
                       setNoteId(note.id);
@@ -103,7 +103,7 @@ export function WikisPage() {
                     data-testid={`wiki-note-${note.id}`}
                   >
                     <FileText
-                      className="size-3.5 shrink-0 text-muted-foreground"
+                      className="size-3.5 shrink-0 text-label-secondary"
                       aria-hidden="true"
                     />
                     <span className="min-w-0 flex-1 truncate">{note.title ?? "未命名笔记"}</span>
@@ -117,7 +117,7 @@ export function WikisPage() {
             {noteId ? (
               <WikiNoteView noteId={noteId} />
             ) : (
-              <div className="flex h-full min-h-64 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground lg:min-h-0">
+              <div className="flex h-full min-h-64 items-center justify-center rounded-xl border border-dashed text-sm text-label-secondary lg:min-h-0">
                 选择左侧笔记开始阅读。
               </div>
             )}
@@ -141,12 +141,12 @@ function BaseRow({
     <button
       type="button"
       className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-none transition-colors ${
-        active ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+        active ? "bg-accent-soft text-accent" : "hover:bg-grouped"
       }`}
       onClick={onClick}
       data-testid={`wiki-base-${base.id}`}
     >
-      <BookOpen className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <BookOpen className="size-3.5 shrink-0 text-label-secondary" aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate">{base.knowledgeBaseName ?? "未命名知识库"}</span>
     </button>
   );
@@ -167,14 +167,14 @@ function WikiNoteView({ noteId }: { noteId: number }) {
   }
   if (note.isError) {
     return (
-      <div className="h-full overflow-y-auto rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+      <div className="h-full overflow-y-auto rounded-xl border border-danger/30 bg-danger/5 p-6 text-sm text-danger">
         笔记加载失败：{note.error.message}
       </div>
     );
   }
   return (
     <article
-      className="h-full overflow-y-auto rounded-xl border bg-card p-6"
+      className="h-full overflow-y-auto rounded-xl border bg-surface p-6"
       data-testid="wiki-note-view"
     >
       <h2 className="mb-4 text-xl font-semibold">{note.data?.title ?? "未命名笔记"}</h2>

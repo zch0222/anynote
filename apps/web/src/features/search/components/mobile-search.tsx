@@ -23,7 +23,7 @@ export function MobileSearchPage() {
       <div className="space-y-4 p-4" data-testid="mobile-search">
         <div className="relative">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-label-secondary"
             aria-hidden="true"
           />
           <Input
@@ -37,26 +37,26 @@ export function MobileSearchPage() {
         </div>
 
         {results.length === 0 ? (
-          <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-xl border border-dashed p-6 text-center text-sm text-label-secondary">
             没有找到匹配的页面
           </p>
         ) : (
-          <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+          <ul className="divide-y overflow-hidden rounded-xl border bg-surface">
             {results.map((item) => (
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className="flex min-h-12 items-center gap-3 px-4 text-sm outline-none focus-visible:bg-accent"
+                  className="flex min-h-12 items-center gap-3 px-4 text-sm outline-none focus-visible:bg-grouped"
                 >
                   <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{item.href}</span>
+                  <span className="shrink-0 text-xs text-label-secondary">{item.href}</span>
                 </Link>
               </li>
             ))}
           </ul>
         )}
 
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-label-secondary">
           这里搜的是页面与入口。笔记正文检索后端还没有对应端点，桌面版同样没有。
         </p>
       </div>

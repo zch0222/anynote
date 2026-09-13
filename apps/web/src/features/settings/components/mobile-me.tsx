@@ -26,15 +26,15 @@ export function MobileMePage() {
   return (
     <MobileScreen title="我的">
       <div className="space-y-6 p-4" data-testid="mobile-me">
-        <section className="flex items-center gap-3 rounded-xl border bg-card p-4">
-          <Avatar>
+        <section className="flex items-center gap-3 rounded-lg bg-surface p-4 shadow-card">
+          <Avatar className="size-12">
             <AvatarImage src={me.data?.avatar || undefined} alt="" />
             <AvatarFallback>{name.slice(0, 1)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate font-medium">{name}</p>
+            <p className="truncate text-headline font-semibold text-label">{name}</p>
             {/* /api/auth/me 的白名单里没有邮箱，这里只展示它确实返回的字段 */}
-            <p className="truncate text-sm text-muted-foreground">
+            <p className="truncate text-footnote text-label-secondary">
               {me.data?.username ? `@${me.data.username}` : "账号资料加载中"}
             </p>
           </div>
@@ -58,38 +58,29 @@ export function MobileMePage() {
               href={route.href}
               title={route.title}
               description={route.description}
-              icon={<route.icon className="size-4 text-muted-foreground" aria-hidden="true" />}
+              icon={<route.icon className="size-4 text-label-secondary" aria-hidden="true" />}
             />
           ))}
         </MeGroup>
 
-        {/* 决策 4：画布不做移动端，给说明 + 桌面版链接，而不是让入口消失得没有解释 */}
+        {/* 画布不做移动端，给说明 + 桌面版链接，而不是让入口消失得没有解释 */}
         <MeGroup label="仅桌面版">
           {mobileUnavailableRoutes.map((route) => (
             <li key={route.desktopHref}>
-              <Link
-                href={`${route.desktopHref}?desktop=1`}
-                prefetch={false}
-                className="flex min-h-14 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-accent"
-              >
-                <route.icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <Link href={`${route.desktopHref}?desktop=1`} prefetch={false} className={ROW_CLASS}>
+                <route.icon className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate">{route.title}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {route.reason}
-                  </span>
+                  <span className="block truncate text-footnote text-label">{route.title}</span>
+                  <span className="block truncate text-xs text-label-tertiary">{route.reason}</span>
                 </span>
-                <ChevronRight
-                  className="size-4 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
+                <ChevronRight className="size-4 shrink-0 text-label-tertiary" aria-hidden="true" />
               </Link>
             </li>
           ))}
         </MeGroup>
 
         <div className="space-y-2">
-          <ViewSwitch className="w-full justify-start rounded-xl border bg-card px-4 py-3" />
+          <ViewSwitch className="w-full justify-start rounded-lg bg-surface px-4 py-3 text-footnote shadow-card" />
           <button
             type="button"
             disabled={logout.isPending}
@@ -97,7 +88,7 @@ export function MobileMePage() {
             onClick={() =>
               logout.mutate(undefined, { onError: () => toast.error("退出登录失败，请重试") })
             }
-            className="flex min-h-12 w-full items-center gap-2 rounded-xl border bg-card px-4 text-sm text-destructive outline-none transition-colors hover:bg-accent disabled:opacity-50"
+            className="flex min-h-12 w-full items-center gap-2 rounded-lg bg-surface px-4 text-footnote text-danger shadow-card outline-none transition-colors hover:bg-danger/5 disabled:opacity-50"
           >
             <LogOut className="size-4" aria-hidden="true" />
             {logout.isPending ? "正在退出…" : "退出登录"}
@@ -108,11 +99,16 @@ export function MobileMePage() {
   );
 }
 
+const ROW_CLASS =
+  "flex min-h-14 items-center gap-3 px-4 py-2 outline-none transition-colors focus-visible:bg-grouped";
+
 function MeGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-medium text-muted-foreground">{label}</h2>
-      <ul className="divide-y overflow-hidden rounded-xl border bg-card">{children}</ul>
+      <h2 className="text-xs font-medium text-label-tertiary">{label}</h2>
+      <ul className="divide-y divide-separator overflow-hidden rounded-lg bg-surface shadow-card">
+        {children}
+      </ul>
     </section>
   );
 }
@@ -126,25 +122,21 @@ function MeLink({
 }: {
   href: string;
   title: string;
-  description?: string;
-  icon?: ReactNode;
-  testId?: string;
+  description?: string | undefined;
+  icon?: ReactNode | undefined;
+  testId?: string | undefined;
 }) {
   return (
     <li>
-      <Link
-        href={href}
-        data-testid={testId}
-        className="flex min-h-14 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-accent"
-      >
+      <Link href={href} data-testid={testId} className={ROW_CLASS}>
         {icon ? <span className="shrink-0">{icon}</span> : null}
         <span className="min-w-0 flex-1">
-          <span className="block truncate">{title}</span>
+          <span className="block truncate text-footnote text-label">{title}</span>
           {description ? (
-            <span className="block truncate text-xs text-muted-foreground">{description}</span>
+            <span className="block truncate text-xs text-label-tertiary">{description}</span>
           ) : null}
         </span>
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ChevronRight className="size-4 shrink-0 text-label-tertiary" aria-hidden="true" />
       </Link>
     </li>
   );

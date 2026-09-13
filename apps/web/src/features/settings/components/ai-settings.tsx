@@ -17,7 +17,7 @@ export function AiSettings() {
     <div className="max-w-2xl space-y-4" data-testid="settings-ai">
       <div>
         <h2 className="text-lg font-semibold">AI</h2>
-        <p className="text-sm text-muted-foreground">选择 AI 对话使用的默认模型。</p>
+        <p className="text-sm text-label-secondary">选择 AI 对话使用的默认模型。</p>
       </div>
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="默认模型">
         {AI_MODEL_OPTIONS.map((option) => (
@@ -34,8 +34,8 @@ export function AiSettings() {
             }}
             className={`cursor-pointer rounded-lg border px-4 py-2 text-sm outline-none transition-colors ${
               model === option.value
-                ? "border-primary bg-primary/5 text-primary"
-                : "hover:bg-accent/50"
+                ? "border-accent bg-accent-soft text-accent"
+                : "hover:bg-grouped"
             }`}
             data-testid={`model-option-${option.value}`}
           >
@@ -43,7 +43,7 @@ export function AiSettings() {
           </button>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">偏好保存在本设备浏览器中。</p>
+      <p className="text-xs text-label-secondary">偏好保存在本设备浏览器中。</p>
     </div>
   );
 }

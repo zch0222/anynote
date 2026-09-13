@@ -83,9 +83,9 @@ export function SubmitTaskDialog({
             {notes.isPending ? (
               <Skeleton className="h-10 w-full" />
             ) : notes.isError ? (
-              <p className="text-sm text-destructive">笔记加载失败：{notes.error.message}</p>
+              <p className="text-sm text-danger">笔记加载失败：{notes.error.message}</p>
             ) : notes.data.rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">这个知识库下还没有笔记。</p>
+              <p className="text-sm text-label-secondary">这个知识库下还没有笔记。</p>
             ) : (
               <div
                 className="max-h-56 space-y-1 overflow-y-auto rounded-lg border p-1"
@@ -96,7 +96,7 @@ export function SubmitTaskDialog({
                     key={note.id}
                     type="button"
                     className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-sm outline-none transition-colors ${
-                      noteId === note.id ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+                      noteId === note.id ? "bg-accent-soft text-accent" : "hover:bg-grouped"
                     }`}
                     onClick={() => {
                       setNoteId(note.id);

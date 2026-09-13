@@ -116,13 +116,13 @@ export function MobilePdfList() {
         </Button>
         {progress !== null ? (
           <div data-testid="mobile-pdf-progress">
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div className="h-1.5 overflow-hidden rounded-full bg-grouped">
               <div
-                className="h-full rounded-full bg-primary transition-[width] duration-200"
+                className="h-full rounded-full bg-accent transition-[width] duration-200"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{progress}%</p>
+            <p className="mt-1 text-xs text-label-secondary">{progress}%</p>
           </div>
         ) : null}
 
@@ -134,20 +134,20 @@ export function MobilePdfList() {
             <Skeleton className="h-14 rounded-xl" />
           </div>
         ) : docs.isError ? (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             文档加载失败：{docs.error.message}
           </p>
         ) : (docs.data?.rows.length ?? 0) === 0 ? (
           <EmptyBox title="还没有文档" hint="上传一个 PDF，就能围绕它提问。" />
         ) : (
-          <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+          <ul className="divide-y overflow-hidden rounded-xl border bg-surface">
             {docs.data?.rows.map((row) => (
               <li key={row.id} className="flex items-center" data-testid={`doc-item-${row.id}`}>
                 <Link
                   href={`/m/ai/pdf/${row.id}`}
-                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-accent"
+                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-grouped"
                 >
-                  <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
                   <span className="min-w-0 flex-1 truncate">{row.docName ?? "未命名文档"}</span>
                   <Badge variant={row.indexStatus === DOC_INDEXED ? "secondary" : "outline"}>
                     {row.indexStatus === DOC_INDEXED ? "已索引" : "未索引"}
@@ -157,7 +157,7 @@ export function MobilePdfList() {
                   type="button"
                   aria-label={`「${row.docName ?? "未命名文档"}」的操作`}
                   onClick={() => setActing({ id: row.id, name: row.docName ?? "未命名文档" })}
-                  className="flex size-11 shrink-0 items-center justify-center text-muted-foreground outline-none focus-visible:bg-accent"
+                  className="flex size-11 shrink-0 items-center justify-center text-label-secondary outline-none focus-visible:bg-grouped"
                 >
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </button>
@@ -196,9 +196,9 @@ export function MobilePdfList() {
 function EmptyBox({ title, hint }: { title: string; hint: string }) {
   return (
     <div className="rounded-xl border border-dashed p-6 text-center">
-      <FileText className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+      <FileText className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
       <p className="mt-3 text-sm font-medium">{title}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
+      <p className="mt-1 text-sm text-label-secondary">{hint}</p>
     </div>
   );
 }

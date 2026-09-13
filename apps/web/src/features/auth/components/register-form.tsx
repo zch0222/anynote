@@ -80,7 +80,7 @@ export function RegisterForm() {
           <FieldLabel htmlFor="sex">性别</FieldLabel>
           <select
             id="sex"
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-ring"
+            className="h-9 rounded-md border border-separator bg-surface px-3 text-sm focus-visible:outline-ring"
             {...register("sex", { valueAsNumber: true })}
           >
             <option value={0}>男</option>

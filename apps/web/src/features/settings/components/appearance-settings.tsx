@@ -17,7 +17,7 @@ export function AppearanceSettings() {
     <div className="max-w-2xl space-y-4" data-testid="settings-appearance">
       <div>
         <h2 className="text-lg font-semibold">外观</h2>
-        <p className="text-sm text-muted-foreground">选择界面主题，跟随系统会自动切换明暗。</p>
+        <p className="text-sm text-label-secondary">选择界面主题，跟随系统会自动切换明暗。</p>
       </div>
       <div className="flex gap-2" role="radiogroup" aria-label="主题">
         {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
@@ -31,7 +31,7 @@ export function AppearanceSettings() {
               setTheme(value);
             }}
             className={`flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm outline-none transition-colors ${
-              theme === value ? "border-primary bg-primary/5 text-primary" : "hover:bg-accent/50"
+              theme === value ? "border-accent bg-accent-soft text-accent" : "hover:bg-grouped"
             }`}
             data-testid={`theme-option-${value}`}
           >

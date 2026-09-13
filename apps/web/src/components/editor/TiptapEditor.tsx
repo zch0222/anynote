@@ -13,7 +13,7 @@ export const TiptapEditor = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="space-y-3 rounded-xl border bg-card p-4" aria-busy="true">
+      <div className="space-y-3 rounded-xl border bg-surface p-4" aria-busy="true">
         <Skeleton className="h-8 w-2/3" />
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-5/6" />

@@ -40,7 +40,7 @@ export function CliAuthorize({ params }: { params: CliAuthorizeParams }) {
   return (
     <>
       <h1 className="text-2xl font-semibold">授权 CLI 登录</h1>
-      <p className="mb-6 mt-2 text-sm text-muted-foreground">
+      <p className="mb-6 mt-2 text-sm text-label-secondary">
         命令行工具请求访问你的 Anynote 账号。授权后它会获得一对**独立的**令牌，
         与当前浏览器会话互不影响。
       </p>
@@ -64,7 +64,7 @@ export function CliAuthorize({ params }: { params: CliAuthorizeParams }) {
             取消
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-label-secondary">
           授权码只在本机 CLI 与服务器之间传递，不会出现在浏览器地址栏以外的任何地方。
         </p>
       </div>

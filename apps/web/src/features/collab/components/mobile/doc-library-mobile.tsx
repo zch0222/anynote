@@ -61,7 +61,7 @@ export function MobileDocLibrary() {
     <MobileScreen title="文档" actions={<CollabStatusBadge status={status} />}>
       <div className="space-y-4 p-4" data-testid="mobile-doc-library">
         {status === "error" ? (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             协同服务连接失败：{error?.message ?? "未知错误"}。请确认 collab 服务已启动。
           </p>
         ) : status !== "connected" ? (
@@ -71,24 +71,24 @@ export function MobileDocLibrary() {
           </div>
         ) : docs.length === 0 ? (
           <div className="rounded-xl border border-dashed p-6 text-center">
-            <FileText className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+            <FileText className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
             <p className="mt-3 text-sm font-medium">还没有协同文档</p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-label-secondary">
               新建一篇，把链接发给同伴就能一起写。
             </p>
           </div>
         ) : (
-          <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+          <ul className="divide-y overflow-hidden rounded-xl border bg-surface">
             {docs.map((item) => (
               <li key={item.id} className="flex items-center">
                 <Link
                   href={`/m/docs/${item.id}`}
-                  className="flex min-h-16 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-accent"
+                  className="flex min-h-16 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-grouped"
                 >
-                  <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{item.title}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block truncate text-xs text-label-secondary">
                       {item.createdBy} · 更新于 {formatTime(item.updatedAt)}
                     </span>
                   </span>
@@ -97,7 +97,7 @@ export function MobileDocLibrary() {
                   type="button"
                   aria-label={`${item.title} 的操作`}
                   onClick={() => setActing({ id: item.id, title: item.title })}
-                  className="flex size-11 shrink-0 items-center justify-center text-muted-foreground outline-none focus-visible:bg-accent"
+                  className="flex size-11 shrink-0 items-center justify-center text-label-secondary outline-none focus-visible:bg-grouped"
                 >
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </button>
@@ -143,7 +143,7 @@ export function MobileDocLibrary() {
               {...form.register("title")}
             />
             {form.formState.errors.title ? (
-              <p className="text-xs text-destructive">{form.formState.errors.title.message}</p>
+              <p className="text-xs text-danger">{form.formState.errors.title.message}</p>
             ) : null}
             <Button type="submit" className="min-h-11 w-full">
               创建

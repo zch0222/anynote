@@ -75,7 +75,7 @@ export function MobileDocWorkspace({ docId }: { docId: string }) {
       contentClassName="min-h-0"
     >
       {content.status === "error" ? (
-        <p className="m-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+        <p className="m-4 rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           协同服务连接失败：{content.error?.message ?? "未知错误"}。请确认 collab 服务已启动。
         </p>
       ) : collaboration ? (

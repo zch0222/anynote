@@ -73,13 +73,13 @@ export function MobilePdfDetail({ docId }: { docId: number }) {
           {doc.isPending ? (
             <Skeleton className="h-64 w-full rounded-xl" aria-busy="true" />
           ) : doc.isError ? (
-            <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
               文档加载失败：{doc.error.message}
             </p>
           ) : doc.data.url ? (
             <PdfViewer url={doc.data.url} />
           ) : (
-            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-label-secondary">
               这篇文档还没有可预览的地址。
             </p>
           )}

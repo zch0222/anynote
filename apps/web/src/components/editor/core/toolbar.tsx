@@ -310,8 +310,9 @@ function renderSlots(
 ) {
   return slots.map((slot, index) => {
     if (slot === TOOLBAR_DIVIDER) {
-      // 分隔符没有天然 key，但排版数组是常量、顺序不会变，用下标是安全的
-      return <ToolbarDivider key={`divider-${index}`} />;
+      // 分隔符没有天然 key；这里用"它前面那个命令"命名，
+      // 比裸下标更贴近结构，也不依赖数组顺序不变（顺序变了 key 也跟着变，不会错位复用）。
+      return <ToolbarDivider key={`divider-after-${slots[index - 1] ?? "start"}`} />;
     }
     const command = commands[slot];
     return (
@@ -408,7 +409,7 @@ export function Toolbar({ editor, variant = "full" }: ToolbarProps) {
             <div className="space-y-4 px-4 pb-4">
               {MOBILE_OVERFLOW_GROUPS.map((group) => (
                 <section key={group.label} className="space-y-2">
-                  <h3 className="text-xs text-muted-foreground">{group.label}</h3>
+                  <h3 className="text-xs text-label-secondary">{group.label}</h3>
                   <div className="grid grid-cols-4 gap-2">
                     {group.ids.map((id) => {
                       const command = commands[id];
@@ -424,7 +425,7 @@ export function Toolbar({ editor, variant = "full" }: ToolbarProps) {
                           className={cn(
                             "flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border text-xs outline-none",
                             "disabled:pointer-events-none disabled:opacity-50",
-                            command.active && "border-primary text-primary",
+                            command.active && "border-primary text-accent",
                           )}
                         >
                           <span className="anynote-toolbar__sheet-icon">{command.icon}</span>

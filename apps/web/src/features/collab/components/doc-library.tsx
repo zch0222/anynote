@@ -61,7 +61,7 @@ export function CollabDocLibrary() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">文档</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-label-secondary">
             多人实时协同编辑，改动即时同步给所有在线成员。
           </p>
         </div>
@@ -91,9 +91,7 @@ export function CollabDocLibrary() {
                   <Label htmlFor="collab-doc-title">标题</Label>
                   <Input id="collab-doc-title" autoComplete="off" {...form.register("title")} />
                   {form.formState.errors.title ? (
-                    <p className="text-xs text-destructive">
-                      {form.formState.errors.title.message}
-                    </p>
+                    <p className="text-xs text-danger">{form.formState.errors.title.message}</p>
                   ) : null}
                 </div>
                 <DialogFooter>
@@ -106,7 +104,7 @@ export function CollabDocLibrary() {
       </div>
 
       {status === "error" ? (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+        <p className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-sm text-danger">
           协同服务连接失败：{error?.message ?? "未知错误"}。请确认 collab 服务已启动。
         </p>
       ) : status !== "connected" ? (
@@ -117,9 +115,9 @@ export function CollabDocLibrary() {
         </div>
       ) : docs.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
-          <FileText className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+          <FileText className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
           <p className="mt-3 text-sm font-medium">还没有协同文档</p>
-          <p className="mt-1 text-sm text-muted-foreground">新建一篇，把链接发给同伴就能一起写。</p>
+          <p className="mt-1 text-sm text-label-secondary">新建一篇，把链接发给同伴就能一起写。</p>
         </div>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -128,17 +126,14 @@ export function CollabDocLibrary() {
               <Card className="h-full transition-colors hover:border-primary/40">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <FileText
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
+                    <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
                     <Link href={`/docs/${item.id}`} className="truncate hover:underline">
                       {item.title}
                     </Link>
                   </CardTitle>
                   <CardDescription>由 {item.createdBy} 创建</CardDescription>
                 </CardHeader>
-                <CardContent className="flex items-center justify-between text-xs text-muted-foreground">
+                <CardContent className="flex items-center justify-between text-xs text-label-secondary">
                   <span>更新于 {formatTime(item.updatedAt)}</span>
                   <Button
                     type="button"

@@ -38,9 +38,9 @@ export function MoocDetailPage({ moocId }: { moocId: number }) {
               ))}
             </div>
           ) : items.isError ? (
-            <p className="p-2 text-sm text-destructive">条目加载失败：{items.error.message}</p>
+            <p className="p-2 text-sm text-danger">条目加载失败：{items.error.message}</p>
           ) : items.data.length === 0 ? (
-            <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+            <p className="flex items-center gap-2 p-4 text-sm text-label-secondary">
               <ListTree className="size-4" aria-hidden="true" />
               这门课还没有章节内容
             </p>
@@ -72,7 +72,7 @@ export function MoocDetailPage({ moocId }: { moocId: number }) {
           {selectedItem ? (
             <SelectedItemPanel moocId={moocId} item={selectedItem} />
           ) : (
-            <div className="flex h-64 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+            <div className="flex h-64 items-center justify-center rounded-xl border border-dashed text-sm text-label-secondary">
               从左侧选择章节、视频或文档开始学习。
             </div>
           )}
@@ -103,7 +103,7 @@ function MoocItemRow({
     <li>
       <div
         className={`flex items-center gap-1 rounded-lg text-sm transition-colors ${
-          selected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+          selected ? "bg-accent-soft text-accent" : "hover:bg-grouped"
         }`}
       >
         {isChapter ? (
@@ -133,7 +133,7 @@ function MoocItemRow({
           <span className="min-w-0 flex-1 truncate" title={item.title ?? "未命名条目"}>
             {item.title ?? "未命名条目"}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground">
+          <span className="shrink-0 text-xs text-label-secondary">
             {moocItemTypeName(item.moocItemType)}
           </span>
         </button>
@@ -160,7 +160,7 @@ function ChapterChildren({
   }
   const childRows = children.data ?? [];
   if (childRows.length === 0) {
-    return <p className="ml-8 py-1 text-xs text-muted-foreground">章节下暂无内容</p>;
+    return <p className="ml-8 py-1 text-xs text-label-secondary">章节下暂无内容</p>;
   }
   return (
     <ul className="ml-6 space-y-1 border-l pl-2">
@@ -168,7 +168,7 @@ function ChapterChildren({
         <li key={child.id}>
           <button
             type="button"
-            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent/50"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-grouped"
             onClick={onSelect}
           >
             <ItemIcon type={child.moocItemType} />
@@ -182,12 +182,12 @@ function ChapterChildren({
 
 function ItemIcon({ type }: { type: number | null | undefined }) {
   if (type === MOOC_ITEM_TYPE.VIDEO) {
-    return <Film className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />;
+    return <Film className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />;
   }
   if (type === MOOC_ITEM_TYPE.DOC) {
-    return <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />;
+    return <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />;
   }
-  return <ListTree className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />;
+  return <ListTree className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />;
 }
 
 function SelectedItemPanel({ moocId, item }: { moocId: number; item: MoocItem }) {
@@ -203,7 +203,7 @@ function SelectedItemPanel({ moocId, item }: { moocId: number; item: MoocItem })
         objectUrl.isPending ? (
           <Skeleton className="aspect-video w-full rounded-lg" />
         ) : objectUrl.isError || !objectUrl.data?.url ? (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+          <p className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-sm text-danger">
             视频地址获取失败，请稍后重试。
           </p>
         ) : (
@@ -212,11 +212,11 @@ function SelectedItemPanel({ moocId, item }: { moocId: number; item: MoocItem })
       ) : detail.isPending ? (
         <Skeleton className="h-48 w-full rounded-xl" />
       ) : detail.data?.moocItemText?.content ? (
-        <div className="rounded-xl border bg-card p-4">
+        <div className="rounded-xl border bg-surface p-4">
           <TiptapEditor preset="readonly" value={detail.data.moocItemText.content} />
         </div>
       ) : (
-        <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed p-8 text-center text-sm text-label-secondary">
           这个条目还没有内容。
         </p>
       )}

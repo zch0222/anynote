@@ -14,7 +14,7 @@ export const MessageItem = memo(function MessageItem({ message }: { message: Str
   if (message.role === 0) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm whitespace-pre-wrap text-primary-foreground">
+        <div className="max-w-[85%] rounded-xl rounded-br-sm bg-accent px-4 py-2.5 text-sm whitespace-pre-wrap text-accent-foreground">
           {message.content}
         </div>
       </div>
@@ -24,14 +24,14 @@ export const MessageItem = memo(function MessageItem({ message }: { message: Str
   return (
     <div className="flex gap-3">
       <div
-        className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+        className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"
         aria-hidden="true"
       >
         <Sparkles className="size-4" />
       </div>
       <div className="min-w-0 flex-1 space-y-1">
         {message.content ? null : (
-          <p className="text-sm text-muted-foreground" data-testid="assistant-thinking">
+          <p className="text-sm text-label-secondary" data-testid="assistant-thinking">
             思考中…
           </p>
         )}
@@ -41,7 +41,7 @@ export const MessageItem = memo(function MessageItem({ message }: { message: Str
             data-testid="assistant-streaming"
           >
             {message.content}
-            <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-primary align-text-bottom" />
+            <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-accent align-text-bottom" />
           </p>
         ) : message.content ? (
           <TiptapEditor preset="readonly" value={message.content} className="border-0" />

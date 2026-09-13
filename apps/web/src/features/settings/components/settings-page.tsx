@@ -21,7 +21,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
     <section className="mx-auto w-full max-w-6xl space-y-6" data-testid="settings-page">
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">设置</h1>
-        <p className="text-sm text-muted-foreground">管理你的个人资料与使用偏好。</p>
+        <p className="text-sm text-label-secondary">管理你的个人资料与使用偏好。</p>
       </div>
 
       <nav aria-label="设置分区" className="flex flex-wrap gap-2 border-b pb-3">
@@ -31,8 +31,8 @@ export function SettingsPage({ section }: SettingsPageProps) {
             href={`/settings/${key === "profile" ? "profile" : key}`}
             className={`rounded-lg px-3 py-1.5 text-sm outline-none transition-colors ${
               key === section
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:bg-accent/50"
+                ? "bg-accent-soft text-accent"
+                : "text-label-secondary hover:bg-grouped"
             }`}
             data-testid={`settings-nav-${key}`}
           >

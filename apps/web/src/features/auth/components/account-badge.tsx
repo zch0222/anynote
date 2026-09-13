@@ -23,21 +23,21 @@ export function AccountBadge() {
   const { data, isPending, isError } = useMe();
 
   if (isPending) {
-    return <p className="text-sm text-muted-foreground">正在读取当前账号…</p>;
+    return <p className="text-sm text-label-secondary">正在读取当前账号…</p>;
   }
   if (isError || !data) {
     return (
-      <p className="text-sm text-destructive" role="alert">
+      <p className="text-sm text-danger" role="alert">
         无法读取当前账号，请刷新页面重试。
       </p>
     );
   }
 
   return (
-    <div className="rounded-lg border bg-muted/40 p-3">
-      <p className="text-xs text-muted-foreground">将以以下账号授权</p>
+    <div className="rounded-lg border bg-grouped/40 p-3">
+      <p className="text-xs text-label-secondary">将以以下账号授权</p>
       <p className="mt-1 text-sm font-medium">{displayName(data)}</p>
-      {data.username ? <p className="text-xs text-muted-foreground">@{data.username}</p> : null}
+      {data.username ? <p className="text-xs text-label-secondary">@{data.username}</p> : null}
     </div>
   );
 }

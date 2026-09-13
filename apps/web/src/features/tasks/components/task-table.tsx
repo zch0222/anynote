@@ -54,7 +54,7 @@ export function TaskTable({ tasks, loading }: TaskTableProps) {
         header: "描述",
         cell: ({ row }) => (
           <span
-            className="line-clamp-2 max-w-72 text-sm text-muted-foreground"
+            className="line-clamp-2 max-w-72 text-sm text-label-secondary"
             title={row.original.taskDescribe ?? ""}
           >
             {row.original.taskDescribe?.trim() || "—"}
@@ -126,7 +126,7 @@ export function TaskTable({ tasks, loading }: TaskTableProps) {
     return (
       <div className="space-y-2">
         {[0, 1, 2, 3].map((row) => (
-          <div key={row} className="h-12 animate-pulse rounded-lg bg-muted" />
+          <div key={row} className="h-12 animate-pulse rounded-lg bg-grouped" />
         ))}
       </div>
     );
@@ -154,7 +154,7 @@ export function TaskTable({ tasks, loading }: TaskTableProps) {
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center text-muted-foreground"
+                  className="h-24 text-center text-label-secondary"
                 >
                   这个知识库下还没有任务
                 </TableCell>

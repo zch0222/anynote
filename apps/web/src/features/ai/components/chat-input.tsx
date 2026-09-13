@@ -47,7 +47,7 @@ export function ChatInput({ streaming, disabled, placeholder, onSend, onStop }: 
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex items-end gap-2 rounded-2xl border bg-background p-2 shadow-sm"
+      className="flex items-end gap-2 rounded-xl border bg-surface p-2 shadow-sm"
     >
       <Textarea
         value={value}

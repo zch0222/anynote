@@ -112,7 +112,7 @@ export function MobileTaskCards() {
             <Skeleton className="h-28 rounded-xl" />
           </div>
         ) : tasks.isError ? (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             任务加载失败：{tasks.error.message}
           </p>
         ) : rows.length === 0 ? (
@@ -127,7 +127,7 @@ export function MobileTaskCards() {
             return (
               <article
                 key={task.id}
-                className="space-y-2 rounded-xl border bg-card p-4"
+                className="space-y-2 rounded-xl border bg-surface p-4"
                 data-testid={`task-card-${task.id}`}
               >
                 <div className="flex items-start gap-2">
@@ -139,9 +139,9 @@ export function MobileTaskCards() {
                   </Badge>
                 </div>
                 {task.taskDescribe?.trim() ? (
-                  <p className="line-clamp-2 text-sm text-muted-foreground">{task.taskDescribe}</p>
+                  <p className="line-clamp-2 text-sm text-label-secondary">{task.taskDescribe}</p>
                 ) : null}
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-label-secondary">
                   {(task.startTime ?? "").slice(0, 10) || "?"} ~{" "}
                   {(task.endTime ?? "").slice(0, 10) || "?"}
                   {open ? "" : "（已截止）"}
@@ -176,9 +176,9 @@ export function MobileTaskCards() {
 function EmptyBox({ title, hint }: { title: string; hint: string }) {
   return (
     <div className="rounded-xl border border-dashed p-6 text-center">
-      <ListTodo className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
+      <ListTodo className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
       <p className="mt-3 text-sm font-medium">{title}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
+      <p className="mt-1 text-sm text-label-secondary">{hint}</p>
     </div>
   );
 }
