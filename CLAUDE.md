@@ -277,7 +277,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `.claude/openspec/changes/` — API 变更提案归档
 - `CONTRIBUTING.md` — 代码规范要点
 - `apps/desktop/README.md` — 桌面壳的令牌交换流程、构建前置条件与未验证项
-- `docs/cli/` — CLI 前端：`CLI_PLAN.md`（技术方案）、`CLI_MILESTONES.md`（M9.x 进度）、`COMMANDS.md`（**生成物**）
+- `docs/cli/` — CLI 前端：`CLI_PLAN.md`（技术方案）、`CLI_MILESTONES.md`（M9.x 进度，**M9.5 skill 一键安装与配置持久化已完成**）、`COMMANDS.md`（**生成物**）
 - `docs/mobile/` — 移动端适配：`MOBILE_PLAN.md`（技术方案）、`MOBILE_MILESTONES.md`（M10.0–M10.5 进度 + 验收记录 + 与方案的偏差）、`UI_INVENTORY.md`（开工前逐页核对证据）。**M10.0–M10.4 已实现**（2026-09-12，分支 `feat/mobile-foundation`，未并 `dev`）：21 条 `/m/*` 路由落在 `apps/web` 的 `app/(mobile)/m/**` 路由段、不新开应用（认证 Cookie 是 host-only + `sameSite=strict`，刷新锁是进程级）；入口做 UA 分流（`?desktop=1` 逃生口 + 非身份的 `anynote_view` 偏好 Cookie），登录后落 `/m/dashboard`。**未做**：E2E / Lighthouse 实跑与真机验收（见里程碑「验收记录」）。契约登记见 `.claude/openspec/changes/2026-09-12-mobile-route-segment.md`，逐文件清单见 `docs/changelist/2026-09-12-mobile-adaptation.md`
 - `docs/minio/` — 对象存储链路：`MINIO_PLAN.md`（MinIO 修复方案 v1.0，2026-09-12）+ `MINIO_MILESTONES.md`（**M11.0–M11.5 已实施**，含逐项验收记录）。覆盖 note 侧上传任务端点补齐、MinIO 双 endpoint（内网 `endPoint` + 浏览器 `publicEndPoint`）、compose 建桶初始化、独立子域的 Nginx 反代与 CORS；§2 记录 9 条已核对的现状事实（含 `fileSize` 单位 bug 与 7 天预签名 URL 问题），§11 的 4 项待拍板已按建议落地（D3 仍为「本期不接」，协同文档图片另开工单）；逐文件清单见 `docs/changelist/2026-09-12-minio-note-image-upload.md`
 - `docs/changelist/` — 各批改动的逐文件审计清单；`README.md` 是编写规范与命名规则（`YYYY-MM-DD-<slug>.md`）
@@ -325,6 +325,8 @@ CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分�
 - ❌ 前端手写 fetch / axios 直调后端（必须走 `@anynote/api-client` + BFF 代理）
 - ❌ 前端把 token 写到 `document.cookie` / localStorage / sessionStorage（必须 httpOnly Cookie）。**例外一**：`apps/web/src/lib/desktop/bridge.ts` 的桌面壳场景，由里程碑 M8.2 授权，且写入前校验确实处在 Tauri 壳中。**例外二**：`apps/cli` 把凭据写 `<configDir>/credentials.json`（POSIX 0600，Windows 无等价保护），由 `.claude/openspec/changes/2026-09-12-cli-credential-storage.md` 授权——CLI 没有 Cookie jar，且刷新必须走跨进程文件锁；不想落盘用 `ANYNOTE_TOKEN`
 - ❌ CLI 命令改动后不重新生成 `docs/cli/COMMANDS.md` 与 `.claude/skills/anynote-cli/reference/commands.md` 就提交（`pnpm --filter @anynote/cli manifest:write`，CI 的 `cli` job 会卡 diff）
+- ❌ 手改 `apps/cli/src/bundled.ts`（它是 `.claude/skills/anynote-{cli,notes}` 的**构建期快照**，由 `pnpm --filter @anynote/cli build` 生成、CI 卡 diff；要改 skill 就改 `.claude/skills/` 下的源文再重新构建）
+- ❌ 在 `apps/cli/src/version.ts` 再写一份版本号字面量（版本号只在 `package.json` 写一次，`version.ts` 是 `bundled.ts` 的再导出；构建脚本会拒绝第二份副本）
 - ❌ 在纯 Web 部署里配置 `DESKTOP_EXCHANGE_KEY`（那是把真实 Token 交给 JS 的开关，不配即关闭）
 - ❌ 静态引入重依赖（编辑器整包、yjs / y-websocket、pdfjs、ReactFlow）——一律 `dynamic(..., { ssr: false })`，改完跑 `pnpm --filter web bundle:budget` 确认没顶出首屏 300KB 预算
 - ❌ 新增 / 修改 Service、工具类、前端 hook、BFF Route Handler 后不写单元测试就提交（见[「测试要求」](#测试要求强制)）
