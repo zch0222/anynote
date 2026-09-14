@@ -426,18 +426,78 @@ test.describe("05 品牌启动 Brand boot", () => {
     // 真实点击：走完整的事件链，Link 的 preventDefault 会真的发生
     await page.click('a[href="/ai/chat"]');
 
-    const bar = page.locator('[data-slot="route-progress"]');
+    /*
+     * 可见的像素在**内层** `boot-bar` 上，不在 `route-progress` 上。
+     *
+     * 外层是零高度的定位 + 状态容器（见下一条用例），零高度元素在
+     * Playwright 眼里就是不可见的——对着它断言 `toBeVisible` 会永远等不到。
+     * 语义与文案仍然断在外层，那才是读屏读到的东西。
+     */
+    const region = page.locator('[data-slot="route-progress"]');
+    const bar = page.locator('[data-slot="boot-bar"]');
     await expect(
       bar,
       "点站内链接时进度条没亮——Link 的 preventDefault 被误判成放弃导航",
     ).toBeVisible({ timeout: 5000 });
     // 不确定型进度：有可播报的文案，且不编造百分比
-    await expect(bar).toContainText("页面加载中");
-    await expect(bar).not.toHaveAttribute("aria-valuenow", /.*/);
+    await expect(region).toContainText("页面加载中");
+    await expect(region).not.toHaveAttribute("aria-valuenow", /.*/);
 
     // 导航完成后必须收起——进度条永远挂着是最糟的失败模式
     await expect(page).toHaveURL(/\/ai\/chat/, { timeout: 30_000 });
-    await expect(bar).toHaveCount(0, { timeout: 15_000 });
+    await expect(region).toHaveCount(0, { timeout: 15_000 });
+  });
+
+  /**
+   * 回归：**进度条亮起来时整页往下沉一下**。
+   *
+   * 原来容器自己就是 `h-0.5`，一条 2px 的条实打实占在顶栏与内容区之间的
+   * 文档流里：它一亮，`#workspace-content` 的 top 从 56 变成 58，下面所有内容
+   * 被推下去；导航结束它被卸载，内容又弹回来。切一次页面抖两次。
+   *
+   * 这条用例的核心是**量位移**而不是量样式：光断言容器类名里有 `h-0`
+   * 证明不了真实渲染结果（外层的 `h-0` 会不会被子元素撑开、绝对定位有没有
+   * 生效、sticky 会不会改变行为，都只有真机能回答）。所以基准取
+   * `#workspace-content` 的 `getBoundingClientRect().top` 与文档总高。
+   */
+  test("进度条亮起时内容不被推下去——加载条不占高度", async ({ page }) => {
+    await ensureKnowledgeBase(page, BASE_NAME);
+    await page.goto("/notes");
+    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
+
+    const measure = () =>
+      page.evaluate(() => {
+        const content = document.querySelector("#workspace-content");
+        const bar = document.querySelector('[data-slot="boot-bar"]');
+        return {
+          contentTop: content ? Math.round(content.getBoundingClientRect().top) : -1,
+          docHeight: document.documentElement.scrollHeight,
+          barHeight: bar ? Math.round(bar.getBoundingClientRect().height) : 0,
+        };
+      });
+
+    const before = await measure();
+    expect(before.contentTop, "没找到内容区").toBeGreaterThan(0);
+    expect(before.barHeight, "测基准时进度条不该在场").toBe(0);
+
+    // 拖慢目标路由的请求，把进度条钉在屏幕上，位移才量得稳
+    await page.route("**/ai/chat**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await route.continue();
+    });
+    await page.click('a[href="/ai/chat"]');
+    await expect(page.locator('[data-slot="boot-bar"]')).toBeVisible({ timeout: 5000 });
+
+    const during = await measure();
+    // 先确认它真的画出来了，且还是设计稿要的那 2px——别为了不占高度把条改没了
+    expect(during.barHeight, "进度条没有可见高度").toBe(2);
+    expect(during.contentTop, "加载条出现时内容被推下去了").toBe(before.contentTop);
+    expect(during.docHeight, "加载条把文档总高撑大了").toBe(before.docHeight);
+
+    // 收起之后同样不许有反向位移
+    await expect(page).toHaveURL(/\/ai\/chat/, { timeout: 30_000 });
+    await expect(page.locator('[data-slot="route-progress"]')).toHaveCount(0, { timeout: 15_000 });
+    expect((await measure()).docHeight).toBe(before.docHeight);
   });
 });
 
