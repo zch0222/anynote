@@ -1,5 +1,6 @@
 "use client";
 
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -119,13 +120,7 @@ function DocList({
   limit?: number | undefined;
 }) {
   if (loading) {
-    return (
-      <div className="space-y-2" aria-busy="true">
-        {["a", "b", "c"].map((key) => (
-          <Skeleton key={key} className="h-14 rounded-lg" />
-        ))}
-      </div>
-    );
+    return <ListRowsSkeleton count={3} />;
   }
 
   const visible = limit ? docs.slice(0, limit) : docs;
@@ -190,11 +185,7 @@ export function KnowledgeBaseMembers({ baseId }: { baseId: number }) {
           成员加载失败：{members.error.message}
         </p>
       ) : members.isPending ? (
-        <div className="space-y-2" aria-busy="true">
-          {["a", "b", "c"].map((key) => (
-            <Skeleton key={key} className="h-14 rounded-lg" />
-          ))}
-        </div>
+        <ListRowsSkeleton count={3} />
       ) : members.data.rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-separator p-8 text-center">
           <Users className="mx-auto size-7 text-label-tertiary" aria-hidden="true" />

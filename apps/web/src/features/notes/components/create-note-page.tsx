@@ -1,9 +1,9 @@
 "use client";
 
+import { CardGridSkeleton } from "@/components/loading/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { coverAvatarClassName } from "@/features/notes/lib/cover-gradient";
 import {
   type CreateNoteInput,
@@ -72,11 +72,8 @@ export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | und
       </header>
 
       {bases.isPending ? (
-        <div className="grid gap-3 sm:grid-cols-2" aria-busy="true">
-          {["a", "b", "c", "d"].map((key) => (
-            <Skeleton key={key} className="h-16 rounded-lg" />
-          ))}
-        </div>
+        // 卡片高 16 跟着 `BaseOption` 的 min-h-16 走，骨架与真卡片同高才不跳
+        <CardGridSkeleton count={4} cardClassName="h-16" />
       ) : bases.isError ? (
         <p role="alert" className="rounded-lg bg-danger/5 p-6 text-footnote text-danger">
           知识库加载失败：{bases.error.message}

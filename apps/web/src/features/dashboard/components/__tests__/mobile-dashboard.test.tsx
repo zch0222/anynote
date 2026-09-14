@@ -129,7 +129,8 @@ describe("MobileDashboard", () => {
   it("加载中渲染骨架", () => {
     setup({ bases: { isPending: true, isError: false, data: undefined } });
     const { container } = renderWithProviders(<MobileDashboard />);
-    expect(container.querySelector(".animate-pulse")).toBeTruthy();
+    // 骨架改用共享预设：普通 Skeleton 是 aria-hidden 的，靠 aria-busy 的容器定位
+    expect(container.querySelector('[data-slot="skeleton-list"]')).toBeTruthy();
   });
 
   it("知识库卡片最多四个，指向各自的笔记列表", () => {

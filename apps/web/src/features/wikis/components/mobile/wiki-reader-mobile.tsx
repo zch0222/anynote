@@ -2,7 +2,7 @@
 
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
-import { Skeleton } from "@/components/ui/skeleton";
+import { EditorSkeleton } from "@/components/loading/skeletons";
 import { useNoteQuery } from "@/features/notes/use-note";
 import { PenLine } from "lucide-react";
 import Link from "next/link";
@@ -37,11 +37,7 @@ export function MobileWikiReader({ baseId, noteId }: { baseId: number; noteId: n
     >
       <div className="min-h-0 flex-1 overflow-y-auto p-4" data-testid="mobile-wiki-reader">
         {note.isPending ? (
-          <div className="space-y-3" aria-busy="true">
-            <Skeleton className="h-6 w-2/3" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
-          </div>
+          <EditorSkeleton />
         ) : note.isError ? (
           <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             笔记加载失败：{note.error.message}

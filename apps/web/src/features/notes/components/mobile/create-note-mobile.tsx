@@ -1,10 +1,10 @@
 "use client";
 
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { CreateBaseDialog } from "@/features/notes/components/create-base-dialog";
 import { type CreateNoteInput, createNoteSchema } from "@/features/notes/schemas";
 import { useCreateNoteMutation } from "@/features/notes/use-create-note";
@@ -66,10 +66,7 @@ export function MobileCreateNote() {
     <MobileScreen title="新建笔记" back="/m/notes">
       <div className="space-y-6 p-4" data-testid="mobile-create-note">
         {bases.isPending ? (
-          <div className="space-y-2" aria-busy="true">
-            <Skeleton className="h-14 rounded-xl" />
-            <Skeleton className="h-14 rounded-xl" />
-          </div>
+          <ListRowsSkeleton count={2} />
         ) : bases.isError ? (
           <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             知识库加载失败：{bases.error.message}

@@ -1,8 +1,9 @@
 "use client";
 
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { DocumentSkeleton } from "@/components/loading/skeletons";
+import { Spinner } from "@/components/loading/spinner";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatPanel } from "@/features/ai/components/chat-panel";
 import { PdfViewer } from "@/features/ai/components/pdf/pdf-viewer";
@@ -10,7 +11,6 @@ import { DOC_INDEXED } from "@/features/ai/schemas";
 import { docSessionKey } from "@/features/ai/use-chat-stream";
 import { useDocIndexStatus, useDocQuery } from "@/features/ai/use-docs";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /**
@@ -46,7 +46,8 @@ export function MobilePdfDetail({ docId }: { docId: number }) {
           <Badge variant="secondary">已索引</Badge>
         ) : (
           <Badge variant="outline">
-            <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
+            {/* 不传 label：紧邻的「索引中」文字已经是可播报的状态，再挂 role="status" 会念两遍 */}
+            <Spinner size="badge" className="mr-1" />
             索引中
           </Badge>
         )
@@ -71,7 +72,7 @@ export function MobilePdfDetail({ docId }: { docId: number }) {
 
         <TabsContent value="preview" className="min-h-0 flex-1 overflow-y-auto pt-3">
           {doc.isPending ? (
-            <Skeleton className="h-64 w-full rounded-xl" aria-busy="true" />
+            <DocumentSkeleton />
           ) : doc.isError ? (
             <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
               文档加载失败：{doc.error.message}

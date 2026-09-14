@@ -1,5 +1,6 @@
 "use client";
 
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,7 +17,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { Conversation } from "@/features/ai/schemas";
 import {
   useConversationsInfinite,
@@ -72,7 +72,7 @@ export function ConversationList({ activeId }: ConversationListProps) {
       </div>
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3" aria-label="会话列表">
         {conversations.isPending ? (
-          [0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-10 rounded-lg" />)
+          <ListRowsSkeleton count={4} />
         ) : conversations.isError ? (
           <p className="px-2 py-4 text-sm text-danger">
             会话加载失败：{conversations.error.message}

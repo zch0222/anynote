@@ -1,9 +1,9 @@
 "use client";
 
+import { PanelSkeleton } from "@/components/loading/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   type AIModelValue,
   AI_MODEL_OPTIONS,
@@ -99,7 +99,7 @@ export function AccountSettings() {
           </p>
         </div>
         {profile.isPending ? (
-          <Skeleton className="h-48 w-full rounded-xl" />
+          <PanelSkeleton className="h-48" />
         ) : profile.isError ? (
           <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             资料加载失败：{profile.error.message}

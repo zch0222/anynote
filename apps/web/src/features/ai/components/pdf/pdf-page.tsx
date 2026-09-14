@@ -1,5 +1,8 @@
 "use client";
 
+import { ProgressBar } from "@/components/loading/progress";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
+import { Spinner } from "@/components/loading/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +24,7 @@ import {
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, FileText, Loader2, Trash2, Upload } from "lucide-react";
+import { ChevronDown, FileText, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChatPanel } from "../chat-panel";
@@ -223,21 +226,17 @@ export function PdfChatPage() {
             {upload.isPending ? "上传中…" : "选择文件"}
           </Button>
           {progress !== null ? (
+            // data-testid 留在外层包装上而不是传给 ProgressBar：
+            // 它是 E2E 的稳定锚点，挂在共享组件上会被组件内部结构调整带崩。
             <div className="mt-3" data-testid="pdf-upload-progress">
-              <div className="h-1.5 overflow-hidden rounded-full bg-grouped">
-                <div
-                  className="h-full rounded-full bg-accent transition-[width] duration-200"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-label-secondary">{progress}%</p>
+              <ProgressBar value={progress} label="PDF 上传进度" showValue />
             </div>
           ) : null}
         </div>
 
         <div className="min-h-0 flex-1 space-y-1 overflow-y-auto" data-testid="doc-list">
           {docs.isPending ? (
-            [0, 1, 2].map((item) => <Skeleton key={item} className="h-12 rounded-lg" />)
+            <ListRowsSkeleton count={3} />
           ) : docs.isError ? (
             <p className="p-2 text-sm text-danger">文档加载失败：{docs.error.message}</p>
           ) : (docs.data?.rows.length ?? 0) === 0 ? (
@@ -270,10 +269,16 @@ export function PdfChatPage() {
                     已索引
                   </Badge>
                 ) : row.id === docId && indexPending ? (
-                  <Loader2
-                    className="size-3.5 shrink-0 animate-spin text-label-secondary"
-                    aria-label="索引构建中"
-                  />
+                  /*
+                   * 不传 label：这一行旁边没有文字，所以**必须**自己带状态语义，
+                   * 但用 sr-only 文字而不是 `label` —— Spinner 的 `label` 会给 SVG
+                   * 挂 role="status" 并成为独立播报点，而这里真正的语义是
+                   * 「这一行正在建索引」，挂在整行上比挂在图标上准确。
+                   */
+                  <span className="flex shrink-0 items-center gap-1 text-label-secondary">
+                    <Spinner size="badge" />
+                    <span className="sr-only">索引构建中</span>
+                  </span>
                 ) : (
                   <Badge variant="outline" className="shrink-0">
                     未索引
@@ -309,7 +314,12 @@ export function PdfChatPage() {
                 <Badge variant="secondary">已索引</Badge>
               ) : (
                 <Badge variant="outline">
-                  <Loader2 className="mr-1 size-3 animate-spin" aria-hidden="true" />
+                  {/*
+                    不传 label：紧邻的「索引构建中」文字已经是可播报的状态，
+                    再给 SVG 挂 role="status" 会让读屏把同一件事念两遍。
+                    Badge 用 `[&>svg]:size-3!` 统一收口图标尺寸，这里保留原来的 mr-1 间距。
+                  */}
+                  <Spinner size="badge" className="mr-1" />
                   索引构建中
                 </Badge>
               )}

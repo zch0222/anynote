@@ -52,7 +52,8 @@ describe("TaskTable", () => {
 
   it("加载态渲染骨架", () => {
     const { container } = renderWithProviders(<TaskTable tasks={[]} loading />);
-    expect(container.querySelector(".animate-pulse")).toBeTruthy();
+    // 骨架改用共享预设：普通 Skeleton 是 aria-hidden 的，靠 aria-busy 的容器定位
+    expect(container.querySelector('[data-slot="skeleton-table"]')).toBeTruthy();
     expect(screen.queryByTestId("task-table")).toBeNull();
   });
 

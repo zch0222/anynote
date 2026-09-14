@@ -1,5 +1,6 @@
 "use client";
 
+import { CardGridSkeleton } from "@/components/loading/skeletons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { CollabPresence, CollabStatusBadge } from "@/features/collab/components/collab-status";
 import { type CollabDocTitleInput, collabDocTitleSchema } from "@/features/collab/schemas";
 import { useCollabIndex } from "@/features/collab/use-collab-index";
@@ -108,11 +108,7 @@ export function CollabDocLibrary() {
           协同服务连接失败：{error?.message ?? "未知错误"}。请确认 collab 服务已启动。
         </p>
       ) : status !== "connected" ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((item) => (
-            <Skeleton key={item} className="h-36 rounded-xl" />
-          ))}
-        </div>
+        <CardGridSkeleton count={4} cardClassName="h-36" />
       ) : docs.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <FileText className="mx-auto size-8 text-label-secondary" aria-hidden="true" />

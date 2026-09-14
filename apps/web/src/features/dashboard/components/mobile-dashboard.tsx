@@ -1,8 +1,8 @@
 "use client";
 
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useMe } from "@/features/auth/use-me";
 import { coverAvatarClassName } from "@/features/notes/lib/cover-gradient";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -26,8 +26,6 @@ import type { ReactNode } from "react";
 const RECENT_NOTE_COUNT = 4;
 const PENDING_TASK_COUNT = 3;
 const BASE_CARD_COUNT = 4;
-/** 骨架占位的稳定 key：用数组下标会被 lint 拦（顺序变化会错位复用 DOM）。 */
-const SKELETON_KEYS = ["a", "b", "c"];
 
 const QUICK_ACTIONS = [
   { title: "新建笔记", href: "/m/notes/new", icon: PenLine },
@@ -99,7 +97,7 @@ export function MobileDashboard() {
           moreLabel="全部"
         >
           {bases.isPending || (baseId > 0 && notes.isPending) ? (
-            <ListSkeleton />
+            <ListRowsSkeleton />
           ) : bases.isError ? (
             <ErrorLine message={bases.error.message} />
           ) : !baseId ? (
@@ -142,7 +140,7 @@ export function MobileDashboard() {
 
         <DashboardSection title="待办" moreHref={baseId ? "/m/tasks" : undefined} moreLabel="全部">
           {baseId > 0 && tasks.isPending ? (
-            <ListSkeleton rows={2} />
+            <ListRowsSkeleton count={2} />
           ) : tasks.isError ? (
             <ErrorLine message={tasks.error.message} />
           ) : pendingTasks.length === 0 ? (
@@ -171,7 +169,7 @@ export function MobileDashboard() {
 
         <DashboardSection title="我的知识库" moreHref="/m/notes" moreLabel="全部">
           {bases.isPending ? (
-            <ListSkeleton rows={2} />
+            <ListRowsSkeleton count={2} />
           ) : (bases.data?.length ?? 0) === 0 ? (
             <p className="rounded-lg border border-dashed border-separator p-4 text-footnote text-label-secondary">
               还没有知识库。
@@ -243,16 +241,6 @@ function DashboardSection({
       </div>
       {children}
     </section>
-  );
-}
-
-function ListSkeleton({ rows = 3 }: { rows?: number }) {
-  return (
-    <div className="space-y-2" aria-busy="true">
-      {SKELETON_KEYS.slice(0, rows).map((key) => (
-        <Skeleton key={key} className="h-14 rounded-lg" />
-      ))}
-    </div>
   );
 }
 

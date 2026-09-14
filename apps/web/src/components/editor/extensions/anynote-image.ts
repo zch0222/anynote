@@ -58,7 +58,55 @@ function clampPercent(percent: number): number {
   return Math.max(0, Math.min(100, Math.round(percent)));
 }
 
-/** 「上传中」指示器的 DOM：转圈 + 百分比，插在图片将要落下的位置。 */
+/**
+ * 「上传中」指示器的 DOM：转圈 + 文件名 + 右端百分比。
+ *
+ * 形态对齐设计稿 P14 底部那条「行内 · 编辑器图片上传占位」。
+ *
+ * 为什么用 `createElement` 手搭而不是渲染成 ProseMirror 节点：
+ * 它是 widget decoration（见 `uploadImageAt` 的说明），必须是**纯 DOM**——
+ * 进了文档就会写进 Markdown 并被协同同步出去。
+ *
+ * 转圈刻意用内联 SVG 复刻 `components/ui/spinner.tsx` 的几何（40 视窗 / 描边 5.6 /
+ * 80° 弧），而不是去 import 那个 React 组件：这里是命令式 DOM 环境，
+ * 为了一个 12px 的圈引入 `createRoot` 会让每次进度变化都多一轮 React 调度，
+ * 而进度回调是高频的（每个分片一次）。
+ */
+function createSpinner(): SVGSVGElement {
+  const NS = "http://www.w3.org/2000/svg";
+  // 与 ui/spinner.tsx 的常量保持一致：视窗 40、描边 5.6、弧长 80°
+  const VIEW_BOX = 40;
+  const STROKE = 5.6;
+  const RADIUS = (VIEW_BOX - STROKE) / 2;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("class", "anynote-image-upload__spinner");
+  svg.setAttribute("viewBox", `0 0 ${VIEW_BOX} ${VIEW_BOX}`);
+  svg.setAttribute("width", "12");
+  svg.setAttribute("height", "12");
+  svg.setAttribute("aria-hidden", "true");
+
+  const track = document.createElementNS(NS, "circle");
+  track.setAttribute("cx", String(VIEW_BOX / 2));
+  track.setAttribute("cy", String(VIEW_BOX / 2));
+  track.setAttribute("r", String(RADIUS));
+  track.setAttribute("fill", "none");
+  track.setAttribute("stroke-width", String(STROKE));
+
+  const arc = document.createElementNS(NS, "circle");
+  arc.setAttribute("cx", String(VIEW_BOX / 2));
+  arc.setAttribute("cy", String(VIEW_BOX / 2));
+  arc.setAttribute("r", String(RADIUS));
+  arc.setAttribute("fill", "none");
+  arc.setAttribute("stroke-width", String(STROKE));
+  arc.setAttribute("stroke-linecap", "round");
+  arc.setAttribute("stroke-dasharray", `${CIRCUMFERENCE * (80 / 360)} ${CIRCUMFERENCE}`);
+
+  svg.append(track, arc);
+  return svg;
+}
+
 function createIndicator(item: UploadItem): HTMLElement {
   const dom = document.createElement("span");
   dom.className = "anynote-image-upload";
@@ -69,15 +117,23 @@ function createIndicator(item: UploadItem): HTMLElement {
   dom.setAttribute("role", "status");
   dom.setAttribute("aria-label", `图片「${item.fileName}」上传中 ${item.percent}%`);
 
-  const spinner = document.createElement("span");
-  spinner.className = "anynote-image-upload__spinner";
-  spinner.setAttribute("aria-hidden", "true");
+  /*
+   * 可见文案是**固定的「图片上传中」**（设计稿 P14 的原文），不是文件名。
+   *
+   * 这是有意的：占位块插在正文里，宽度只有正文列那么宽，长文件名会把这一行
+   * 撑得忽长忽短，上传途中正文一直在跳。文件名没有丢——它在 `aria-label`
+   * 与 `title` 里，悬停可看，读屏也会念。
+   */
+  const name = document.createElement("span");
+  name.className = "anynote-image-upload__name";
+  name.textContent = "图片上传中";
+  name.title = item.fileName || "未命名图片";
 
   const text = document.createElement("span");
   text.className = "anynote-image-upload__text";
-  text.textContent = `上传中 ${item.percent}%`;
+  text.textContent = `${item.percent}%`;
 
-  dom.append(spinner, text);
+  dom.append(createSpinner(), name, text);
   return dom;
 }
 

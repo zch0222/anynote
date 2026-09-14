@@ -2,9 +2,10 @@
 
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { ProgressBar } from "@/components/loading/progress";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DOC_INDEXED } from "@/features/ai/schemas";
 import { useDeleteDocMutation, useDocsQuery, useUploadPdfMutation } from "@/features/ai/use-docs";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -115,24 +116,16 @@ export function MobilePdfList() {
           {upload.isPending ? "上传中…" : "上传 PDF"}
         </Button>
         {progress !== null ? (
+          // data-testid 留在外层包装上：它是既有锚点，挂在共享组件上会被其内部结构变化带崩
           <div data-testid="mobile-pdf-progress">
-            <div className="h-1.5 overflow-hidden rounded-full bg-grouped">
-              <div
-                className="h-full rounded-full bg-accent transition-[width] duration-200"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <p className="mt-1 text-xs text-label-secondary">{progress}%</p>
+            <ProgressBar value={progress} label="PDF 上传进度" showValue />
           </div>
         ) : null}
 
         {!baseId ? (
           <EmptyBox title="还没有可用的知识库" hint="文档挂在知识库下，先到笔记页创建一个。" />
         ) : docs.isPending ? (
-          <div className="space-y-2" aria-busy="true">
-            <Skeleton className="h-14 rounded-xl" />
-            <Skeleton className="h-14 rounded-xl" />
-          </div>
+          <ListRowsSkeleton count={2} />
         ) : docs.isError ? (
           <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             文档加载失败：{docs.error.message}

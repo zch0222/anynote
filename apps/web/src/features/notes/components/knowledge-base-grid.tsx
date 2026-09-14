@@ -1,7 +1,7 @@
 "use client";
 
+import { CardGridSkeleton } from "@/components/loading/skeletons";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { Library } from "lucide-react";
 import Link from "next/link";
@@ -22,11 +22,7 @@ export function KnowledgeBaseGrid() {
       </div>
 
       {bases.isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((item) => (
-            <Skeleton key={item} className="h-36 rounded-xl" />
-          ))}
-        </div>
+        <CardGridSkeleton count={3} cardClassName="h-36" />
       ) : bases.isError ? (
         <p className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-sm text-danger">
           知识库加载失败：{bases.error.message}

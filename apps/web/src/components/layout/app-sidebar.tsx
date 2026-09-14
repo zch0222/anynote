@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { parseBaseIdFromPath } from "./app-header";
+import { AnynoteLogo } from "./brand-logo";
 import {
   SidebarKnowledgeBaseCard,
   SidebarKnowledgeBaseNav,
@@ -23,8 +24,9 @@ import { SidebarKnowledgeBases, SidebarToolGroups, SidebarUserCard } from "./sid
 /**
  * 产品标记。
  *
- * 设计稿里是一个蓝色圆角方块 + 「Anynote」字标。方块用 accent 底色 +
- * 首字母，不引入新图片资源，也跟随主题换色。
+ * 设计稿里是一个蓝色圆角方块 + 「Anynote」字标。方块用 `AnynoteLogo`
+ * 而不是「accent 底 + 首字母 A」：侧栏与启动页必须是**同一个标记**——
+ * 启动页刚画完的书，落到工作区就变成了一个字母，品牌就断在这里了。
  */
 function Brand() {
   return (
@@ -33,12 +35,7 @@ function Brand() {
       aria-label="Anynote 工作台"
       className="flex min-h-10 items-center gap-2 rounded-md px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span
-        aria-hidden="true"
-        className="grid size-7 shrink-0 place-items-center rounded-sm bg-accent text-sm font-bold text-white"
-      >
-        A
-      </span>
+      <AnynoteLogo size={28} />
       <span className="text-headline font-semibold tracking-tight text-label">Anynote</span>
     </Link>
   );

@@ -2,6 +2,7 @@
 
 import { MobileTabBar } from "@/components/layout/mobile/mobile-tab-bar";
 import { isImmersiveMobileRoute } from "@/components/layout/navigation";
+import { RouteProgressBar } from "@/components/layout/route-progress-bar";
 import { WorkspaceSession } from "@/components/layout/workspace-session";
 import { useVisualViewportHeight } from "@/hooks/use-visual-viewport";
 import { usePathname } from "next/navigation";
@@ -42,6 +43,13 @@ export function MobileShell({ children }: { children: ReactNode }) {
         跳转到内容
       </a>
       <WorkspaceSession>{children}</WorkspaceSession>
+      {/*
+        移动端顶栏进度条（设计稿 P16 那张图的标题就是「移动端顶栏进度条」）。
+        移动端页面由各自的 `MobileScreen` 提供 sticky 顶栏，进度条挂在**视口顶部**
+        而不是某个顶栏下面——沉浸式页面（编辑器 / 对话）没有统一顶栏，
+        挂在 shell 上两端就都覆盖到了。
+      */}
+      <RouteProgressBar className="pointer-events-none fixed inset-x-0 top-0 z-40" />
       {immersive ? null : <MobileTabBar />}
     </div>
   );
