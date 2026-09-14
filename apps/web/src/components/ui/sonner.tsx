@@ -26,10 +26,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          // sonner 这套 CSS 变量名是它自己的契约，右边必须是**本设计系统真实存在**的
+          // Token：早先写的是 shadcn v3 的 --popover / --border / --radius，
+          // 而它们在本仓从未定义过，var() 解析失败会让 sonner 拿不到底色与圆角。
+          "--normal-bg": "var(--surface-elevated)",
+          "--normal-text": "var(--label-primary)",
+          "--normal-border": "var(--separator)",
+          "--border-radius": "var(--radius-md)",
         } as React.CSSProperties
       }
       toastOptions={{

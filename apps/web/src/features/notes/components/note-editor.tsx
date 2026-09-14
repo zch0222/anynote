@@ -33,20 +33,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 /**
- * 编辑区高度 = 视口 − (AppHeader + 内容区上下内边距)。
- * 与 `/ai/chat`、`/ai/pdf`、`/ai/workflow` 用的是同一个常量，改这里记得一起改。
- */
-const WORKSPACE_VIEWPORT = "h-[calc(100svh-9rem)]";
-
-/**
- * `/notes/[baseId]/[noteId]`：限宽正文纸面 + 顶栏状态条。
+ * `/notes/[baseId]/[noteId]`：满幅正文 + 顶栏状态条。
  *
  * 编辑器是非受控的：只在笔记切换时喂一次初始内容，之后的每次输入都进自动保存队列。
  * 如果把 query 缓存直接当 `value` 回灌，保存返回的内容会把光标顶回文首。
  *
- * 版式对齐设计稿：顶栏一条**文档状态条**（保存徽标 + 操作），下方是限宽的
+ * 版式对齐设计稿：顶层是一条**文档状态条**（保存徽标 + 操作），下方是限宽的
  * 正文纸面——行宽超过约 75 字符后回行会丢行。导航（二级 Tab 与笔记目录）
  * 都在侧栏，正文这一列只负责读和写。
+ *
+ * 整页**不画卡片**：设计稿里这页的顶栏分隔线与正文底色一直铺到侧栏右侧与
+ * 窗口右缘，外面没有灰底衬托、没有圆角、没有投影。曾经这里套了一层
+ * `rounded-lg bg-surface shadow-card`，正文于是变成"灰底上浮着的一张白卡片"，
+ * 与"编辑器占满剩余所有空间"正好相反。满幅由 `AppShell` 的
+ * `isFullBleedRoute` 配合（内容区不加内边距），这里只负责吃掉剩下的高度。
  */
 export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number }) {
   const router = useRouter();
@@ -147,16 +147,18 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   }
 
   return (
-    <div className={`flex w-full min-h-0 ${WORKSPACE_VIEWPORT}`}>
+    <div className="flex min-h-0 w-full flex-1">
       {/*
         目录（知识库 → 笔记两层）在**侧栏**里（设计稿的位置，见 AppSidebar），
         这里不再另起一列：同一份目录在一屏里出现两次，读者要先分辨"哪个才是真的"。
       */}
       <section
         data-testid="note-panel"
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-card"
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface"
       >
-        <header className="flex shrink-0 items-center gap-3 px-8 py-4">
+        {/* 顶栏分隔线铺满整列宽度（设计稿 x 296→1439.5 的 1px 线），所以内边距加在
+            内容上、不加在 <header> 上；否则线会跟着内边距缩进去。 */}
+        <header className="flex shrink-0 items-center gap-3 border-b border-separator px-6 py-3 sm:px-8">
           <SaveStatusBadge status={status} lastSavedAt={lastSavedAt} />
           <span className="min-w-0 flex-1" />
           <DropdownMenu>
@@ -196,42 +198,54 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
         */}
         <div data-testid="note-scroll" className="min-h-0 flex-1 overflow-y-auto">
           {note.isPending || initialContent === null ? (
-            <div className="mx-auto w-full max-w-3xl space-y-4 px-6 py-4">
+            <div className="mx-auto w-full max-w-[calc(62.5rem+9rem)] space-y-4 px-6 py-10 sm:px-8 lg:px-18">
               <Skeleton className="h-10 w-1/2" />
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-64 w-full rounded-lg" />
             </div>
           ) : (
-            <article
-              data-testid="note-document"
-              className="mx-auto flex w-full max-w-[46rem] flex-col px-10 pb-10"
-            >
-              <input
-                aria-label="笔记标题"
-                value={title}
-                onChange={(event) => handleTitleChange(event.target.value)}
-                placeholder="未命名笔记"
-                className="w-full bg-transparent text-display font-semibold text-label outline-none placeholder:text-label-tertiary"
-              />
-              <NoteMeta
-                baseId={baseId}
-                baseName={note.data?.knowledgeBaseName}
-                updateTime={note.data?.updateTime}
-              />
-              <TiptapEditor
-                key={noteId}
-                preset="full"
-                value={initialContent}
-                onChange={handleContentChange}
-                onReady={onEditorReady}
-                aiContinue={handleAiContinue}
-                uploadFn={uploadFn}
-                // 设计稿的桌面编辑器没有常驻工具条（移动端才有，见 note-editor-mobile）
-                toolbar="none"
-                className="mt-2"
-              />
-              <NoteFooter contentLength={initialContent.length} />
-            </article>
+            /*
+             * 限宽分两层：外层带内边距、内层是正文列本身。
+             *
+             * 设计稿实测（1440×900）：内容区 x 296→1439.5，正文列 x 368→1367.5——
+             * 列宽正好 1000px、左右各 72px，且**居中**（两侧中心都是 867.75）。
+             * 判据取元信息行底下那条分隔线：它铺满整列（1px 高、1000px 宽），
+             * 量到的是列宽本身，而不是某一行文字恰好断在哪里。
+             *
+             * 内边距加在外层而不是列里：宽屏下 max-width 生效、窄屏下内边距生效，
+             * 两种情形都不会贴边，列内也保持"标题/分隔线/正文左缘同一条线"。
+             */
+            <div className="mx-auto w-full max-w-[calc(62.5rem+9rem)] px-6 sm:px-8 lg:px-18">
+              <article data-testid="note-document" className="flex w-full flex-col pb-16 pt-10">
+                <input
+                  aria-label="笔记标题"
+                  value={title}
+                  onChange={(event) => handleTitleChange(event.target.value)}
+                  placeholder="未命名笔记"
+                  className="w-full bg-transparent text-display font-semibold text-label outline-none placeholder:text-label-tertiary"
+                />
+                <NoteMeta
+                  baseId={baseId}
+                  baseName={note.data?.knowledgeBaseName}
+                  updateTime={note.data?.updateTime}
+                />
+                <TiptapEditor
+                  key={noteId}
+                  preset="full"
+                  value={initialContent}
+                  onChange={handleContentChange}
+                  onReady={onEditorReady}
+                  aiContinue={handleAiContinue}
+                  uploadFn={uploadFn}
+                  // 设计稿的桌面编辑器没有常驻工具条（移动端才有，见 note-editor-mobile）
+                  toolbar="none"
+                  // 正文列自己就是对齐基准，编辑器不再叠一层内边距
+                  flush
+                  className="mt-6"
+                />
+                <NoteFooter contentLength={initialContent.length} />
+              </article>
+            </div>
           )}
         </div>
       </section>

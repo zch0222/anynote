@@ -65,7 +65,7 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--separator);
   border-bottom: none;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }

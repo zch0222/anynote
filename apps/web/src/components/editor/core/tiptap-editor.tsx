@@ -47,6 +47,14 @@ export type TiptapEditorProps = {
    * 高度自适应的场景（playground、AI 输出）保持 `false`。
    */
   fill?: boolean;
+  /**
+   * 正文不自带内边距，留白交给外层。
+   *
+   * 笔记页的正文列自己有 `px-*`（标题、元信息、正文必须左右对齐成一条线），
+   * 编辑器再叠一层 padding 会让标题比正文多缩进一截。默认 `false`，
+   * 独立使用编辑器（playground 等）时仍自带内边距。
+   */
+  flush?: boolean;
   className?: string;
 };
 
@@ -70,6 +78,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
     onReady,
     toolbar,
     fill = false,
+    flush = false,
     className,
   } = props;
 
@@ -109,8 +118,17 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
       },
       editorProps: {
         attributes: {
-          class:
-            "anynote-editor__content prose prose-neutral dark:prose-invert max-w-none focus:outline-none",
+          /*
+           * 刻意**不用** `prose`（@tailwindcss/typography）。
+           *
+           * prose 是给"整页 Markdown 文档"用的：它会给 pre 套深色底、给行内 code
+           * 加反引号伪元素、接管表格与引用的边框，与编辑器自己的节点样式正面冲突。
+           * 此前靠"更高特异度一条条复写回来"压制它——那种做法要求每次都赌对
+           * 两个样式表的加载顺序，而 CSS 的加载顺序由构建决定、不由我们决定。
+           * 正文排版现在由 `styles/tiptap.css` 的「正文排版」一节负责，
+           * 取值全部走语义 Token，没有需要复位的对手。
+           */
+          class: "anynote-editor__content max-w-none focus:outline-none",
         },
       },
     },
@@ -149,6 +167,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
       data-preset={preset}
       data-toolbar={toolbarVariant}
       data-fill={fill ? "true" : undefined}
+      data-flush={flush ? "true" : undefined}
     >
       {/* 移动端工具条贴底（靠近软键盘），所以放在正文之后 */}
       {effectiveEditable && !isMobileToolbar && !hasNoToolbar ? (

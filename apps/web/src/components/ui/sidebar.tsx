@@ -457,8 +457,12 @@ const sidebarMenuButtonVariants = cva(
     variants: {
       variant: {
         default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        // 任意值（`[...]`）**不经过** @theme 解析，所以里面必须写设计系统里真实存在的
+        // Token 名。此前写的是 `--sidebar-` 前缀去掉 `--color-` 之后的想当然写法
+        // （以为 @theme 的条目名可以直接当变量用），那个名字谁都没定义过，
+        // var() 解析失败使 box-shadow 整条失效，描边款按钮因此没有外圈。
         outline:
-          "bg-surface shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_var(--sidebar-accent)]",
+          "bg-surface shadow-[0_0_0_1px_var(--separator)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_var(--accent-tint)]",
       },
       size: {
         default: "h-8 text-sm",

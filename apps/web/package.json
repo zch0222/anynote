@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check:css-tokens": "node scripts/check-css-tokens.mjs",
     "test:integration:auth": "vitest run --config vitest.auth-integration.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
