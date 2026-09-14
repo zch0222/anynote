@@ -157,7 +157,13 @@ const SCENES = [
           .querySelector('a[href="/ai/chat"]')
           ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
       });
-      await page.waitForSelector('[data-slot="route-progress"]', { timeout: 5000 });
+      /*
+       * 等的是**内层** `boot-bar`，不是 `route-progress`。
+       * 外层为了不占布局高度是零高度的（见 `components/layout/route-progress-bar.tsx`），
+       * 而 `waitForSelector` 默认 state 是 `visible`——零高度元素在 Playwright 眼里
+       * 永远不可见，对着它等会一直等到超时。
+       */
+      await page.waitForSelector('[data-slot="boot-bar"]', { timeout: 5000 });
       // 进度条 3s 渐进制到 90%，等它走到中段再截
       await page.waitForTimeout(1200);
     },
