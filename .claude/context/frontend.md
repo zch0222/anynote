@@ -87,6 +87,13 @@
 反例记在 `mooc-detail.tsx`（16:9 视频位**不用** `DocumentSkeleton`，那是 A4 竖版）
 与侧栏（40px 紧凑行**不用** `ListRowsSkeleton`，那是 `min-h-14` 卡片壳）。
 
+**加载态一律不占布局高度**，与上一条同源：它出现与消失各引发一次重排，等于"页面抖两下"。
+`RouteProgressBar` 是这条约束最容易被违反的地方——可见的 2px 由绝对定位子元素画，
+外层定位容器是 `h-0`，**不是为了省事**：原来外层自己就是 `h-0.5`，
+一亮就把 `#workspace-content` 往下推 2px。配套的三条别动：容器不加 `overflow-hidden`
+（会把绝对定位的条裁没）、整条 `pointer-events-none`（条浮在内容上沿，别吃掉那 2px 的点击）、
+可见性判定要查内层 `[data-slot="boot-bar"]`（零高度元素在 Playwright 眼里永远不可见）。
+
 ### 加载体系的 Token 与动效
 
 | 名字 | 值 / 时长 | 说明 |
