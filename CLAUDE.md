@@ -318,6 +318,7 @@ CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分�
 > Git 操作禁忌见 [`README.md` Git 工作流 → 禁止操作清单](./README.md#git-工作流)。
 
 - ❌ 手改 `packages/api-client/src/` 下任何生成文件
+- ❌ 改任何 `package.json` 的依赖后不提交同步过的 `pnpm-lock.yaml`（`pnpm install --lockfile-only`）。宿主机侧单测 / typecheck / build / E2E 用的都是已装好的 `node_modules`，**只有干净安装才读 lockfile**——漏同步在本地一路绿灯，直到 `infra/Dockerfile.web` 的 `pnpm install --frozen-lockfile` 报 `ERR_PNPM_OUTDATED_LOCKFILE` 才发现镜像构建不出来。CI 目前没有门禁卡这一条，改依赖后请手动跑一次 `docker compose --env-file <空文件> -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml build anynote-web`
 - ❌ Controller 用旧的 Springfox 注解（`@Api` / `@ApiOperation` / `@ApiModelProperty`）
 - ❌ Feign `FallbackFactory` 中抛异常（应 `return ResData.error(...)`）
 - ❌ `return null` 占位未实现端点（应 `throw new NotImplementedException(...)`）

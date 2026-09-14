@@ -13,24 +13,26 @@
 
 | 项目 | 数量 |
 |------|------|
-| 新增文件 | 3 |
-| 修改文件 | 21 |
+| 新增文件 | 4（含本清单） |
+| 修改文件 | 22 |
 | 删除文件 | 2 |
-| 增 / 删行数 | +1129 / −463 |
+| 增 / 删行数 | +1280 / −500 |
 
 按目录分布：`apps/web/src/components/layout/**`（4 个，含侧栏两态与新组件）、
 `apps/web/src/features/notes/**`（7 个）、`apps/web/src/components/editor/**`（3 个）、
-`apps/web/e2e/**`（4 个）、`packages/api-core/**`（1 个）、`.claude/context/**`（1 个）。
+`apps/web/e2e/**`（4 个）、`packages/api-core/**`（1 个）、`.claude/context/**`（1 个）、
+根 `pnpm-lock.yaml`（1 个）。
 
 ### 验证结果
 
 | 命令 | 结果 |
 |------|------|
 | `pnpm --filter web test` | **106 文件 / 1061 用例全绿**（本批起点 1031） |
-| `pnpm --filter web test:e2e` | **74 passed / 0 failed / 1 skipped**（跳过的是 `pdf-upload.spec.ts` 里既有的条件跳过） |
+| `pnpm --filter web test:e2e` | **74 passed / 0 failed / 1 skipped**（跳过的是 `pdf-upload.spec.ts` 里既有的条件跳过）——跑在**本机 Docker 全栈**上 |
 | `pnpm --filter web typecheck` | 0 error |
 | `pnpm check`（Biome） | 495 文件 clean |
 | `pnpm --filter web build` | 41 页全部编译通过 |
+| `docker compose build anynote-web` | 成功（这条是唯一能发现 lockfile 漂移的门禁，见第六章） |
 | `pnpm --filter web bundle:budget` | 三条全 PASS：`/notes` **285.6** / 300 KB、`/m/notes` **224.7** / 250 KB、编辑器 chunk **13.7** / 250 KB |
 | `pnpm --filter web lighthouse:budget` | 全 PASS：`/login` 100 · `/dashboard`→`/notes` 99 · `/notes` 99 · `/docs` 99 · `/ai/chat` 99，无障碍均 96 |
 | `pnpm --filter web lighthouse:budget:mobile` | **4/5 PASS，`/m/dashboard` FAIL（81–83 / 门槛 85）——既有问题，见下方「审计要点」** |
@@ -93,7 +95,13 @@
 | `apps/web/src/components/note/__tests__/note-tree.test.tsx` | 删除 | 随被测文件一起删。 |
 | `apps/web/package.json` | 修改 | 摘掉随之失去消费者的 `@dnd-kit/core` 依赖。 |
 
-## 六、端到端用例
+## 六、构建：lockfile 漂移修复
+
+| 文件 | 状态 | 作用与原因 |
+|------|------|-----------|
+| `pnpm-lock.yaml` | 修改 | 第五章摘掉 `@dnd-kit/core` 时漏了同步 lockfile，导致 `infra/Dockerfile.web` 的 `pnpm install --frozen-lockfile` 报 `ERR_PNPM_OUTDATED_LOCKFILE`，**Docker 镜像直接构建不出来**。重新生成后移除 `@dnd-kit/core` 与其两个传递依赖（`@dnd-kit/accessibility`、`@dnd-kit/utilities`），共 37 行、全部属于 dnd-kit。 |
+
+## 七、端到端用例
 
 | 文件 | 状态 | 作用与原因 |
 |------|------|-----------|
@@ -102,7 +110,7 @@
 | `apps/web/e2e/notes-image-upload.spec.ts` | 修改 | 插图入口从工具栏按钮改走 **Slash 菜单**（桌面已无常驻工具栏）。这条路径本来就是占位文案「输入 "/" 唤起命令」指向的那条，也比测工具栏更贴近真实用法。 |
 | `apps/web/e2e/mobile-core.spec.ts` | 修改 | 新增"知识库详情：单行库头 + 行列表"：补建第二篇后按**算出来的**边框宽度、行高、圆角、阴影判定行列表形态（不数类名——`last:border-b-0` 本身含 `border-b` 子串，数类名会数错）。 |
 
-## 七、文档
+## 八、文档
 
 | 文件 | 状态 | 作用与原因 |
 |------|------|-----------|
@@ -110,29 +118,45 @@
 
 ## 审计要点
 
-1. **顶栏与侧栏各只有一份二级导航**（`app-header.tsx` 删 `KnowledgeBaseTabs`、
+1. **`pnpm-lock.yaml` 必须与 `package.json` 同步**（第六章）。这是本批最值得记住的一条：
+   宿主机侧的**所有**门禁（单测 / typecheck / build / E2E / 预算）用的都是已经装好的
+   `node_modules`，`pnpm-lock.yaml` 只在**干净安装**时才被读。所以删依赖而不同步 lockfile
+   在本地一路绿灯，直到重建 Docker 镜像才炸。本仓库的 CI 有 `openapi-check.yml` 卡 spec 漂移、
+   CLI job 卡 manifest 漂移，但**没有一条卡 lockfile**；`--frozen-lockfile` 只出现在
+   `infra/Dockerfile.web` 里。改 `package.json` 的依赖后务必跑一次 `pnpm install --lockfile-only`
+   并提交 `pnpm-lock.yaml`。
+
+2. **顶栏与侧栏各只有一份二级导航**（`app-header.tsx` 删 `KnowledgeBaseTabs`、
    `app-sidebar.tsx` 的 `SidebarBody` 二选一）。这是本批最容易改漏的地方：
    两处都渲染会让人分不清哪个是主导航，`kb-tab-*` 的 testid 也会撞。
    E2E 里"顶栏在库内没有第二份"就是防这个的。
 
-2. **`toolbar="none"` 必须保留气泡菜单**（`tiptap-editor.tsx`）。常驻工具条去掉后，
+3. **`toolbar="none"` 必须保留气泡菜单**（`tiptap-editor.tsx`）。常驻工具条去掉后，
    选区格式化只剩气泡菜单、Slash 菜单与快捷键三条路；把气泡菜单一起关掉
    等于桌面端没法加粗。单测只钉了"工具条不渲染"，气泡菜单那条靠
    `BubbleMenuPortal` 的条件分支读代码确认。
 
-3. **删除笔记的跳转地址**（`note-editor.tsx`）。`/notes/<baseId>/notes` 会命中
+4. **删除笔记的跳转地址**（`note-editor.tsx`）。`/notes/<baseId>/notes` 会命中
    `[baseId]/[noteId]` 路由、把字面量 `"notes"` 当 noteId 然后 `notFound()`。
    回归用例已实测在旧代码上失败（`expected "vi.fn()" to be called with ['/notes/7']`）。
 
-4. **计数为 0 与计数缺失是两回事**（`knowledge-base-sidebar.tsx`）。
+5. **计数为 0 与计数缺失是两回事**（`knowledge-base-sidebar.tsx`）。
    `typeof count === "number"` 才会渲染——0 要显示（库里确实没有慕课），
    `undefined` 不显示（还没查到）。写反了会把"加载中"显示成"0 个"。
 
-5. **`knowledgeBaseSchema` 的 `type` 字段**（`packages/api-core/note-schemas.ts`）。
+6. **`knowledgeBaseSchema` 的 `type` 字段**（`packages/api-core/note-schemas.ts`）。
    这是 `apps/web` 与 `apps/cli` **共用**的 schema，加字段要确认 CLI 侧不受影响
    （CLI 用的是同一份 `knowledgeBaseSchema`，多一个可选字段是兼容的）。
 
-6. **移动端 `/m/dashboard` 的 Lighthouse 未达门槛（81–83 / 85）是既有问题，不是本批引入**。
+7. **E2E 的 `E2E_BASE_URL` 必须与镜像内联的 `NEXT_PUBLIC_APP_URL` 逐字相同**。
+   `NEXT_PUBLIC_*` 是构建参数，BFF 的 `checkOrigin` 拿它和请求 Origin 逐字比对，
+   不一致则所有 BFF 端点 403（登录都过不去，表现为 `globalSetup` 注册/登录失败）。
+   本批实测时仓库里有一份**未提交**的 `infra/docker-compose.yaml` 把默认值改成了
+   `https://192.168.3.90:3000`（局域网域名，非本批改动），因此用显式环境变量
+   `NEXT_PUBLIC_APP_URL=http://localhost:3000` 重建镜像后才跑通 E2E。
+   评审时若在别的机器上复现，注意这一点。
+
+8. **移动端 `/m/dashboard` 的 Lighthouse 未达门槛（81–83 / 85）是既有问题，不是本批引入**。
    已用 9 小时前构建的 `anynote/anynote-web:local` 镜像（早于本批全部提交）在同一台机器上
    实测同一路由：**79 分**，同样 FAIL；本批的产物反而略高（81–83）。
    `docs/mobile/MOBILE_MILESTONES.md` 的 T5.2「Lighthouse 移动模式跑通」本就未勾选
