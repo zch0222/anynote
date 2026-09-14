@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { ensureKnowledgeBase } from "./support/account";
+import { setTheme } from "./support/theme";
 
 const BASE_NAME = "E2E 知识库";
 const NOTE_TITLE = `E2E 笔记 ${Date.now().toString().slice(-6)}`;
@@ -150,6 +151,56 @@ test.describe("笔记编辑器：布局与保存冲突", () => {
 });
 
 test.describe("笔记编辑器：代码块", () => {
+  /**
+   * 回归：代码块在浅色与深色下都"没有底色、没有边框、没有圆角"。
+   *
+   * 根因是 `tiptap.css` 用了 shadcn v3 的变量名（`--muted` / `--border` /
+   * `--radius`），而本套设计系统从未定义过它们。CSS 对未定义的 `var()` 不报错、
+   * 不回退，只让整条声明失效——三条声明一起作废，代码块退化成一段裸文字。
+   *
+   * 所以这里断言**计算样式真的落了值**。只看类名或 DOM 结构的话，这种静默失效
+   * 照样能通过——它当初就是这么溜过全部测试的。
+   */
+  test("代码块在浅色与深色下都有底色、边框与圆角，且两态不同", async ({ page }) => {
+    expect(noteUrl, "缺少可用的笔记").not.toBe("");
+    await page.goto(noteUrl);
+    await focusEditor(page);
+
+    await page.keyboard.press("Control+End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("```ts");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("const answer = 42;");
+
+    const block = page.locator(".anynote-code-block").first();
+    await expect(block).toBeVisible({ timeout: 30_000 });
+
+    const read = () =>
+      block.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          background: style.backgroundColor,
+          borderWidth: style.borderTopWidth,
+          radius: style.borderRadius,
+        };
+      });
+
+    const light = await read();
+    expect(light.background, "浅色下代码块没有底色").not.toBe("rgba(0, 0, 0, 0)");
+    expect(light.borderWidth, "浅色下代码块没有边框").not.toBe("0px");
+    expect(light.radius, "浅色下代码块没有圆角").not.toBe("0px");
+
+    await setTheme(page, "深色");
+    const dark = await read();
+    expect(dark.background, "深色下代码块没有底色").not.toBe("rgba(0, 0, 0, 0)");
+    expect(dark.borderWidth, "深色下代码块没有边框").not.toBe("0px");
+    expect(dark.radius, "深色下代码块没有圆角").not.toBe("0px");
+    // 两态取值不同才说明 Token 真的换了一组，而不是只定义了一态
+    expect(dark.background).not.toBe(light.background);
+
+    await setTheme(page, "浅色");
+  });
+
   test("代码块有语法高亮，且正文本身可见（不是透明文字叠高亮层）", async ({ page }) => {
     expect(noteUrl, "缺少可用的笔记").not.toBe("");
     await page.goto(noteUrl);
@@ -197,7 +248,7 @@ test.describe("笔记编辑器：代码块", () => {
     await expect(page.locator(".anynote-code-token").first()).toBeVisible({ timeout: 30_000 });
   });
 
-  test("行内代码不会被 prose 加上反引号", async ({ page }) => {
+  test("行内代码有芯片底色且不带 prose 的反引号", async ({ page }) => {
     await page.goto(noteUrl);
     await focusEditor(page);
 
@@ -208,12 +259,25 @@ test.describe("笔记编辑器：代码块", () => {
     const inline = page.locator(`${EDITOR_SURFACE} code`).first();
     await expect(inline).toBeVisible({ timeout: 30_000 });
 
-    const pseudo = await inline.evaluate((element) => ({
-      before: getComputedStyle(element, "::before").content,
-      after: getComputedStyle(element, "::after").content,
-    }));
-    // @tailwindcss/typography 默认给 code 加 `content: "\`"`，编辑器里必须复位
-    expect(pseudo.before).not.toContain("`");
-    expect(pseudo.after).not.toContain("`");
+    const style = await inline.evaluate((element) => {
+      const computed = getComputedStyle(element);
+      return {
+        before: getComputedStyle(element, "::before").content,
+        after: getComputedStyle(element, "::after").content,
+        background: computed.backgroundColor,
+        radius: computed.borderRadius,
+      };
+    });
+
+    // @tailwindcss/typography 曾给 code 加 `content: "\`"`。现在编辑器不再加载
+    // prose（排版由 styles/tiptap.css 接管），这些伪元素不该存在——
+    // 保留断言是因为"哪天有人把 prose 加回来"正是最可能的回归方式。
+    expect(style.before).not.toContain("`");
+    expect(style.after).not.toContain("`");
+
+    // 行内代码要有芯片样子：浅底 + 圆角。全透明说明 --surface-block 没生效
+    // （未定义的 var() 会让整条 background-color 失效，且不报错）
+    expect(style.background).not.toBe("rgba(0, 0, 0, 0)");
+    expect(style.radius).not.toBe("0px");
   });
 });

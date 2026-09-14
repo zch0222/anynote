@@ -1,19 +1,5 @@
-import { type Page, expect, test } from "@playwright/test";
-
-/**
- * 切换主题。
- *
- * 必须等菜单**完全收起**再开下一次：Base UI 的下拉在选中后会做一段收起动画，
- * 紧接着点触发按钮时旧菜单项还在 DOM 上，`click()` 会拿到一个正在被卸载的元素，
- * 于是报 "element was detached from the DOM"。这是用例的节奏问题不是产品缺陷。
- */
-async function setTheme(page: Page, label: "浅色" | "深色" | "跟随系统") {
-  const menu = page.getByRole("menu");
-  await page.getByRole("button", { name: "切换主题" }).click();
-  await expect(menu).toBeVisible();
-  await menu.getByRole("menuitemradio", { name: label }).click();
-  await expect(menu).toBeHidden();
-}
+import { expect, test } from "@playwright/test";
+import { setTheme } from "./support/theme";
 
 test.describe("关键路径 6：浅色 / 深色切换", () => {
   test("切到深色后 html 上挂 dark 类，刷新后保持", async ({ page }) => {

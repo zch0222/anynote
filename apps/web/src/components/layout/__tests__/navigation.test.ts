@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   activeMobileTab,
   getWorkspaceRoute,
+  isFullBleedRoute,
   isImmersiveMobileRoute,
   isMobilePath,
   isRouteActive,
@@ -48,6 +49,38 @@ describe("工作区导航", () => {
     expect(isRouteActive("/ai/pdf", "/ai/chat")).toBe(false);
     expect(getWorkspaceRoute("/notes/new")?.title).toBe("创建笔记");
     expect(getWorkspaceRoute("/missing")).toBeUndefined();
+  });
+});
+
+describe("满幅路由", () => {
+  /**
+   * 满幅＝内容区不加内边距，由页面自己吃到视口边缘。
+   *
+   * 只有笔记编辑器：设计稿里它的顶栏分隔线与正文底色一直延伸到侧栏右侧与窗口右缘，
+   * 外面再套一层留白，正文就变成"灰底上浮着的一张卡片"，与"编辑器占满剩余所有空间"相反。
+   */
+  it("只有笔记编辑器（知识库 id + 笔记 id 两段数字）满幅", () => {
+    expect(isFullBleedRoute("/notes/7/42")).toBe(true);
+    expect(isFullBleedRoute("/notes/1/1")).toBe(true);
+  });
+
+  it("二级页与列表页仍走文档流（要有留白）", () => {
+    expect(isFullBleedRoute("/notes/7")).toBe(false);
+    expect(isFullBleedRoute("/notes")).toBe(false);
+    expect(isFullBleedRoute("/notes/new")).toBe(false);
+    expect(isFullBleedRoute("/notes/7/overview")).toBe(false);
+    expect(isFullBleedRoute("/notes/7/members")).toBe(false);
+    expect(isFullBleedRoute("/notes/7/tasks")).toBe(false);
+  });
+
+  it("按整段数字判定，不接受非数字或尾随段", () => {
+    // 字面量 "notes" 曾经被 `[baseId]/[noteId]` 当 id 吃掉然后 notFound()，
+    // 判定口径必须与路由一致：只有纯数字才算命中
+    expect(isFullBleedRoute("/notes/abc/def")).toBe(false);
+    expect(isFullBleedRoute("/notes/7/42/extra")).toBe(false);
+    expect(isFullBleedRoute("/notes/7/42/")).toBe(false);
+    expect(isFullBleedRoute("/ai/chat")).toBe(false);
+    expect(isFullBleedRoute("/")).toBe(false);
   });
 });
 

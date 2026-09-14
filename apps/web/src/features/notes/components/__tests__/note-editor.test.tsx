@@ -93,12 +93,31 @@ describe("NoteEditor 布局与编辑器接线", () => {
     );
   });
 
-  it("编辑区占满工作区视口高度，而不是跟着内容长短变", async () => {
+  /**
+   * 回归：这一页曾经在正文外面套了一层 `rounded-lg bg-surface shadow-card`，
+   * 于是满幅内容区里浮着一张白卡片——与设计稿「编辑器占满剩余所有空间」相反。
+   * 满幅的背景与顶栏分隔线由 AppShell 的 isFullBleedRoute 保证，
+   * 这里盯住**面板自己不再画卡片**。
+   */
+  it("编辑面板不画卡片：没有圆角、没有投影，且吃掉剩余高度", async () => {
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
+
+    const panel = screen.getByTestId("note-panel");
+    expect(panel.className).not.toMatch(/rounded/);
+    expect(panel.className).not.toMatch(/shadow/);
+    // 满幅：吃满外层 flex 剩余高度，而不是靠"视口减固定值"去猜页头多高
+    expect(panel.className).toContain("flex-1");
+    expect(panel.className).toContain("min-h-0");
+  });
+
+  it("面板高度不再用 h-[calc(100svh-…)] 猜，改由外层 flex 决定", async () => {
     const { container } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
     await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
 
     const shell = container.firstElementChild as HTMLElement;
-    expect(shell.className).toContain("h-[calc(100svh-9rem)]");
+    expect(shell.className).not.toContain("100svh");
+    expect(shell.className).toContain("flex-1");
     // 没有 min-h-0，flex 子项会被内容撑开，编辑器内部就滚不起来
     expect(shell.className).toContain("min-h-0");
   });
@@ -108,10 +127,12 @@ describe("NoteEditor 布局与编辑器接线", () => {
     await waitFor(() => expect(editorProps).toHaveBeenCalled());
 
     const props = editorProps.mock.calls.at(-1)?.[0];
-    // `fill` 是把高度交给外层 flex 的信号；这一版改为由中间的滚动列统一承担，
+    // `fill` 是把高度交给外层 flex 的信号；这一版由中间的滚动列统一承担，
     // 编辑器本身不再自己撑满视口，否则标题与元信息行会被顶出可视区。
     expect(props).toMatchObject({ preset: "full" });
     expect(props.fill).toBeUndefined();
+    // 正文列自己就是对齐基准（标题/元信息/正文左缘同一条线），编辑器不再叠内边距
+    expect(props.flush).toBe(true);
   });
 
   it("标题与元信息行在正文之上，字数落在正文末尾", async () => {

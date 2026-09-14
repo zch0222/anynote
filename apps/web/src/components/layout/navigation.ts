@@ -151,6 +151,20 @@ export function isRouteActive(pathname: string, href: string) {
   return pathname === root || pathname.startsWith(`${root}/`);
 }
 
+/**
+ * 满幅路由：内容区**不留内边距**，由页面自己吃到视口边缘的页面。
+ *
+ * 只有笔记编辑器：设计稿里它的顶栏分隔线与正文底色一直延伸到侧栏右侧与窗口右缘，
+ * 外面再套一层 20/32px 的留白，正文就成了一块浮在灰底上的卡片——
+ * 与「编辑器占满剩余所有空间」正好相反。
+ *
+ * 必须按**数字段**判定：`/notes/7/42` 是编辑器，而 `/notes/7/overview`、
+ * `/notes/7/members` 这些二级页是普通文档流页面，仍然要有留白。
+ */
+export function isFullBleedRoute(pathname: string): boolean {
+  return /^\/notes\/\d+\/\d+$/.test(pathname);
+}
+
 export function getWorkspaceRoute(pathname: string) {
   if (pathname === newNoteRoute.href) return newNoteRoute;
   return workspaceRoutes.find((route) => isRouteActive(pathname, route.href));

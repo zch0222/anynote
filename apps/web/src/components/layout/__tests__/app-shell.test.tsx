@@ -88,6 +88,61 @@ beforeEach(() => {
 });
 
 describe("AppShell 交互", () => {
+  /**
+   * 满幅页面（笔记编辑器）不能有内容区留白。
+   *
+   * 设计稿里这一页的顶栏分隔线与正文底色一直铺到侧栏右侧与窗口右缘；
+   * 外面套一层 `px-5 pb-5 sm:px-8`，正文就缩成"灰底上浮着的一张卡片"，
+   * 与「编辑器占满剩余所有空间」正好相反——而这一层内边距在 AppShell 里，
+   * 不在编辑器组件里，改编辑器时很容易漏掉。
+   */
+  it("笔记编辑器路由的内容区不留内边距，且是确定高度的 flex 列", () => {
+    for (const route of ["/notes/7/42", "/notes/1/2"]) {
+      pathname.current = route;
+      const { unmount } = render(
+        <AppShell>
+          <h1>编辑器</h1>
+        </AppShell>,
+      );
+      const content = document.getElementById("workspace-content");
+      expect(content, `${route} 缺少内容区`).not.toBeNull();
+      expect(content?.className, `${route} 内容区不该有内边距`).not.toMatch(/\bpx-|\bpb-|\bpy-/);
+      // 满幅页面自己 flex-1 吃满剩余高度，需要确定高度链才滚得起来
+      expect(content?.className).toContain("flex-1");
+      expect(content?.className).toContain("min-h-0");
+      expect(content?.className).toContain("flex-col");
+      unmount();
+    }
+  });
+
+  it("其它页面仍保留内容区留白", () => {
+    pathname.current = "/notes";
+    render(
+      <AppShell>
+        <h1>知识库</h1>
+      </AppShell>,
+    );
+    const content = document.getElementById("workspace-content");
+    expect(content?.className).toMatch(/\bpx-5\b/);
+    expect(content?.className).toMatch(/\bpb-5\b/);
+    expect(content?.className).toContain("sm:px-8");
+  });
+
+  it("满幅页面把内容列底色换成卡片白，避免灰底从缝隙里透出来", () => {
+    pathname.current = "/notes/7/42";
+    const { unmount } = render(
+      <AppShell>
+        <h1>编辑器</h1>
+      </AppShell>,
+    );
+    // 侧栏右侧那一列是编辑器的白底；非满幅页面用灰底衬托卡片。
+    // 只看内容区所属的那一层——`.bg-grouped` 在顶栏/侧栏里也出现，全局查会误判。
+    const inset = document.getElementById("workspace-content")?.parentElement;
+    expect(inset?.className).toContain("bg-surface");
+    expect(inset?.className).not.toContain("bg-grouped");
+    unmount();
+  });
+
   it("侧栏把知识库铺成一级入口，而不是四个平铺的静态页", async () => {
     render(
       <AppShell>

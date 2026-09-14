@@ -1,14 +1,23 @@
 /* TipTap 编辑器样式：容器 / 工具栏 / 气泡菜单 / Slash 菜单 / 自定义节点 / Shiki 高亮。
-   纯 CSS（不使用 @apply），避免依赖 Tailwind 的编译上下文；颜色一律走 globals.css 的 token。 */
+   纯 CSS（不使用 @apply），避免依赖 Tailwind 的编译上下文。
+
+   颜色一律引用 `globals.css` 的语义 Token。
+   **注意变量名**：本套设计系统用的是 `--separator` / `--surface-block` /
+   `--label-primary` 这一套名字，**不是** shadcn v3 的 `--border` / `--muted` /
+   `--foreground`。写错了不会报错——CSS 对未定义的 `var()` 只让整条声明失效
+   （invalid at computed-value time），于是代码块会静默变成没有底色边框的裸文字。
+   改动本文件后请跑 `node scripts/check-css-tokens.mjs`（已接进 `pnpm --filter web test`）。 */
 
 /* ---------- 容器 ---------- */
+/*
+ * 编辑器本身**不画卡片**：底、边框、圆角都由页面决定。
+ *
+ * 曾有 border + 圆角 + `--card` 底色，笔记页因此在正文区里又套了一层卡片，
+ * 与设计稿「编辑器占满剩余所有空间」冲突。这里只保留排版所需的 flex 列。
+ */
 .anynote-editor {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background-color: var(--card);
-  overflow: hidden;
 }
 
 .anynote-editor[data-preset="readonly"] {
@@ -28,12 +37,20 @@
   padding: 1rem 1.25rem;
   min-height: 320px;
   outline: none;
+  /* 正文底色跟着页面走：设计稿里纸面与内容区是同一层，没有第二层底板 */
+  color: var(--label-primary);
 }
 
 /* data-fill：外层已经把编辑器约束到确定高度（如笔记页占满视口）。
    正文撑满可滚动区，正文下方的空白处点击也能聚焦到编辑器末尾。 */
 .anynote-editor[data-fill="true"] .anynote-editor__content {
   min-height: 100%;
+}
+
+/* data-flush：正文不再自带内边距，由页面决定留白（笔记页的正文列自带 padding，
+   再叠一层会让标题与正文对不齐）。 */
+.anynote-editor[data-flush="true"] .anynote-editor__content {
+  padding: 0;
 }
 
 .anynote-editor[data-preset="readonly"] .anynote-editor__content {
@@ -51,8 +68,91 @@
   content: attr(data-placeholder);
   float: left;
   height: 0;
-  color: var(--muted-foreground);
+  color: var(--label-tertiary);
   pointer-events: none;
+}
+
+/* ---------- 正文排版 ----------
+   原先靠 Tailwind Typography 的 `.prose` 撑起排版，代价是 prose 会顺手接管
+   代码块 / 行内代码 / 引用 / 表格的底色与边框，逼着我们在别处用更高特异度
+   一条条复写回来（两个样式表谁先加载都不能赌）。这里直接自己写这套规则：
+   节点少、取值全部走 Token、没有需要"复位"的对手。
+   规则与设计稿的字阶对齐（Body 15/24、Display 34/41、Title 22/28）。 */
+.anynote-editor__content > * + * {
+  margin-top: 0.75rem;
+}
+
+.anynote-editor__content p {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  color: var(--label-primary);
+}
+
+.anynote-editor__content h1 {
+  margin-top: 1.5rem;
+  font-size: 1.75rem;
+  line-height: 2.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--label-primary);
+}
+
+.anynote-editor__content h2 {
+  margin-top: 1.5rem;
+  font-size: var(--text-title);
+  line-height: var(--text-title--line-height);
+  font-weight: var(--text-title--font-weight);
+  letter-spacing: var(--text-title--letter-spacing);
+  color: var(--label-primary);
+}
+
+.anynote-editor__content h3 {
+  margin-top: 1.25rem;
+  font-size: var(--text-headline);
+  line-height: var(--text-headline--line-height);
+  font-weight: var(--text-headline--font-weight);
+  color: var(--label-primary);
+}
+
+.anynote-editor__content ul,
+.anynote-editor__content ol {
+  padding-left: 1.375rem;
+}
+
+.anynote-editor__content ul {
+  list-style: disc;
+}
+
+.anynote-editor__content ol {
+  list-style: decimal;
+}
+
+.anynote-editor__content li + li {
+  margin-top: 0.25rem;
+}
+
+.anynote-editor__content a {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.anynote-editor__content hr {
+  margin: 1.5rem 0;
+  border: none;
+  border-top: 1px solid var(--separator);
+}
+
+.anynote-editor__content blockquote {
+  padding-left: 1rem;
+  border-left: 3px solid var(--separator);
+  color: var(--label-secondary);
+}
+
+.anynote-editor__content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
 }
 
 /* ---------- 工具栏 ---------- */
@@ -65,8 +165,8 @@
   align-items: center;
   gap: 2px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  background-color: var(--muted);
+  border-bottom: 1px solid var(--separator);
+  background-color: var(--surface-block);
 }
 
 .anynote-toolbar__button,
@@ -77,22 +177,22 @@
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: calc(var(--radius) * 0.6);
+  border-radius: var(--radius-sm);
   background-color: transparent;
-  color: var(--muted-foreground);
+  color: var(--label-secondary);
   cursor: pointer;
 }
 
 .anynote-toolbar__button:hover,
 .anynote-bubble-menu__button:hover {
-  background-color: var(--accent);
-  color: var(--accent-foreground);
+  background-color: var(--accent-tint);
+  color: var(--label-primary);
 }
 
 .anynote-toolbar__button.is-active,
 .anynote-bubble-menu__button.is-active {
-  background-color: var(--primary);
-  color: var(--primary-foreground);
+  background-color: var(--accent-primary);
+  color: #ffffff;
 }
 
 .anynote-toolbar__button:disabled {
@@ -115,7 +215,7 @@
   width: 1px;
   height: 18px;
   margin: 0 4px;
-  background-color: var(--border);
+  background-color: var(--separator);
 }
 
 .anynote-toolbar__spacer {
@@ -124,7 +224,7 @@
 
 .anynote-toolbar__count {
   font-size: 12px;
-  color: var(--muted-foreground);
+  color: var(--label-secondary);
 }
 
 /* ---------- 气泡菜单 ---------- */
@@ -133,10 +233,10 @@
   align-items: center;
   gap: 2px;
   padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.8);
-  background-color: var(--popover);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-elevated);
+  box-shadow: var(--shadow-popover);
 }
 
 /* ---------- Slash 菜单 ---------- */
@@ -145,16 +245,16 @@
   max-height: 280px;
   overflow: auto;
   padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.8);
-  background-color: var(--popover);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-elevated);
+  box-shadow: var(--shadow-popover);
 }
 
 .anynote-slash-menu--empty {
   padding: 10px;
   font-size: 12px;
-  color: var(--muted-foreground);
+  color: var(--label-secondary);
 }
 
 .anynote-slash-menu__list {
@@ -170,50 +270,54 @@
   width: 100%;
   padding: 6px 8px;
   border: none;
-  border-radius: calc(var(--radius) * 0.6);
+  border-radius: var(--radius-sm);
   background-color: transparent;
   text-align: left;
   cursor: pointer;
 }
 
 .anynote-slash-menu__item.is-selected {
-  background-color: var(--accent);
+  background-color: var(--accent-tint);
 }
 
 .anynote-slash-menu__title {
   font-size: 13px;
-  color: var(--foreground);
+  color: var(--label-primary);
 }
 
 .anynote-slash-menu__description {
   font-size: 11px;
-  color: var(--muted-foreground);
+  color: var(--label-secondary);
 }
 
-/* ---------- 代码 / 代码块 ----------
-   Tailwind Typography 的 prose 会给 pre 套深色底、给行内 code 加反引号伪元素，
-   与自定义代码块冲突。这里用「祖先类 + 自身类」把特异度抬到 prose 之上再复位，
-   不依赖两个样式表谁先加载。 */
-.anynote-editor .anynote-editor__content code::before,
-.anynote-editor .anynote-editor__content code::after {
-  content: none;
-}
-
+/* ---------- 代码 / 代码块 ---------- */
+/*
+ * 行内代码：浅底 + 等宽。
+ * 不再需要复位反引号伪元素——`prose` 已经不参与排版（见上方「正文排版」）。
+ */
 .anynote-editor .anynote-editor__content :not(pre) > code {
   padding: 0.15em 0.35em;
-  border-radius: 4px;
-  background-color: var(--muted);
-  color: var(--foreground);
+  border-radius: var(--radius-xs);
+  background-color: var(--surface-block);
+  color: var(--label-primary);
   font-family: var(--font-mono, ui-monospace, "SFMono-Regular", monospace);
   font-size: 0.875em;
   font-weight: 500;
 }
 
+/*
+ * 代码块容器：一块浅底 + 发丝边 + 中圆角，明暗两态都成立。
+ *
+ * 这三条正是本文件此前静默失效的地方：`--muted` / `--border` / `--radius`
+ * 在本套设计系统里都不存在，`var()` 解析失败使 background-color、border、
+ * border-radius 三条声明**整条作废**——代码块于是变成一段没有底色、没有边框、
+ * 没有圆角的裸文字，且深浅两态都一样（因为两态都取不到值）。
+ */
 .anynote-code-block {
   margin: 0.75rem 0;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.8);
-  background-color: var(--muted);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-block);
   overflow: hidden;
 }
 
@@ -221,13 +325,13 @@
   display: flex;
   justify-content: flex-end;
   padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--separator);
 }
 
 .anynote-code-block__language {
   border: none;
   background-color: transparent;
-  color: var(--muted-foreground);
+  color: var(--label-secondary);
   font-size: 11px;
 }
 
@@ -237,7 +341,7 @@
   border: none;
   border-radius: 0;
   background-color: transparent;
-  color: var(--foreground);
+  color: var(--label-primary);
   font-family: var(--font-mono, ui-monospace, "SFMono-Regular", monospace);
   font-size: 13px;
   line-height: 1.6;
@@ -247,7 +351,8 @@
 }
 
 /* Shiki 分词结果以行内装饰贴在正文上：这里只决定明暗主题各取哪个变量，
-   颜色值本身在装饰 span 的 style 里（--shiki-light / --shiki-dark）。 */
+   颜色值本身在装饰 span 的 style 里（--shiki-light / --shiki-dark）。
+   两个变量都落在 `.anynote-editor` 作用域内，不依赖 `.dark` 祖先之外的选择器。 */
 .anynote-code-block__editor .anynote-code-token {
   color: var(--shiki-light);
 }
@@ -262,7 +367,7 @@
   padding: 8px 12px;
   border-left-width: 3px;
   border-left-style: solid;
-  border-radius: calc(var(--radius) * 0.6);
+  border-radius: var(--radius-sm);
   font-style: normal;
 }
 
@@ -312,12 +417,12 @@
 .anynote-editor__content th,
 .anynote-editor__content td {
   padding: 6px 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--separator);
   vertical-align: top;
 }
 
 .anynote-editor__content th {
-  background-color: var(--muted);
+  background-color: var(--surface-block);
   font-weight: 600;
 }
 
@@ -330,10 +435,10 @@
   gap: 8px;
   margin: 0.75rem 0;
   padding: 10px 12px;
-  border: 1px dashed var(--border);
-  border-radius: calc(var(--radius) * 0.8);
-  background-color: var(--muted);
-  color: var(--muted-foreground);
+  border: 1px dashed var(--separator);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-block);
+  color: var(--label-secondary);
   font-size: 12px;
   user-select: none;
 }
@@ -344,8 +449,8 @@
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-  border: 2px solid var(--border);
-  border-top-color: var(--primary);
+  border: 2px solid var(--separator);
+  border-top-color: var(--accent-primary);
   border-radius: 50%;
   animation: anynote-image-upload-spin 0.8s linear infinite;
 }
@@ -381,19 +486,19 @@
 /* ---------- 双链 / AI 块 ---------- */
 .anynote-editor__content .anynote-wikilink {
   padding: 0 4px;
-  border-radius: 4px;
-  background-color: var(--accent);
-  color: var(--accent-foreground);
+  border-radius: var(--radius-xs);
+  background-color: var(--accent-tint);
+  color: var(--accent-primary);
   cursor: pointer;
 }
 
 .anynote-editor__content .anynote-ai-block {
   margin: 0.75rem 0;
   padding: 10px 12px;
-  border: 1px dashed var(--border);
-  border-radius: calc(var(--radius) * 0.8);
-  background-color: var(--muted);
-  color: var(--muted-foreground);
+  border: 1px dashed var(--separator);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-block);
+  color: var(--label-secondary);
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 12px;
   white-space: pre-wrap;
@@ -402,7 +507,7 @@
 /* ---------- 数学公式（KaTeX 懒加载 NodeView） ---------- */
 .anynote-editor__content .anynote-math-inline {
   padding: 0 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .anynote-editor__content .anynote-math-block {
@@ -413,7 +518,7 @@
 
 .anynote-editor__content .anynote-math-inline.ProseMirror-selectednode,
 .anynote-editor__content .anynote-math-block.ProseMirror-selectednode {
-  background-color: var(--accent);
+  background-color: var(--accent-tint);
 }
 
 /* ---------- 只读渲染的数学公式微调 ---------- */

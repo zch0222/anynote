@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -29,6 +28,7 @@
   --color-surface: var(--surface-primary);
   --color-elevated: var(--surface-elevated);
   --color-sidebar: var(--surface-sidebar);
+  --color-block: var(--surface-block);
   --color-separator: var(--separator);
 
   /* —— 语义色（文字） —— */
@@ -123,6 +123,13 @@
   --surface-primary: #ffffff;
   --surface-elevated: #ffffff;
   --surface-sidebar: #f7f7f9;
+  /*
+   * 正文里的「块级浅底」：代码块、行内代码、引用块、上传占位。
+   * 取值抄设计稿第 4 页的引用块取样（浅色 #F7F7F9 / 深色 #1C1C1E）——
+   * 这两级恰好横跨另外两套 Token（浅色等于 bg/sidebar、深色等于 bg/grouped），
+   * 没有现成的名字能同时表达，所以单独立一个，不与页面底色混用。
+   */
+  --surface-block: #f7f7f9;
 
   --separator: #e5e5ea;
 
@@ -148,6 +155,7 @@
   --surface-primary: #1c1c1e;
   --surface-elevated: #1c1c1e;
   --surface-sidebar: #17171a;
+  --surface-block: #1c1c1e;
 
   --separator: #3a3a3c;
 

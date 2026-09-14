@@ -353,17 +353,77 @@ test.describe("笔记列表与编辑器版式", () => {
     await expect(page.getByLabel("笔记标题")).toBeVisible();
     await expect(page.getByTestId("note-char-count")).toHaveText(/\d+ 字/);
 
-    // 正文纸面限宽：一行超过约 75 字符后回行会丢行，所以容器必须有 max-width
+    // 正文纸面限宽：一行超过约 75 字符后回行会丢行，所以容器必须有 max-width。
+    // 1000px 是设计稿实测值（1440 视口下正文列 x 368→1367.5，正好 1000）。
     const articleWidth = await page.evaluate(() => {
       const article = document.querySelector<HTMLElement>('[data-testid="note-document"]');
       return article ? article.getBoundingClientRect().width : null;
     });
     expect(articleWidth).not.toBeNull();
-    expect(articleWidth ?? 0).toBeLessThanOrEqual(820);
+    expect(articleWidth ?? 0).toBeLessThanOrEqual(1010);
     // 也不该窄成一条——限宽不等于缩水
     expect(articleWidth ?? 0).toBeGreaterThan(400);
 
     await expectNoHorizontalScroll(page);
+  });
+
+  /**
+   * 回归：编辑页曾经在满幅内容区里又套了一层 `rounded-lg bg-surface shadow-card`，
+   * 于是正文变成"灰底上浮着的一张白卡片"，与设计稿「编辑器占满剩余所有空间」相反。
+   *
+   * 设计稿实测（1440×900）：内容区 x 296→1439.5 是一整块连续底色，
+   * 顶栏下方只有一条 1px 分隔线（CSS y=53），没有圆角、没有投影、没有灰底衬托。
+   */
+  test("笔记编辑器满幅铺满内容区，不是浮在灰底上的一张卡片", async ({ page }) => {
+    expect(baseUrl, "上一条用例未能定位知识库").not.toBe("");
+    await page.goto(baseUrl);
+    const firstRow = page.getByTestId("note-list-items").getByRole("link").first();
+    await expect(firstRow).toBeVisible({ timeout: 30_000 });
+    await firstRow.click();
+    await expect(page.locator(EDITOR_SURFACE)).toBeVisible({ timeout: 30_000 });
+
+    const geometry = await page.evaluate(() => {
+      const pick = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) return null;
+        const style = getComputedStyle(element);
+        const box = element.getBoundingClientRect();
+        return {
+          x: Math.round(box.x),
+          right: Math.round(box.right),
+          width: Math.round(box.width),
+          height: Math.round(box.height),
+          radius: style.borderRadius,
+          shadow: style.boxShadow,
+          background: style.backgroundColor,
+        };
+      };
+      const inset = document.getElementById("workspace-content")?.parentElement ?? null;
+      return {
+        panel: pick('[data-testid="note-panel"]'),
+        content: pick("#workspace-content"),
+        insetBackground: inset ? getComputedStyle(inset).backgroundColor : null,
+        sidebar: pick('[data-slot="sidebar"]') ?? pick("nav"),
+      };
+    });
+
+    expect(geometry.panel).not.toBeNull();
+    expect(geometry.content).not.toBeNull();
+
+    // 不画卡片：没有圆角、没有投影
+    expect(geometry.panel?.radius).toBe("0px");
+    expect(geometry.panel?.shadow).toBe("none");
+
+    // 满幅：面板与内容区同宽同起点（内容区不再给编辑页留内边距）
+    expect(geometry.panel?.width).toBe(geometry.content?.width);
+    expect(geometry.panel?.x).toBe(geometry.content?.x);
+
+    // 面板底色与它所在的内容列一致：没有第二层底板从缝隙里透出来
+    expect(geometry.panel?.background).toBe(geometry.insetBackground);
+
+    // 真正吃满剩余高度：面板高度应接近（视口 − 顶栏）而不是被内容撑到某个固定值
+    const viewport = page.viewportSize();
+    expect(geometry.panel?.height ?? 0).toBeGreaterThan((viewport?.height ?? 0) * 0.6);
   });
 
   test("编辑器左侧目录在侧栏里，且高亮当前那篇", async ({ page }) => {
