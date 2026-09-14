@@ -1,7 +1,7 @@
 "use client";
 
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DEFAULT_PAGE_SIZE, type NoteListItem } from "@/features/notes/schemas";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { useNotesQuery } from "@/features/notes/use-notes";
@@ -49,7 +49,7 @@ export function NoteList({ baseId }: { baseId: number }) {
       </header>
 
       {notes.isPending ? (
-        <NoteListSkeleton />
+        <ListRowsSkeleton />
       ) : notes.isError ? (
         <p role="alert" className="rounded-lg bg-danger/5 p-6 text-footnote text-danger">
           笔记加载失败：{notes.error.message}
@@ -123,15 +123,5 @@ function NoteRow({ baseId, note }: { baseId: number; note: NoteListItem }) {
         {formatRelativeTime(touched)}
       </span>
     </Link>
-  );
-}
-
-function NoteListSkeleton() {
-  return (
-    <div className="space-y-2" aria-busy="true">
-      {["a", "b", "c", "d", "e"].map((key) => (
-        <Skeleton key={key} className="h-14 rounded-lg" />
-      ))}
-    </div>
   );
 }

@@ -3,8 +3,8 @@
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import type { CollaborationBinding } from "@/components/editor/presets/types";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { PanelSkeleton } from "@/components/loading/skeletons";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { CollabPresence, CollabStatusBadge } from "@/features/collab/components/collab-status";
 import { useCollabIndex } from "@/features/collab/use-collab-index";
 import { useCollabRoom } from "@/features/collab/use-collab-room";
@@ -99,10 +99,8 @@ export function MobileDocWorkspace({ docId }: { docId: string }) {
           />
         </>
       ) : (
-        <div className="space-y-3 p-4" aria-busy="true">
-          <Skeleton className="h-8 w-2/3" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
+        <div className="p-4">
+          <PanelSkeleton />
         </div>
       )}
     </MobileScreen>

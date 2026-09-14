@@ -1,16 +1,25 @@
 "use client";
 
+import { Spinner } from "@/components/loading/spinner";
 import type { NoteSaveStatus } from "@/features/notes/use-save-note";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Check, CloudOff, GitCompareArrows, Loader2, PenLine } from "lucide-react";
+import { AlertTriangle, Check, CloudOff, GitCompareArrows, PenLine } from "lucide-react";
 
 const presentation: Record<
   NoteSaveStatus,
-  { label: string; icon: typeof Check; className: string; spin?: boolean }
+  {
+    label: string;
+    className: string;
+    /**
+     * 状态图标。`saving` 不在此列：转圈是全站统一的 `Spinner`，
+     * 不再借 lucide 的 `Loader2` + `animate-spin` 自己拼一个转圈。
+     */
+    icon?: typeof Check;
+  }
 > = {
   saved: { label: "已保存", icon: Check, className: "text-success" },
   pending: { label: "待保存", icon: PenLine, className: "text-label-secondary" },
-  saving: { label: "保存中", icon: Loader2, className: "text-label-secondary", spin: true },
+  saving: { label: "保存中", className: "text-label-secondary" },
   offline: { label: "离线，改动已暂存", icon: CloudOff, className: "text-warning" },
   error: { label: "保存失败，正在重试", icon: AlertTriangle, className: "text-danger" },
   conflict: { label: "内容有冲突", icon: GitCompareArrows, className: "text-danger" },
@@ -31,7 +40,7 @@ export function SaveStatusBadge({
   lastSavedAt?: Date | null;
   className?: string;
 }) {
-  const { label, icon: Icon, className: tone, spin } = presentation[status];
+  const { label, icon: Icon, className: tone } = presentation[status];
   const savedAt =
     status === "saved" && lastSavedAt
       ? `${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt
@@ -49,7 +58,11 @@ export function SaveStatusBadge({
         className,
       )}
     >
-      <Icon className={cn("size-3.5", spin && "animate-spin")} aria-hidden="true" />
+      {status === "saving" || !Icon ? (
+        <Spinner size="badge" />
+      ) : (
+        <Icon className="size-3.5" aria-hidden="true" />
+      )}
       {savedAt ? `${label} ${savedAt}` : label}
     </output>
   );

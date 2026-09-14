@@ -9,6 +9,7 @@ import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
 import { CommandPalette } from "./command-palette";
 import { isFullBleedRoute } from "./navigation";
+import { RouteProgressBar } from "./route-progress-bar";
 import { WorkspaceSession } from "./workspace-session";
 
 /**
@@ -60,6 +61,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         className={fullBleed ? "h-svh min-w-0 overflow-hidden bg-surface" : "min-w-0 bg-grouped"}
       >
         <AppHeader />
+        {/*
+          路由进度条紧跟顶栏：`sticky top-14` 与顶栏的 `min-h-14` 对齐，
+          长页面滚动时它随顶栏一起留在视口顶部，不会滑出视野。
+        */}
+        <RouteProgressBar />
         <div
           id="workspace-content"
           tabIndex={-1}

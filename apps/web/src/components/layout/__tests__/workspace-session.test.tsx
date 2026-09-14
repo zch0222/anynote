@@ -42,7 +42,7 @@ describe("WorkspaceSession 会话闸门", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
-  it("加载中先给可读的占位，不闪空白", () => {
+  it("加载中给品牌启动（不是两块灰条 + 一行裸文字），且读屏播报得到", async () => {
     fetchMock.mockReturnValue(new Promise(() => {}));
     renderWithProviders(
       <WorkspaceSession>
@@ -50,8 +50,15 @@ describe("WorkspaceSession 会话闸门", () => {
       </WorkspaceSession>,
     );
 
+    // 会话未知 = 真正的「全屏初始化」，设计稿 P16 指定的唯一形态
     expect(screen.queryByRole("heading", { name: "私有页面" })).not.toBeInTheDocument();
-    expect(screen.getByText("正在加载工作区")).toBeInTheDocument();
+    // BrandBoot 自己带 120ms 的防抖（快速请求不该闪一下启动页），所以要等它出现
+    const boot = await screen.findByRole("status", {}, { timeout: 2000 });
+    expect(boot.textContent).toContain("正在准备工作区");
+    // 品牌三件套里的 Logo 必须在
+    expect(document.querySelector('[data-slot="brand-logo"]')).not.toBeNull();
+    // 旧的裸骨架不该再出现
+    expect(document.querySelector('[data-slot="skeleton"]')).toBeNull();
   });
 
   it("会话失效（BFF 刷新后仍 401）回退到登录页", async () => {

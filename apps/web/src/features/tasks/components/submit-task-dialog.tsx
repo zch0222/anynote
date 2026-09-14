@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/loading/spinner";
 import { KnowledgeBaseSelect } from "@/components/shared/knowledge-base-select";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +17,6 @@ import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { useNotesQuery } from "@/features/notes/use-notes";
 import type { MemberTask } from "@/features/tasks/schemas";
 import { useSubmitTaskMutation } from "@/features/tasks/use-tasks";
-import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -103,9 +103,7 @@ export function SubmitTaskDialog({
                     }}
                     data-testid={`submit-note-${note.id}`}
                   >
-                    {noteId === note.id ? (
-                      <Loader2 className="size-3.5 shrink-0" aria-hidden="true" />
-                    ) : null}
+                    {noteId === note.id ? <Spinner size="badge" /> : null}
                     <span className="min-w-0 flex-1 truncate">{note.title ?? "未命名笔记"}</span>
                   </button>
                 ))}

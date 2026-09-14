@@ -45,6 +45,12 @@
   --color-organization: var(--state-organization);
   --color-info: var(--state-info);
 
+  /* —— 加载体系（设计稿 P12-16）——
+   * 骨架块必须比宿主底色**高一档**：旧的 `bg-grouped` 在浅色分组底（#F2F2F7）上
+   * 等于隐形，卡片骨架整片看不见。所以单独立一个 base，不借用任何页面底色。 */
+  --color-skeleton: var(--skeleton-base);
+  --color-skeleton-sheen: var(--skeleton-sheen);
+
   /* —— shadcn/ui 兼容层 ——
    * components/ui/ 下的 vendored 原件按这套名字消费，保持一一映射即可，
    * 页面代码一律用上面的语义名。 */
@@ -114,6 +120,136 @@
   /* 层级 · 卡片与浮层是两个高度 */
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.06);
   --shadow-popover: 0 8px 32px rgb(0 0 0 / 0.16), 0 2px 8px rgb(0 0 0 / 0.08);
+
+  /*
+   * 动效 · 加载体系（设计稿 P13-P16 把节奏写死为契约，这里落成唯一一份时长）
+   *
+   * 时长不是随便取的：骨架扫光 1.4s、转圈 0.8s、思考三点 1.2s、品牌启动 1.6s，
+   * 与设计稿逐条对应。改任何一个都要回设计稿确认——它们是"看起来在动"的全部依据。
+   */
+  --animate-shimmer: skeleton-shimmer 1.4s ease-in-out infinite;
+  --animate-breathe: skeleton-breathe 1.6s ease-in-out infinite;
+  --animate-spin-loading: loading-spin 0.8s linear infinite;
+  --animate-think-dot: think-dot 1.2s ease-in-out infinite;
+  --animate-caret-blink: caret-blink 1s step-end infinite;
+  --animate-boot-bar: boot-bar 3s ease-out forwards;
+  /*
+   * 品牌启动的 Logo 描边：三个笔段共用 1.6s 的时间轴，各自在自己的窗口里绘制，
+   * 其余时间停在"未落笔"（dashoffset=100）。
+   *
+   * 刻意**不用 animation-delay 错峰**：延迟只影响第一轮，第二轮起三段会漂移，
+   * 而设计稿要的是"永远按 左页 → 右页 → 书脊 的顺序无限循环"。
+   * 把相位写进同一份 keyframes 才是无状态且可测的。
+   */
+  --animate-logo-page-1: logo-draw-page-1 1.6s ease-in-out infinite;
+  --animate-logo-page-2: logo-draw-page-2 1.6s ease-in-out infinite;
+  --animate-logo-spine: logo-draw-spine 1.6s ease-in-out infinite;
+}
+
+/*
+ * 为什么 keyframes 写在 `@theme` **外面**：
+ * Tailwind v4 只把 `@theme` 里被 `--animate-*` 工具类引用到的 keyframes 打进产物，
+ * 而下面 reduced-motion 分支要用 `skeleton-breathe`、它并不在任何工具类里出现。
+ * 写在顶层则原样透传，两种用法都拿得到。命名与 `--animate-*` 一一对应，别改单边。
+ */
+
+/* 骨架扫光：highlight 从 -30% 扫到 130%（设计稿 P13 的扫光关键帧） */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -30% 0;
+  }
+  100% {
+    background-position: 130% 0;
+  }
+}
+
+/* 骨架呼吸：reduced-motion 下的降级形态，仍然能看出"在动" */
+@keyframes skeleton-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* 转圈：一周 360°，两态（转 / 停）不需要缓动，所以是 linear */
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* AI「思考中」三点：依次放大到 1.2 倍并把透明度从 0.2 提到 1，错峰 0.15s */
+@keyframes think-dot {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+/* 流式光标：step-end 是刻意的——光标应当"跳"，不是淡入淡出 */
+@keyframes caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* —— 品牌启动 Logo 的三段时间轴（% 对应 1.6s）——
+ *   0%–25%（0–0.40s） 左页落笔
+ *  34%–59%（0.55–0.94s）右页落笔
+ *  69%–94%（1.10–1.50s）书脊收笔，94%–100% 是收笔处的停顿
+ */
+@keyframes logo-draw-page-1 {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  25%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes logo-draw-page-2 {
+  0%,
+  34% {
+    stroke-dashoffset: 100;
+  }
+  59%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes logo-draw-spine {
+  0%,
+  69% {
+    stroke-dashoffset: 100;
+  }
+  94%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 顶栏进度条：3s 渐进制到 90%（真实完成由路由接管），最后一段留给"已就绪" */
+@keyframes boot-bar {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(0.9);
+  }
 }
 
 :root {
@@ -130,6 +266,17 @@
    * 没有现成的名字能同时表达，所以单独立一个，不与页面底色混用。
    */
   --surface-block: #f7f7f9;
+
+  /*
+   * 加载体系的骨架底色与扫光高光（设计稿 P13）。
+   *
+   * `--skeleton-base` 取值抄设计稿采样（浅 #E5E5EA / 深 #2C2C2E）：
+   * 它必须比**承载它的那一层**高一档。旧 Skeleton 用的 `bg-grouped` 在浅色分组底
+   * （#F2F2F7）上与背景几乎同色，卡片骨架整片隐形；换成 #E5E5EA 才拉开一档。
+   * sheen 是扫光扫过时那道亮带，比 base 再亮一档。
+   */
+  --skeleton-base: #e5e5ea;
+  --skeleton-sheen: #f7f7f9;
 
   --separator: #e5e5ea;
 
@@ -156,6 +303,10 @@
   --surface-elevated: #1c1c1e;
   --surface-sidebar: #17171a;
   --surface-block: #1c1c1e;
+
+  /* 深色下骨架要比承载层（#1C1C1E）亮一档，否则卡片骨架在深色里同样看不见 */
+  --skeleton-base: #2c2c2e;
+  --skeleton-sheen: #3a3a3c;
 
   --separator: #3a3a3c;
 
@@ -233,5 +384,42 @@
   .kb-cover-4 {
     --kb-from: #d842a1;
     --kb-to: #ff2d54;
+  }
+}
+
+/*
+ * 加载体系的 reduced-motion 降级（设计稿 P12 / P13 明确要求）。
+ *
+ * 关键决策：**降级不等于静止**。动效保留"正在进行"这唯一信息，只把幅度收掉：
+ *   - 骨架扫光 → 呼吸式淡入淡出（opacity 1 → 0.45，1.6s）
+ *   - 转圈弧   → 同样降为呼吸（持续旋转在减动效偏好下正是要避开的）
+ *   - 品牌启动 → Logo 三笔直接常显，不再循环描边
+ *   - 流式光标 → 常亮（闪烁本身就是"跳"，最该收掉的就是它）
+ * 静止处理会让加载态与"加载完但内容为空"变得无从区分。
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="skeleton"] {
+    animation: skeleton-breathe 1.6s ease-in-out infinite;
+    background-image: none;
+  }
+
+  [data-slot="spinner"] [data-spinner-arc],
+  [data-slot="boot-logo"] [data-logo-stroke] {
+    animation: skeleton-breathe 1.6s ease-in-out infinite;
+  }
+
+  /* 描边动画停在下笔完成的那一帧（dashoffset=0），Logo 仍然是完整形状 */
+  [data-slot="boot-logo"] [data-logo-stroke] {
+    stroke-dashoffset: 0;
+  }
+
+  [data-slot="stream-caret"] {
+    animation: none;
+    opacity: 1;
+  }
+
+  [data-slot="boot-bar"] {
+    animation: none;
+    transform: scaleX(0.9);
   }
 }

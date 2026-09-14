@@ -3,6 +3,7 @@
 import { TiptapEditor, type TiptapEditorProps } from "@/components/editor/TiptapEditor";
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
 import type { AiContinueFn } from "@/components/editor/presets/types";
+import { EditorSkeleton } from "@/components/loading/skeletons";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
 import { SaveStatusBadge } from "@/components/note/save-status";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DEFAULT_PAGE_SIZE, toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -198,10 +198,8 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
         */}
         <div data-testid="note-scroll" className="min-h-0 flex-1 overflow-y-auto">
           {note.isPending || initialContent === null ? (
-            <div className="mx-auto w-full max-w-[calc(62.5rem+9rem)] space-y-4 px-6 py-10 sm:px-8 lg:px-18">
-              <Skeleton className="h-10 w-1/2" />
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-64 w-full rounded-lg" />
+            <div className="mx-auto w-full max-w-[calc(62.5rem+9rem)] px-6 py-10 sm:px-8 lg:px-18">
+              <EditorSkeleton />
             </div>
           ) : (
             /*

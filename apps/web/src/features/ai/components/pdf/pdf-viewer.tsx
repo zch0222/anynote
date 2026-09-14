@@ -1,18 +1,13 @@
 "use client";
 
-import { Skeleton } from "@/components/ui/skeleton";
+import { DocumentSkeleton } from "@/components/loading/skeletons";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 
 // pdfjs 不能进 SSR 包，与 TiptapEditor 同样的懒加载策略
 const PdfDocument = dynamic(() => import("./pdf-document").then((mod) => mod.PdfDocument), {
   ssr: false,
-  loading: () => (
-    <div className="space-y-3 p-6">
-      <Skeleton className="h-8 w-2/3" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  ),
+  loading: () => <DocumentSkeleton />,
 });
 
 export type PdfViewerProps = {

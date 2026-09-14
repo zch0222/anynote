@@ -5,10 +5,10 @@ import type { UploadFn } from "@/components/editor/extensions/anynote-image";
 import type { AiContinueFn } from "@/components/editor/presets/types";
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { EditorSkeleton } from "@/components/loading/skeletons";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
 import { SaveStatusBadge } from "@/components/note/save-status";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -175,9 +175,8 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
       contentClassName="min-h-0"
     >
       {note.isPending || initialContent === null ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 p-4" aria-busy="true">
-          <Skeleton className="h-10 w-2/3 shrink-0" />
-          <Skeleton className="min-h-0 flex-1 rounded-xl" />
+        <div className="flex min-h-0 flex-1 flex-col p-4">
+          <EditorSkeleton className="min-h-0 flex-1" />
         </div>
       ) : (
         <>

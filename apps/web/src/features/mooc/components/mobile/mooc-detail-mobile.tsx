@@ -2,6 +2,7 @@
 
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VideoPlayer } from "@/features/mooc/components/video-player";
@@ -51,10 +52,7 @@ export function MobileMoocDetail({ moocId }: { moocId: number }) {
 
         <TabsContent value="catalog" className="pt-3">
           {items.isPending ? (
-            <div className="space-y-2" aria-busy="true">
-              <Skeleton className="h-12 rounded-lg" />
-              <Skeleton className="h-12 rounded-lg" />
-            </div>
+            <ListRowsSkeleton count={2} />
           ) : items.isError ? (
             <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
               条目加载失败：{items.error.message}
@@ -200,6 +198,8 @@ function MoocItemPanel({ moocId, item }: { moocId: number; item: MoocItem }) {
       </h2>
       {isVideo ? (
         objectUrl.isPending ? (
+          // 视频位保留 16:9 播放器比例：DocumentSkeleton 是 A4 竖版纸面，
+          // 塞进视频槽位会在加载完成时整块塌缩（形状要跟着宿主走）。
           <Skeleton className="aspect-video w-full rounded-lg" />
         ) : objectUrl.isError || !objectUrl.data?.url ? (
           <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">

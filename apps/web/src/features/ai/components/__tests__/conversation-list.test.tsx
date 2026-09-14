@@ -33,7 +33,8 @@ describe("ConversationList", () => {
   it("加载中渲染骨架", () => {
     mockConversations(PENDING);
     const { container } = renderWithProviders(<ConversationList activeId={0} />);
-    expect(container.querySelector(".animate-pulse")).toBeTruthy();
+    // 骨架改用共享预设：普通 Skeleton 是 aria-hidden 的，靠 aria-busy 的容器定位
+    expect(container.querySelector('[data-slot="skeleton-list"]')).toBeTruthy();
     expect(screen.getByTestId("conversation-new")).toBeTruthy();
   });
 

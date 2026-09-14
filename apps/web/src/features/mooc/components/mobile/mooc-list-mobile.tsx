@@ -2,8 +2,8 @@
 
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useMoocsQuery } from "@/features/mooc/use-moocs";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { ChevronDown, GraduationCap, Library } from "lucide-react";
@@ -63,10 +63,7 @@ export function MobileMoocList() {
             </p>
           </div>
         ) : moocs.isPending ? (
-          <div className="space-y-3" aria-busy="true">
-            <Skeleton className="h-24 rounded-xl" />
-            <Skeleton className="h-24 rounded-xl" />
-          </div>
+          <ListRowsSkeleton count={2} />
         ) : moocs.isError ? (
           <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             课程加载失败：{moocs.error.message}

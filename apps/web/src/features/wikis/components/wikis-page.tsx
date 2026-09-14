@@ -1,6 +1,7 @@
 "use client";
 
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
+import { EditorSkeleton } from "@/components/loading/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DEFAULT_PAGE_SIZE, type KnowledgeBase } from "@/features/notes/schemas";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -157,11 +158,8 @@ function WikiNoteView({ noteId }: { noteId: number }) {
 
   if (note.isPending) {
     return (
-      <div className="h-full space-y-3 overflow-y-auto rounded-xl border p-6">
-        <Skeleton className="h-8 w-1/3" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-2/3" />
+      <div className="h-full overflow-y-auto rounded-xl border p-6">
+        <EditorSkeleton />
       </div>
     );
   }

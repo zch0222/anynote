@@ -2,9 +2,9 @@
 
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { type MemberTask, isTaskOpen, submissionStatusText } from "@/features/tasks/schemas";
 import { useTasksQuery } from "@/features/tasks/use-tasks";
@@ -107,10 +107,7 @@ export function MobileTaskCards() {
             hint="任务挂在知识库下，先到笔记页创建一个。"
           />
         ) : tasks.isPending ? (
-          <div className="space-y-3" aria-busy="true">
-            <Skeleton className="h-28 rounded-xl" />
-            <Skeleton className="h-28 rounded-xl" />
-          </div>
+          <ListRowsSkeleton count={2} />
         ) : tasks.isError ? (
           <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             任务加载失败：{tasks.error.message}

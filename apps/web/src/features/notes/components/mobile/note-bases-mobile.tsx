@@ -1,8 +1,8 @@
 "use client";
 
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Segmented } from "@/components/ui/segmented";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useMe } from "@/features/auth/use-me";
 import { CreateBaseDialog } from "@/features/notes/components/create-base-dialog";
 import {
@@ -121,11 +121,7 @@ export function MobileNoteBases({
             知识库加载失败：{failed.error.message}
           </p>
         ) : loading ? (
-          <div className="space-y-2" aria-busy="true">
-            {["a", "b", "c"].map((key) => (
-              <Skeleton key={key} className="h-16 rounded-lg" />
-            ))}
-          </div>
+          <ListRowsSkeleton count={3} />
         ) : bases.length === 0 ? (
           <div className="rounded-lg border border-dashed border-separator p-6 text-center">
             <Library className="mx-auto size-8 text-label-tertiary" aria-hidden="true" />

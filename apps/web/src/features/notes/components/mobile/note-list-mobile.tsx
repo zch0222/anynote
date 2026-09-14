@@ -2,8 +2,8 @@
 
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { knowledgeBaseSections } from "@/components/layout/navigation";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import { DEFAULT_PAGE_SIZE } from "@/features/notes/schemas";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
@@ -83,11 +83,7 @@ export function MobileNoteList({
 
         <div className="px-4">
           {notes.isPending ? (
-            <div className="space-y-2" aria-busy="true">
-              {["a", "b", "c"].map((key) => (
-                <Skeleton key={key} className="h-16 rounded-lg" />
-              ))}
-            </div>
+            <ListRowsSkeleton count={3} />
           ) : notes.isError ? (
             <p role="alert" className="rounded-lg bg-danger/5 p-4 text-footnote text-danger">
               笔记加载失败：{notes.error.message}

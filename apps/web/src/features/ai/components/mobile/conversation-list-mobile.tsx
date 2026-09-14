@@ -2,6 +2,7 @@
 
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,7 +13,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { Conversation } from "@/features/ai/schemas";
 import {
   useConversationsInfinite,
@@ -63,10 +63,7 @@ export function MobileConversationList() {
     >
       <div className="space-y-4 p-4" data-testid="mobile-conversations">
         {conversations.isPending ? (
-          <div className="space-y-2" aria-busy="true">
-            <Skeleton className="h-14 rounded-xl" />
-            <Skeleton className="h-14 rounded-xl" />
-          </div>
+          <ListRowsSkeleton count={2} />
         ) : conversations.isError ? (
           <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
             会话加载失败：{conversations.error.message}

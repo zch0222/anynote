@@ -1,7 +1,7 @@
 "use client";
 
 import type { TiptapEditorProps } from "@/components/editor/core/tiptap-editor";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PanelSkeleton } from "@/components/loading/skeletons";
 import dynamic from "next/dynamic";
 
 /**
@@ -12,14 +12,7 @@ export const TiptapEditor = dynamic(
   () => import("@/components/editor/core/tiptap-editor").then((mod) => mod.TiptapEditorImpl),
   {
     ssr: false,
-    loading: () => (
-      <div className="space-y-3 rounded-xl border bg-surface p-4" aria-busy="true">
-        <Skeleton className="h-8 w-2/3" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-3/4" />
-      </div>
-    ),
+    loading: () => <PanelSkeleton />,
   },
 );
 

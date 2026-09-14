@@ -1,5 +1,6 @@
 "use client";
 
+import { DocumentSkeleton } from "@/components/loading/skeletons";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -29,7 +30,7 @@ export function PdfDocument({ url, width, onLoaded }: PdfDocumentProps) {
         setNumPages(pdf.numPages);
         onLoaded?.(pdf.numPages);
       }}
-      loading={<p className="p-6 text-center text-sm text-label-secondary">PDF 加载中…</p>}
+      loading={<DocumentSkeleton />}
       error={
         <p className="p-6 text-center text-sm text-danger">
           PDF 加载失败：预览链接可能已过期，重新选择文档试试。

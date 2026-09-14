@@ -1,5 +1,6 @@
 "use client";
 
+import { TableSkeleton } from "@/components/loading/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,13 +124,7 @@ export function TaskTable({ tasks, loading }: TaskTableProps) {
   });
 
   if (loading) {
-    return (
-      <div className="space-y-2">
-        {[0, 1, 2, 3].map((row) => (
-          <div key={row} className="h-12 animate-pulse rounded-lg bg-grouped" />
-        ))}
-      </div>
-    );
+    return <TableSkeleton rows={4} />;
   }
 
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import { CardGridSkeleton } from "@/components/loading/skeletons";
 import { KnowledgeBaseSelect } from "@/components/shared/knowledge-base-select";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -79,11 +79,7 @@ export function MoocPage({ baseId: fixedBaseId }: { baseId?: number | undefined 
       {bases.isPending ? null : !baseId ? (
         <EmptyState title="还没有可用的知识库" hint="课程挂在知识库下，先创建一个知识库。" />
       ) : moocs.isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
-          {["a", "b", "c"].map((key) => (
-            <Skeleton key={key} className="h-40 rounded-lg" />
-          ))}
-        </div>
+        <CardGridSkeleton count={3} cardClassName="h-40" />
       ) : moocs.isError ? (
         <p role="alert" className="rounded-lg bg-danger/5 p-6 text-footnote text-danger">
           课程加载失败：{moocs.error.message}

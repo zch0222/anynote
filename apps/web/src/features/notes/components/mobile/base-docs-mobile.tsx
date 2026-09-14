@@ -1,8 +1,8 @@
 "use client";
 
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DOC_INDEXED } from "@/features/notes/schemas";
 import { useKnowledgeBaseDocsQuery } from "@/features/notes/use-docs";
 import { formatRelativeTime } from "@/lib/format-time";
@@ -21,11 +21,7 @@ export function MobileBaseDocs({ baseId }: { baseId: number }) {
     <MobileScreen title="资料" back={`/m/notes/${baseId}`}>
       <div className="space-y-2 p-4" data-testid="mobile-base-docs">
         {docs.isPending ? (
-          <div className="space-y-2" aria-busy="true">
-            {["a", "b", "c"].map((key) => (
-              <Skeleton key={key} className="h-16 rounded-lg" />
-            ))}
-          </div>
+          <ListRowsSkeleton count={3} />
         ) : docs.isError ? (
           <p role="alert" className="rounded-lg bg-danger/5 p-4 text-footnote text-danger">
             资料加载失败：{docs.error.message}

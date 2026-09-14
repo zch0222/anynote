@@ -2,6 +2,7 @@
 
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
 import { CollabStatusBadge } from "@/features/collab/components/collab-status";
 import { type CollabDocTitleInput, collabDocTitleSchema } from "@/features/collab/schemas";
 import { useCollabIndex } from "@/features/collab/use-collab-index";
@@ -65,10 +65,7 @@ export function MobileDocLibrary() {
             协同服务连接失败：{error?.message ?? "未知错误"}。请确认 collab 服务已启动。
           </p>
         ) : status !== "connected" ? (
-          <div className="space-y-2" aria-busy="true">
-            <Skeleton className="h-16 rounded-xl" />
-            <Skeleton className="h-16 rounded-xl" />
-          </div>
+          <ListRowsSkeleton count={2} />
         ) : docs.length === 0 ? (
           <div className="rounded-xl border border-dashed p-6 text-center">
             <FileText className="mx-auto size-8 text-label-secondary" aria-hidden="true" />

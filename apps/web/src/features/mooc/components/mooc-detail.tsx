@@ -201,6 +201,8 @@ function SelectedItemPanel({ moocId, item }: { moocId: number; item: MoocItem })
       <h2 className="text-lg font-semibold">{detail.data?.title ?? item.title ?? "未命名条目"}</h2>
       {isVideo ? (
         objectUrl.isPending ? (
+          // 这里保留 16:9 的播放器占位而不是 DocumentSkeleton：后者是 A4 纸面比例
+          // （竖版 1:1.414），套在视频位上是"形状对不上宿主"，加载完成时会整块塌缩。
           <Skeleton className="aspect-video w-full rounded-lg" />
         ) : objectUrl.isError || !objectUrl.data?.url ? (
           <p className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-sm text-danger">

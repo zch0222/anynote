@@ -1,7 +1,7 @@
 "use client";
 
+import { CardGridSkeleton } from "@/components/loading/skeletons";
 import { Segmented } from "@/components/ui/segmented";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useMe } from "@/features/auth/use-me";
 import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import {
@@ -149,7 +149,7 @@ export function KnowledgeBaseGallery({ openCreate = false }: { openCreate?: bool
           知识库加载失败：{failed.error.message}
         </p>
       ) : loading ? (
-        <GallerySkeleton />
+        <CardGridSkeleton />
       ) : visible.length === 0 ? (
         <EmptyScope scope={scope} />
       ) : (
@@ -251,16 +251,6 @@ function EmptyScope({ scope }: { scope: BaseScope }) {
       <p className="mt-1 text-footnote text-label-secondary">
         先建一个知识库，笔记、慕课与任务都会归到它下面。
       </p>
-    </div>
-  );
-}
-
-function GallerySkeleton() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
-      {["a", "b", "c", "d", "e", "f"].map((key) => (
-        <Skeleton key={key} className="h-[148px] rounded-lg" />
-      ))}
     </div>
   );
 }

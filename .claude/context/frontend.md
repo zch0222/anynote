@@ -59,6 +59,80 @@
 
 ---
 
+## 加载体系（设计稿 P12-P16）
+
+全部加载态收敛为 **5 套组件 × 浅/深 2 主题**，按「形态」而不是按页面切分。
+**新写加载态一律先在这里选形态，不要就地写 `animate-pulse` 或裸文字。**
+
+| 形态 | 组件 | 用在哪 |
+|------|------|--------|
+| 骨架屏 | `components/loading/skeletons.tsx` 的 6 个预设 | 首屏 / 列表 / 表格 / 编辑器 / 文档 |
+| 转圈 | `components/loading/spinner.tsx` | **算不出总量**的行内等待：按钮提交、下拉加载、局部刷新 |
+| 进度 | `components/loading/progress.tsx` | **算得出总量**的任务：PDF 上传、图片分片、批量导入 |
+| AI 流式 | `features/ai/components/stream-states.tsx` | AI 对话与笔记内 AI 续写（共用一套） |
+| 品牌启动 | `components/layout/brand-boot.tsx` | 全屏初始化；站内路由切换用 `RouteProgressBar` |
+
+### 选哪个骨架预设
+
+| 预设 | 宿主 |
+|------|------|
+| `CardGridSkeleton` | 知识库列表 / 慕课列表 / 协同文档库（卡片网格） |
+| `ListRowsSkeleton` | 笔记列表 / 成员列表 / 资料列表（行 + 缩略图） |
+| `TableSkeleton` | 任务（表格行） |
+| `DocumentSkeleton` | PDF 预览（A4 竖版纸面） |
+| `EditorSkeleton` | 笔记 / 协作文档 / Wikis（标题 + 参差段落） |
+| `PanelSkeleton` | 协同工作区 / 设置面板（一整块） |
+
+**形状必须对得上宿主**：选错了加载完成时整页跳一下，比不显示骨架更糟。
+反例记在 `mooc-detail.tsx`（16:9 视频位**不用** `DocumentSkeleton`，那是 A4 竖版）
+与侧栏（40px 紧凑行**不用** `ListRowsSkeleton`，那是 `min-h-14` 卡片壳）。
+
+### 加载体系的 Token 与动效
+
+| 名字 | 值 / 时长 | 说明 |
+|------|-----------|------|
+| `--skeleton-base` | 浅 `#E5E5EA` / 深 `#2C2C2E` | 骨架底色。**必须比承载它的那一层高一档**——用 `bg-grouped` 在浅色分组底上等于隐形 |
+| `--skeleton-sheen` | 浅 `#F7F7F9` / 深 `#3A3A3C` | 扫光那道亮带 |
+| `--animate-shimmer` | 1.4s ease-in-out infinite | 骨架扫光，highlight 从 -30% 扫到 130% |
+| `--animate-spin-loading` | 0.8s linear infinite | 转圈。只有"转/停"两态，**不要加缓动** |
+| `--animate-think-dot` | 1.2s ease-in-out infinite | AI 思考三点，错峰 0.15s |
+| `--animate-caret-blink` | 1s step-end infinite | 流式光标。`step-end` 是刻意的——光标应当"跳" |
+| `--animate-logo-{page-1,page-2,spine}` | 1.6s ease-in-out infinite | 品牌 Logo 三段描边，相位写在同一份 keyframes 里（用 `animation-delay` 第二轮会漂移） |
+| `--animate-boot-bar` | 3s ease-out forwards | 路由进度条，渐进制到 90% 就停（真实完成由路由接管） |
+
+`keyframes` 刻意写在 `@theme` **外面**：Tailwind v4 只把被工具类引用到的 keyframes
+打进产物，而 `skeleton-breathe`（reduced-motion 用）不出现在任何工具类里。
+
+**`prefers-reduced-motion` 降级不等于静止**（设计稿明确要求）：扫光→呼吸、
+转圈弧→呼吸、Logo→常显完整形状、光标→常亮。静止处理会让加载态与
+"加载完但内容为空"无从区分。
+
+### 无障碍约定
+
+- 文案**必须进 DOM**：只有视觉动效不算状态可见。容器用 `<output>`（隐式 `role=status`），与
+  `components/note/save-status.tsx` 同一套写法。
+- 转圈的 `label` **只在它独自承载状态时才传**：紧邻已有文字（如「索引构建中」）时传了
+  会让读屏念两遍。
+- 进度条必须有真实的 `aria-valuenow`；**不确定型**进度（路由进度条）用 `<output>` 而不是
+  `role="progressbar"`——挂 progressbar 却不给数值，读屏会说"进度条 0%"或干脆沉默。
+
+### 改动时的门禁
+
+```bash
+pnpm --filter web test              # 骨架形状、动画名、aria 语义的单元测试
+pnpm --filter web bundle:budget     # 加载组件在首屏包里，注意 300KB 预算
+pnpm --filter web test:e2e          # e2e/loading-system.spec.ts：动效真的在跑 / 主题不断层
+```
+
+UI 还原度对比（人眼验收，非门禁）：
+
+```bash
+node apps/web/scripts/extract-design-reference.mjs   # 设计稿 → e2e/reference/（仅设计稿更新时跑）
+node apps/web/scripts/ui-capture.mjs                 # 真实页面截图 + 并排对比图 → e2e/.ui-capture/
+```
+
+---
+
 ## 目录结构
 
 ```
@@ -74,8 +148,9 @@ apps/web/
 │   │   └── providers.tsx     Provider 树（QueryClient、Theme）
 │   ├── components/           通用组件
 │   │   ├── ui/               shadcn 原子组件（vendored，不改不测）
+│   │   ├── loading/          加载体系原子件（Spinner / Progress / 骨架预设，**有单测**）
 │   │   ├── editor/           TipTap 编辑器（core / extensions / presets）
-│   │   ├── layout/           AppShell、侧栏（`sidebar-nav.tsx`）、顶栏、命令面板、`navigation.ts`
+│   │   ├── layout/           AppShell、侧栏（`sidebar-nav.tsx`）、顶栏、命令面板、`navigation.ts`、品牌启动
 │   │   └── note/             笔记域共享组件
 │   ├── features/             功能模块
 │   │   └── <feature>/
@@ -91,6 +166,7 @@ apps/web/
 │   │   ├── desktop/          桌面壳桥接（令牌交换 + 本地保管）
 │   │   ├── editor/           Markdown 桥接、Shiki、KaTeX、上传
 │   │   ├── mobile/           移动端 UA 分流与搜索（纯函数，middleware 与单测共用）
+│   │   ├── route-progress.ts 站内软导航的判定（纯函数，喂给顶栏进度条）
 │   │   ├── format-time.ts    相对时间与卡片元信息行（纯函数）
 │   │   └── utils.ts          cn()、格式化工具
 │   ├── stores/               Zustand stores（仅 UI 状态）
