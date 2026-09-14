@@ -4,7 +4,6 @@ import { TiptapEditor, type TiptapEditorProps } from "@/components/editor/Tiptap
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
 import type { AiContinueFn } from "@/components/editor/presets/types";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
-import { NoteTree } from "@/components/note/note-tree";
 import { SaveStatusBadge } from "@/components/note/save-status";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,19 +39,19 @@ import { toast } from "sonner";
 const WORKSPACE_VIEWPORT = "h-[calc(100svh-9rem)]";
 
 /**
- * `/notes/[baseId]/[noteId]`：左目录 + 右编辑器。
+ * `/notes/[baseId]/[noteId]`：限宽正文纸面 + 顶栏状态条。
  *
  * 编辑器是非受控的：只在笔记切换时喂一次初始内容，之后的每次输入都进自动保存队列。
  * 如果把 query 缓存直接当 `value` 回灌，保存返回的内容会把光标顶回文首。
  *
- * 版式对齐设计稿：顶栏一条**文档状态条**（标题 + 保存徽标 + 操作），
- * 下方是限宽的正文纸面（`max-w-3xl`）——正文行宽超过约 75 字符后回行会丢行。
+ * 版式对齐设计稿：顶栏一条**文档状态条**（保存徽标 + 操作），下方是限宽的
+ * 正文纸面——行宽超过约 75 字符后回行会丢行。导航（二级 Tab 与笔记目录）
+ * 都在侧栏，正文这一列只负责读和写。
  */
 export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number }) {
   const router = useRouter();
   const note = useNoteQuery(noteId);
   const bases = useKnowledgeBasesQuery();
-  const notes = useNotesQuery({ knowledgeBaseId: baseId, page: 1, pageSize: DEFAULT_PAGE_SIZE });
   const remove = useDeleteNoteMutation();
   const move = useMoveNoteMutation();
 
@@ -116,7 +115,9 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
     try {
       await remove.mutateAsync(noteId);
       toast.success("笔记已删除");
-      router.push(`/notes/${baseId}/notes`);
+      // 回知识库的笔记**列表**。不能写 `/notes/<baseId>/notes`：那条地址会落到
+      // `[baseId]/[noteId]` 上、把字面量 "notes" 当成 noteId，然后 notFound()。
+      router.push(`/notes/${baseId}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "删除失败，请稍后重试");
     }
@@ -146,29 +147,16 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   }
 
   return (
-    <div className={`flex w-full min-h-0 gap-6 ${WORKSPACE_VIEWPORT}`}>
-      <aside className="hidden w-60 shrink-0 lg:block">
-        <NoteTree
-          bases={(bases.data ?? []).map((base) => ({
-            id: base.id,
-            name: base.knowledgeBaseName?.trim() || "未命名知识库",
-          }))}
-          activeBaseId={baseId}
-          activeNoteId={noteId}
-          notes={(notes.data?.rows ?? []).map((item) => ({
-            id: item.id,
-            title: item.title?.trim() || "未命名笔记",
-          }))}
-          isLoading={notes.isPending}
-          onMoveNote={handleMove}
-        />
-      </aside>
-
+    <div className={`flex w-full min-h-0 ${WORKSPACE_VIEWPORT}`}>
+      {/*
+        目录（知识库 → 笔记两层）在**侧栏**里（设计稿的位置，见 AppSidebar），
+        这里不再另起一列：同一份目录在一屏里出现两次，读者要先分辨"哪个才是真的"。
+      */}
       <section
         data-testid="note-panel"
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface shadow-card"
       >
-        <header className="flex shrink-0 items-center gap-3 px-5 py-3">
+        <header className="flex shrink-0 items-center gap-3 px-8 py-4">
           <SaveStatusBadge status={status} lastSavedAt={lastSavedAt} />
           <span className="min-w-0 flex-1" />
           <DropdownMenu>
@@ -203,7 +191,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
         </header>
 
         {/*
-          正文的滚动容器。重设计后标题与元信息行属于**文章的一部分**（跟着正文一起滚），
+          正文的滚动容器。标题与元信息行属于**文章的一部分**（跟着正文一起滚），
           所以"占满视口"的职责从编辑器本身移到了这一层：面板吃满剩余高度，内容在这里滚。
         */}
         <div data-testid="note-scroll" className="min-h-0 flex-1 overflow-y-auto">
@@ -216,7 +204,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
           ) : (
             <article
               data-testid="note-document"
-              className="mx-auto flex w-full max-w-3xl flex-col px-6 pb-10"
+              className="mx-auto flex w-full max-w-[46rem] flex-col px-10 pb-10"
             >
               <input
                 aria-label="笔记标题"
@@ -229,7 +217,6 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                 baseId={baseId}
                 baseName={note.data?.knowledgeBaseName}
                 updateTime={note.data?.updateTime}
-                contentLength={initialContent.length}
               />
               <TiptapEditor
                 key={noteId}
@@ -239,8 +226,11 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                 onReady={onEditorReady}
                 aiContinue={handleAiContinue}
                 uploadFn={uploadFn}
+                // 设计稿的桌面编辑器没有常驻工具条（移动端才有，见 note-editor-mobile）
+                toolbar="none"
                 className="mt-2"
               />
+              <NoteFooter contentLength={initialContent.length} />
             </article>
           )}
         </div>
@@ -252,33 +242,31 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
 }
 
 /**
- * 标题下方的元信息行：作者 / 更新时间 / 字数 / 所属知识库。
+ * 标题下方的元信息行：更新时间 · 所属知识库。
  *
- * 每一项都可能缺（后端没返回作者时），所以整行用 `·` 拼接而不是固定网格——
- * 缺项时不会留下一段空白列。
+ * 设计稿这里是「作者 · 更新 · 阅读次数」，其中作者与阅读次数后端都没有返回
+ * （`GET /notes/{id}` 只有 id/title/content/knowledgeBaseId/updateTime），
+ * 所以只渲染拿得到的两项。整行用 `·` 拼接而不是固定网格，缺项时不会留下空白列。
+ *
+ * 字数**不在这一行**：设计稿把它放在正文末尾（见 `NoteFooter`），
+ * 两处都放会让同一份信息在一屏里出现两次。
  */
 function NoteMeta({
   baseId,
   baseName,
   updateTime,
-  contentLength,
 }: {
   baseId: number;
   baseName?: string | null | undefined;
   updateTime?: string | null | undefined;
-  contentLength: number;
 }) {
   const relative = formatRelativeTime(updateTime);
   return (
     <div
       data-testid="note-meta"
-      className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-footnote text-label-tertiary"
+      className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-separator pb-3 text-footnote text-label-secondary"
     >
       {relative ? <span>{relative}更新</span> : null}
-      <Dot />
-      <span className="tabular" data-testid="note-char-count">
-        {contentLength.toLocaleString("zh-CN")} 字
-      </span>
       <Dot />
       <Link
         href={`/notes/${baseId}`}
@@ -287,6 +275,22 @@ function NoteMeta({
         {baseName?.trim() || "知识库"}
       </Link>
     </div>
+  );
+}
+
+/**
+ * 文章尾部的字数。
+ *
+ * 设计稿把字数放在正文末尾而不是标题下面：读完一整篇之后，读者关心的
+ * "这篇多长"应该在收尾处出现，而不是留在顶部要滚回去看。
+ */
+function NoteFooter({ contentLength }: { contentLength: number }) {
+  return (
+    <p className="mt-8 text-footnote text-label-tertiary">
+      <span className="tabular" data-testid="note-char-count">
+        {contentLength.toLocaleString("zh-CN")} 字
+      </span>
+    </p>
   );
 }
 

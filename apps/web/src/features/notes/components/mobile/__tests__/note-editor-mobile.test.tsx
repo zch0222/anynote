@@ -62,7 +62,12 @@ function mockNote(value: Record<string, unknown>) {
 const LOADED = {
   isPending: false,
   isError: false,
-  data: { title: "会议纪要", content: "正文内容", updateTime: "2026-09-12T08:00:00" },
+  data: {
+    title: "会议纪要",
+    content: "正文内容",
+    updateTime: "2026-09-12T08:00:00",
+    knowledgeBaseName: "产品设计知识库",
+  },
 };
 
 describe("MobileNoteEditor", () => {
@@ -73,6 +78,26 @@ describe("MobileNoteEditor", () => {
     expect(screen.getByLabelText("笔记标题")).toHaveValue("会议纪要");
     expect(screen.getByTestId("editor")).toHaveAttribute("data-toolbar", "mobile");
     expect(screen.getByTestId("editor")).toHaveTextContent("正文内容");
+  });
+
+  it("标题与正文之间有元信息行：更新时间 · 字数 · 所属知识库", () => {
+    mockNote(LOADED);
+    renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+    const meta = screen.getByTestId("mobile-note-meta");
+    expect(meta).toHaveTextContent("4 字");
+    expect(meta).toHaveTextContent("产品设计知识库");
+  });
+
+  it("缺字段的元信息不留下悬空的分隔点", () => {
+    mockNote({
+      isPending: false,
+      isError: false,
+      data: { title: "只有标题", content: "", updateTime: null, knowledgeBaseName: null },
+    });
+    renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+    // 只剩字数一项，没有 "· " 前缀
+    expect(screen.getByTestId("mobile-note-meta")).toHaveTextContent(/^0 字$/);
   });
 
   it("保存状态显示在顶栏而不是占正文空间", () => {

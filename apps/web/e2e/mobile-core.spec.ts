@@ -210,6 +210,77 @@ test.describe("移动端笔记三级导航与编辑", () => {
     await expect(page.locator(EDITOR_SURFACE)).toContainText(marker, { timeout: 30_000 });
   });
 
+  /**
+   * 知识库详情页的版式（设计稿 p08）：库头只有**一行**「类型 · 篇数」，
+   * 笔记是**分隔线隔开的行列表**而不是卡片堆——卡片会把每行的上下留白叠起来，
+   * 一屏少看两条。
+   *
+   * 放在"输入自动保存"之后，并且这里再补一篇：列表查询走 `selectNoteList`
+   * （`FROM n_note_operation_log LEFT JOIN n_note`），只有**写过正文**的笔记才会出现，
+   * 所以到这一步为止列表里只有上一篇。分隔线要有两行才验得出来。
+   * （该查询口径是既有的后端缺陷，与本版式无关。）
+   */
+  test("知识库详情：单行库头 + 行列表（不是卡片堆）", async ({ page }) => {
+    expect(noteUrl, "上一条用例未能创建笔记").not.toBe("");
+    const baseUrl = noteUrl.replace(/\/\d+$/, "");
+
+    // 补第二篇：同样要写正文，否则它不会进列表
+    await page.goto(baseUrl);
+    await page.getByTestId("mobile-note-create").click();
+    await expect(page).toHaveURL(/\/m\/notes\/new\?baseId=\d+/, { timeout: 30_000 });
+    await page.getByLabel("标题").fill(`移动端第二篇 ${Date.now().toString().slice(-6)}`);
+    await page.getByRole("button", { name: "创建笔记" }).click();
+    await expect(page).toHaveURL(/\/m\/notes\/\d+\/\d+/, { timeout: 30_000 });
+
+    const surface = page.locator(EDITOR_SURFACE);
+    await expect(surface).toBeVisible({ timeout: 30_000 });
+    await surface.click();
+    await page.keyboard.type("第二篇正文");
+    await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await page.goto(baseUrl);
+    const header = page.getByTestId("mobile-base-header");
+    await expect(header).toBeVisible({ timeout: 30_000 });
+    // 单行：类型与篇数在同一行，没有第二行简介
+    await expect(header).toContainText("篇笔记", { timeout: 30_000 });
+    const headerBox = await header.boundingBox();
+    expect(headerBox?.height ?? 0).toBeLessThan(72);
+
+    const items = page.getByTestId("mobile-note-items");
+    await expect(items).toBeVisible({ timeout: 30_000 });
+    const rows = items.getByRole("link");
+    await expect(rows.first()).toBeVisible({ timeout: 30_000 });
+    await expect(rows).toHaveCount(2, { timeout: 30_000 });
+
+    // 行高明显小于卡片：卡片最少 80px（含内边距与卡片间距）
+    const box = await rows.first().boundingBox();
+    expect(box?.height ?? 0).toBeLessThan(80);
+
+    // 行与行之间是 1px 分隔线（不是卡片间距）：按**算出来的**边框宽度判断，
+    // 而不是类名字符串——`last:border-b-0` 本身就含 "border-b" 子串，数类名会数错
+    const borders = await items.locator("li").evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        bottom: getComputedStyle(node).borderBottomWidth,
+        radius: getComputedStyle(node).borderRadius,
+        shadow: getComputedStyle(node).boxShadow,
+      })),
+    );
+    expect(borders.length).toBe(2);
+    for (const [index, style] of borders.entries()) {
+      // 非最后一行有分隔线；最后一行没有（否则列表底部会多出一条线）
+      expect(style.bottom, `第 ${index + 1} 行的下边框`).toBe(
+        index === borders.length - 1 ? "0px" : "1px",
+      );
+      // 行本身不是卡片：没有圆角、没有阴影
+      expect(style.radius).toBe("0px");
+      expect(style.shadow).toBe("none");
+    }
+
+    await expectNoHorizontalScroll(page);
+  });
+
   test("工具条单行横滑、按钮 ≥40px、更多弹层可开", async ({ page }) => {
     expect(noteUrl, "上一条用例未能创建笔记").not.toBe("");
     await page.goto(noteUrl);

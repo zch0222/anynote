@@ -102,14 +102,21 @@ export function KnowledgeBaseGallery({ openCreate = false }: { openCreate?: bool
 
   return (
     <section
-      className="mx-auto w-full max-w-6xl space-y-5"
+      className="mx-auto w-full max-w-6xl space-y-4"
       data-testid="kb-gallery"
       data-state={state}
     >
       <header className="flex flex-wrap items-start justify-between gap-4">
+        {/*
+          标题用 Display 字阶：设计稿里它明显大于正文标题，是这一屏的锚点。
+          副标题只报**知识库个数**——设计稿那行还有「N 篇笔记 · N 节慕课 ·
+          N 个任务」，但后端没有跨知识库的聚合端点（`/notes/list` 是
+          「暂未实现」，慕课与任务都必须带 knowledgeBaseId），前端拼出来
+          要么 N 次请求、要么是个会过期的假数字。
+        */}
         <div className="space-y-1">
-          <h1 className="text-title text-label">知识库</h1>
-          <p className="text-footnote text-label-secondary">
+          <h1 className="text-display text-label">知识库</h1>
+          <p className="text-body text-label-secondary">
             {bases.length > 0 ? `共 ${bases.length} 个知识库` : "还没有知识库"}
           </p>
         </div>
@@ -146,16 +153,28 @@ export function KnowledgeBaseGallery({ openCreate = false }: { openCreate?: bool
       ) : visible.length === 0 ? (
         <EmptyScope scope={scope} />
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="kb-gallery-grid">
-          {visible.map((base) => (
-            <li key={base.id}>
-              <KnowledgeBaseCard base={base} />
+        <>
+          {/* 分组标题（设计稿 p03）：「最近访问」+ 计数，把网格从页头里分出来 */}
+          <h2 className="flex items-baseline gap-2 pt-1 text-headline text-label">
+            最近访问
+            <span className="text-footnote font-normal text-label-tertiary">
+              共 {bases.length} 个知识库
+            </span>
+          </h2>
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="kb-gallery-grid">
+            {visible.map((base) => (
+              <li key={base.id}>
+                <KnowledgeBaseCard base={base} />
+              </li>
+            ))}
+            <li>
+              <CreateBaseDialog
+                trigger={<CreateBaseCard />}
+                triggerClassName="block h-full w-full"
+              />
             </li>
-          ))}
-          <li>
-            <CreateBaseDialog trigger={<CreateBaseCard />} triggerClassName="block h-full w-full" />
-          </li>
-        </ul>
+          </ul>
+        </>
       )}
     </section>
   );
@@ -168,12 +187,19 @@ function KnowledgeBaseCard({ base }: { base: KnowledgeBase }) {
       href={`/notes/${base.id}`}
       data-testid={`kb-card-${base.id}`}
       className={cn(
-        "group flex h-full flex-col overflow-hidden rounded-lg bg-surface shadow-card outline-none transition-shadow",
+        "group flex h-full flex-col overflow-hidden rounded-lg bg-surface p-3 shadow-card outline-none transition-shadow",
         "hover:shadow-popover focus-visible:ring-2 focus-visible:ring-ring",
       )}
     >
-      <span aria-hidden="true" className={cn(coverClassName(base.id), "h-[72px] w-full")} />
-      <span className="flex flex-1 flex-col gap-1.5 p-4">
+      {/*
+        封面是**内嵌**的（设计稿里四周留 12px 白边、自身圆角 10），不是通栏出血。
+        通栏会让相邻两张卡的色块连成一条色带，卡与卡的边界反而看不出来。
+      */}
+      <span
+        aria-hidden="true"
+        className={cn(coverClassName(base.id), "h-[72px] w-full rounded-md")}
+      />
+      <span className="flex flex-1 flex-col gap-1 px-1 pb-1 pt-3">
         <span className="truncate text-headline font-semibold text-label">{name}</span>
         <span className="truncate text-footnote text-label-secondary">
           {base.detail?.trim() ||
@@ -196,7 +222,7 @@ function CreateBaseCard() {
     <span
       data-testid="kb-create-card"
       className={cn(
-        "flex h-full min-h-[132px] flex-col justify-center gap-1.5 rounded-lg border border-dashed border-separator p-4",
+        "flex h-full min-h-[148px] flex-col justify-center gap-1.5 rounded-lg border border-dashed border-separator p-4",
         "transition-colors group-hover/create:border-accent/50 group-hover/create:bg-accent-soft/40",
       )}
     >
@@ -233,7 +259,7 @@ function GallerySkeleton() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
       {["a", "b", "c", "d", "e", "f"].map((key) => (
-        <Skeleton key={key} className="h-[132px] rounded-lg" />
+        <Skeleton key={key} className="h-[148px] rounded-lg" />
       ))}
     </div>
   );

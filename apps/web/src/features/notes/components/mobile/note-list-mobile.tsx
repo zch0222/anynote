@@ -66,16 +66,16 @@ export function MobileNoteList({
       }
     >
       <div className="space-y-4 pb-4" data-testid="mobile-note-list">
-        <header className="flex items-center gap-3 px-4 pt-4">
+        {/*
+          库头（设计稿 p08）：渐变块 + 一行「类型 · 篇数」。
+          不展示 `detail`：设计稿那里只有一行，而简介可能很长，塞进来会把
+          Tab 条挤到首屏之外——移动端的正文才是主角。
+        */}
+        <header className="flex items-center gap-3 px-4 pt-4" data-testid="mobile-base-header">
           <span className={`${coverClassName(baseId)} size-12 rounded-lg`} aria-hidden="true" />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-footnote text-label-secondary">
-              {editable ? "普通知识库" : "只读浏览"}
-              {notes.data?.total ? ` · ${notes.data.total} 篇笔记` : ""}
-            </span>
-            <span className="block truncate text-body text-label">
-              {base.data?.detail?.trim() || "还没有填写简介"}
-            </span>
+          <span className="min-w-0 flex-1 truncate text-footnote text-label-secondary">
+            {base.data?.type === 1 ? "组织知识库" : editable ? "普通知识库" : "只读浏览"}
+            {notes.data?.total ? ` · ${notes.data.total} 篇笔记` : ""}
           </span>
         </header>
 
@@ -85,7 +85,7 @@ export function MobileNoteList({
           {notes.isPending ? (
             <div className="space-y-2" aria-busy="true">
               {["a", "b", "c"].map((key) => (
-                <Skeleton key={key} className="h-20 rounded-lg" />
+                <Skeleton key={key} className="h-16 rounded-lg" />
               ))}
             </div>
           ) : notes.isError ? (
@@ -102,21 +102,25 @@ export function MobileNoteList({
             </div>
           ) : (
             <>
-              <ul className="space-y-2" data-testid="mobile-note-items">
+              {/*
+                行列表而不是卡片堆（设计稿 p08）：整页一个白底，行与行之间用
+                1px 分隔线。卡片会把每行的上下留白叠起来，一屏少看两条。
+              */}
+              <ul className="overflow-hidden rounded-lg bg-surface" data-testid="mobile-note-items">
                 {notes.data.rows.map((note) => (
-                  <li key={note.id}>
+                  <li key={note.id} className="border-b border-separator last:border-b-0">
                     <Link
                       href={`${basePath}/${baseId}/${note.id}`}
                       data-testid={`mobile-note-${note.id}`}
                       className={cn(
-                        "block min-h-20 rounded-lg bg-surface p-3 outline-none shadow-card",
-                        "focus-visible:ring-2 focus-visible:ring-ring",
+                        "block min-h-16 px-3 py-3 outline-none",
+                        "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                       )}
                     >
                       <span className="block truncate text-headline font-semibold text-label">
                         {note.title?.trim() || "未命名笔记"}
                       </span>
-                      <span className="mt-1 block truncate text-footnote text-label-secondary">
+                      <span className="mt-1 block truncate text-footnote text-label-tertiary">
                         {note.updateTime
                           ? `${formatRelativeTime(note.updateTime)}更新`
                           : "暂无更新记录"}

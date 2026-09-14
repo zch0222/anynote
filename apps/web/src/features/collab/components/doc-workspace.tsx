@@ -105,6 +105,8 @@ export function CollabDocWorkspace({ docId }: { docId: string }) {
           value=""
           collaboration={collaboration}
           onChange={handleChange}
+          // 与笔记编辑器一致：桌面版没有常驻工具条（设计稿的形态）
+          toolbar="none"
           fill
           className="min-h-0 flex-1"
         />

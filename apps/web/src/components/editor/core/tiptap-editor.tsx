@@ -76,6 +76,8 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
   // 不传 toolbar 时沿用原来的推导，保证桌面调用方一行不用改
   const toolbarVariant: ToolbarVariant = toolbar ?? (preset === "minimal" ? "minimal" : "full");
   const isMobileToolbar = toolbarVariant === "mobile";
+  /** 不渲染常驻工具条（设计稿的桌面编辑器形态）。 */
+  const hasNoToolbar = toolbarVariant === "none";
 
   // readonly 预设不含交互与 undo 扩展：强制只读并跳过 Toolbar / BubbleMenu，
   // 否则工具栏对不存在的命令（can().undo()）求值会直接抛错、炸掉整个 React 树。
@@ -149,13 +151,16 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
       data-fill={fill ? "true" : undefined}
     >
       {/* 移动端工具条贴底（靠近软键盘），所以放在正文之后 */}
-      {effectiveEditable && !isMobileToolbar ? (
+      {effectiveEditable && !isMobileToolbar && !hasNoToolbar ? (
         <Toolbar editor={editor} variant={toolbarVariant} />
       ) : null}
       {/*
         气泡菜单在触摸端关掉：选区一出现，系统自己的「复制 / 粘贴 / 全选」菜单
         会盖在同一位置上，两个浮层互相打架，且气泡本身依赖 hover 定位。
         移动端的格式化入口是贴底工具条。
+
+        `none` 形态下它是**唯一的**就地格式化入口（其余是 Slash 菜单与快捷键），
+        所以这里不能跟着工具条一起关掉。
       */}
       {effectiveEditable && !isMobileToolbar ? <BubbleMenuPortal editor={editor} /> : null}
       <EditorContent editor={editor} className="anynote-editor__surface" />
