@@ -644,9 +644,20 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 
 | 命令 | 内容 | 门槛 |
 |------|------|------|
-| `pnpm --filter web test:e2e` | 登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 浅深色切换 6 条关键路径，UI 重设计的语义 Token、知识库信息架构、画廊与编辑器版式，笔记编辑器的高度、保存冲突与代码块回归，协同编辑的双上下文实时同步，外加笔记图片分片直传 MinIO 并渲染（含刷新后仍可加载） | 全绿 |
+| `pnpm --filter web test:e2e` | 登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 浅深色切换 6 条关键路径，UI 重设计的语义 Token、知识库信息架构、画廊与编辑器版式，笔记编辑器的高度、保存冲突与代码块回归，协同编辑的双上下文实时同步，笔记图片分片直传 MinIO 并渲染（含刷新后仍可加载），外加**加载体系**（骨架屏的扫光与深浅两态、转圈与进度的动效及 aria 数值、品牌启动的三段描边与骨架兜底、AI 流式的思考三点与光标） | 全绿 |
 | `pnpm --filter web bundle:budget` | 各路由首屏 JS（含各级 layout chunk）与编辑器整包的 gzip 体积 | 首屏 ≤ 300KB、编辑器 ≤ 250KB |
 | `pnpm --filter web lighthouse:budget` | `/login`、`/notes`、`/docs`、`/ai/chat` 四条路由 | Performance ≥ 90、Accessibility ≥ 95 |
+
+**加载体系的 UI 还原度对比**（人眼验收，不是门禁）：
+门禁断言的是行为契约，"像不像设计稿"只能靠对图。两个脚本把设计稿与真实截图并排拼好：
+
+```bash
+node apps/web/scripts/extract-design-reference.mjs   # 设计稿 P12-P16 → apps/web/e2e/reference/（仅设计稿更新时跑）
+node apps/web/scripts/ui-capture.mjs                 # 真实构建上截图 + 并排对比图 + index.html 看板
+```
+
+后者要求栈已在跑、且 `apps/web/e2e/.auth/state.json` 里有登录态（即**先跑过一次 `test:e2e`**）。
+产物落在已 gitignore 的 `apps/web/e2e/.ui-capture/`；参考图入库在 `apps/web/e2e/reference/`。
 
 移动端（M10.x，方案见 [`docs/mobile/`](docs/mobile/)）另有一套同口径门禁：
 
