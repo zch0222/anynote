@@ -17,7 +17,9 @@
  *   apps/web/e2e/.ui-capture/index.html                        一页看完全部场景
  *
  * 为什么落在 e2e/.ui-capture：与 e2e/.auth、e2e/.output 同为"跑出来的东西"，
- * 已在 .gitignore 里按目录忽略，不必再往 gitignore 里加一条。
+ * 已在 `.gitignore` 的「端到端测试产物」节按目录忽略——截图每次跑都变，
+ * 入库只会制造噪音。设计稿的参考图是另一回事（只有设计稿更新时才变），
+ * 它落在 `e2e/reference/` 并且**入库**。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
