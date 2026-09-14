@@ -29,10 +29,17 @@ const OUT_DIR = join(APP_ROOT, "e2e", "reference");
 /**
  * 需要导出的页与文件名。
  *
- * 页号按 PDF 实际页码（1 起）。只导本批「加载体系」相关的 5 页——
+ * 页号按 PDF 实际页码（1 起）。**只导 `ui-capture.mjs` 真的会拿去并排对比的页**——
  * 全导会让参考图目录变成设计稿的第二份拷贝，反而看不出哪些是对比基准。
+ * 两处清单必须同步：这里的 `name` 就是那边场景的 `ref`。
  */
 const PAGES = [
+  // 编辑器：标题即正文首节点 H1，元信息行在它之上（没有独立标题行）
+  { page: 4, name: "p04-editor-light.png", note: "04 桌面编辑器 · 浅色" },
+  { page: 6, name: "p06-editor-dark.png", note: "04 桌面编辑器 · 深色" },
+  { page: 9, name: "p09-editor-mobile-light.png", note: "09 移动编辑器 · 浅色" },
+  { page: 11, name: "p11-editor-mobile-dark.png", note: "09 移动编辑器 · 深色" },
+  // 加载体系
   { page: 12, name: "p12-loading-system.png", note: "加载体系总览（5 套组件 × 2 主题）" },
   { page: 13, name: "p13-skeleton.png", note: "01 骨架屏：基础形状 / 实战 / 扫光关键帧" },
   { page: 14, name: "p14-spinner-progress.png", note: "02 转圈 + 03 进度" },

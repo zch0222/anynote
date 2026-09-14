@@ -13,21 +13,26 @@
  *
  * 产物：
  *   apps/web/e2e/.ui-capture/<scene>-light.png / -dark.png     真实页面截图
- *   apps/web/e2e/.ui-capture/<scene>-compare.png               与设计稿并排的对比图
+ *   apps/web/e2e/.ui-capture/<scene>-compare-<theme>.png       与设计稿并排的对比图（两态各一张）
  *   apps/web/e2e/.ui-capture/index.html                        一页看完全部场景
  *
  * 为什么落在 e2e/.ui-capture：与 e2e/.auth、e2e/.output 同为"跑出来的东西"，
  * 已在 `.gitignore` 的「端到端测试产物」节按目录忽略——截图每次跑都变，
  * 入库只会制造噪音。设计稿的参考图是另一回事（只有设计稿更新时才变），
  * 它落在 `e2e/reference/` 并且**入库**。
+ *
+ * 不需要浏览器的判定逻辑（挑哪张参考图、种子正文、对比图命名）拆在
+ * `lib/ui-capture.mjs`，那边有单测——这类逻辑错了会产出"看着正常其实对错页"的图，
+ * 比脚本直接崩更难发现。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // 从 `@playwright/test` 取 chromium 而不是 `playwright-core`：
 // 只有前者是 package.json 里声明的依赖，后者由它间接带入、在 pnpm 的
 // 严格 node_modules 布局下解析不到（裸 `node` 跑脚本不会走 pnpm 的软链）。
 import { chromium } from "@playwright/test";
+import { buildNoteBody, comparisonFileName, resolveReference } from "./lib/ui-capture.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(HERE, "..");
@@ -108,6 +113,33 @@ const SCENES = [
       await page.getByRole("button", { name: "发送" }).click();
     },
   },
+  /*
+   * 编辑器两屏（设计稿 p04 浅 / p06 深、p09 浅 / p11 深）。
+   *
+   * 这两屏的要点是**没有独立标题行**：标题就是正文的首节点 H1，元信息行在它之上。
+   * 所以场景必须**先真的有一篇带内容的笔记**——空笔记截出来只有一行 H1，
+   * 看不出元信息行与正文的层级，也判不了"标题是不是正文的一部分"。
+   * `seed` 负责把正文写成与设计稿同构的一份（H1 + 段落 + H2 + 列表 + 引用）：
+   * 不这么做，截图里的正文是 E2E 用例随手写的句子，跟设计稿无从对照。
+   */
+  {
+    name: "editor-note",
+    title: "04 桌面编辑器 · 标题即正文 H1",
+    ref: { light: "p04-editor-light.png", dark: "p06-editor-dark.png" },
+    seed: "editor",
+    waitFor: '[data-testid="note-document"]',
+    settle: 600,
+  },
+  {
+    name: "editor-note-mobile",
+    title: "09 移动编辑器 · 标题即正文 H1",
+    ref: { light: "p09-editor-mobile-light.png", dark: "p11-editor-mobile-dark.png" },
+    seed: "editor-mobile",
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    waitFor: '[data-testid="mobile-note-meta"]',
+    settle: 600,
+  },
   {
     name: "route-progress",
     title: "05 品牌启动 · 顶栏路由进度条",
@@ -142,6 +174,78 @@ async function setTheme(page, label) {
 }
 
 /**
+ * 与设计稿同构的种子正文。判定逻辑在 `lib/ui-capture.mjs`，那边有单测盯着。
+ *
+ * 标题必须与 `NOTE_TITLE` 一致——它同时是笔记的 `title` 字段，
+ * 打开时 `ensureLeadingHeading` 见到首节点已是 H1 就原样返回，不会再补一行。
+ */
+const NOTE_TITLE = "交互一致性检查清单";
+
+const DEFAULT_BASE_COVER =
+  "https://anynote.obs.cn-east-3.myhuaweicloud.com/images/knowledge_base_cover.png";
+
+/**
+ * 用**真实 BFF 端点**造一篇带正文的笔记，返回它的编辑页地址。
+ *
+ * 走页面里的 `fetch` 而不是另起 request context：BFF 的写请求要过 `checkOrigin`
+ * （拿请求 Origin 与 `NEXT_PUBLIC_APP_URL` 逐字比对），而且鉴权靠 httpOnly Cookie——
+ * 在页面上下文里发请求，这两件事都由浏览器自然满足。
+ *
+ * 设计稿里的正文是**服务端已有的内容**，所以这里也必须真的落库：
+ * 编辑器一旦拿到初始值就不再接受回灌（回灌会把光标顶回文首），
+ * 靠 `page.evaluate` 直接改 DOM 是改不出这个版式的。
+ */
+async function seedEditorNote(page, seed) {
+  const isMobile = seed === "editor-mobile";
+  const path = isMobile ? "/m/notes" : "/notes";
+  await page.goto(`${BASE_URL}${path}`, { waitUntil: "domcontentloaded" });
+
+  const created = await page.evaluate(
+    async ({ title, body, cover, mobile }) => {
+      const post = async (url, payload) => {
+        const response = await fetch(`/api/proxy/note/${url}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const parsed = await response.json().catch(() => null);
+        if (parsed?.code !== "00000") {
+          throw new Error(`${url} 失败：${response.status} ${JSON.stringify(parsed)}`);
+        }
+        return parsed.data;
+      };
+
+      const bases = await fetch("/api/proxy/note/bases?page=1&pageSize=20&permissions=4").then(
+        (response) => response.json(),
+      );
+      const existing = bases?.data?.rows?.[0];
+      const baseId =
+        existing?.id ??
+        (await post("bases", { name: "UI 还原对比", detail: "截图脚本建立", cover, type: 0 }));
+
+      const noteId = await post("notes", { knowledgeBaseId: baseId, title });
+      // 正文单独 PATCH：创建端点只收标题，正文走编辑接口
+      await fetch(`/api/proxy/note/notes/${noteId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content: body }),
+      });
+
+      return mobile ? `/m/notes/${baseId}/${noteId}` : `/notes/${baseId}/${noteId}`;
+    },
+    {
+      title: NOTE_TITLE,
+      body: buildNoteBody(NOTE_TITLE),
+      cover: DEFAULT_BASE_COVER,
+      mobile: isMobile,
+    },
+  );
+
+  await page.goto(`${BASE_URL}${created}`, { waitUntil: "domcontentloaded" });
+  return created;
+}
+
+/**
  * 场景是否配了参考图，且参考图确实在。
  *
  * 要同时判 `name` 是否存在：不是每个场景都有对应的设计稿页
@@ -152,11 +256,21 @@ function hasReference(name) {
   return typeof name === "string" && name !== "" && existsSync(join(REF_DIR, name));
 }
 
+/**
+ * 场景在某主题下真正可用的参考图（挑图逻辑在 lib，有单测）。
+ * 文件不在 `reference/` 里时同样返回 null——配了却缺文件不该被当成"对比过了"。
+ */
+function usableReference(scene, theme) {
+  const name = resolveReference(scene, theme);
+  return hasReference(name) ? name : null;
+}
+
 async function captureScene(browser, scene, theme) {
   const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
+    viewport: scene.viewport ?? { width: 1440, height: 900 },
     deviceScaleFactor: 2,
     locale: "zh-CN",
+    ...(scene.isMobile ? { isMobile: true, hasTouch: true } : {}),
     ignoreHTTPSErrors: BASE_URL.startsWith("https:"),
     ...(existsSync(STATE_PATH) ? { storageState: STATE_PATH } : {}),
   });
@@ -194,7 +308,14 @@ async function captureScene(browser, scene, theme) {
     theme === "dark" ? "dark" : "light",
   );
 
-  await page.goto(`${BASE_URL}${scene.path}`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${BASE_URL}${scene.path ?? "/login"}`, { waitUntil: "domcontentloaded" });
+
+  /*
+   * 造数据必须在**置好主题之后**：`seedEditorNote` 自己会 `goto` 到笔记页，
+   * 放在前面会把主题偏好那一步覆盖掉（导航走的是客户端路由，偏好虽在
+   * localStorage 里，但编辑器首帧已定型，截出来仍是上一个主题）。
+   */
+  if (scene.seed) await seedEditorNote(page, scene.seed);
 
   if (scene.hangNotes) {
     // 骨架要看的是"进了库、笔记列表还没回来"，所以先导航进第一个库
@@ -222,9 +343,10 @@ async function captureScene(browser, scene, theme) {
  * 而浏览器本来就在手边。
  */
 async function buildComparison(browser, scene, theme, shotPath) {
-  if (!hasReference(scene.ref)) return null;
+  const referenceName = usableReference(scene, theme);
+  if (!referenceName) return null;
 
-  const reference = readFileSync(join(REF_DIR, scene.ref)).toString("base64");
+  const reference = readFileSync(join(REF_DIR, referenceName)).toString("base64");
   const shot = readFileSync(shotPath).toString("base64");
   const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
     * { box-sizing: border-box; margin: 0; }
@@ -239,7 +361,7 @@ async function buildComparison(browser, scene, theme, shotPath) {
 
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   await page.setContent(html, { waitUntil: "load" });
-  const file = join(OUT_DIR, `${scene.name}-compare.png`);
+  const file = join(OUT_DIR, comparisonFileName(scene.name, theme));
   await page.screenshot({ path: file, fullPage: true });
   await page.close();
   return file;
@@ -259,11 +381,15 @@ function buildIndex(rows) {
           )
           .join("")}
         ${
-          row.compare
-            ? `<figure class="wide"><figcaption>与设计稿并排</figcaption><img src="${row.compare.replace(
-                `${OUT_DIR}\\`,
-                "",
-              )}"></figure>`
+          row.compares.length > 0
+            ? row.compares
+                .map(
+                  (compare) =>
+                    `<figure class="wide"><figcaption>与设计稿并排 · ${
+                      compare.theme === "dark" ? "深色" : "浅色"
+                    }</figcaption><img src="${basename(compare.file)}"></figure>`,
+                )
+                .join("")
             : ""
         }
       </div>
@@ -274,7 +400,7 @@ function buildIndex(rows) {
   writeFileSync(
     join(OUT_DIR, "index.html"),
     `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
-    <title>加载体系 · UI 还原度对比</title><style>
+    <title>新前端 · UI 还原度对比</title><style>
       body { margin: 0; padding: 24px; background: #f2f2f7; font: 14px/1.5 system-ui; }
       h1 { font-size: 22px; } h2 { font-size: 16px; margin: 32px 0 8px; }
       .shots { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -283,9 +409,9 @@ function buildIndex(rows) {
       img { width: 100%; border: 1px solid #e5e5ea; border-radius: 8px; background: #fff; }
       figcaption { color: #6e6e73; margin-bottom: 4px; }
     </style></head><body>
-    <h1>加载体系 · UI 还原度对比</h1>
+    <h1>新前端 · UI 还原度对比</h1>
     <p>左为真实浏览器在生产构建上的截图，右为设计稿对应页。设计稿渲染图放在
-    <code>e2e/.ui-capture/reference/</code>（由 docs/ui 的 PDF 转出）。</p>
+    <code>e2e/reference/</code>（由 docs/ui 的 PDF 转出）。</p>
     ${cards}
     </body></html>`,
     "utf8",
@@ -313,18 +439,19 @@ async function main() {
 
   for (const scene of scenes) {
     process.stdout.write(`\n▶ ${scene.name} — ${scene.title}\n`);
-    const row = { name: scene.name, title: scene.title, compare: null };
+    const row = { name: scene.name, title: scene.title, compares: [] };
     for (const theme of ["light", "dark"]) {
       const shot = await captureScene(browser, scene, theme);
       console.log(`  截图 ${theme}: ${shot}`);
-      if (theme === "light") {
-        const compare = await buildComparison(browser, scene, theme, shot);
-        if (compare) {
-          row.compare = compare;
-          console.log(`  对比图: ${compare}`);
-        } else {
-          console.log(`  对比图: 跳过（参考图 ${scene.ref ?? "未指定"} 不在 reference/）`);
-        }
+      // 两个主题各拼一张：深浅在设计稿里是两页，混用会把主题差异读成还原度差距
+      const compare = await buildComparison(browser, scene, theme, shot);
+      if (compare) {
+        row.compares.push({ theme, file: compare });
+        console.log(`  对比图 ${theme}: ${compare}`);
+      } else {
+        const ref = scene.ref;
+        const missing = typeof ref === "string" ? ref : (ref?.[theme] ?? "未指定");
+        console.log(`  对比图 ${theme}: 跳过（参考图 ${missing} 不在 reference/）`);
       }
     }
     rows.push(row);
