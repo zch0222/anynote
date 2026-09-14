@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ensureLeadingHeading, stripLeadingHeading } from "@/features/notes/lib/leading-heading";
 import { DEFAULT_PAGE_SIZE, toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -38,9 +39,13 @@ import { toast } from "sonner";
  * 编辑器是非受控的：只在笔记切换时喂一次初始内容，之后的每次输入都进自动保存队列。
  * 如果把 query 缓存直接当 `value` 回灌，保存返回的内容会把光标顶回文首。
  *
- * 版式对齐设计稿：顶层是一条**文档状态条**（保存徽标 + 操作），下方是限宽的
- * 正文纸面——行宽超过约 75 字符后回行会丢行。导航（二级 Tab 与笔记目录）
- * 都在侧栏，正文这一列只负责读和写。
+ * 版式对齐设计稿：顶层是一条**文档状态条**（保存徽标 + 操作），下面依次是元信息行、
+ * 正文纸面、末尾字数。元信息行**在正文之上**：正文的第一个节点就是 H1 标题。
+ *
+ * **没有独立的标题输入行**——笔记标题就是正文的第一个一级标题。原因：标题与正文
+ * 分家时，同一句话在一屏里出现两次（输入框一次、正文里再写一次一级标题），
+ * 而且分不清哪个才是"真的"。`useNoteTitle` 从文档首节点取标题，所以这里只做一件事：
+ * 打开时把已存标题补成顶部 H1（`ensureLeadingHeading`），历史笔记的标题才看得见。
  *
  * 整页**不画卡片**：设计稿里这页的顶栏分隔线与正文底色一直铺到侧栏右侧与
  * 窗口右缘，外面没有灰底衬托、没有圆角、没有投影。曾经这里套了一层
@@ -55,7 +60,8 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   const remove = useDeleteNoteMutation();
   const move = useMoveNoteMutation();
 
-  const { title, setTitle, onEditorReady, getTitleForContent } = useNoteTitle();
+  // `title` 不进 JSX：标题在正文里，这里只需要"取标题"与"编辑器就绪"两条能力
+  const { setTitle, onEditorReady, getTitleForContent } = useNoteTitle();
   // 只在笔记切换时重置一次编辑器初始值，避免自动保存的回写打断输入
   const [initialContent, setInitialContent] = useState<string | null>(null);
   const loadedNoteId = useRef<number | null>(null);
@@ -68,8 +74,11 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
     if (!note.data || loadedNoteId.current === noteId) return;
     loadedNoteId.current = noteId;
     setTitle(note.data.title ?? "");
-    contentRef.current = note.data.content ?? "";
-    setInitialContent(note.data.content ?? "");
+    // 正文不以 H1 开头就先补一个（标题从前是单独的输入框，老笔记正文里没有 H1）。
+    // 只改喂给编辑器的初始值，不单独发写请求：用户第一次编辑会连它一起存回去。
+    const content = ensureLeadingHeading(note.data.content ?? "", note.data.title);
+    contentRef.current = content;
+    setInitialContent(content);
   }, [note.data, noteId, setTitle]);
 
   const handleContentChange = useCallback<NonNullable<TiptapEditorProps["onChange"]>>(
@@ -78,14 +87,6 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
       scheduleSave({ title: getTitleForContent(editor), content: markdown });
     },
     [scheduleSave, getTitleForContent],
-  );
-
-  const handleTitleChange = useCallback(
-    (next: string) => {
-      setTitle(next);
-      scheduleSave({ title: next, content: contentRef.current });
-    },
-    [scheduleSave, setTitle],
   );
 
   // 图片走 file 服务的分片直传。实现（SHA-256 + 分片签名）只在真的插图时才下载，
@@ -215,13 +216,10 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
              */
             <div className="mx-auto w-full max-w-[calc(62.5rem+9rem)] px-6 sm:px-8 lg:px-18">
               <article data-testid="note-document" className="flex w-full flex-col pb-16 pt-10">
-                <input
-                  aria-label="笔记标题"
-                  value={title}
-                  onChange={(event) => handleTitleChange(event.target.value)}
-                  placeholder="未命名笔记"
-                  className="w-full bg-transparent text-display font-semibold text-label outline-none placeholder:text-label-tertiary"
-                />
+                {/*
+                  元信息行在正文之上：正文的**第一个节点就是 H1 标题**，
+                  所以这一行插不进"标题与正文之间"了。
+                */}
                 <NoteMeta
                   baseId={baseId}
                   baseName={note.data?.knowledgeBaseName}
@@ -241,7 +239,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                   flush
                   className="mt-6"
                 />
-                <NoteFooter contentLength={initialContent.length} />
+                <NoteFooter contentLength={stripLeadingHeading(initialContent).length} />
               </article>
             </div>
           )}
@@ -254,7 +252,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
 }
 
 /**
- * 标题下方的元信息行：更新时间 · 所属知识库。
+ * 元信息行：更新时间 · 所属知识库。落在正文**之上**（标题就在正文里）。
  *
  * 设计稿这里是「作者 · 更新 · 阅读次数」，其中作者与阅读次数后端都没有返回
  * （`GET /notes/{id}` 只有 id/title/content/knowledgeBaseId/updateTime），
@@ -276,7 +274,7 @@ function NoteMeta({
   return (
     <div
       data-testid="note-meta"
-      className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-separator pb-3 text-footnote text-label-secondary"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-separator pb-3 text-footnote text-label-secondary"
     >
       {relative ? <span>{relative}更新</span> : null}
       <Dot />

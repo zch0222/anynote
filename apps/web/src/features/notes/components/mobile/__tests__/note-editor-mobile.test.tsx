@@ -75,7 +75,10 @@ describe("MobileNoteEditor", () => {
     mockNote(LOADED);
     renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
 
-    expect(screen.getByLabelText("笔记标题")).toHaveValue("会议纪要");
+    // 与桌面一致：没有独立标题行，标题以一级标题的形式躺在正文里；
+    // 老笔记（有 title、正文里没有 H1）打开时补齐，否则标题不可见
+    expect(screen.queryByLabelText("笔记标题")).toBeNull();
+    expect(editorProps.mock.calls.at(-1)?.[0].value).toBe("# 会议纪要\n\n正文内容");
     expect(screen.getByTestId("editor")).toHaveAttribute("data-toolbar", "mobile");
     expect(screen.getByTestId("editor")).toHaveTextContent("正文内容");
   });
@@ -106,12 +109,28 @@ describe("MobileNoteEditor", () => {
     expect(screen.getByRole("status")).toHaveTextContent("已保存");
   });
 
-  it("改标题会进自动保存队列（复用桌面同一个 useSaveNote）", () => {
+  /** 标题只能从正文的顶部 H1 来，所以"改正文不动标题"这条必须成立。 */
+  it("只改正文不动标题时，保存沿用原本的标题", () => {
     mockNote(LOADED);
     renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
 
-    fireEvent.change(screen.getByLabelText("笔记标题"), { target: { value: "新标题" } });
-    expect(save.scheduleSave).toHaveBeenCalledWith({ title: "新标题", content: "正文内容" });
+    act(() => {
+      editorProps.mock.calls.at(-1)?.[0].onChange("# 会议纪要\n\n正文内容改了", {
+        state: {
+          doc: {
+            firstChild: {
+              type: { name: "heading" },
+              attrs: { level: 1 },
+              textContent: "会议纪要",
+            },
+          },
+        },
+      });
+    });
+    expect(save.scheduleSave).toHaveBeenLastCalledWith({
+      title: "会议纪要",
+      content: "# 会议纪要\n\n正文内容改了",
+    });
   });
 
   it("修改顶部 H1 同步移动端标题，并和正文一起自动保存", () => {
@@ -130,7 +149,6 @@ describe("MobileNoteEditor", () => {
         },
       });
     });
-    expect(screen.getByLabelText("笔记标题")).toHaveValue("移动端新标题");
     expect(save.scheduleSave).toHaveBeenLastCalledWith({
       title: "移动端新标题",
       content: "# 移动端新标题",

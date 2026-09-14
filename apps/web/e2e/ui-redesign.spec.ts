@@ -349,8 +349,9 @@ test.describe("笔记列表与编辑器版式", () => {
     expect(badgeStyle.radius).not.toBe("0px");
     expect(badgeStyle.background).not.toBe("rgba(0, 0, 0, 0)");
 
-    // 标题可编辑 + 元信息行（字数 + 所属知识库）
-    await expect(page.getByLabel("笔记标题")).toBeVisible();
+    // 标题就在正文里（首节点 H1），没有单独的标题输入行 + 元信息行（字数 + 所属知识库）
+    await expect(page.getByLabel("笔记标题")).toHaveCount(0);
+    await expect(page.locator(".anynote-editor__content h1").first()).toBeVisible();
     await expect(page.getByTestId("note-char-count")).toHaveText(/\d+ 字/);
 
     // 正文纸面限宽：一行超过约 75 字符后回行会丢行，所以容器必须有 max-width。

@@ -176,7 +176,10 @@ test.describe("移动端笔记三级导航与编辑", () => {
     await page.getByRole("button", { name: "创建笔记" }).click();
 
     await expect(page).toHaveURL(/\/m\/notes\/\d+\/\d+/, { timeout: 30_000 });
-    await expect(page.getByLabel("笔记标题")).toHaveValue(title, { timeout: 30_000 });
+    // 标题就是正文的首节点 H1（没有独立的标题输入行）
+    await expect(page.locator(`${EDITOR_SURFACE} h1`).first()).toHaveText(title, {
+      timeout: 30_000,
+    });
     noteUrl = page.url();
   });
 
