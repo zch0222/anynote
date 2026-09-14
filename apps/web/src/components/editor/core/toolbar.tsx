@@ -46,7 +46,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
-export type ToolbarVariant = "full" | "minimal" | "mobile";
+export type ToolbarVariant = "full" | "minimal" | "mobile" | "none";
 
 export type ToolbarProps = {
   editor: Editor | null;
@@ -332,9 +332,11 @@ function renderSlots(
 /**
  * 编辑器工具栏。用 `useEditorState` 只订阅关心的状态，避免每次 transaction 全量重渲染。
  *
- * - `full`：全部 23 个命令（笔记、文档）
+ * - `full`：全部 23 个命令（playground / 需要常驻入口的场景）
  * - `minimal`：只留基础排版（评论 / 输入框场景）
  * - `mobile`：单行横滑的 10 个常驻命令 + "更多"底部弹层，按钮 40px（方案 D5）
+ * - `none`：不渲染工具栏（笔记 / 协同文档的桌面版）。设计稿的桌面编辑器从
+ *   标题直接进正文，没有常驻工具条；格式化走选区气泡菜单、Slash 菜单与快捷键
  */
 export function Toolbar({ editor, variant = "full" }: ToolbarProps) {
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -371,6 +373,12 @@ export function Toolbar({ editor, variant = "full" }: ToolbarProps) {
   });
 
   if (!editor || !state) {
+    return null;
+  }
+
+  // `none`：整条不渲染。放在 state 之后是为了不破坏 hooks 顺序
+  // （useEditorState 必须无条件调用），但渲染前就返回，避免建 23 个按钮。
+  if (variant === "none") {
     return null;
   }
 

@@ -209,9 +209,19 @@ import { TiptapEditor } from "@/components/editor/TiptapEditor";
 
 | 预设 | 用途 | 关键扩展 |
 |------|------|---------|
-| `full` | 笔记 / 文档编辑 | StarterKit（关 codeBlock/underline）+ 自定义节点 + Slash 菜单 + 工具栏 + 气泡菜单 |
+| `full` | 笔记 / 文档编辑 | StarterKit（关 codeBlock/underline）+ 自定义节点 + Slash 菜单 + 气泡菜单 |
 | `minimal` | 评论 / AI 输入框 | StarterKit + Placeholder |
 | `readonly` | 预览 / AI 输出 / Wikis | 渲染型扩展，无交互扩展与工具栏 |
+
+工具栏形态由 `toolbar` 属性决定（不传时按预设推导：`minimal` → minimal，
+其余 → full）：
+
+| 形态 | 用在哪 | 说明 |
+|------|--------|------|
+| `full` | playground | 全部 23 个命令，一行铺开 |
+| `minimal` | 评论 / 输入框 | 只留基础排版 |
+| `mobile` | 移动端笔记 / 协同文档 | 单行横滑 10 个常驻 + 「更多」底部弹层 |
+| `none` | **桌面笔记 / 协同文档** | 不渲染常驻工具条——设计稿的桌面编辑器从标题直接进正文；格式化走气泡菜单、Slash 菜单与快捷键 |
 
 自定义节点（`components/editor/extensions/`）：`anynote-callout`（`> [!INFO]`）、
 `anynote-image`（分片直传）、`anynote-wikilink`（`[[双链]]`）、`anynote-ai-block`（```anynote-ai fence）、

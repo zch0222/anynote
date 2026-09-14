@@ -226,6 +226,8 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                 onReady={onEditorReady}
                 aiContinue={handleAiContinue}
                 uploadFn={uploadFn}
+                // 设计稿的桌面编辑器没有常驻工具条（移动端才有，见 note-editor-mobile）
+                toolbar="none"
                 className="mt-2"
               />
               <NoteFooter contentLength={initialContent.length} />

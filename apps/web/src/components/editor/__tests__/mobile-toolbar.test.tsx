@@ -89,3 +89,26 @@ describe("Toolbar variant=mobile", () => {
     expect(screen.getByRole("button", { name: LABELS.bold })).toBeInTheDocument();
   });
 });
+
+/**
+ * `none`：设计稿的桌面编辑器从标题直接进正文，没有常驻工具条。
+ * 格式化改走选区气泡菜单、Slash 菜单与快捷键。
+ */
+describe("Toolbar variant=none", () => {
+  it("整条工具条不渲染，但编辑器本体照常挂着", async () => {
+    const { container } = render(<TiptapEditorImpl preset="full" toolbar="none" value="内容" />);
+
+    await waitFor(() => expect(container.querySelector(".anynote-editor__content")).not.toBeNull());
+    expect(screen.queryByRole("toolbar", { name: "编辑器工具栏" })).toBeNull();
+    // data-toolbar 仍是 none：样式与 E2E 靠它区分形态
+    expect(container.querySelector(".anynote-editor")).toHaveAttribute("data-toolbar", "none");
+  });
+
+  it("只读预设本来就没有工具条，none 不改变这一点", async () => {
+    const { container } = render(
+      <TiptapEditorImpl preset="readonly" toolbar="none" value="# 只读" editable={false} />,
+    );
+    await waitFor(() => expect(container.querySelector(".anynote-editor__content")).not.toBeNull());
+    expect(screen.queryByRole("toolbar")).toBeNull();
+  });
+});

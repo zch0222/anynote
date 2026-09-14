@@ -34,20 +34,27 @@ async function createNote(page: Page, title: string): Promise<string> {
 }
 
 /**
- * 工具栏的图片入口：点击后插一个隐藏 input，直接把文件喂给它最稳。
+ * 插图入口：Slash 菜单的「图片」。
  *
- * 必须**限定在编辑器工具栏里**再按名字找：左侧笔记目录的每一行都是
- * `role="button"`（dnd-kit 注入的），笔记标题里带「图片」二字时
- * 全局 `getByRole("button", { name: /图片/ })` 会先命中目录行，
- * 于是点到了导航而不是上传按钮（表现为 filechooser 永远不出现）。
+ * 桌面版**没有常驻工具栏**（设计稿的形态，见 `note-editor.tsx` 的
+ * `toolbar="none"`），图片入口是 Slash 菜单——这也正是占位文案
+ * 「输入 "/" 唤起命令」告诉用户的那条路径，测它比测工具栏更贴近真实用法。
+ *
+ * 点开菜单后编辑器会插一个隐藏 input，直接把文件喂给它最稳。
  */
-async function uploadImageThroughToolbar(page: Page) {
+async function uploadImageThroughSlashMenu(page: Page) {
+  const surface = page.locator(".anynote-editor__content");
+  await surface.click();
+  // 新开一段再敲 "/" 唤起命令面板（段首才会触发 suggestion）
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/");
+
+  const menu = page.getByTestId("slash-menu");
+  await expect(menu).toBeVisible({ timeout: 30_000 });
+
   const chooser = page.waitForEvent("filechooser", { timeout: 30_000 });
-  await page
-    .getByRole("toolbar", { name: "编辑器工具栏" })
-    .getByRole("button", { name: /图片/ })
-    .first()
-    .click();
+  await menu.getByRole("button", { name: /图片/ }).first().click();
   const fileChooser = await chooser;
   await fileChooser.setFiles({
     name: "e2e-pixel.png",
@@ -78,7 +85,7 @@ test.describe("笔记图片：分片直传到 MinIO 并渲染", () => {
       { timeout: 30_000 },
     );
 
-    await uploadImageThroughToolbar(page);
+    await uploadImageThroughSlashMenu(page);
 
     const taskRequest = await createTask;
     const body = taskRequest.postDataJSON() as Record<string, unknown>;
@@ -111,7 +118,7 @@ test.describe("笔记图片：分片直传到 MinIO 并渲染", () => {
 
   test("刷新页面后图片仍在且能重新加载（地址确实不会过期）", async ({ page }) => {
     await createNote(page, "E2E 图片持久化笔记");
-    await uploadImageThroughToolbar(page);
+    await uploadImageThroughSlashMenu(page);
 
     const image = insertedImage(page).first();
     await expect
@@ -160,7 +167,7 @@ test.describe("笔记图片：上传过程有 loading 提示", () => {
       await route.continue();
     });
 
-    await uploadImageThroughToolbar(page);
+    await uploadImageThroughSlashMenu(page);
 
     // 上传途中：指示器可见，且明确写着"上传中"（不是静默等待）
     await expect(indicator).toBeVisible({ timeout: 30_000 });
@@ -185,7 +192,7 @@ test.describe("笔记图片：上传过程有 loading 提示", () => {
       });
     });
 
-    await uploadImageThroughToolbar(page);
+    await uploadImageThroughSlashMenu(page);
 
     await expect(indicator).toBeVisible({ timeout: 30_000 });
     // 失败后必须收尾，否则正文里会留下一个永远转圈的占位
