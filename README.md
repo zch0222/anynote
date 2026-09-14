@@ -648,14 +648,16 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 | `pnpm --filter web bundle:budget` | 各路由首屏 JS（含各级 layout chunk）与编辑器整包的 gzip 体积 | 首屏 ≤ 300KB、编辑器 ≤ 250KB |
 | `pnpm --filter web lighthouse:budget` | `/login`、`/notes`、`/docs`、`/ai/chat` 四条路由 | Performance ≥ 90、Accessibility ≥ 95 |
 
-**加载体系的 UI 还原度对比**（人眼验收，不是门禁）：
+**UI 还原度对比**（人眼验收，不是门禁）：
 门禁断言的是行为契约，"像不像设计稿"只能靠对图。两个脚本把设计稿与真实截图并排拼好：
 
 ```bash
-node apps/web/scripts/extract-design-reference.mjs   # 设计稿 P12-P16 → apps/web/e2e/reference/（仅设计稿更新时跑）
+node apps/web/scripts/extract-design-reference.mjs   # 设计稿相关页 → apps/web/e2e/reference/（仅设计稿更新时跑）
 node apps/web/scripts/ui-capture.mjs                 # 真实构建上截图 + 并排对比图 + index.html 看板
 ```
 
+场景表现覆盖**编辑器两屏**（桌面 p04/p06、移动 p09/p11，深浅各一张对比图）与**加载体系五屏**（P12-P16）。
+编辑器场景会先经 BFF 真的建一篇与设计稿同构的笔记再截图——空笔记看不出元信息行与正文的层级。
 后者要求栈已在跑、且 `apps/web/e2e/.auth/state.json` 里有登录态（即**先跑过一次 `test:e2e`**）。
 产物落在已 gitignore 的 `apps/web/e2e/.ui-capture/`；参考图入库在 `apps/web/e2e/reference/`。
 

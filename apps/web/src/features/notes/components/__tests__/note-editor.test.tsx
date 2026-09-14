@@ -80,7 +80,7 @@ describe("NoteEditor 布局与编辑器接线", () => {
         },
       });
     });
-    expect(screen.getByLabelText("笔记标题")).toHaveValue("同步标题");
+    expect(screen.queryByLabelText("笔记标题")).toBeNull();
     await waitFor(
       () =>
         expect(noteApi.PATCH).toHaveBeenCalledWith(
@@ -135,15 +135,54 @@ describe("NoteEditor 布局与编辑器接线", () => {
     expect(props.flush).toBe(true);
   });
 
-  it("标题与元信息行在正文之上，字数落在正文末尾", async () => {
+  /**
+   * 回归：这里曾经有一个独立的标题输入框，于是同一句话在一屏里出现两次——
+   * 输入框一次、正文里再写一次一级标题，而且分不清哪个才是"真的"。
+   * 现在标题就是正文的首节点 H1；历史笔记（有 title、正文里没有 H1）
+   * 打开时由 `ensureLeadingHeading` 补上，否则标题在编辑器里根本看不见。
+   */
+  it("标题就是正文的首节点 H1，没有独立的标题行", async () => {
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+
+    expect(screen.queryByLabelText("笔记标题")).toBeNull();
+    expect(editorProps.mock.calls.at(-1)?.[0].value).toBe("# 测试笔记\n\n正文");
+  });
+
+  it("正文已经有顶部 H1 时不重复补标题", async () => {
+    get.mockImplementation((path: string) => {
+      if (path === "/notes/{noteId}") {
+        return Promise.resolve(
+          envelope({
+            id: NOTE_ID,
+            title: "库里的标题",
+            content: "# 正文自己的标题\n\n正文",
+            knowledgeBaseId: BASE_ID,
+            knowledgeBaseName: "测试库",
+            updateTime: "2026-09-11T01:00:00.000Z",
+          }),
+        );
+      }
+      return Promise.resolve(envelope({ rows: [] }));
+    });
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+
+    expect(editorProps.mock.calls.at(-1)?.[0].value).toBe("# 正文自己的标题\n\n正文");
+  });
+
+  it("元信息行在正文之上，字数落在正文末尾且只算正文", async () => {
     renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
     await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
 
-    expect(screen.getByLabelText("笔记标题")).toHaveValue("测试笔记");
+    // 正文首节点是 H1，元信息行插不进"标题与正文之间"，只能落在整篇之上
+    const doc = screen.getByTestId("note-document");
+    const meta = screen.getByTestId("note-meta");
+    expect(doc.firstElementChild).toBe(meta);
 
     // 设计稿：字数在**正文末尾**，不在标题下面那一行（一行只出现一次）
-    const meta = screen.getByTestId("note-meta");
     expect(meta).not.toHaveTextContent(/\d+ 字/);
+    // 字数不含标题：正文是"正文"两个字，标题那 9 个字符不算进来
     expect(screen.getByTestId("note-char-count")).toHaveTextContent("2 字");
 
     // 元信息行给的是"更新于 + 所属知识库"

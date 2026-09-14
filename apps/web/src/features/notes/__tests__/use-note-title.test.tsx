@@ -74,7 +74,7 @@ describe("useNoteTitle", () => {
     expect(result.current.title).toBe("保留标题");
   });
 
-  it("只改正文不覆盖手动标题，随后改 H1 仍能同步", () => {
+  it("库里标题与正文 H1 不一致时，只改正文不覆盖标题；随后改 H1 仍能同步", () => {
     const { result } = renderHook(() => useNoteTitle());
     act(() => {
       result.current.onEditorReady(editorWith([heading("原 H1")]));

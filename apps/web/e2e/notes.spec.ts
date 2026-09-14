@@ -36,9 +36,11 @@ test.describe("关键路径 2/3：创建笔记与编辑保存", () => {
     await page.getByLabel("标题").fill(NOTE_TITLE);
     await page.getByRole("button", { name: "创建笔记" }).click();
 
-    // 创建成功会跳到 /notes/<baseId>/<noteId>
+    // 创建成功会跳到 /notes/<baseId>/<noteId>，创建时填的标题以首节点 H1 落进正文
     await expect(page).toHaveURL(/\/notes\/\d+\/\d+/, { timeout: 30_000 });
-    await expect(page.getByLabel("笔记标题")).toHaveValue(NOTE_TITLE, { timeout: 30_000 });
+    await expect(page.locator(".anynote-editor__content h1").first()).toHaveText(NOTE_TITLE, {
+      timeout: 30_000,
+    });
     noteUrl = page.url();
   });
 

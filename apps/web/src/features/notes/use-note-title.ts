@@ -9,7 +9,18 @@ function leadingHeading(editor: Editor): string | null {
   return first.textContent.trim() || null;
 }
 
-/** 顶部 H1 改动时同步笔记标题；正文改动不覆盖手动命名，空 H1 不清空标题。 */
+/**
+ * 笔记标题**只来自正文的顶部 H1**（编辑器里没有独立的标题输入行，见
+ * `lib/leading-heading.ts`）。这里只负责一件事：让标题与正文始终指向同一句话。
+ *
+ * 两条边界：
+ * 1. 打开 / 切换笔记时先建立 H1 基线，只改正文不会重命名；
+ * 2. 顶部 H1 被删空时不清空标题——用户正在改标题、文字暂时为空，
+ *    这时候把标题抹掉会让目录与列表里那一条瞬间失去名字。
+ *
+ * `title` 供调用方读取当前标题（如移动端动作表的标题）；`getTitleForContent`
+ * 在同一步里返回"与这次正文匹配的标题"，让标题与正文由同一份草稿保存。
+ */
 export function useNoteTitle() {
   const [title, setTitleState] = useState("");
   const titleRef = useRef("");

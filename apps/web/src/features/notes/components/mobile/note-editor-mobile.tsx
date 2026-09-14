@@ -8,7 +8,7 @@ import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { EditorSkeleton } from "@/components/loading/skeletons";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
 import { SaveStatusBadge } from "@/components/note/save-status";
-import { Input } from "@/components/ui/input";
+import { ensureLeadingHeading, stripLeadingHeading } from "@/features/notes/lib/leading-heading";
 import { toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -33,6 +33,9 @@ import { toast } from "sonner";
  * 2. `toolbar="mobile"`：单行横滑 + 贴底（靠近软键盘），气泡菜单关掉
  * 3. 保存状态显示在顶栏，不占正文空间
  * 4. "移动到…"与删除走底部动作表，不用 hover 才出现的下拉菜单
+ *
+ * 与桌面一致：**没有独立的标题输入行**，标题就是正文的第一个 H1
+ * （见 `note-editor.tsx` 的说明与 `lib/leading-heading.ts`）。
  */
 export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: number }) {
   const router = useRouter();
@@ -55,8 +58,10 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
     if (!note.data || loadedNoteId.current === noteId) return;
     loadedNoteId.current = noteId;
     setTitle(note.data.title ?? "");
-    contentRef.current = note.data.content ?? "";
-    setInitialContent(note.data.content ?? "");
+    // 与桌面同一处补齐：标题是正文的首节点 H1，老笔记要先补上才看得见
+    const content = ensureLeadingHeading(note.data.content ?? "", note.data.title);
+    contentRef.current = content;
+    setInitialContent(content);
   }, [note.data, noteId, setTitle]);
 
   const handleContentChange = useCallback<NonNullable<TiptapEditorProps["onChange"]>>(
@@ -65,14 +70,6 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
       scheduleSave({ title: getTitleForContent(editor), content: markdown });
     },
     [scheduleSave, getTitleForContent],
-  );
-
-  const handleTitleChange = useCallback(
-    (next: string) => {
-      setTitle(next);
-      scheduleSave({ title: next, content: contentRef.current });
-    },
-    [scheduleSave, setTitle],
   );
 
   // 图片走 file 服务的分片直传；实现只在真的插图时才下载（静态 import 会压进首屏）。
@@ -180,24 +177,20 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
         </div>
       ) : (
         <>
-          <Input
-            aria-label="笔记标题"
-            value={title}
-            onChange={(event) => handleTitleChange(event.target.value)}
-            placeholder="未命名笔记"
-            className="h-auto shrink-0 rounded-none border-0 px-4 pt-3 !text-2xl font-semibold shadow-none focus-visible:ring-0"
-          />
           {/*
             元信息行（设计稿 p09）：更新 · 字数 · 所属知识库。
             作者与阅读次数后端没有返回（`GET /notes/{id}` 只有 title/content/
             knowledgeBaseId/updateTime），所以只渲染拿得到的几项。
+            位置在正文之上——正文的首节点就是 H1 标题，这一行插不进去了。
           */}
           <p
             data-testid="mobile-note-meta"
             className="shrink-0 border-b px-4 pb-3 text-footnote text-label-tertiary"
           >
             {note.data?.updateTime ? `${formatRelativeTime(note.data.updateTime)}更新 · ` : ""}
-            <span className="tabular">{initialContent.length.toLocaleString("zh-CN")} 字</span>
+            <span className="tabular">
+              {stripLeadingHeading(initialContent).length.toLocaleString("zh-CN")} 字
+            </span>
             {note.data?.knowledgeBaseName ? ` · ${note.data.knowledgeBaseName}` : ""}
           </p>
           <TiptapEditor
