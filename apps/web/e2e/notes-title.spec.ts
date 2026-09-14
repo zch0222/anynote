@@ -19,7 +19,8 @@ test("顶部一级标题同步笔记标题、目录和刷新后的内容", async
 
   const notePath = new URL(page.url()).pathname;
   const treeLink = page.locator(`a[href="${notePath}"]`);
-  await expect(treeLink).toHaveText("同步后的标题");
+  // 目录行是「标题 + 更新于…」两行，所以断言收敛到标题那一行而不是整个链接
+  await expect(treeLink.getByText("同步后的标题", { exact: true })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible();
   await page.reload();
   await expect(title).toHaveValue("同步后的标题");
@@ -29,7 +30,7 @@ test("顶部一级标题同步笔记标题、目录和刷新后的内容", async
   // 修改已有 H1；标题与正文必须由同一份草稿保存。
   await replaceLeadingHeading(page, "再次修改标题");
   await expect(title).toHaveValue("再次修改标题");
-  await expect(treeLink).toHaveText("再次修改标题");
+  await expect(treeLink.getByText("再次修改标题", { exact: true })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible();
   await page.reload();
   await expect(title).toHaveValue("再次修改标题");
@@ -39,7 +40,7 @@ test("顶部一级标题同步笔记标题、目录和刷新后的内容", async
   await title.fill("手动笔记标题");
   await replaceLastParagraph(page, "继续编辑正文");
   await expect(title).toHaveValue("手动笔记标题");
-  await expect(treeLink).toHaveText("手动笔记标题");
+  await expect(treeLink.getByText("手动笔记标题", { exact: true })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible();
   await page.reload();
   await expect(title).toHaveValue("手动笔记标题");

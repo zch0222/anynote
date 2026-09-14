@@ -196,24 +196,27 @@
 
 @layer utilities {
   /*
-   * 知识库封面渐变。设计稿里 5 张卡各自一组双色渐变，色相固定、角度固定，
+   * 知识库封面渐变。设计稿里 5 组双色渐变，色相固定、方向固定（左上 → 右下），
    * 由 ID 取模选组（见 features/notes/lib/cover-gradient.ts），所以这里只需要
    * 5 条静态规则——不用内联 style，也就不违反「动态值走 CSS 变量」的约束。
+   *
+   * 取值直接抄设计稿第 3 页的卡片取样：起点是饱和色、终点更亮，
+   * 45° 斜向让同色系的卡片也不至于糊成一块。
    */
   .kb-cover {
-    background-image: linear-gradient(135deg, var(--kb-from), var(--kb-to));
+    background-image: linear-gradient(to bottom right, var(--kb-from), var(--kb-to));
   }
   .kb-cover-0 {
-    --kb-from: #33a1ef;
+    --kb-from: #1f8eea;
     --kb-to: #59c6f9;
   }
   .kb-cover-1 {
     --kb-from: #8a58e6;
-    --kb-to: #af59f2;
+    --kb-to: #c05cf5;
   }
   .kb-cover-2 {
-    --kb-from: #32bc88;
-    --kb-to: #33c659;
+    --kb-from: #1fbc74;
+    --kb-to: #35c95c;
   }
   .kb-cover-3 {
     --kb-from: #ff6519;

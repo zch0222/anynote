@@ -17,6 +17,7 @@ import { useNoteQuery } from "@/features/notes/use-note";
 import { useNoteTitle } from "@/features/notes/use-note-title";
 import { useSaveNote } from "@/features/notes/use-save-note";
 import { continueWriting } from "@/lib/ai/sse";
+import { formatRelativeTime } from "@/lib/format-time";
 import { FolderInput, MoreHorizontal, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -185,8 +186,21 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
             value={title}
             onChange={(event) => handleTitleChange(event.target.value)}
             placeholder="未命名笔记"
-            className="h-auto shrink-0 rounded-none border-0 border-b px-4 py-3 !text-xl font-semibold shadow-none focus-visible:ring-0"
+            className="h-auto shrink-0 rounded-none border-0 px-4 pt-3 !text-2xl font-semibold shadow-none focus-visible:ring-0"
           />
+          {/*
+            元信息行（设计稿 p09）：更新 · 字数 · 所属知识库。
+            作者与阅读次数后端没有返回（`GET /notes/{id}` 只有 title/content/
+            knowledgeBaseId/updateTime），所以只渲染拿得到的几项。
+          */}
+          <p
+            data-testid="mobile-note-meta"
+            className="shrink-0 border-b px-4 pb-3 text-footnote text-label-tertiary"
+          >
+            {note.data?.updateTime ? `${formatRelativeTime(note.data.updateTime)}更新 · ` : ""}
+            <span className="tabular">{initialContent.length.toLocaleString("zh-CN")} 字</span>
+            {note.data?.knowledgeBaseName ? ` · ${note.data.knowledgeBaseName}` : ""}
+          </p>
           <TiptapEditor
             key={noteId}
             preset="full"

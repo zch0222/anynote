@@ -1,6 +1,6 @@
 import { noteApi } from "@/lib/api/openapi";
 import { renderWithProviders } from "@/test/render";
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { Mock } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "../note-editor";
@@ -9,8 +9,9 @@ vi.mock("@/lib/api/openapi", () => ({
   noteApi: { PATCH: vi.fn(), GET: vi.fn(), POST: vi.fn(), DELETE: vi.fn() },
 }));
 
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => router,
 }));
 
 /** 编辑器整包走 dynamic 懒加载，测试里换成能记录 props 的桩件。 */
@@ -40,6 +41,8 @@ beforeEach(() => {
   get.mockReset();
   vi.mocked(noteApi.PATCH).mockReset();
   editorProps.mockReset();
+  router.push.mockReset();
+  router.replace.mockReset();
   get.mockImplementation((path: string) => {
     if (path === "/notes/{noteId}") {
       return Promise.resolve(
@@ -111,18 +114,31 @@ describe("NoteEditor 布局与编辑器接线", () => {
     expect(props.fill).toBeUndefined();
   });
 
-  it("标题与元信息行在正文之上，字数取自正文长度", async () => {
+  it("标题与元信息行在正文之上，字数落在正文末尾", async () => {
     renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
     await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
 
     expect(screen.getByLabelText("笔记标题")).toHaveValue("测试笔记");
-    // 正文 "正文" 两个字符，元信息行按 toLocaleString 渲染
-    expect(screen.getByText("2 字")).toBeInTheDocument();
-    // 「测试库」同时出现在左侧目录与元信息行，取元信息行那一条（正文区域内）
-    const metaLinks = screen
-      .getAllByRole("link", { name: "测试库" })
-      .filter((link) => link.getAttribute("href") === `/notes/${BASE_ID}`);
-    expect(metaLinks.length).toBeGreaterThan(0);
+
+    // 设计稿：字数在**正文末尾**，不在标题下面那一行（一行只出现一次）
+    const meta = screen.getByTestId("note-meta");
+    expect(meta).not.toHaveTextContent(/\d+ 字/);
+    expect(screen.getByTestId("note-char-count")).toHaveTextContent("2 字");
+
+    // 元信息行给的是"更新于 + 所属知识库"
+    expect(meta).toHaveTextContent("测试库");
+    expect(within(meta).getByRole("link", { name: "测试库" })).toHaveAttribute(
+      "href",
+      `/notes/${BASE_ID}`,
+    );
+  });
+
+  it("编辑器不再自带宽目录栏——目录在侧栏里", async () => {
+    const { container } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
+
+    // 同一份目录在一屏里出现两次会让人先分辨"哪个才是真的"
+    expect(container.querySelector('[aria-label="笔记目录"]')).toBeNull();
   });
 
   it("给编辑器接上图片上传实现，笔记里才能插图", async () => {
@@ -143,5 +159,24 @@ describe("NoteEditor 布局与编辑器接线", () => {
 
     await waitFor(() => expect(screen.getByText(/笔记加载失败/)).toBeInTheDocument());
     expect(screen.queryByTestId("tiptap-stub")).toBeNull();
+  });
+
+  /**
+   * 回归：删除后曾经 push 到 `/notes/<baseId>/notes`，那条地址会命中
+   * `[baseId]/[noteId]` 路由、把字面量 "notes" 当 noteId，然后 notFound()——
+   * 用户删完笔记直接掉进 404。列表页的地址是裸的 `/notes/<baseId>`。
+   */
+  it("删除成功后回到知识库的笔记列表，而不是会 404 的 /notes/<id>/notes", async () => {
+    vi.mocked(noteApi.DELETE).mockResolvedValue(envelope(null) as never);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("note-actions"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "删除笔记" }));
+
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith(`/notes/${BASE_ID}`));
+    expect(router.push).not.toHaveBeenCalledWith(`/notes/${BASE_ID}/notes`);
   });
 });

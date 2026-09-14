@@ -36,7 +36,26 @@ vi.mock("next-themes", () => ({ useTheme: () => ({ theme: "system", setTheme }) 
 vi.mock("@/features/auth/use-me", () => ({ useMe: () => ({ ...profile, refetch }) }));
 vi.mock("@/features/notes/use-knowledge-bases", () => ({
   useKnowledgeBasesQuery: () => bases,
-  useKnowledgeBaseQuery: () => ({ data: { knowledgeBaseName: "产品设计知识库" } }),
+  useKnowledgeBaseQuery: () => ({ data: { knowledgeBaseName: "产品设计知识库", type: 0 } }),
+}));
+// 侧栏在知识库内会拉三份计数，这些查询在本文件里不是被测对象
+vi.mock("@/features/notes/use-notes", () => ({
+  useNotesQuery: () => ({
+    data: {
+      rows: [
+        { id: 11, title: "交互一致性检查清单", updateTime: "2026-09-14T10:00:00+08:00" },
+        { id: 12, title: "空状态与错误态文案", updateTime: "2026-09-13T10:00:00+08:00" },
+      ],
+      total: 2,
+    },
+    isPending: false,
+  }),
+}));
+vi.mock("@/features/mooc/use-moocs", () => ({
+  useMoocsQuery: () => ({ data: { rows: [], total: 6 }, isPending: false }),
+}));
+vi.mock("@/features/tasks/use-tasks", () => ({
+  useTasksQuery: () => ({ data: { rows: [], total: 3 }, isPending: false }),
 }));
 
 beforeEach(() => {
@@ -99,51 +118,78 @@ describe("AppShell 交互", () => {
     expect(within(navigation).queryByRole("link", { name: "任务" })).toBeNull();
   });
 
-  it("当前知识库在侧栏高亮，且只高亮它一个", () => {
-    pathname.current = "/notes/2/tasks";
-    render(<AppShell>内容</AppShell>);
-    expect(screen.getByTestId("sidebar-base-2")).toHaveAttribute("data-active", "true");
-    expect(screen.getByTestId("sidebar-base-1")).toHaveAttribute("data-active", "false");
-  });
-
-  it("知识库内页的顶栏给切换器与二级 Tab，而不是裸面包屑", () => {
-    pathname.current = "/notes/7";
+  it("进了知识库之后侧栏换成当前库卡片与二级导航，并给出计数", () => {
+    pathname.current = "/notes/7/tasks";
     render(<AppShell>内容</AppShell>);
 
-    expect(screen.getByTestId("kb-switcher")).toHaveAttribute("href", "/notes");
+    // 头部换成"我在哪个库"
+    expect(screen.getByTestId("sidebar-kb-card")).toHaveAttribute("href", "/notes");
+    expect(screen.getByTestId("sidebar-kb-card")).toHaveTextContent("产品设计知识库");
+
+    // 二级导航在侧栏，不在顶栏
     const tabs = screen.getByRole("navigation", { name: "知识库内容" });
-    expect(within(tabs).getByRole("link", { name: "概览" })).toHaveAttribute(
+    expect(within(tabs).getByRole("link", { name: /概览/ })).toHaveAttribute(
       "href",
       "/notes/7/overview",
     );
-    expect(within(tabs).getByRole("link", { name: "笔记" })).toHaveAttribute("href", "/notes/7");
-    expect(within(tabs).getByRole("link", { name: "成员" })).toHaveAttribute(
+    expect(within(tabs).getByRole("link", { name: /笔记/ })).toHaveAttribute("href", "/notes/7");
+    expect(within(tabs).getByRole("link", { name: /成员/ })).toHaveAttribute(
       "href",
       "/notes/7/members",
     );
-    // 笔记是当前 Tab
-    expect(within(tabs).getByRole("link", { name: "笔记" })).toHaveAttribute(
+    // 计数来自各自的列表查询
+    expect(within(tabs).getByRole("link", { name: /笔记/ })).toHaveTextContent("2");
+    expect(within(tabs).getByRole("link", { name: /慕课/ })).toHaveTextContent("6");
+    expect(within(tabs).getByRole("link", { name: /任务/ })).toHaveTextContent("3");
+
+    expect(within(tabs).getByRole("link", { name: /任务/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
   });
 
-  it("编辑器里「笔记」Tab 仍然高亮", () => {
-    pathname.current = "/notes/7/345";
+  it("知识库内不再列出别的知识库——换库收进卡片与画廊", () => {
+    pathname.current = "/notes/7";
     render(<AppShell>内容</AppShell>);
+    // 「我有哪些库」那一列在进库后让位给「这个库里有什么」
+    expect(screen.queryByTestId("sidebar-base-1")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "主导航" })).toBeNull();
+  });
+
+  it("编辑器里「笔记」仍然高亮，且目录高亮当前那篇", () => {
+    pathname.current = "/notes/7/11";
+    render(<AppShell>内容</AppShell>);
+
     const tabs = screen.getByRole("navigation", { name: "知识库内容" });
-    expect(within(tabs).getByRole("link", { name: "笔记" })).toHaveAttribute(
+    expect(within(tabs).getByRole("link", { name: /笔记/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
+
+    const directory = screen.getByRole("navigation", { name: "笔记列表" });
+    expect(within(directory).getByRole("link", { name: /交互一致性检查清单/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(directory).getByRole("link", { name: /空状态与错误态文案/ })).not.toHaveAttribute(
+      "aria-current",
+    );
   });
 
-  it("知识库外页的顶栏退回面包屑", () => {
+  it("非「笔记」面收起笔记目录，不挤掉要看的内容", () => {
+    pathname.current = "/notes/7/members";
+    render(<AppShell>内容</AppShell>);
+    expect(screen.getByTestId("sidebar-note-directory")).toHaveClass("hidden");
+  });
+
+  it("知识库外页的顶栏退回面包屑，且侧栏是知识库列表", () => {
     pathname.current = "/ai/chat";
     render(<AppShell>内容</AppShell>);
     const crumb = screen.getByRole("navigation", { name: "面包屑" });
     expect(within(crumb).getByText("AI 对话")).toBeInTheDocument();
     expect(screen.queryByTestId("kb-switcher")).toBeNull();
+    // 库外仍然是"我有哪些库"
+    expect(screen.getByTestId("sidebar-base-1")).toBeInTheDocument();
   });
 
   it("Ctrl+K 搜索并执行路由跳转，关闭面板", async () => {

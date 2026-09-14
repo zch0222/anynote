@@ -22,6 +22,12 @@ export const knowledgeBaseSchema = z.object({
   cover: z.string().nullish(),
   detail: z.string().nullish(),
   permissions: z.number().nullish(),
+  /**
+   * 0 = 普通知识库，1 = 组织知识库（`n_knowledge_base.type`）。
+   * 侧栏卡片与顶栏要据此说明"这是个什么库"，而两种库用的是**不同的列表端点**，
+   * 所以这个字段不能在解析时被丢掉。
+   */
+  type: z.number().nullish(),
   updateTime: z.string().nullish(),
 });
 export type KnowledgeBase = z.infer<typeof knowledgeBaseSchema>;

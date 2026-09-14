@@ -116,36 +116,58 @@ test.describe("信息架构：知识库是唯一顶层对象", () => {
     await expect(navigation.getByRole("link", { name: "任务" })).toHaveCount(0);
   });
 
-  test("知识库内的二级 Tab 可达，且「笔记」是默认落地页", async ({ page }) => {
+  test("知识库内的二级 Tab 在侧栏，且「笔记」是默认落地页", async ({ page }) => {
     await ensureKnowledgeBase(page, BASE_NAME);
     const url = page.url();
     const baseId = /\/notes\/(\d+)/.exec(url)?.[1];
     expect(baseId, `未能从 ${url} 解析知识库 id`).toBeTruthy();
 
-    const tabs = page.getByRole("navigation", { name: "知识库内容" });
-    await expect(tabs.getByRole("link", { name: "笔记" })).toHaveAttribute(
+    // 设计稿把二级导航放在侧栏：进库后侧栏换成「当前库卡片 + 知识库内容」
+    await expect(page.getByTestId("sidebar-kb-card")).toBeVisible({ timeout: 30_000 });
+    const tabs = page.getByTestId("app-sidebar").getByRole("navigation", { name: "知识库内容" });
+    await expect(tabs.getByRole("link", { name: /笔记/ })).toHaveAttribute(
       "href",
       `/notes/${baseId}`,
     );
-    await expect(tabs.getByRole("link", { name: "笔记" })).toHaveAttribute("aria-current", "page");
+    await expect(tabs.getByRole("link", { name: /笔记/ })).toHaveAttribute("aria-current", "page");
 
     // 概览 Tab 能打开
-    await tabs.getByRole("link", { name: "概览" }).click();
+    await tabs.getByRole("link", { name: /概览/ }).click();
     await expect(page).toHaveURL(new RegExp(`/notes/${baseId}/overview$`), { timeout: 30_000 });
     await expect(page.getByTestId("kb-overview")).toBeVisible({ timeout: 30_000 });
 
     // 成员 Tab 能打开
     await page
+      .getByTestId("app-sidebar")
       .getByRole("navigation", { name: "知识库内容" })
-      .getByRole("link", { name: "成员" })
+      .getByRole("link", { name: /成员/ })
       .click();
     await expect(page).toHaveURL(new RegExp(`/notes/${baseId}/members$`), { timeout: 30_000 });
     await expect(page.getByTestId("kb-members")).toBeVisible({ timeout: 30_000 });
   });
 
-  test("顶栏在知识库内给切换器与 Tab，在知识库外退回面包屑", async ({ page }) => {
+  test("侧栏在库内换一套内容，库外换回知识库列表", async ({ page }) => {
+    await openKnowledgeBase(page, BASE_NAME);
+    // 库内：当前库卡片 + 二级导航，不再罗列"我有哪些库"
+    await expect(page.getByTestId("sidebar-kb-card")).toBeVisible({ timeout: 30_000 });
+    await expect(
+      page.getByTestId("app-sidebar").getByRole("navigation", { name: "主导航" }),
+    ).toHaveCount(0);
+
+    // 库外：换回知识库列表与跨库能力
+    await page.goto("/notes");
+    await expect(
+      page.getByTestId("app-sidebar").getByRole("navigation", { name: "主导航" }),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("sidebar-kb-card")).toHaveCount(0);
+  });
+
+  test("顶栏在知识库内只给切换器，在知识库外退回面包屑", async ({ page }) => {
     await openKnowledgeBase(page, BASE_NAME);
     await expect(page.getByTestId("kb-switcher")).toHaveAttribute("href", "/notes");
+    // 二级 Tab 已经搬进侧栏，顶栏不该再出现第二份
+    const header = page.getByTestId("app-header");
+    await expect(header.getByRole("navigation", { name: "知识库内容" })).toHaveCount(0);
 
     await page.goto("/ai/chat");
     await expect(page.getByRole("navigation", { name: "面包屑" })).toBeVisible({ timeout: 30_000 });
@@ -344,7 +366,7 @@ test.describe("笔记列表与编辑器版式", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("编辑器有左侧目录（知识库 → 笔记两层）", async ({ page }) => {
+  test("编辑器左侧目录在侧栏里，且高亮当前那篇", async ({ page }) => {
     expect(baseUrl, "上一条用例未能定位知识库").not.toBe("");
     await page.goto(baseUrl);
     const firstRow = page.getByTestId("note-list-items").getByRole("link").first();
@@ -352,8 +374,13 @@ test.describe("笔记列表与编辑器版式", () => {
     await firstRow.click();
     await expect(page.locator(".anynote-editor__content")).toBeVisible({ timeout: 30_000 });
 
-    const tree = page.getByRole("navigation", { name: "笔记目录" });
-    await expect(tree).toBeVisible();
-    await expect(tree.getByRole("link", { name: new RegExp(BASE_NAME) })).toBeVisible();
+    // 目录在侧栏（设计稿的位置），不是正文左边另起的一列
+    const directory = page.getByTestId("sidebar-note-directory");
+    await expect(directory).toBeVisible();
+    await expect(directory.getByRole("navigation", { name: "笔记列表" })).toBeVisible();
+    // 当前这篇被高亮
+    const current = directory.locator('a[aria-current="page"]');
+    await expect(current).toHaveCount(1);
+    await expect(current).toHaveAttribute("href", new URL(page.url()).pathname);
   });
 });
