@@ -4,11 +4,7 @@ import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Segmented } from "@/components/ui/segmented";
 import { useMe } from "@/features/auth/use-me";
-import { CreateBaseDialog } from "@/features/notes/components/create-base-dialog";
-import {
-  type BaseScopeSource,
-  selectBases,
-} from "@/features/notes/components/knowledge-base-gallery";
+import { type BaseScopeSource, selectBases } from "@/features/notes/lib/base-scope";
 import { coverAvatarClassName } from "@/features/notes/lib/cover-gradient";
 import { type BaseScope, type KnowledgeBase, baseScopeOptions } from "@/features/notes/schemas";
 import {
@@ -19,26 +15,40 @@ import {
 import { formatRelativeTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
 import { ChevronRight, Library, Plus, Search } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+/**
+ * 新建知识库对话框按需加载。
+ *
+ * 它顶层引着 react-hook-form + `@hookform/resolvers/zod` + 一整套 Dialog 原子，
+ * 静态引入会把这条依赖树整棵压进 `/m/notes` 的首屏——而用户十有八九只是来看
+ * 列表的，不建库。`/m/*` 的预算是 250KB，这一条就顶掉了余量。
+ */
+const CreateBaseDialog = dynamic(
+  () =>
+    import("@/features/notes/components/create-base-dialog").then((mod) => mod.CreateBaseDialog),
+  { ssr: false },
+);
+
 export type MobileNoteBasesProps = {
-  /** 列表项跳转的前缀：`/m/notes` 是可写的笔记，`/m/wikis` 是只读浏览。 */
-  basePath?: "/m/notes" | "/m/wikis";
   title?: string;
-  /** 只读浏览（wikis）不提供新建入口与搜索。 */
+  /** 只读场景（无新建权限）不提供新建入口。 */
   showCreate?: boolean;
 };
 
 /**
- * `/m/notes` 与 `/m/wikis` 的第一级：知识库单列列表。
+ * `/m/notes`：知识库单列列表。
  *
  * 版式对齐设计稿：大标题 + 搜索框 + 分段筛选 + 「最近访问」单列卡片。
  * 数据与分段逻辑与桌面画廊**共用**（同一个 `selectBases`），
  * 只换版式——两端各写一份筛选规则迟早会漂。
+ *
+ * 12.1.3 删掉了 `/m/wikis` 与它的 `basePath` 参数：只读浏览那条链路整条下线，
+ * 列表项只剩 `/m/notes/:baseId` 一种落点。
  */
 export function MobileNoteBases({
-  basePath = "/m/notes",
   title = "知识库",
   showCreate = true,
 }: MobileNoteBasesProps = {}) {
@@ -136,7 +146,7 @@ export function MobileNoteBases({
           <ul className="space-y-2" data-testid="mobile-base-list">
             {bases.map((base) => (
               <li key={base.id}>
-                <BaseCard base={base} href={`${basePath}/${base.id}`} />
+                <BaseCard base={base} href={`/m/notes/${base.id}`} />
               </li>
             ))}
           </ul>
