@@ -173,9 +173,11 @@ describe("SettingsPage", () => {
     expect(screen.getByTestId("settings-nav-integrations")).toBeTruthy();
   });
 
-  it("按 section 渲染对应面板", () => {
+  it("按 section 渲染对应面板", async () => {
     renderWithProviders(<SettingsPage section="integrations" />);
-    expect(screen.getByTestId("settings-integrations")).toBeTruthy();
+    // 四个分区各自 dynamic(..., { ssr: false })：只有当前分区的代码会被下载，
+    // 所以这里要等它挂上（这正是省首屏预算的手段）。
+    expect(await screen.findByTestId("settings-integrations")).toBeTruthy();
     expect(screen.queryByTestId("settings-appearance")).toBeNull();
   });
 });

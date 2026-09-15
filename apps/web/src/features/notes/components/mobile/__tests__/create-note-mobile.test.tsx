@@ -98,9 +98,9 @@ describe("MobileCreateNote", () => {
     fireEvent.change(screen.getByLabelText("标题"), { target: { value: "短" } });
     fireEvent.click(screen.getByRole("button", { name: "创建笔记" }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/标题/)).toBeInTheDocument();
-    });
+    // 校验改用受控 state + 与桌面同一套边界（min 3 / max 15），错误走内联提示。
+    // 断言错误文案本身而不是 /标题/：后者会同时命中 <label>标题</label>。
+    expect(await screen.findByText("标题至少 3 个字符")).toBeInTheDocument();
     expect(createNote.mutateAsync).not.toHaveBeenCalled();
   });
 

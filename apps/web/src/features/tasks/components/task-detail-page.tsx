@@ -1,6 +1,5 @@
 "use client";
 
-import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { taskEditHref } from "@/components/layout/navigation";
 import { ProgressBar } from "@/components/loading/progress";
 import { ListRowsSkeleton, PanelSkeleton } from "@/components/loading/skeletons";
@@ -17,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Segmented } from "@/components/ui/segmented";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { useNoteQuery } from "@/features/notes/use-note";
 import {
@@ -52,11 +52,33 @@ import { toUserMessage } from "@/lib/api/errors";
 import { formatRelativeTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, FileText, MoreHorizontal, Pencil } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
-import { ReturnSubmissionDialog } from "./return-submission-dialog";
-import { SubmitTaskDialog } from "./submit-task-dialog";
 import { TaskHeatmap } from "./task-heatmap";
+
+/*
+ * 两个对话框都按需加载：它们只在点击后才出现，且各自带着一份笔记/成员列表查询的
+ * 依赖；静态引入会把它们压进任务详情的首屏（这条路由本来就贴着预算）。
+ * `ssr: false`：对话框在服务端渲染没有意义。
+ */
+const SubmitTaskDialog = dynamic(
+  () => import("./submit-task-dialog").then((mod) => mod.SubmitTaskDialog),
+  { ssr: false },
+);
+const ReturnSubmissionDialog = dynamic(
+  () => import("./return-submission-dialog").then((mod) => mod.ReturnSubmissionDialog),
+  { ssr: false },
+);
+
+/*
+ * 只读正文按需加载：TipTap 整包（含 Shiki、KaTeX 桥接）是重依赖，
+ * 静态引入会把它压进任务详情的首屏 JS（仓库禁止清单里明确要求 dynamic）。
+ */
+const TiptapEditor = dynamic(
+  () => import("@/components/editor/TiptapEditor").then((mod) => mod.TiptapEditor),
+  { ssr: false, loading: () => <Skeleton className="h-24 w-full rounded-md" /> },
+);
 
 /** 提交记录分段控件（图例 11）：文案 → tab 值。 */
 const TAB_LABELS: Record<SubmissionTab, string> = {

@@ -25,10 +25,19 @@ import { toUserMessage } from "@/lib/api/errors";
 import { formatRelativeTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, MoreHorizontal, NotebookPen, Plus, Trash2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CreateNoteDialog } from "./create-note-dialog";
+
+/*
+ * 「新建笔记」对话框按需加载，理由同 `knowledge-base-detail.tsx`：
+ * 它顶层引着 react-hook-form，静态引入会把整棵表单依赖树压进笔记列表的首屏。
+ */
+const CreateNoteDialog = dynamic(
+  () => import("./create-note-dialog").then((mod) => mod.CreateNoteDialog),
+  { ssr: false },
+);
 
 /** 页头与空态的主按钮样式：两处必须是同一个按钮，只换措辞不换形。 */
 const CREATE_TRIGGER_CLASS =

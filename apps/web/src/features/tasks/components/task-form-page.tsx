@@ -1,6 +1,5 @@
 "use client";
 
-import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { taskDetailHref } from "@/components/layout/navigation";
 import { Spinner } from "@/components/loading/spinner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -21,10 +20,20 @@ import { useCreateTaskMutation, useUpdateTaskMutation } from "@/features/tasks/u
 import { toUserMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Library } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { DateTimeField } from "./date-time-field";
+
+/*
+ * 描述编辑器按需加载：TipTap 整包是重依赖，仓库禁止清单要求一律
+ * `dynamic(..., { ssr: false })`（`pnpm --filter web bundle:budget` 会卡）。
+ */
+const TiptapEditor = dynamic(
+  () => import("@/components/editor/TiptapEditor").then((mod) => mod.TiptapEditor),
+  { ssr: false, loading: () => <Skeleton className="h-[130px] w-full rounded-md" /> },
+);
 
 /** 表单字段的 DOM id。提交失败要按"第一个出错字段"聚焦，得能按名字把元素找回来。 */
 const NAME_FIELD_ID = "task-name";

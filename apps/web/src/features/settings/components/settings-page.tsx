@@ -1,13 +1,40 @@
 "use client";
 
+import { PanelSkeleton } from "@/components/loading/skeletons";
+import { SETTINGS_SECTIONS, type SettingsSection } from "@/features/settings/sections";
 import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import type { SettingsSection } from "./account-settings";
-import { AccountSettings } from "./account-settings";
-import { SETTINGS_SECTIONS } from "./account-settings";
-import { AiSettings } from "./ai-settings";
-import { AppearanceSettings } from "./appearance-settings";
-import { IntegrationsSettings } from "./integrations-settings";
+
+/*
+ * 四个分区分开按需加载。
+ *
+ * 它们同属一页的四面，但只有一面会渲染。静态引入会把另外三面的依赖也压进首屏——
+ * 「账号」那条尤其贵（react-hook-form + 表单原子），而它恰好是**唯一**被
+ * `/settings/profile` 之外的路径访问不到的分区。这也符合仓库对重依赖一律
+ * `dynamic(..., { ssr: false })` 的约束。
+ */
+const AccountSettings = dynamic(
+  () => import("./account-settings").then((mod) => mod.AccountSettings),
+  { ssr: false, loading: () => <SettingsSectionSkeleton /> },
+);
+const AppearanceSettings = dynamic(
+  () => import("./appearance-settings").then((mod) => mod.AppearanceSettings),
+  { ssr: false, loading: () => <SettingsSectionSkeleton /> },
+);
+const AiSettings = dynamic(() => import("./ai-settings").then((mod) => mod.AiSettings), {
+  ssr: false,
+  loading: () => <SettingsSectionSkeleton />,
+});
+const IntegrationsSettings = dynamic(
+  () => import("./integrations-settings").then((mod) => mod.IntegrationsSettings),
+  { ssr: false, loading: () => <SettingsSectionSkeleton /> },
+);
+
+/** 分区块的骨架：形状对齐设置卡（标题 + 若干行），避免加载完成时整页跳一下。 */
+function SettingsSectionSkeleton() {
+  return <PanelSkeleton className="min-h-40" />;
+}
 
 export type SettingsPageProps = {
   section: SettingsSection;

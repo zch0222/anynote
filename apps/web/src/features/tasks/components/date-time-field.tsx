@@ -1,20 +1,24 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CalendarSkeleton } from "@/components/loading/skeletons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import {
-  addMonths,
-  eachDayOfInterval,
-  endOfMonth,
-  format,
-  isSameDay,
-  set,
-  startOfMonth,
-} from "date-fns";
-import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState } from "react";
+
+/**
+ * 浮层内容按需加载：它引 `date-fns`（整包约 15 KB gzip），而这只在用户真的
+ * 点开日历时才需要。静态引入会把整包压进任务表单的首屏——那条路由的预算
+ * 只剩十几 KB，`pnpm --filter web bundle:budget` 会卡。
+ *
+ * 骨架给 `CalendarSkeleton`：与即将出现的"月份行 + 7 列日期格"同形，
+ * 加载完成时不会整块跳一下。
+ */
+const DateTimeCalendar = dynamic(
+  () => import("./date-time-calendar").then((mod) => mod.DateTimeCalendar),
+  { ssr: false, loading: () => <CalendarSkeleton /> },
+);
 
 export type DateTimeFieldProps = {
   /** 触发器元素的 id，页面用它做「滚到第一个错误字段」的锚点。 */
@@ -30,27 +34,21 @@ export type DateTimeFieldProps = {
   className?: string;
 };
 
-/**
- * `HH:mm` 的严格形态。用 `exec` 而不是 `test` + `split`：
- * 分组一次拿到，且天然挡住空串 / 缺前导零 / 半全角冒号这些输入法常见产物。
- */
-const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+/** 两位补零。刻意**不用 `date-fns` 的 `format`**：那会把整包拖进首屏（见上）。 */
+function pad(value: number): string {
+  return String(value).padStart(2, "0");
+}
 
-const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+/** `MM-dd HH:mm`，与 `date-fns` 的 `format(value, "MM-dd HH:mm")` 同形。 */
+function formatTrigger(value: Date): string {
+  return `${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
 
 /**
  * 日期时间选择（D-18 图例 6 / 7 / 12）。
  *
- * 触发器只读、浮层里才编辑，且**浮层里的改动是草稿**：点日期格只移动选中格，
- * 改时间输入只改草稿，只有「确定」才 `onChange` 回填并关闭。
- * 这样做的原因是两个字段（开始 / 截止）都要参与「截止必须晚于开始」的联动校验，
- * 边点边回填会让用户在还没选完时就看到一次错误提示。
- *
- * 另外两个刻意的地方：
- * 1. **每次打开都从当前值重置草稿**。上一次点开又取消留下的日期若留到下一次，
- *    用户会以为"我上次选的还算数"。
- * 2. **时间非法时不回填、也不关浮层**，只在输入框下提示。关闭等于把用户
- *    输入的东西吞掉，重开还得再打一遍。
+ * 触发器只读、浮层里才编辑。**每次打开都从当前值重置草稿**——
+ * 上一次点开又取消留下的日期若留到下一次，用户会以为"我上次选的还算数"。
  */
 export function DateTimeField({
   id,
@@ -63,42 +61,17 @@ export function DateTimeField({
   className,
 }: DateTimeFieldProps) {
   const [open, setOpen] = useState(false);
-  const [viewMonth, setViewMonth] = useState<Date>(() => startOfMonth(value));
-  const [selectedDay, setSelectedDay] = useState<Date>(value);
-  const [timeDraft, setTimeDraft] = useState<string>(() => format(value, "HH:mm"));
-  const [timeInvalid, setTimeInvalid] = useState(false);
+  /*
+   * 重挂浮层内容的钥匙：每次打开 +1，让 `DateTimeCalendar` 重新初始化草稿。
+   * 用 key 而不是把草稿状态提到这里，是为了让「草稿」这件事完全留在浮层内——
+   * 触发器这边不需要知道有草稿存在。
+   */
+  const [openCount, setOpenCount] = useState(0);
 
   function handleOpenChange(next: boolean) {
-    if (next) {
-      setViewMonth(startOfMonth(value));
-      setSelectedDay(value);
-      setTimeDraft(format(value, "HH:mm"));
-      setTimeInvalid(false);
-    }
+    if (next) setOpenCount((count) => count + 1);
     setOpen(next);
   }
-
-  function handleConfirm() {
-    const matched = TIME_PATTERN.exec(timeDraft.trim());
-    if (!matched) {
-      setTimeInvalid(true);
-      return;
-    }
-    const next = set(selectedDay, {
-      hours: Number(matched[1]),
-      minutes: Number(matched[2]),
-      seconds: 0,
-      milliseconds: 0,
-    });
-    onChange(next);
-    setOpen(false);
-  }
-
-  /** 下界归一化到当天零点，这样比较只受日期影响、与传入时刻无关。 */
-  const minDay = min ? set(min, { hours: 0, minutes: 0, seconds: 0, milliseconds: 0 }) : null;
-  const days = eachDayOfInterval({ start: startOfMonth(viewMonth), end: endOfMonth(viewMonth) });
-  /** 首格前面要垫的空位：`eachDayOfInterval` 不带星期对齐信息，得自己补。 */
-  const leadingBlanks = startOfMonth(viewMonth).getDay();
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -116,95 +89,20 @@ export function DateTimeField({
         )}
       >
         <Clock className="size-4 text-label-secondary" aria-hidden="true" />
-        <span className="tabular-nums">{format(value, "MM-dd HH:mm")}</span>
+        <span className="tabular-nums">{formatTrigger(value)}</span>
       </PopoverTrigger>
 
       <PopoverContent align="start" className="w-[296px] p-3">
-        <div className="flex items-center justify-between">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="上个月"
-            onClick={() => setViewMonth((month) => addMonths(month, -1))}
-          >
-            <ChevronLeft aria-hidden="true" />
-          </Button>
-          <span className="text-footnote font-medium text-label tabular-nums">
-            {format(viewMonth, "yyyy 年 MM 月")}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="下个月"
-            onClick={() => setViewMonth((month) => addMonths(month, 1))}
-          >
-            <ChevronRight aria-hidden="true" />
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-7 gap-y-0.5">
-          {WEEKDAYS.map((weekday) => (
-            <span
-              key={weekday}
-              className="flex h-6 items-center justify-center text-xs text-label-tertiary"
-            >
-              {weekday}
-            </span>
-          ))}
-          {Array.from({ length: leadingBlanks }, (_, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 定长静态占位，无身份、不重排
-            <span key={index} aria-hidden="true" />
-          ))}
-          {days.map((day) => {
-            const isSelected = isSameDay(day, selectedDay);
-            const isToday = isSameDay(day, new Date());
-            const isDisabled = minDay !== null && day.getTime() < minDay.getTime();
-            return (
-              <button
-                key={day.toISOString()}
-                type="button"
-                aria-label={format(day, "yyyy-MM-dd")}
-                aria-pressed={isSelected}
-                disabled={isDisabled}
-                onClick={() => setSelectedDay(day)}
-                className={cn(
-                  "flex h-9 items-center justify-center rounded-md text-footnote tabular-nums transition-colors",
-                  isSelected ? "bg-accent text-white" : "text-label hover:bg-fill-hover",
-                  // 今天描边只是"定位"，不该盖过选中态的实心强调
-                  isToday && !isSelected && "border border-accent",
-                  isDisabled && "pointer-events-none opacity-40",
-                )}
-              >
-                {day.getDate()}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-2 border-t border-separator pt-2.5">
-          <Input
-            aria-label="时间"
-            aria-invalid={timeInvalid}
-            className="h-8 w-20 tabular-nums"
-            value={timeDraft}
-            placeholder="HH:mm"
-            pattern="^([01]\d|2[0-3]):[0-5]\d$"
-            onChange={(event) => {
-              setTimeDraft(event.target.value);
-              setTimeInvalid(false);
+        {open ? (
+          <DateTimeCalendar
+            key={openCount}
+            value={value}
+            min={min}
+            onConfirm={(next) => {
+              onChange(next);
+              setOpen(false);
             }}
           />
-          <span className="flex-1 text-xs text-label-tertiary">24 小时制</span>
-          <Button type="button" size="sm" onClick={handleConfirm}>
-            确定
-          </Button>
-        </div>
-        {timeInvalid ? (
-          <p role="alert" className="text-xs text-danger">
-            请输入 HH:mm 格式的时间
-          </p>
         ) : null}
       </PopoverContent>
     </Popover>

@@ -146,7 +146,7 @@ describe("KnowledgeBaseOverview（D-02）", () => {
     });
   }
 
-  it("权限 1 / 2 显示「新建笔记」，权限 3 / 4 隐藏", () => {
+  it("权限 1 / 2 显示「新建笔记」，权限 3 / 4 隐藏", async () => {
     for (const [permissions, visible] of [
       [1, true],
       [2, true],
@@ -158,9 +158,13 @@ describe("KnowledgeBaseOverview（D-02）", () => {
       mockDocs([]);
       const { unmount } = renderWithProviders(<KnowledgeBaseOverview baseId={5} />);
       if (visible) {
-        expect(screen.getByTestId("kb-overview-note-create")).toBeInTheDocument();
+        // 对话框走 dynamic(..., { ssr: false })，要等一拍才挂上（省首屏预算）
+        expect(await screen.findByTestId("kb-overview-note-create")).toBeInTheDocument();
       } else {
-        expect(screen.queryByTestId("kb-overview-note-create")).toBeNull();
+        // 反向断言给一拍再查：立即查会因为"还没加载"而假通过，测不出权限逻辑
+        await waitFor(() => {
+          expect(screen.queryByTestId("kb-overview-note-create")).toBeNull();
+        });
       }
       unmount();
     }

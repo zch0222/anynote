@@ -113,9 +113,15 @@ function mockAdminTask(overrides: Record<string, unknown> = {}) {
 }
 
 /** 打开日期浮层、点某一天、改时间、确定——快捷胶囊之外唯一能改时间的方式。 */
-function pickDate(fieldLabel: string, day: string, time: string) {
+/**
+ * 选日期 + 时间 + 确定。
+ *
+ * `async` 是必需的：日历内容带 `date-fns`，走 `dynamic(..., { ssr: false })`
+ * 按需加载，点击触发器之后要等它挂上才能找到日期格。
+ */
+async function pickDate(fieldLabel: string, day: string, time: string) {
   fireEvent.click(screen.getByLabelText(fieldLabel));
-  fireEvent.click(screen.getByRole("button", { name: day }));
+  fireEvent.click(await screen.findByRole("button", { name: day }));
   fireEvent.change(screen.getByLabelText("时间"), { target: { value: time } });
   fireEvent.click(screen.getByRole("button", { name: "确定" }));
 }
@@ -138,7 +144,7 @@ afterEach(() => {
 });
 
 describe("TaskFormPage 新建", () => {
-  it("默认值：开始取下一个整点，截止为开始 + 7 天的 23:59（图例 6 / 7）", () => {
+  it("默认值：开始取下一个整点，截止为开始 + 7 天的 23:59（图例 6 / 7）", async () => {
     renderWithProviders(<TaskFormPage baseId={7} mode="new" />);
 
     expect(screen.getByLabelText("开始时间")).toHaveTextContent(START_TEXT);
@@ -146,7 +152,7 @@ describe("TaskFormPage 新建", () => {
     expect(screen.getByTestId("task-form-base")).toHaveTextContent("产品设计知识库");
   });
 
-  it("名称计数随输入更新（图例 5）", () => {
+  it("名称计数随输入更新（图例 5）", async () => {
     renderWithProviders(<TaskFormPage baseId={7} mode="new" />);
 
     expect(screen.getByText("0 / 20")).toBeInTheDocument();
@@ -180,7 +186,7 @@ describe("TaskFormPage 新建", () => {
     renderWithProviders(<TaskFormPage baseId={7} mode="new" />);
 
     fireEvent.change(screen.getByLabelText("任务名称"), { target: { value: "读论文" } });
-    pickDate("截止时间", "2026-09-09", "09:00");
+    await pickDate("截止时间", "2026-09-09", "09:00");
     fireEvent.click(screen.getByRole("button", { name: "发布任务" }));
 
     await screen.findByText("截止时间必须晚于开始时间");
@@ -224,7 +230,7 @@ describe("TaskFormPage 新建", () => {
 
     fireEvent.change(screen.getByLabelText("任务名称"), { target: { value: "读论文" } });
     // 截止选到开始（09-10 11:00）之前：09-09 09:00
-    pickDate("截止时间", "2026-09-09", "09:00");
+    await pickDate("截止时间", "2026-09-09", "09:00");
     fireEvent.click(screen.getByRole("button", { name: "发布任务" }));
 
     expect(await screen.findByText("截止时间必须晚于开始时间")).toBeInTheDocument();
@@ -237,7 +243,7 @@ describe("TaskFormPage 新建", () => {
     renderWithProviders(<TaskFormPage baseId={7} mode="new" />);
 
     fireEvent.change(screen.getByLabelText("任务名称"), { target: { value: "读论文" } });
-    pickDate("截止时间", "2026-09-09", "09:00");
+    await pickDate("截止时间", "2026-09-09", "09:00");
     fireEvent.click(screen.getByRole("button", { name: "发布任务" }));
     expect(await screen.findByText("截止时间必须晚于开始时间")).toBeInTheDocument();
 
@@ -247,7 +253,7 @@ describe("TaskFormPage 新建", () => {
     expect(screen.getByLabelText("截止时间")).toHaveAttribute("aria-invalid", "false");
   });
 
-  it("快捷胶囊「2 周」把截止回填成开始日 + 14 天的 23:59（图例 8）", () => {
+  it("快捷胶囊「2 周」把截止回填成开始日 + 14 天的 23:59（图例 8）", async () => {
     renderWithProviders(<TaskFormPage baseId={7} mode="new" />);
 
     fireEvent.click(screen.getByRole("button", { name: "2 周" }));
@@ -258,10 +264,10 @@ describe("TaskFormPage 新建", () => {
     expect(screen.getByRole("button", { name: "1 周" })).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("胶囊按**当前**开始时间回填，改了开始时间后按新值算", () => {
+  it("胶囊按**当前**开始时间回填，改了开始时间后按新值算", async () => {
     renderWithProviders(<TaskFormPage baseId={7} mode="new" />);
 
-    pickDate("开始时间", "2026-09-15", "08:30");
+    await pickDate("开始时间", "2026-09-15", "08:30");
     fireEvent.click(screen.getByRole("button", { name: "1 周" }));
 
     expect(screen.getByLabelText("截止时间")).toHaveTextContent("09-22 23:59");
@@ -273,7 +279,7 @@ describe("TaskFormPage 新建", () => {
 
     fireEvent.change(screen.getByLabelText("任务名称"), { target: { value: "  读书笔记  " } });
     fireEvent.change(screen.getByTestId("task-describe"), { target: { value: "**本周内**交" } });
-    pickDate("截止时间", "2026-09-20", "18:00");
+    await pickDate("截止时间", "2026-09-20", "18:00");
     fireEvent.click(screen.getByRole("button", { name: "发布任务" }));
 
     await waitFor(() => expect(createMutate).toHaveBeenCalledTimes(1));

@@ -27,7 +27,6 @@ import { useNoteQuery } from "@/features/notes/use-note";
 import { useNoteTitle } from "@/features/notes/use-note-title";
 import { useNotesQuery } from "@/features/notes/use-notes";
 import { useSaveNote } from "@/features/notes/use-save-note";
-import { continueWriting } from "@/lib/ai/sse";
 import { formatRelativeTime } from "@/lib/format-time";
 import { Clock, MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -107,6 +106,9 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   const handleAiContinue = useCallback<AiContinueFn>(
     async ({ contextTail, signal, onDelta, onError }) => {
       try {
+        // AI 续写同图片上传：SSE 消费层带 @microsoft/fetch-event-source，
+        // 只在真的用 slash「AI 续写」时才需要，静态引入会压进编辑器首屏。
+        const { continueWriting } = await import("@/lib/ai/sse");
         await continueWriting({ contextTail, signal, onDelta });
       } catch (error) {
         onError?.(error);

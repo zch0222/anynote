@@ -20,9 +20,19 @@ import {
 import { formatCardMeta } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
 import { Library, Plus } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
-import { CreateBaseDialog } from "./create-base-dialog";
+/*
+ * 「新建知识库」对话框按需加载（与移动端同款处理）：它顶层引着 react-hook-form
+ * 与整棵表单原子，而 `CreateBaseDialog` 在画廊与新建笔记页都只是"点开才需要"的
+ * 一个入口。静态引入会把这条依赖树压进 `/notes` 的首屏——实测这一步就是
+ * 桌面首屏超出 300KB 预算的主因之一。`ssr: false`：对话框只在点击后才渲染。
+ */
+const CreateBaseDialog = dynamic(
+  () => import("./create-base-dialog").then((mod) => mod.CreateBaseDialog),
+  { ssr: false },
+);
 
 /** 画廊只铺一屏放得下的量；再多交给搜索。 */
 const GALLERY_LIMIT = 12;

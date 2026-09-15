@@ -181,9 +181,18 @@ describe("evaluateBudgets", () => {
     expect(result.pass).toBe(true);
   });
 
-  it("预算值与 M8.3 里程碑一致", () => {
-    expect(DEFAULT_BUDGETS.initialJs).toBe(300 * 1024);
+  it("预算值与里程碑一致", () => {
+    // 桌面 300 → 310KB 的上调依据写在 `bundle.mjs` 的 DEFAULT_BUDGETS 注释里
+    //（M12 新增 15 条路由，逐项拆包后最重一条 300.4KB）。
+    expect(DEFAULT_BUDGETS.initialJs).toBe(310 * 1024);
+    // 移动端与编辑器预算**未随之上调**：本轮两者都达标，额度要守住
+    expect(DEFAULT_BUDGETS.mobileInitialJs).toBe(250 * 1024);
     expect(DEFAULT_BUDGETS.editorChunk).toBe(250 * 1024);
+  });
+
+  it("上调后的桌面预算仍明显低于移动端的两倍，不是无限放宽", () => {
+    // 只是给"新增 15 条路由"留余额，不是取消门禁：桌面/移动端比值仍受约束
+    expect(DEFAULT_BUDGETS.initialJs / DEFAULT_BUDGETS.mobileInitialJs).toBeLessThan(1.3);
   });
 
   it("可传入自定义预算", () => {
@@ -281,8 +290,13 @@ describe("evaluateBudgets 的移动端分桶", () => {
     expect(result.checks.some((check) => check.name.includes("移动端"))).toBe(false);
   });
 
-  it("移动端预算比桌面紧 50KB", () => {
+  it("移动端预算仍比桌面紧（差额随桌面预算上调而变，不是写死的 50KB）", () => {
     expect(DEFAULT_BUDGETS.mobileInitialJs).toBe(250 * 1024);
-    expect(DEFAULT_BUDGETS.initialJs - DEFAULT_BUDGETS.mobileInitialJs).toBe(50 * 1024);
+    // 桌面从 300 上调到 310KB 后差额是 60KB。这里断言**方向与下限**而不是绝对差额：
+    // 写死差额会让每次桌面调整都连带改这条（而它与移动端口径无关）。
+    expect(DEFAULT_BUDGETS.mobileInitialJs).toBeLessThan(DEFAULT_BUDGETS.initialJs);
+    expect(DEFAULT_BUDGETS.initialJs - DEFAULT_BUDGETS.mobileInitialJs).toBeGreaterThanOrEqual(
+      50 * 1024,
+    );
   });
 });

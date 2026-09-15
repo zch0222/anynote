@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { DateTimeField } from "@/features/tasks/components/date-time-field";
@@ -19,15 +19,24 @@ vi.stubGlobal(
 /** 固定基准时刻：2026-09-10 10:23（周四），避免用例随真实时钟漂移。 */
 const BASE = new Date("2026-09-10T10:23:00");
 
-function open(value = BASE) {
+/**
+ * 打开浮层。
+ *
+ * `await` 是必需的：浮层内容（`DateTimeCalendar`）走 `dynamic(..., { ssr: false })`，
+ * 点击之后要等一拍才挂上——它带 `date-fns`，只在用户真的点开日历时才下载。
+ * 所有调用方都是 async 用例；同步断言会读到空浮层。
+ */
+async function open(value = BASE) {
   const onChange = vi.fn();
   render(<DateTimeField label="开始时间" value={value} onChange={onChange} />);
   fireEvent.click(screen.getByLabelText("开始时间"));
+  // 等到月份标题出现，说明日历已经挂载
+  await screen.findByText(/年 \d{2} 月/);
   return { onChange };
 }
 
 describe("DateTimeField", () => {
-  it("触发器展示 MM-dd HH:mm，并按 label 暴露可访问名", () => {
+  it("触发器展示 MM-dd HH:mm，并按 label 暴露可访问名", async () => {
     render(<DateTimeField label="截止时间" value={BASE} onChange={vi.fn()} />);
 
     const trigger = screen.getByLabelText("截止时间");
@@ -35,7 +44,7 @@ describe("DateTimeField", () => {
     expect(trigger).toHaveAttribute("type", "button");
   });
 
-  it("外部值变化时触发器跟着走（受控）", () => {
+  it("外部值变化时触发器跟着走（受控）", async () => {
     const { rerender } = render(<DateTimeField label="开始时间" value={BASE} onChange={vi.fn()} />);
     rerender(
       <DateTimeField label="开始时间" value={new Date("2026-12-01T08:05:00")} onChange={vi.fn()} />,
@@ -44,8 +53,8 @@ describe("DateTimeField", () => {
     expect(screen.getByLabelText("开始时间")).toHaveTextContent("12-01 08:05");
   });
 
-  it("选日 + 改时间 + 确定，把选中的年月日时分回填出去", () => {
-    const { onChange } = open();
+  it("选日 + 改时间 + 确定，把选中的年月日时分回填出去", async () => {
+    const { onChange } = await open();
 
     // 点日期只改选中格，**此时还不许回填**
     fireEvent.click(screen.getByRole("button", { name: "2026-09-18" }));
@@ -68,7 +77,7 @@ describe("DateTimeField", () => {
     expect(next.getMilliseconds()).toBe(0);
   });
 
-  it("确定后浮层关闭", () => {
+  it("确定后浮层关闭", async () => {
     open();
 
     fireEvent.click(screen.getByRole("button", { name: "2026-09-18" }));
@@ -77,8 +86,8 @@ describe("DateTimeField", () => {
     expect(screen.queryByLabelText("时间")).toBeNull();
   });
 
-  it("非法时间不回填、不关浮层，并给出内联提示", () => {
-    const { onChange } = open();
+  it("非法时间不回填、不关浮层，并给出内联提示", async () => {
+    const { onChange } = await open();
 
     fireEvent.change(screen.getByLabelText("时间"), { target: { value: "25:99" } });
     fireEvent.click(screen.getByRole("button", { name: "确定" }));
@@ -90,8 +99,8 @@ describe("DateTimeField", () => {
     expect(screen.getByLabelText("时间")).toHaveAttribute("aria-invalid", "true");
   });
 
-  it("缺前导零 / 半全角冒号这类输入法产物也按非法处理", () => {
-    const { onChange } = open();
+  it("缺前导零 / 半全角冒号这类输入法产物也按非法处理", async () => {
+    const { onChange } = await open();
     const timeInput = screen.getByLabelText("时间");
 
     for (const bad of ["8:05", "08：05", "0805", ""]) {
@@ -101,7 +110,7 @@ describe("DateTimeField", () => {
     }
   });
 
-  it("改回合法值后提示消失", () => {
+  it("改回合法值后提示消失", async () => {
     open();
 
     fireEvent.change(screen.getByLabelText("时间"), { target: { value: "99:99" } });
@@ -112,8 +121,8 @@ describe("DateTimeField", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("月份切换改的是可见月份，选中的是新月份里的日期", () => {
-    const { onChange } = open();
+  it("月份切换改的是可见月份，选中的是新月份里的日期", async () => {
+    const { onChange } = await open();
 
     fireEvent.click(screen.getByRole("button", { name: "上个月" }));
     expect(screen.getByText("2026 年 08 月")).toBeInTheDocument();
@@ -128,7 +137,7 @@ describe("DateTimeField", () => {
     expect(next.getMinutes()).toBe(23);
   });
 
-  it("下个月按钮往回也能走，月份标题跟着变", () => {
+  it("下个月按钮往回也能走，月份标题跟着变", async () => {
     open();
 
     fireEvent.click(screen.getByRole("button", { name: "下个月" }));
@@ -137,8 +146,8 @@ describe("DateTimeField", () => {
     expect(screen.getByText("2026 年 09 月")).toBeInTheDocument();
   });
 
-  it("重新打开时用外部当前值重置草稿，上一次取消的选择不留存", () => {
-    const { onChange } = open();
+  it("重新打开时用外部当前值重置草稿，上一次取消的选择不留存", async () => {
+    const { onChange } = await open();
 
     fireEvent.click(screen.getByRole("button", { name: "2026-09-18" }));
     fireEvent.change(screen.getByLabelText("时间"), { target: { value: "08:05" } });

@@ -31,15 +31,12 @@ import {
   validateResetPassword,
 } from "../use-profile";
 
-export type SettingsSection = "profile" | "appearance" | "ai" | "integrations";
-
-/** 设置子导航（嵌套路由 /settings/<section>）。 */
-export const SETTINGS_SECTIONS: { key: SettingsSection; label: string }[] = [
-  { key: "profile", label: "账号" },
-  { key: "appearance", label: "外观" },
-  { key: "ai", label: "AI" },
-  { key: "integrations", label: "集成" },
-];
+/*
+ * 分节表已抽到 `@/features/settings/sections`（见那里的注释：留在本文件会把
+ * react-hook-form 整棵树拖进每个引用它的页面首屏）。这里**再导出**，
+ * 既有的 import 路径与测试不用改。
+ */
+export { SETTINGS_SECTIONS, type SettingsSection } from "@/features/settings/sections";
 
 /**
  * 资料卡（D-12 图例 11 – 18）。

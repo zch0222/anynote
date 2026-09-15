@@ -24,7 +24,13 @@ async function createBase(page: Page, name: string): Promise<number> {
     const res = await fetch("/api/proxy/note/bases", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: baseName, detail: "UI 补稿用例", type: 0 }),
+      // cover 是后端必填（缺了返回「知识库封面不能为空」），与前端默认值同址
+      body: JSON.stringify({
+        name: baseName,
+        detail: "UI 补稿用例",
+        cover: "https://anynote.obs.cn-east-3.myhuaweicloud.com/images/knowledge_base_cover.png",
+        type: 0,
+      }),
     });
     const json = await res.json();
     if (json.code !== "00000") throw new Error(`建库失败：${json.msg}`);

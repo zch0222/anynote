@@ -13,7 +13,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { coverAvatarClassName } from "@/features/notes/lib/cover-gradient";
-import { type CreateNoteInput, createNoteSchema } from "@/features/notes/schemas";
 import { useCreateNoteMutation } from "@/features/notes/use-create-note";
 import {
   useCreateKnowledgeBaseMutation,
@@ -21,14 +20,13 @@ import {
 } from "@/features/notes/use-knowledge-bases";
 import { toUserMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, Plus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-/** 标题上限（`createNoteSchema` 的 max）。计数器与校验共用同一个数。 */
+/** 标题长度边界，与 `createNoteSchema` 的 min / max 保持一致。 */
+const TITLE_MIN = 3;
 const TITLE_MAX = 15;
 
 /**
@@ -60,30 +58,44 @@ export function MobileCreateNote() {
   const [newBaseName, setNewBaseName] = useState("");
   const [newBaseDetail, setNewBaseDetail] = useState("");
 
-  const form = useForm<CreateNoteInput>({
-    resolver: zodResolver(createNoteSchema),
-    defaultValues: { title: presetTitle.slice(0, TITLE_MAX) },
-  });
-
-  const title = form.watch("title") ?? "";
+  /*
+   * 标题用受控 state 而不是 react-hook-form：这里是**单字段**表单，
+   * 而 react-hook-form + @hookform/resolvers 整包约 13 KB gzip —— `/m/*` 的
+   * 预算是 250KB，为一个输入框付这个代价不划算。校验用 schema 的同一个上限
+   * （`TITLE_MAX`），错误文案按 schema 的口径给出，行为与桌面版一致。
+   */
+  const [title, setTitle] = useState(() => presetTitle.slice(0, TITLE_MAX));
+  const [submitting, setSubmitting] = useState(false);
+  /** 只有提交过一次之后才提示，避免刚进页面就报错。 */
+  const [titleTouched, setTitleTouched] = useState(false);
+  const titleError = titleTouched && title.trim().length < TITLE_MIN ? "标题至少 3 个字符" : null;
   const baseList = bases.data ?? [];
   const effectiveBaseId = selectedBaseId ?? baseList[0]?.id ?? null;
   const backHref = effectiveBaseId ? `/m/notes/${effectiveBaseId}` : "/m/notes";
 
-  async function onSubmit(values: CreateNoteInput) {
+  async function onSubmit(event: React.FormEvent) {
+    event.preventDefault();
     if (effectiveBaseId === null) {
       toast.error("请先选择一个知识库");
       return;
     }
+    const trimmed = title.trim();
+    if (trimmed.length < TITLE_MIN) {
+      setTitleTouched(true);
+      return;
+    }
+    setSubmitting(true);
     try {
       const noteId = await create.mutateAsync({
         knowledgeBaseId: effectiveBaseId,
-        title: values.title,
+        title: trimmed,
       });
       toast.success("笔记已创建");
       router.push(`/m/notes/${effectiveBaseId}/${noteId}`);
     } catch (error) {
       toast.error(toUserMessage(error));
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -119,7 +131,7 @@ export function MobileCreateNote() {
             retrying={bases.isFetching}
           />
         ) : (
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <form onSubmit={onSubmit} className="space-y-5">
             <fieldset className="space-y-2">
               <legend className="mb-2 text-footnote font-medium text-label-secondary">
                 归属知识库
@@ -202,11 +214,18 @@ export function MobileCreateNote() {
                 maxLength={TITLE_MAX}
                 className="h-12 rounded-md text-base"
                 data-testid="create-note-title"
-                {...form.register("title")}
+                value={title}
+                aria-invalid={titleError ? true : undefined}
+                onChange={(event) => {
+                  setTitle(event.target.value);
+                  setTitleTouched(true);
+                }}
               />
               <div className="flex items-start justify-between gap-2">
-                {form.formState.errors.title ? (
-                  <p className="text-xs text-danger">{form.formState.errors.title.message}</p>
+                {titleError ? (
+                  <p role="alert" className="text-xs text-danger">
+                    {titleError}
+                  </p>
                 ) : (
                   <span />
                 )}
@@ -219,9 +238,9 @@ export function MobileCreateNote() {
             <Button
               type="submit"
               className="min-h-11 w-full"
-              disabled={form.formState.isSubmitting || effectiveBaseId === null}
+              disabled={submitting || effectiveBaseId === null}
             >
-              {form.formState.isSubmitting ? "创建中…" : "创建笔记"}
+              {submitting ? "创建中…" : "创建笔记"}
             </Button>
           </form>
         )}

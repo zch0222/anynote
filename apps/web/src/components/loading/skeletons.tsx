@@ -18,6 +18,7 @@ import { Fragment, type ReactNode } from "react";
  * | `DocumentSkeleton` | PDF 预览（文档页） |
  * | `EditorSkeleton` | 笔记 / 协作文档（标题 + 段落） |
  * | `PanelSkeleton` | 协同工作区 / 设置面板（一整块） |
+ * | `CalendarSkeleton` | 日期时间浮层（月份行 + 7 列日期格） |
  *
  * 全部带 `aria-busy`：读屏用户需要知道"这块正在变"，否则只会念到一个空区域。
  * 各个 `Skeleton` 自己是 `aria-hidden` 的，不会刷屏。
@@ -191,6 +192,35 @@ export function PanelSkeleton({ className }: { className?: string }) {
       <Skeleton className="h-7 w-2/3" />
       <Skeleton className="h-3.5 w-full" />
       <Skeleton className="h-3.5 w-5/6" />
+    </div>
+  );
+}
+
+/**
+ * 日期时间浮层：月份行 + 星期表头 + 6 行日期格。
+ *
+ * 形状按 `DateTimeCalendar` 实测（浮层宽 296、格 36 高、7 列）——
+ * 日期格给 36 高而不是文字行高：给矮了加载完成时浮层会往下长一截，
+ * 而用户的手正停在上面。
+ */
+export function CalendarSkeleton({ className }: { className?: string }) {
+  return (
+    <div aria-busy="true" data-slot="skeleton-calendar" className={cn("space-y-2", className)}>
+      <div className="flex items-center justify-between">
+        <Skeleton className="size-8 rounded-md" />
+        <Skeleton className="h-3.5 w-24" />
+        <Skeleton className="size-8 rounded-md" />
+      </div>
+      <div className="grid grid-cols-7 gap-y-0.5">
+        <SkeletonBlocks count={7}>{() => <Skeleton className="mx-auto h-6 w-6" />}</SkeletonBlocks>
+        <SkeletonBlocks count={42}>
+          {() => <Skeleton className="mx-auto h-9 w-9 rounded-md" />}
+        </SkeletonBlocks>
+      </div>
+      <div className="flex items-center gap-2 border-t border-separator pt-2.5">
+        <Skeleton className="h-8 w-20" />
+        <Skeleton className="h-8 flex-1" />
+      </div>
     </div>
   );
 }

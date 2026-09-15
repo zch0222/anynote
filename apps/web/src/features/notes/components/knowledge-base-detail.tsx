@@ -17,11 +17,26 @@ import { formatRelativeTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, FileText, Library, Plus, Upload } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CreateNoteDialog } from "./create-note-dialog";
 import { KnowledgeBaseMembers } from "./knowledge-base-members";
+
+/*
+ * 「新建笔记」对话框按需加载。
+ *
+ * 它顶层引着 react-hook-form + `@hookform/resolvers/zod`，而这条文件是
+ * `/notes/:id`、`/overview`、`/docs`、`/members` 四个路由的共同入口——
+ * 静态引入会把整棵表单依赖树压进这四个页面的首屏，而用户十有八九只是来看内容的。
+ * 实测这一步就是桌面首屏从 288.7KB 涨到 307.3KB（预算 300KB）的主因。
+ *
+ * `ssr: false` 与移动端同款：对话框只在点击后才需要，服务端渲染它没有意义。
+ */
+const CreateNoteDialog = dynamic(
+  () => import("./create-note-dialog").then((mod) => mod.CreateNoteDialog),
+  { ssr: false },
+);
 
 // 「成员」Tab 从本文件拆出（12.2.6），但路由页仍从 `knowledge-base-detail` 取，
 // 保持 import 路径稳定、避免同一轮里再改一次 page.tsx。
