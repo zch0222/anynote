@@ -78,9 +78,16 @@ apps/web/e2e/.ui-supplement/
 # `<cwd>\wsl.localhost\...\undefined：\Users\undefined\AppData\Local\lighthouse.NNN`，
 # 在仓库里生成几千个浏览器缓存文件。它们不是源码，也不该入库。
 # 用通配兜住这种畸形路径（含 Windows 盘符形态与 `undefined` 段）。
+# 主守卫：锚在 Lighthouse 自己生成的 `lighthouse.<pid>` 目录名上。
+# 它出现在下面两种畸形路径的**末段**，比匹配前缀那串 UNC / `undefined` 更稳
+# （前缀里混着反斜杠与全角冒号，在 gitignore 里还要处理转义，容易写错而静默失效）。
 **/lighthouse.[0-9]*/
-**/\\wsl.localhost*
-**/undefined：/Users/undefined/
+# 兜底：`undefined` 段（Windows 路径模板里的变量没被替换）。
+# 两种形态都要覆盖：`undefined:/Users/...`（盘符位）与
+# `\\wsl.localhost\...\undefined：\Users\...`（UNC 前缀 + 全角冒号）。
+# 反斜杠在 gitignore 里是转义字符，所以用 `[\\]` 字符类来匹配字面反斜杠。
+**/undefined[:：]/Users/undefined/
+**/*wsl.localhost*
 
 # ===== Logs =====
 *.log

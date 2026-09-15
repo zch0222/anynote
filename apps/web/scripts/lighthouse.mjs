@@ -5,7 +5,8 @@
 //   node scripts/lighthouse.mjs --mobile               # 移动 form factor + /m/* 路由
 //   node scripts/lighthouse.mjs --url http://localhost:3000/notes
 //   node scripts/lighthouse.mjs --budget               # 不达标以非零退出码失败
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as chromeLauncher from "chrome-launcher";
@@ -67,9 +68,32 @@ function resolveChromePath() {
 }
 
 const chromePath = resolveChromePath();
+/*
+ * Chrome 的 profile 目录在 WSL 下有个非显然的坑，两层一起处理：
+ *
+ * 1. `chrome-launcher` 用 `is-wsl` 判定平台，判为 WSL 时会把 `--user-data-dir`
+ *    经 `wslpath -w` 转成 **Windows 路径**——那是给"启动 Windows 侧 chrome.exe"
+ *    准备的。我们现在跑的是 Linux 侧的 `google-chrome`，转换后反而指向一个
+ *    不存在的盘符位置，于是它把 profile 落在仓库里、拼出
+ *    `<cwd>\wsl.localhost\...\undefined：\Users\undefined\...\lighthouse.NNN`
+ *    这样的畸形目录（曾一次误入库 4189 个文件）。
+ * 2. 所以这里用 `useDefaultProfile: false` + **自己把 `--user-data-dir` 放进
+ *    `chromeFlags`**：`chromeFlags` 是原样透传的，不过 `toWin32Path`。
+ *    同时给 `userDataDir` 让 chrome-launcher 的清理逻辑（rm -rf）仍有目标。
+ *
+ * profile 落在系统临时目录，仓库里不再落任何东西。
+ */
+const profileDir = mkdtempSync(join(tmpdir(), "anynote-lighthouse-"));
 const chrome = await chromeLauncher.launch({
   ...(chromePath ? { chromePath } : {}),
-  chromeFlags: ["--headless=new", "--no-sandbox", "--disable-gpu"],
+  userDataDir: profileDir,
+  chromeFlags: [
+    "--headless=new",
+    "--no-sandbox",
+    "--disable-gpu",
+    // 原样透传，避开 chrome-launcher 的 WSL→Windows 路径转换
+    `--user-data-dir=${profileDir}`,
+  ],
 });
 
 const results = [];
@@ -119,5 +143,8 @@ for (const result of results) {
 
 if (enforce && !verdict.pass) {
   console.error("\nLighthouse 未达门槛。");
-  process.exit(1);
+  // 用 exitCode 而不是 `process.exit(1)`：后者会立刻掐断事件循环，
+  // 让 chrome-launcher 的清理（以及 stdout 的 flush）来不及跑完，
+  // 每次不达标都会留一个残留的 Chrome 进程。
+  process.exitCode = 1;
 }
