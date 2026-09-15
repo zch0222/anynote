@@ -9,6 +9,7 @@ import com.anynote.note.api.model.vo.AdminNoteTaskVO;
 import com.anynote.note.api.model.po.NoteTaskSubmissionRecord;
 import com.anynote.note.model.bo.*;
 import com.anynote.note.model.dto.*;
+import com.anynote.note.model.vo.NoteTaskEditHeatmapVO;
 import com.anynote.note.model.vo.NoteTaskUserAnalyzeVO;
 import com.anynote.note.service.NoteTaskService;
 import com.anynote.note.service.NoteTaskSubmissionRecordService;
@@ -19,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
@@ -96,6 +99,21 @@ public class AdminNoteTaskController {
         return ResUtil.success(noteTaskService.getNoteOperationCounts(NoteTaskQueryParam.NoteTaskQueryParamBuilder()
                         .noteTaskId(id)
                 .build()));
+    }
+
+    /**
+     * 任务成员编辑热力图
+     * @param id 笔记任务id
+     * @return 任务时间窗口内的逐日编辑次数矩阵
+     */
+    @Operation(summary = "任务成员编辑热力图", description = "按天统计已提交成员在任务时间窗口内对提交笔记的编辑次数")
+    @GetMapping("/{id}/editHeatmap")
+    public ResData<NoteTaskEditHeatmapVO> getNoteTaskEditHeatmap(
+            @Parameter(description = "笔记任务id", required = true)
+            @NotNull(message = "任务id不能为空") @PathVariable("id") Long id) {
+        NoteTaskEditHeatmapQueryParam queryParam = new NoteTaskEditHeatmapQueryParam();
+        queryParam.setNoteTaskId(id);
+        return ResUtil.success(noteTaskService.getNoteTaskEditHeatmap(queryParam));
     }
 
     /**

@@ -8,6 +8,7 @@ import com.anynote.common.rocketmq.tags.NoteTaskTagsEnum;
 import com.anynote.common.security.token.TokenUtil;
 import com.anynote.core.constant.Constants;
 import com.anynote.core.exception.BusinessException;
+import com.anynote.core.exception.auth.AuthException;
 import com.anynote.core.exception.user.UserParamException;
 import com.anynote.core.utils.DateUtils;
 import com.anynote.core.utils.StringUtils;
@@ -28,8 +29,12 @@ import com.anynote.note.model.bo.*;
 import com.anynote.note.api.model.vo.AdminNoteTaskVO;
 import com.anynote.note.model.dto.MemberNoteTaskDTO;
 import com.anynote.note.model.po.NoteTaskAnalyzePO;
+import com.anynote.note.model.po.NoteTaskEditHeatmapPO;
 import com.anynote.note.model.po.NoteTaskSubmissionTimePO;
+import com.anynote.note.model.po.NoteTaskSubmitMemberPO;
 import com.anynote.note.api.model.vo.NoteTaskChartsVO;
+import com.anynote.note.model.vo.NoteTaskEditHeatmapMemberVO;
+import com.anynote.note.model.vo.NoteTaskEditHeatmapVO;
 import com.anynote.note.model.vo.NoteTaskHistoryVO;
 import com.anynote.note.model.vo.NoteTaskUserAnalyzeVO;
 import com.anynote.note.service.*;
@@ -50,6 +55,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -701,6 +710,12 @@ public class NoteTaskServiceImpl extends ServiceImpl<NoteTaskMapper, NoteTask>
     public List<NoteTaskChartsVO> getNoteTaskChartsData(NoteTaskChartsQueryParam queryParam) {
         NoteTaskSubmissionTimePO noteTaskSubmissionTimePO =
                 this.baseMapper.selectNoteTaskSubmissionTime(queryParam.getNoteTaskId());
+        // 任务没有任何提交时 MIN/MAX 都是 null，旧实现直接在 roundDownToHour(null) 上空指针
+        if (StringUtils.isNull(noteTaskSubmissionTimePO)
+                || StringUtils.isNull(noteTaskSubmissionTimePO.getEarliestTime())
+                || StringUtils.isNull(noteTaskSubmissionTimePO.getLatestTime())) {
+            return new ArrayList<>();
+        }
         Date roundedEarliestTime = DateUtils.roundDownToHour(noteTaskSubmissionTimePO.getEarliestTime());
         Date roundedLatestTime = DateUtils.roundUpToHour(noteTaskSubmissionTimePO.getLatestTime());
         Calendar calendar = DateUtils.buildCalendar(roundedEarliestTime);
@@ -722,6 +737,128 @@ public class NoteTaskServiceImpl extends ServiceImpl<NoteTaskMapper, NoteTask>
         return noteTaskChartsVOList;
     }
 
+    /**
+     * 热力图最多返回的天数：成员多、窗口长时表格会过宽，方案 §9 风险表定死 62 天。
+     */
+    private static final int MAX_HEATMAP_DAYS = 62;
+
+    @RequiresNoteTaskPermissions(NoteTaskPermissions.MANAGE)
+    @Override
+    public NoteTaskEditHeatmapVO getNoteTaskEditHeatmap(NoteTaskEditHeatmapQueryParam queryParam) {
+        Long noteTaskId = queryParam.getNoteTaskId();
+        NoteTask noteTask = this.baseMapper.selectById(noteTaskId);
+        if (StringUtils.isNull(noteTask)) {
+            throw new UserParamException("任务不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND);
+        }
+
+        LocalDate startDate = toLocalDate(noteTask.getStartTime());
+        LocalDate endDate = toLocalDate(noteTask.getEndTime());
+        LocalDate today = LocalDate.now();
+        List<LocalDate> days = resolveHeatmapDays(startDate, endDate, today);
+
+        Date rangeStart = toStartOfDay(days.get(0));
+        // 查询区间上界：min(endTime, now) 的次日 00:00；任务还没开始时钳到区间起点，避免出现空区间
+        LocalDate rangeEndDate = endDate.isBefore(today) ? endDate : today;
+        if (rangeEndDate.isBefore(days.get(0))) {
+            rangeEndDate = days.get(0);
+        }
+        Date rangeEnd = toStartOfDay(rangeEndDate.plusDays(1));
+
+        List<NoteTaskEditHeatmapPO> editRows = this.baseMapper.selectNoteTaskEditHeatmap(
+                new NoteTaskEditHeatmapQueryParam(noteTaskId, rangeStart, rangeEnd));
+        List<NoteTaskSubmitMemberPO> submitMembers =
+                this.baseMapper.selectNoteTaskSubmitMembers(noteTaskId);
+
+        Map<LocalDate, Integer> dayIndex = new HashMap<>();
+        for (int i = 0; i < days.size(); i++) {
+            dayIndex.put(days.get(i), i);
+        }
+
+        Map<Long, NoteTaskEditHeatmapMemberVO> memberMap = new LinkedHashMap<>();
+        // 先铺已提交成员名单：窗口内一次都没编辑过的成员也要出现，counts 全 0
+        for (NoteTaskSubmitMemberPO submitMember : submitMembers) {
+            memberMap.put(submitMember.getUserId(), emptyHeatmapMember(submitMember, days.size()));
+        }
+        // 再把逐日编辑次数落到对应成员的行上
+        for (NoteTaskEditHeatmapPO editRow : editRows) {
+            Integer index = dayIndex.get(toLocalDate(editRow.getEditDate()));
+            if (StringUtils.isNull(index)) {
+                // 理论上不会出现：区间起点就是 days[0]。防御性跳过，避免下标越界
+                continue;
+            }
+            NoteTaskEditHeatmapMemberVO member = memberMap.get(editRow.getUserId());
+            if (StringUtils.isNull(member)) {
+                member = NoteTaskEditHeatmapMemberVO.builder()
+                        .userId(editRow.getUserId())
+                        .username(editRow.getUsername())
+                        .nickname(editRow.getNickname())
+                        .noteId(editRow.getNoteId())
+                        .total(0)
+                        .counts(new ArrayList<>(Collections.nCopies(days.size(), 0)))
+                        .build();
+                memberMap.put(editRow.getUserId(), member);
+            }
+            int count = StringUtils.isNull(editRow.getEditCount()) ? 0 : editRow.getEditCount();
+            member.getCounts().set(index, member.getCounts().get(index) + count);
+            member.setTotal(member.getTotal() + count);
+        }
+
+        List<NoteTaskEditHeatmapMemberVO> members = new ArrayList<>(memberMap.values());
+        members.sort(Comparator
+                .comparing(NoteTaskEditHeatmapMemberVO::getTotal, Comparator.reverseOrder())
+                .thenComparing(NoteTaskEditHeatmapMemberVO::getUserId));
+
+        return NoteTaskEditHeatmapVO.builder()
+                .startDate(startDate.format(DATE_FORMATTER))
+                .endDate(endDate.format(DATE_FORMATTER))
+                .today(today.format(DATE_FORMATTER))
+                .days(days.stream().map(day -> day.format(DATE_FORMATTER)).collect(Collectors.toList()))
+                .members(members)
+                .build();
+    }
+
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    /**
+     * 算出热力图的列（逐日）。窗口不超过 62 天时覆盖 startDate..endDate；
+     * 超过 62 天时只取截至 min(endDate, today) 的最后 62 天。
+     */
+    private List<LocalDate> resolveHeatmapDays(LocalDate startDate, LocalDate endDate, LocalDate today) {
+        List<LocalDate> window = new ArrayList<>();
+        for (LocalDate day = startDate; !day.isAfter(endDate); day = day.plusDays(1)) {
+            window.add(day);
+        }
+        if (window.size() <= MAX_HEATMAP_DAYS) {
+            return window;
+        }
+        LocalDate cap = endDate.isBefore(today) ? endDate : today;
+        if (cap.isBefore(startDate)) {
+            // 任务尚未开始：没有「截至今天」的部分可取，退化成窗口最前面 62 天
+            return new ArrayList<>(window.subList(0, MAX_HEATMAP_DAYS));
+        }
+        int capIndex = (int) ChronoUnit.DAYS.between(startDate, cap);
+        int fromIndex = Math.max(0, capIndex + 1 - MAX_HEATMAP_DAYS);
+        return new ArrayList<>(window.subList(fromIndex, capIndex + 1));
+    }
+
+    private NoteTaskEditHeatmapMemberVO emptyHeatmapMember(NoteTaskSubmitMemberPO submitMember, int dayCount) {
+        return NoteTaskEditHeatmapMemberVO.builder()
+                .userId(submitMember.getUserId())
+                .username(submitMember.getUsername())
+                .nickname(submitMember.getNickname())
+                .noteId(submitMember.getNoteId())
+                .total(0)
+                .counts(new ArrayList<>(Collections.nCopies(dayCount, 0)))
+                .build();
+    }
+
+    private LocalDate toLocalDate(Date date) {
+        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+    }
+
+    private Date toStartOfDay(LocalDate date) {
+        return Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant());
+    }
 
     @Override
     public List<UserNoteTask> getTaskUsers(Long taskId) {
