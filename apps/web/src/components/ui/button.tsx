@@ -13,9 +13,9 @@ const buttonVariants = cva(
         // 主按钮：一屏只留一个强调色（设计规范 §一）
         default: "bg-accent text-white [a]:hover:bg-accent/85",
         outline:
-          "border-separator bg-surface text-label hover:bg-grouped aria-expanded:bg-grouped",
-        secondary: "bg-grouped text-label hover:bg-grouped/70 aria-expanded:bg-grouped",
-        ghost: "text-label-secondary hover:bg-grouped hover:text-label aria-expanded:bg-grouped",
+          "border-separator bg-surface text-label hover:bg-fill-hover aria-expanded:bg-fill-hover",
+        secondary: "bg-fill-hover text-label hover:bg-fill-hover/70 aria-expanded:bg-fill-hover",
+        ghost: "text-label-secondary hover:bg-fill-hover hover:text-label aria-expanded:bg-fill-hover",
         destructive: "bg-danger/10 text-danger hover:bg-danger/20 focus-visible:ring-danger/25",
         link: "text-accent underline-offset-4 hover:underline",
       },

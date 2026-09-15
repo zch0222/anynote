@@ -10,10 +10,10 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default: "bg-accent text-white [a]:hover:bg-accent/85",
-        secondary: "bg-grouped text-label-secondary [a]:hover:bg-grouped/70",
+        secondary: "bg-fill-hover text-label-secondary [a]:hover:bg-fill-hover/70",
         destructive: "bg-danger/12 text-danger [a]:hover:bg-danger/20",
-        outline: "border-separator text-label-secondary [a]:hover:bg-grouped",
-        ghost: "text-label-secondary hover:bg-grouped",
+        outline: "border-separator text-label-secondary [a]:hover:bg-fill-hover",
+        ghost: "text-label-secondary hover:bg-fill-hover",
         link: "text-accent underline-offset-4 hover:underline",
         // 设计稿里的语义色胶囊：成功 / 警告 / 组织 / 信息
         success: "bg-success/12 text-success",

@@ -61,7 +61,7 @@ export function Segmented<T extends string>({
       onKeyDown={onKeyDown}
       data-slot="segmented"
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-md bg-grouped p-0.5",
+        "inline-flex items-center gap-0.5 rounded-md bg-segmented-track p-0.5",
         size === "sm" ? "text-footnote" : "text-footnote",
         className,
       )}
@@ -84,7 +84,7 @@ export function Segmented<T extends string>({
               "inline-flex min-h-7 items-center justify-center rounded-xs px-3 font-medium outline-none transition-colors",
               "focus-visible:ring-2 focus-visible:ring-ring",
               active
-                ? "bg-surface text-label shadow-card"
+                ? "bg-segmented-thumb text-label shadow-card"
                 : "text-label-secondary hover:text-label",
             )}
           >
