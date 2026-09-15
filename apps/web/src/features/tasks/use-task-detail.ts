@@ -4,7 +4,6 @@ import { ApiError, unwrapEnvelope } from "@/lib/api/errors";
 import { noteApi } from "@/lib/api/openapi";
 import { RES_CODE } from "@anynote/api-core/codes";
 import { useQuery } from "@tanstack/react-query";
-import { fetchTaskEditHeatmap } from "./heatmap-endpoint";
 import { taskQueryKeys } from "./query-keys";
 import {
   type AdminTask,
@@ -148,7 +147,11 @@ export function useTaskHeatmapQuery(taskId: number) {
     enabled: Number.isSafeInteger(taskId) && taskId > 0,
     retry: false,
     queryFn: async (): Promise<TaskHeatmap> => {
-      const { response } = await fetchTaskEditHeatmap(taskId);
+      const { response } = await noteApi.GET("/admin/noteTasks/{id}/editHeatmap", {
+        params: { path: { id: taskId } },
+        parseAs: "stream",
+        signal: AbortSignal.timeout(15_000),
+      });
       return unwrapEnvelope(response, taskHeatmapSchema.parse);
     },
   });

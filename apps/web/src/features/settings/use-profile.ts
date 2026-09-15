@@ -135,24 +135,6 @@ export function useMyProfileQuery() {
  * 所以把类型断言**隔离在这一个 helper 里**，调用点保持普通 typed client 写法，
  * 等 B-3 合入、重跑 `pnpm openapi:generate` 之后整体删除即可。
  */
-// TODO(B-3 合入后清理)：删掉这个 helper，直接调 `systemApi.PUT("/user/mine/profile", …)`。
-function putMyProfile(body: UpdateMyProfileInput) {
-  const client = systemApi as unknown as {
-    PUT: (
-      path: "/user/mine/profile",
-      init: {
-        body: UpdateMyProfileInput;
-        parseAs: "stream";
-        signal: AbortSignal;
-      },
-    ) => Promise<{ response: Response }>;
-  };
-  return client.PUT("/user/mine/profile", {
-    body,
-    parseAs: "stream",
-    signal: AbortSignal.timeout(15_000),
-  });
-}
 
 /**
  * 更新本人资料（B-3 `PUT /user/mine/profile`）。
@@ -167,7 +149,11 @@ export function useUpdateMyProfileMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: UpdateMyProfileInput): Promise<Profile> => {
-      const { response } = await putMyProfile(input);
+      const { response } = await systemApi.PUT("/user/mine/profile", {
+        body: input,
+        parseAs: "stream",
+        signal: AbortSignal.timeout(15_000),
+      });
       return unwrapEnvelope(response, profileSchema.parse);
     },
     retry: false,
