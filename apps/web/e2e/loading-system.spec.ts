@@ -681,6 +681,32 @@ test.describe("加载态的版式约束", () => {
       await expect(surface).toBeVisible({ timeout: 30_000 });
       await surface.click();
       await page.keyboard.type("加载态与纸面限宽验收");
+
+      /*
+       * 打完字要**等保存真的落库**再走，否则这条用例会偶发失败：
+       * 列表来自 `n_note_operation_log`，而那条日志由 RocketMQ 消费者在
+       * 内容 diff 非空时**异步**写入。输入后立刻 `goto`，消费者可能还没消费，
+       * 回到列表就是空的（已实测：全量跑时偶发，单跑必过）。
+       *
+       * 等编辑器自己的保存徽标落到「已保存」是最直接的信号——它由 PATCH 的
+       * 返回值驱动，比 `waitForTimeout` 可靠，也不依赖具体耗时。
+       */
+      await expect(page.locator('[data-status="saved"]')).toBeVisible({ timeout: 30_000 });
+      // 再给消费者一点时间把操作日志写进去（日志写入是 MQ 侧，前端拿不到信号）
+      await expect
+        .poll(
+          async () => {
+            // 参数名是 `page` / `pageSize`（见 `useNotesQuery` 的 params），
+            // 写成 pageNum 会被后端当缺省，返回的不是这一库的行
+            const res = await page.request.get(
+              `/api/proxy/note/notes?knowledgeBaseId=${baseUrl.split("/").pop()}&page=1&pageSize=20`,
+            );
+            const body = await res.json().catch(() => null);
+            return body?.data?.rows?.length ?? 0;
+          },
+          { timeout: 30_000, message: "保存后笔记未出现在列表里（MQ 消费未完成？）" },
+        )
+        .toBeGreaterThan(0);
       await page.goto(baseUrl);
     }
 

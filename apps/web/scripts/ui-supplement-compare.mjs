@@ -215,6 +215,116 @@ const SCENES = [
     path: "/m/settings/profile",
     ready: "h1",
   },
+  // —— 详情类画板：需要真实数据（课程 / 任务 / 笔记历史），由 seedData 备好 ——
+  {
+    name: "d06-kb-mooc-detail",
+    title: "D-06 慕课详情 · 目录与播放",
+    board: "D-06-kb-mooc-detail",
+    view: "desktop",
+    path: "/notes/{baseId}/mooc/{moocId}",
+    seed: "base",
+    ready: "h1",
+  },
+  {
+    name: "d11-collab-workspace",
+    title: "D-11 协同文档工作区",
+    board: "D-11-collab-workspace",
+    // 工作区要一个真实房间：先建一篇（会跳进去），再在当前页截图
+    view: "desktop",
+    path: "/docs",
+    ready: "h1",
+    act: "create-doc",
+  },
+  {
+    name: "d16-note-history",
+    title: "D-16 笔记历史版本",
+    board: "D-16-note-history",
+    view: "desktop",
+    path: "/notes/{baseId}/{noteId}/history",
+    seed: "base",
+    ready: '[data-testid="note-history-page"]',
+  },
+  {
+    name: "d17-task-detail",
+    title: "D-17 任务详情",
+    board: "D-17-task-detail",
+    view: "desktop",
+    path: "/notes/{baseId}/tasks/{taskId}",
+    seed: "base",
+    ready: "h1",
+  },
+  {
+    name: "d18-task-form",
+    title: "D-18 任务新建",
+    board: "D-18-task-form",
+    view: "desktop",
+    path: "/notes/{baseId}/tasks/new",
+    seed: "base",
+    ready: "h1",
+  },
+  {
+    name: "d14-auth-login",
+    title: "D-14 登录",
+    board: "D-14-auth-login",
+    view: "desktop",
+    path: "/login",
+    // 登录页对已登录用户会跳走，所以这条用匿名上下文
+    anonymous: true,
+    ready: '[data-slot="card"]',
+  },
+  {
+    name: "d15-auth-cli",
+    title: "D-15 CLI 授权",
+    board: "D-15-auth-cli",
+    view: "desktop",
+    path: "/cli/authorize?port=53817&state=compare&challenge=compare",
+    ready: "h1",
+  },
+  {
+    name: "m03-kb-mooc",
+    title: "M-03 知识库详情 · 慕课 Tab",
+    board: "M-03-kb-mooc",
+    view: "mobile",
+    path: "/m/notes/{baseId}/mooc",
+    seed: "base",
+    ready: "h1",
+  },
+  {
+    name: "m06-mooc-detail",
+    title: "M-06 慕课详情 · 目录与内容",
+    board: "M-06-mooc-detail",
+    view: "mobile",
+    path: "/m/notes/{baseId}/mooc/{moocId}",
+    seed: "base",
+    ready: "h1",
+  },
+  {
+    name: "m12-task-detail",
+    title: "M-12 任务详情",
+    board: "M-12-task-detail",
+    view: "mobile",
+    path: "/m/notes/{baseId}/tasks/{taskId}",
+    seed: "base",
+    ready: "h1",
+  },
+  {
+    name: "m13-note-history",
+    title: "M-13 笔记历史版本",
+    board: "M-13-note-history",
+    view: "mobile",
+    path: "/m/notes/{baseId}/{noteId}/history",
+    seed: "base",
+    ready: "h1",
+  },
+  {
+    name: "m09-doc-workspace",
+    title: "M-09 协同文档",
+    board: "M-09-doc-workspace",
+    view: "mobile",
+    path: "/m/docs",
+    ready: "h1",
+    act: "create-doc",
+  },
 ];
 
 /** 主题切换：与 `e2e/support/theme.ts` 同款（等菜单完全收起再开下一次）。 */
@@ -248,19 +358,56 @@ async function seedData(page) {
       if (!json || json.code !== "00000") throw new Error(`${path}: ${json?.msg ?? res.status}`);
       return json.data;
     };
-    const baseId = await post("bases", {
+    const created = await post("bases", {
       name: baseName,
       detail: "UI 补稿对比造数",
       // cover 是后端必填（缺了返回「知识库封面不能为空」），与前端默认值同址
       cover: "https://anynote.obs.cn-east-3.myhuaweicloud.com/images/knowledge_base_cover.png",
       type: 0,
     });
+    /*
+     * `POST /bases` 的响应体是 `CreateKnowledgeBaseVO`（`{ id }`），**不是裸数字**。
+     * 直接当 id 用会让 `knowledgeBaseId` 变成 NaN，后端返回「未知错误」——
+     * 而错误信息里看不出是这里的问题，排查成本很高。
+     */
+    const baseId = Number(created?.id ?? created);
     // 三篇笔记：列表要看出"图标 + 标题 + 相对时间"的行形态，一篇看不出密度
     // 笔记标题同样是 3–15 字
+    const noteIds = [];
     for (const title of ["设计原则速查", "组件命名约定", "评审检查清单"]) {
-      await post("notes", { title, knowledgeBaseId: baseId, content: `# ${title}\n\n正文占位。` });
+      const id = await post("notes", {
+        title,
+        knowledgeBaseId: baseId,
+        content: `# ${title}\n\n正文占位。`,
+      });
+      noteIds.push(Number(id?.id ?? id));
     }
-    return { baseId: Number(baseId) };
+
+    /*
+     * 一门课：D-06 慕课详情与 M-06 需要真实课程才有内容可截。
+     * `dataScope: 1` 是必填（`n_mooc.data_scope` 列 NOT NULL 无默认值）。
+     */
+    const moocRaw = await post("moocs", {
+      title: "补稿对比课程",
+      knowledgeBaseId: baseId,
+      cover: "https://anynote.obs.cn-east-3.myhuaweicloud.com/images/knowledge_base_cover.png",
+      dataScope: 1,
+      moocDescription: "用于 UI 还原度对比的课程。",
+    });
+    const moocId = Number(moocRaw?.id ?? moocRaw);
+
+    // 一个任务：D-17 / D-18 / M-12 需要真实任务
+    const now = Date.now();
+    const taskRaw = await post("admin/noteTasks", {
+      taskName: "补稿对比任务",
+      knowledgeBaseId: baseId,
+      startTime: new Date(now - 86_400_000).toISOString(),
+      endTime: new Date(now + 6 * 86_400_000).toISOString(),
+      taskDescribe: "用于 UI 还原度对比的任务。",
+    });
+    const taskId = Number(taskRaw?.id ?? taskRaw);
+
+    return { baseId, noteId: noteIds[0], moocId, taskId };
   });
 }
 
@@ -304,7 +451,8 @@ async function main() {
 
   for (const scene of scenes) {
     const context = await browser.newContext({
-      storageState: STATE_PATH,
+      // `anonymous: true` 的场景（D-14 登录页）对已登录用户会跳走，必须用空上下文
+      storageState: scene.anonymous ? { cookies: [], origins: [] } : STATE_PATH,
       viewport: VIEWPORTS[scene.view],
       deviceScaleFactor: 2,
       isMobile: scene.view === "mobile",
@@ -324,12 +472,50 @@ async function main() {
     const row = { name: scene.name, title: scene.title, view: scene.view, shots: [] };
 
     for (const theme of themes) {
-      await page.goto(`${BASE_URL}/notes`, { waitUntil: "domcontentloaded" });
-      await setTheme(page, theme.label);
+      /*
+       * 主题通过"顶栏主题菜单"切换，而**登录页没有那个菜单**（它在侧栏外壳里）。
+       * 匿名场景改用 `prefers-color-scheme` 驱动：`next-themes` 的 system 分支
+       * 会跟随它，而登录页是三态里唯一没有显式偏好的页面。
+       */
+      if (scene.anonymous) {
+        await page.emulateMedia({ colorScheme: theme.key === "dark" ? "dark" : "light" });
+        // 已存在显式偏好时要先清掉，否则 system 分支不会生效
+        await page.goto(`${BASE_URL}${scene.path}`, { waitUntil: "domcontentloaded" });
+        await page.evaluate(() => {
+          localStorage.removeItem("theme");
+          document.documentElement.classList.toggle("dark", false);
+        });
+        await page.reload({ waitUntil: "domcontentloaded" });
+      }
 
-      const href = scene.path.replace("{baseId}", String(ids.baseId));
+      const href = scene.path
+        .replace("{baseId}", String(ids.baseId))
+        .replace("{noteId}", String(ids.noteId ?? 1))
+        .replace("{moocId}", String(ids.moocId ?? 1))
+        .replace("{taskId}", String(ids.taskId ?? 1));
       await page.goto(`${BASE_URL}${href}`, { waitUntil: "domcontentloaded" });
       await page.waitForSelector(scene.ready, { timeout: 30_000 });
+
+      /*
+       * 协同文档工作区没有"直接打开某一篇"的固定地址（id 是运行时生成的 UUID），
+       * 所以要现场建一篇、等它跳进工作区，再截当前页。
+       * 建完**不回列表**：要的就是工作区那一屏。
+       */
+      if (scene.act === "create-doc") {
+        const createHref = scene.view === "mobile" ? "/m/docs" : "/docs";
+        await page.goto(`${BASE_URL}${createHref}`, { waitUntil: "domcontentloaded" });
+        await page.getByRole("button", { name: "新建文档" }).first().click();
+        const dialog = page.getByRole("dialog");
+        await dialog.waitFor({ timeout: 20_000 });
+        const titleInput = dialog.locator("#collab-doc-title");
+        await titleInput.fill(`补稿对比 ${Date.now().toString(36).slice(-5)}`);
+        await dialog.getByRole("button", { name: "创建" }).click();
+        await page.waitForURL(/\/docs\/.+/, { timeout: 30_000 });
+        // 协同房间要等 sync 完成（连接状态徽标会从"连接中"变"已连接"）
+        await page.waitForLoadState("networkidle").catch(() => {});
+        await page.waitForTimeout(1500);
+      }
+
       // 列表 / 详情的客户端取数要落地，等一次网络空闲
       await page.waitForLoadState("networkidle").catch(() => {});
       await page.waitForTimeout(500);
