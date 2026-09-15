@@ -27,7 +27,7 @@ test.describe("关键路径 1：登录", () => {
     const account = readAccount();
     await page.goto("/login");
     await page.getByLabel("用户名").fill(account.username);
-    await page.getByLabel("密码").fill("definitely-wrong-password");
+    await page.getByLabel("密码", { exact: true }).fill("definitely-wrong-password");
     await page.getByRole("button", { name: "登录" }).click();
 
     await expect(page).toHaveURL(/\/login/);

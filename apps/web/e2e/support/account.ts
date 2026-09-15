@@ -16,7 +16,7 @@ export function readAccount(): E2EAccount {
 export async function loginThroughUi(page: Page, account: E2EAccount) {
   await page.goto("/login");
   await page.getByLabel("用户名").fill(account.username);
-  await page.getByLabel("密码").fill(account.password);
+  await page.getByLabel("密码", { exact: true }).fill(account.password);
   await page.getByRole("button", { name: "登录" }).click();
   await expect(page).toHaveURL(/\/notes$/, { timeout: 30_000 });
 }

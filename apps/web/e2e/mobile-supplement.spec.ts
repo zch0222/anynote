@@ -1,5 +1,4 @@
 import { type Page, expect, test } from "@playwright/test";
-import { setTheme } from "./support/theme";
 
 /**
  * UI 补稿移动端（M-01 – M-13）的还原度门禁。
@@ -27,7 +26,9 @@ async function createBase(page: Page, name: string): Promise<number> {
     });
     const json = await res.json();
     if (json.code !== "00000") throw new Error(`建库失败：${json.msg}`);
-    return Number(json.data);
+    // 响应体是 CreateKnowledgeBaseVO（`{ id }`），不是裸数字——
+    // `Number(json.data)` 会得到 NaN，后续拼出来的地址全是 `/notes/NaN/...`
+    return Number(json.data?.id ?? json.data);
   }, name);
 }
 
@@ -115,9 +116,19 @@ test.describe("UI 补稿 · 移动端", () => {
 
     await page.goto(`/m/notes/${baseId}/docs`);
     await expect(page.getByText("还没有资料")).toBeVisible({ timeout: 30_000 });
+    // 空态的说明文案来自 Q-02 总表（M-05 行）
     await expect(page.getByText("到「PDF 问答」上传 PDF，之后就能围绕它提问。")).toBeVisible();
 
-    const upload = page.getByRole("link", { name: /去「PDF 问答」上传/ });
+    /*
+     * 上传入口在空态下是那个动作按钮、列表非空时是末尾的文字链接，
+     * 两处共用 `data-testid="mobile-doc-upload-link"`，也都指向 /m/ai/pdf
+     *（「上传只保留 PDF 问答一条链路」）。
+     *
+     * 用 testid 而不是 `getByRole("link", …)`：Base UI 的 `Button` 无论
+     * `nativeButton` 取值都会给 `render` 出来的 `<a>` 盖上 `role="button"`，
+     * 按 link 角色找不到它（这是组件库行为，不是产品缺陷）。
+     */
+    const upload = page.getByTestId("mobile-doc-upload-link").first();
     await expect(upload).toBeVisible();
     await expect(upload).toHaveAttribute("href", "/m/ai/pdf");
   });
@@ -214,10 +225,12 @@ test.describe("UI 补稿 · 移动端", () => {
     expect(body).not.toMatch(/^任务$|^慕课$/m);
 
     await page.getByRole("button", { name: /退出登录/ }).click();
-    // 二次确认（动作表），取消后仍在本页
-    await expect(page.getByText(/确定要退出|退出登录\?|确认/).first()).toBeVisible({
-      timeout: 10_000,
-    });
+    /*
+     * 二次确认走 MobileActionSheet，标题固定是「退出登录？」。
+     * 断言用标题本身而不是 /确认/ 这类泛词：后者会命中页面上的其它文字。
+     */
+    await expect(page.getByText("退出登录？")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("退出后需要重新输入账号密码，未保存的内容会丢失。")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/m\/me$/);
   });
@@ -232,12 +245,9 @@ test.describe("UI 补稿 · 移动端", () => {
     await expect(page.getByRole("button", { name: /返回/ })).toBeVisible();
     await expectNoHorizontalScroll(page);
 
-    // 深色下不出现"黑带"（token 替换的移动端验证）
-    await setTheme(page, "深色");
-    await expect(page.locator("html")).toHaveClass(/dark/);
-    await page.goto("/m/me");
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
-    await expectNoHorizontalScroll(page);
+    // 行元信息是「创建者 · 相对时间更新」，不是 toLocaleString 的全量时间
+    const body = await page.locator("body").innerText();
+    expect(body).toMatch(/更新$/m);
   });
 
   /** 12.1.2 + F-02：旧移动地址重定向到知识库列表。 */
@@ -268,5 +278,60 @@ test.describe("UI 补稿 · 移动端", () => {
     const body = await page.locator("body").innerText();
     // 待办里的任务行与「全部」都必须带库上下文，不能回跨库列表
     expect(body).not.toMatch(/\/m\/tasks/);
+  });
+
+  /**
+   * 深色下的填充 Token 复查（Q-01 #1–#3 的移动端口径）。
+   *
+   * 单独立一条而不是塞进 M-08：主题是会跨用例残留的全局状态，
+   * 混在路由用例里会让后者随时因为"上一轮留了深色"而失败。
+   */
+  test("深色下移动端各页不横向溢出，且填充 Token 生效", async ({ page }) => {
+    await page.goto("/m/settings/appearance");
+    // 按可访问名点，不按序号：页面上还有性别等其它单选行，序号会漂
+    const darkRadio = page.getByRole("radio", { name: "深色" });
+    await expect(darkRadio).toBeVisible({ timeout: 30_000 });
+    await darkRadio.click();
+    await expect(page.locator("html")).toHaveClass(/dark/);
+
+    /*
+     * 判定"填充 Token 在深色下不是黑"要看**算出来的颜色**，不是变量字面量：
+     * 同一个语义值可能写成 `rgb(255 255 255 / 0.07)`，也可能被浏览器序列化成
+     * `#ffffff12`（本轮实测就是后者）。所以把变量塞进一个临时元素的
+     * `background-color` 上让浏览器归一化，再断言它的通道值。
+     */
+    const fills = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      document.body.appendChild(probe);
+      const read = (name: string) => {
+        probe.style.backgroundColor = `var(${name})`;
+        return getComputedStyle(probe).backgroundColor;
+      };
+      const value = { hover: read("--fill-hover"), track: read("--segmented-track") };
+      probe.remove();
+      return value;
+    });
+    /** 归一化后的颜色 → [r,g,b,a]；`rgb(...)` 与 `rgba(...)` 都吃。 */
+    const channels = (color: string) => color.match(/[\d.]+/g)?.map(Number) ?? [];
+
+    for (const [name, color] of Object.entries(fills)) {
+      const [r, g, b, alpha] = channels(color);
+      // 亮色三通道 + 低透明度 = 深色下的"白色叠加"；纯黑会是 0,0,0
+      expect(r, `${name} 应偏亮（深色填充是白色叠加），实际 ${color}`).toBeGreaterThan(200);
+      expect(g).toBeGreaterThan(200);
+      expect(b).toBeGreaterThan(200);
+      expect(alpha ?? 1).toBeLessThan(0.5);
+    }
+
+    for (const path of ["/m/me", "/m/notes", "/m/docs"]) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
+      await expectNoHorizontalScroll(page);
+    }
+
+    // 复位成浅色，避免主题状态泄漏到后续用例
+    await page.goto("/m/settings/appearance");
+    await page.getByRole("radio", { name: "浅色" }).click();
+    await expect(page.locator("html")).not.toHaveClass(/dark/);
   });
 });

@@ -192,6 +192,22 @@ describe("NoteHistoryPage 只有一个版本", () => {
   });
 });
 
+describe("NoteHistoryPage 一个版本都没有", () => {
+  /**
+   * 回归：历史快照由保存触发的消息队列**异步**写入，新建笔记刚打开历史页时
+   * 列表是空的（不是一条）。旧实现只判 `length === 1`，空列表会落到正文分支，
+   * 那里用 `selected.operationTime` —— `selected` 是 `undefined`，整页崩成错误边界。
+   */
+  it("空列表也走空态，不崩在 selected 上", async () => {
+    get.mockImplementation(defaultGet({ versions: 0 }));
+    renderWithProviders(<NoteHistoryPage baseId={BASE_ID} noteId={NOTE_ID} />);
+
+    await waitFor(() => expect(screen.getByTestId("history-empty")).toBeInTheDocument());
+    expect(screen.getByText("这篇笔记还没有历史版本")).toBeInTheDocument();
+    expect(screen.queryByTestId("history-restore")).toBeNull();
+  });
+});
+
 describe("NoteHistoryPage 本次改动的增删行样式", () => {
   function diffGet() {
     return (path: string, init: { params?: { query?: { operationId?: number } } }) => {

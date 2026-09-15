@@ -131,7 +131,7 @@ test.describe("CLI 浏览器授权登录", () => {
         await fs.readFile(path.join(__dirname, ".auth", "account.json"), "utf8"),
       ) as { username: string; password: string };
       await page.getByLabel("用户名").fill(account.username);
-      await page.getByLabel("密码").fill(account.password);
+      await page.getByLabel("密码", { exact: true }).fill(account.password);
       await page.getByRole("button", { name: "登录" }).click();
 
       await expect(page.getByRole("heading", { name: "授权 CLI 登录" })).toBeVisible({
@@ -176,7 +176,7 @@ test.describe("CLI 浏览器授权登录", () => {
       // 先在浏览器里登录
       await page.goto("/login");
       await page.getByLabel("用户名").fill(account.username);
-      await page.getByLabel("密码").fill(account.password);
+      await page.getByLabel("密码", { exact: true }).fill(account.password);
       await page.getByRole("button", { name: "登录" }).click();
       await expect(page).toHaveURL(/\/notes$/, { timeout: 30_000 });
 

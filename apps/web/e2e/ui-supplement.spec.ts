@@ -34,7 +34,9 @@ async function createBase(page: Page, name: string): Promise<number> {
     });
     const json = await res.json();
     if (json.code !== "00000") throw new Error(`建库失败：${json.msg}`);
-    return Number(json.data);
+    // 响应体是 CreateKnowledgeBaseVO（`{ id }`），不是裸数字——
+    // `Number(json.data)` 会得到 NaN，后续拼出来的地址全是 `/notes/NaN/...`
+    return Number(json.data?.id ?? json.data);
   }, name);
 }
 
@@ -70,39 +72,74 @@ test.describe("UI 补稿还原度", () => {
     await page.goto("/notes");
     await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
 
+    /*
+     * 读**算出来的颜色**而不是变量字面量：同一个语义值可能写成
+     * `rgb(255 255 255 / 0.07)`，也可能被浏览器序列化成 `#ffffff12`（实测如此）。
+     * 把变量塞进临时元素的 background-color 让浏览器归一化，再解析通道值。
+     */
     const readFills = () =>
       page.evaluate(() => {
-        const root = getComputedStyle(document.documentElement);
-        const val = (n: string) => root.getPropertyValue(n).trim();
-        return {
-          hover: val("--fill-hover"),
-          footer: val("--fill-footer"),
-          track: val("--segmented-track"),
-          thumb: val("--segmented-thumb"),
+        const probe = document.createElement("div");
+        document.body.appendChild(probe);
+        const read = (name: string) => {
+          probe.style.backgroundColor = `var(${name})`;
+          return getComputedStyle(probe).backgroundColor;
         };
+        const out = {
+          hover: read("--fill-hover"),
+          footer: read("--fill-footer"),
+          track: read("--segmented-track"),
+          thumb: read("--segmented-thumb"),
+        };
+        probe.remove();
+        return out;
       });
+    /** 归一化颜色 → `[r, g, b, a?]`。返回定长元组，避免调用点做 undefined 判断。 */
+    const channels = (color: string): number[] => (color.match(/[\d.]+/g) ?? []).map(Number);
 
     const light = await readFills();
-    expect(light.hover).toBe("#f2f2f7");
-    expect(light.track).toBe("#e9e9ee");
-    expect(light.thumb).toBe("#ffffff");
+    // 浅色：hover / track 是中性的浅灰（三通道接近且明显不是纯白），thumb 是纯白
+    {
+      const [r = 0, g = 0, b = 0] = channels(light.hover);
+      expect(r, `浅色 hover 应是浅灰，实际 ${light.hover}`).toBeGreaterThan(230);
+      expect(Math.abs(r - b)).toBeLessThan(12);
+      const [tr = 0, tg = 0, tb = 0] = channels(light.track);
+      expect(tr).toBeGreaterThan(220);
+      expect(Math.abs(tr - tb)).toBeLessThan(12);
+      const [wr = 0, wg = 0, wb = 0, wa] = channels(light.thumb);
+      expect([wr, wg, wb]).toEqual([255, 255, 255]);
+      expect(wa ?? 1).toBe(1);
+    }
 
     await setTheme(page, "深色");
     await expect(page.locator("html")).toHaveClass(/dark/);
     const dark = await readFills();
 
-    // 深色下必须是白色低透明度叠加，不能是黑（黑与页面底 #000 完全分不开）
-    expect(dark.hover, "深色悬停底不能等于页面底色").not.toBe("rgb(0, 0, 0)");
-    expect(dark.hover).toMatch(/rgb\(255 255 255/);
-    expect(dark.footer).toMatch(/rgb\(255 255 255/);
-    expect(dark.track).toMatch(/rgb\(255 255 255/);
+    /*
+     * 深色下三者都必须是**白色低透明度叠加**，不能是黑——黑与页面底 #000
+     * 完全分不开，这正是 Q-01 #1–#3 记录的问题。
+     */
+    for (const [name, color] of Object.entries(dark)) {
+      if (name === "thumb") continue;
+      const [r = 0, g = 0, b = 0, alpha] = channels(color);
+      expect(r, `深色 ${name} 应偏亮，实际 ${color}`).toBeGreaterThan(200);
+      expect(g).toBeGreaterThan(200);
+      expect(b).toBeGreaterThan(200);
+      expect(alpha ?? 1, `深色 ${name} 应是低透明度叠加，实际 ${color}`).toBeLessThan(0.5);
+    }
     // 分段控件轨道与选中格必须拉开：同色就退化成"看不出选中"
     expect(dark.thumb).not.toBe(dark.track);
-    expect(dark.thumb).not.toBe("rgb(0, 0, 0)");
+    const [sr = 0, sg = 0, sb = 0] = channels(dark.thumb);
+    expect(sr + sg + sb, `深色选中格不能是黑，实际 ${dark.thumb}`).toBeGreaterThan(60);
   });
 
   /** 12.0.2：输入框圆角 10（已拍板，此前是 14）。 */
   test("D-03 输入框圆角为 10、高度 40、占位文案正确", async ({ page }) => {
+    // 先建一个库：没有库时本页是「还没有知识库」空态，标题输入框根本不渲染
+    await page.goto("/notes");
+    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
+    await createBase(page, unique("UI 新建笔记"));
+
     await page.goto("/notes/new");
     const input = page.getByPlaceholder("3-15 个字符");
     await expect(input).toBeVisible({ timeout: 30_000 });
@@ -176,10 +213,7 @@ test.describe("UI 补稿还原度", () => {
     await page.goto(`/notes/${baseId}/${noteId}`);
     await expect(page.locator(".anynote-editor__content")).toBeVisible({ timeout: 30_000 });
 
-    await page
-      .getByRole("button", { name: /更多|⋯/ })
-      .first()
-      .click();
+    await page.getByTestId("note-actions").click();
     await page.getByRole("menuitem", { name: "删除笔记" }).click();
 
     const dialog = page.getByRole("dialog");
@@ -207,11 +241,17 @@ test.describe("UI 补稿还原度", () => {
     const baseId = await createBase(page, unique("UI 任务"));
 
     await page.goto(`/notes/${baseId}/tasks`);
-    // 建库人默认是本库管理员 → 应看到页头主按钮
+    /*
+     * 建库人就是本库管理员，所以走的是**管理员分支**：页头有「新建任务」，
+     * 空态提示是「发布一个任务试试。」。成员文案（「任务由知识库管理员发布。」）
+     * 在管理员视角下不出现——这一点原稿图例把两种视角画在同一屏，
+     * 落地时必须按 permissions 分流，不能两条文案都断言。
+     */
     await expect(page.getByRole("link", { name: "新建任务" })).toBeVisible({ timeout: 30_000 });
-    // 空态文案照 Q-02 总表
     await expect(page.getByText("这个知识库下还没有任务")).toBeVisible();
-    await expect(page.getByText("任务由知识库管理员发布。")).toBeVisible();
+    await expect(page.getByText("发布一个任务试试。")).toBeVisible();
+    // 页头副标题：没有任务时是引导语，不是「0 个任务 · 0 个待你提交」
+    await expect(page.getByText("发布一个任务，让本库成员在时间窗口内提交笔记。")).toBeVisible();
   });
 
   /** D-05：权限不足时隐藏「新建课程」（避免点了才报无权限）。 */
@@ -221,7 +261,10 @@ test.describe("UI 补稿还原度", () => {
     const baseId = await createBase(page, unique("UI 慕课"));
 
     await page.goto(`/notes/${baseId}/mooc`);
-    await expect(page.getByRole("button", { name: "新建课程" })).toBeVisible({ timeout: 30_000 });
+    // 页头主按钮与空态次按钮同名（都叫「新建课程」），取页头那个
+    await expect(page.getByRole("button", { name: "新建课程" }).first()).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(page.getByText("这个知识库下还没有课程")).toBeVisible();
     await expect(page.getByText("新建一门课，把视频和资料整理进来。")).toBeVisible();
   });
@@ -250,7 +293,7 @@ test.describe("UI 补稿还原度", () => {
       await expect(page.getByText(label, { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     }
 
-    const search = page.getByPlaceholder(/搜索用户名/);
+    const search = page.getByPlaceholder("按用户名搜索");
     await expect(search).toBeVisible();
     expect(await search.evaluate((el) => getComputedStyle(el).borderRadius)).toBe("10px");
   });
@@ -262,17 +305,30 @@ test.describe("UI 补稿还原度", () => {
       timeout: 30_000,
     });
 
-    // 建一篇：建完会出现卡片，删除按钮在卡片上
+    // 先验证对话框本身（页脚必须有「取消」，图例 24）
     await page.getByRole("button", { name: "新建文档" }).first().click();
     const createDialog = page.getByRole("dialog");
     await expect(createDialog).toBeVisible();
-    // 页脚必须有「取消」（图例 24）
     await expect(createDialog.getByRole("button", { name: "取消" })).toBeVisible();
-    await createDialog.getByLabel(/标题|名称/).fill(unique("协作文档"));
-    await createDialog.getByRole("button", { name: "创建" }).click();
-    await expect(createDialog).toBeHidden({ timeout: 20_000 });
+    await createDialog.getByRole("button", { name: "取消" }).click();
+    await expect(createDialog).toBeHidden();
 
-    const del = page.getByRole("button", { name: /^删除 / }).first();
+    /*
+     * 建一篇并留在列表里。
+     *
+     * 创建成功会 `router.push` 进工作区（那是正常的产品行为），所以建完要回列表。
+     * 文档库本身是协同索引房间，"新建 → 出现在列表"是**别人也会实时看到**的那条路径，
+     * 所以这里等的是卡片真的出现，而不是等一个返回码。
+     */
+    const title = unique("协作文档");
+    await page.getByRole("button", { name: "新建文档" }).first().click();
+    await expect(createDialog).toBeVisible();
+    await createDialog.locator("#collab-doc-title").fill(title);
+    await createDialog.getByRole("button", { name: "创建" }).click();
+    await page.waitForURL(/\/docs\/.+/, { timeout: 20_000 });
+    await page.goto("/docs");
+
+    const del = page.getByRole("button", { name: `删除 ${title}` });
     await expect(del).toBeVisible({ timeout: 20_000 });
     await del.click();
 
@@ -335,10 +391,7 @@ test.describe("UI 补稿还原度", () => {
 
     await page.goto(`/notes/${baseId}/${noteId}`);
     await expect(page.locator(".anynote-editor__content")).toBeVisible({ timeout: 30_000 });
-    await page
-      .getByRole("button", { name: /更多|⋯/ })
-      .first()
-      .click();
+    await page.getByTestId("note-actions").click();
     const first = page.getByRole("menuitem").first();
     await expect(first).toHaveText(/历史版本/);
     await first.click();
@@ -350,10 +403,22 @@ test.describe("UI 补稿还原度", () => {
     await expect(page.getByText("这篇笔记还没有历史版本")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("之后每次保存都会在这里留下一个版本。")).toBeVisible();
 
-    // 满幅：外层不应出现内容卡片的圆角 + 阴影（那等于把设计稿否掉）
-    const shell = page.locator('[data-slot="app-main"], main').first();
-    const shellClass = (await shell.getAttribute("class")) ?? "";
-    expect(shellClass).not.toMatch(/rounded-(lg|xl)/);
+    /*
+     * 满幅：历史页与编辑器一样，左右两栏各自铺到视口边缘，**不套内容卡片**。
+     *
+     * 判据用"页面自己画的那层容器"而不是 `main`：`main` 的 class 里带着
+     * `md:peer-data-[variant=inset]:rounded-xl` 这类 **sidebar 组件的响应式变体**，
+     * 它们在当前布局下不生效（没有 peer 的 inset 状态），按字面匹配会误报。
+     * 所以查页面根节点：它若真是"灰底上浮着的一张卡片"，会同时带圆角与阴影。
+     */
+    const pageRoot = page.getByTestId("note-history-page");
+    await expect(pageRoot).toBeVisible();
+    const rootClass = (await pageRoot.getAttribute("class")) ?? "";
+    expect(rootClass).not.toMatch(/rounded-(lg|xl)/);
+    expect(rootClass).not.toMatch(/shadow-card/);
+    // 两栏都在：左正文 + 右 320 历史面板（图例 10）
+    await expect(page.getByTestId("history-panel")).toBeVisible();
+    await expect(page.getByTestId("history-scroll")).toBeVisible();
   });
 
   /** 12.0.3：错误态必须带重试按钮（此前 24 处都只有一行文案）。 */
@@ -361,11 +426,20 @@ test.describe("UI 补稿还原度", () => {
     await page.goto("/notes");
     await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
 
-    // 让知识库列表失败一次
-    let calls = 0;
+    /*
+     * 让知识库列表**整批**失败一次，再由重试放开。
+     *
+     * 画廊同时发三条 `/bases*` 查询（我的 / 组织 / 我管理的），只失败第一条的话
+     * 另外两条会成功，`failed` 取的是三个查询里第一个出错的——但只要有一条成功，
+     * 页面就仍可能渲染出内容而不是错误态。所以按"是否已失败过"整体放行/拦截。
+     */
+    let retryAllowed = false;
+    /*
+     * 三条 `/bases*` 查询在重试放行前一律返回 500：只要有一条成功，
+     * 页面就可能渲染出内容而不是错误态，测出来的就不是"错误态可重试"。
+     */
     await page.route("**/api/proxy/note/bases**", async (route) => {
-      calls += 1;
-      if (calls === 1) return route.fulfill({ status: 500, body: "boom" });
+      if (!retryAllowed) return route.fulfill({ status: 500, body: "boom" });
       return route.continue();
     });
 
@@ -379,6 +453,7 @@ test.describe("UI 补稿还原度", () => {
 
     const retry = alert.getByRole("button", { name: /重试/ });
     await expect(retry).toBeVisible();
+    retryAllowed = true;
     await retry.click();
     await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
   });

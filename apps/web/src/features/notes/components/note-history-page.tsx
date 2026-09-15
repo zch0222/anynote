@@ -107,8 +107,25 @@ export function NoteHistoryPage({ baseId, noteId }: { baseId: number; noteId: nu
   // 本库权限：1 管理 / 2 编辑可恢复，3 阅读 / 4 无权限只能看
   const canRestore = (base.data?.permissions ?? 0) <= 2;
   const isCurrent = selectedIndex === 0;
-  /** 列表里只有一条 = 只有当前版本，没有可恢复的历史 */
-  const onlyCurrentVersion = items.length === 1;
+  /**
+   * 没有「更早的版本」可看：列表为空，或只有一条（那条就是当前版本）。
+   *
+   * **两条都算**：历史快照由 `PATCH /notes/{noteId}` 触发消息队列**异步**写入，
+   * 新建笔记刚打开历史页时列表是**空**的（不是一条）。只判 `length === 1`
+   * 会让空列表走到下面的正文分支，那里用的 `selected` 是 `undefined` ——
+   * 取 `selected.operationTime` 直接抛错，整页崩成错误边界。
+   */
+  const hasNoEarlierVersion = items.length <= 1;
+  /*
+   * 但**首次加载中不能算**：列表还没到就说"还没有历史版本"，会先闪一句假结论再被
+   * 真实内容顶掉（原实现只判 `length === 1`，恰好躲过了这一帧，但代价是空列表崩）。
+   *
+   * 判据用 `isSuccess` 而不是 `!isPending`：这条查询没有 `staleTime`，
+   * 窗口重新聚焦会触发后台重取，`isPending` 与 `isFetching` 都会再动一次，
+   * 用它们做条件会让空态在已经拿到数据之后又消失（实测就是这么崩的）。
+   * `isSuccess` 一旦为真就保持为真（后续重取只是 `isFetching`）。
+   */
+  const showEmptyState = hasNoEarlierVersion && history.isSuccess;
 
   const handleRestore = useCallback(async () => {
     if (!selected) return;
@@ -160,7 +177,7 @@ export function NoteHistoryPage({ baseId, noteId }: { baseId: number; noteId: nu
 
         <div className="min-h-0 flex-1 overflow-y-auto" data-testid="history-scroll">
           <div className="mx-auto w-full max-w-[calc(56rem+9rem)] px-6 py-6 sm:px-8 lg:px-18">
-            {onlyCurrentVersion ? (
+            {showEmptyState ? (
               // 只有一条版本：那条就是当前版本，没有可比对的更早内容
               <div data-testid="history-empty">
                 <EmptyState
@@ -173,7 +190,7 @@ export function NoteHistoryPage({ baseId, noteId }: { baseId: number; noteId: nu
               <article className="flex w-full flex-col gap-4">
                 <ViewBanner
                   item={selected}
-                  canRestore={canRestore && !isCurrent && !onlyCurrentVersion}
+                  canRestore={canRestore && !isCurrent && !hasNoEarlierVersion}
                   restoring={restore.isPending}
                   onRestore={() => setConfirmOpen(true)}
                 />
