@@ -53,7 +53,7 @@ export function SaveStatusBadge({
     <output
       data-status={status}
       className={cn(
-        "tabular inline-flex min-h-6 items-center gap-1.5 rounded-full bg-grouped px-2.5 text-xs font-medium",
+        "tabular inline-flex min-h-6 items-center gap-1.5 rounded-full bg-fill-hover px-2.5 text-xs font-medium",
         tone,
         className,
       )}

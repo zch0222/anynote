@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import type { CliAuthorizeParams } from "@/lib/auth/cli-authorize";
+import { Terminal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCliAuthorizeMutation } from "../use-cli-authorize-mutation";
@@ -17,6 +18,9 @@ import { AccountBadge } from "./account-badge";
  *
  * 授权成功后浏览器**导航到 CLI 的回环地址**（`http://127.0.0.1:<port>/callback`）：
  * 这个请求由 CLI 的本地服务接收，CLI 校验 state 后再自己向后端兑换 Token。
+ *
+ * 回调端口单独显示一行（D-15 图例 4）不是装饰：**它是防诱导授权的那把尺子**。
+ * 用户可以在终端里看到 CLI 实际监听的端口，对不上就说明这个链接来路不明。
  */
 export function CliAuthorize({ params }: { params: CliAuthorizeParams }) {
   const router = useRouter();
@@ -39,13 +43,20 @@ export function CliAuthorize({ params }: { params: CliAuthorizeParams }) {
 
   return (
     <>
-      <h1 className="text-2xl font-semibold">授权 CLI 登录</h1>
-      <p className="mb-6 mt-2 text-sm text-label-secondary">
-        命令行工具请求访问你的 Anynote 账号。授权后它会获得一对**独立的**令牌，
-        与当前浏览器会话互不影响。
+      <h1 className="text-title text-label">授权 CLI 登录</h1>
+      <p className="mb-6 mt-2 text-body text-label-secondary">
+        命令行工具请求访问你的 Anynote 账号。授权后它会拿到一对
+        {/* 这里用 <strong> 而不是 Markdown 的 `**`：旧文案把星号原样渲染出来了 */}
+        <strong className="font-semibold text-label">独立的</strong>
+        令牌，与当前浏览器会话互不影响。
       </p>
       <div className="space-y-4">
         <AccountBadge />
+        {/* D-15 图例 4：终端图标 + 回调端口，方便用户和终端里的地址核对 */}
+        <p className="flex items-center gap-1.5 text-footnote text-label-secondary">
+          <Terminal className="size-4 shrink-0" aria-hidden="true" />
+          回调到本机 127.0.0.1:{params.port}
+        </p>
         <div className="flex gap-2">
           <Button
             type="button"
@@ -64,8 +75,9 @@ export function CliAuthorize({ params }: { params: CliAuthorizeParams }) {
             取消
           </Button>
         </div>
-        <p className="text-xs text-label-secondary">
-          授权码只在本机 CLI 与服务器之间传递，不会出现在浏览器地址栏以外的任何地方。
+        {/* D-15 图例 7：把 PKCE 讲成人话，不再说"不会出现在地址栏以外的地方" */}
+        <p className="text-xs text-label-tertiary">
+          授权码只在本机 CLI 与服务器之间传递，60 秒内有效，必须配合 CLI 私有的校验码才能兑换。
         </p>
       </div>
     </>

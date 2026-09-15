@@ -40,13 +40,19 @@ export default async function CliAuthorizePage({ searchParams }: PageProps) {
   const parsed = parseCliAuthorizeParams(params);
 
   if (!parsed.ok) {
+    /*
+     * Q-02 给 D-15 的文案口径：标题「授权链接无效」+「{原因}。请在终端重新执行
+     * anynote auth login。」不解释失败细节，只给唯一有效的下一步动作。
+     */
     return (
       <>
-        <h1 className="text-2xl font-semibold">授权链接无效</h1>
-        <p className="mb-6 mt-2 text-sm text-label-secondary">{parsed.reason}。</p>
-        <p className="text-sm text-label-secondary">
-          请在终端重新执行 <code className="rounded bg-grouped px-1">anynote auth login</code>，
-          不要手工修改或复用旧链接。
+        <h1 className="text-title text-label">授权链接无效</h1>
+        <p className="mb-6 mt-2 text-body text-label-secondary">
+          {parsed.reason}。请在终端重新执行{" "}
+          <code className="rounded bg-fill-hover px-1">anynote auth login</code>。
+        </p>
+        <p className="text-footnote text-label-tertiary">
+          不要手工修改或复用旧链接——授权地址里的参数是一次性的。
         </p>
       </>
     );

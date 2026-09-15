@@ -27,6 +27,22 @@ function upstream(body: unknown = { code: "00000", data: { nickname: "测试用�
   return { [status < 400 ? "data" : "error"]: body, response: new Response(null, { status }) };
 }
 
+/**
+ * 在注册页选性别。
+ *
+ * base-ui 的 Select 项靠 `pointerdown` 记录指针类型，缺了它 `click` 会被当成
+ * "打开时鼠标恰好滑过"而不生效；触发器同理（真实点击自带 pointerdown 序列，
+ * `fireEvent.click` 只有 click）。
+ */
+function selectRegisterSex(label: string) {
+  const trigger = screen.getByTestId("register-sex");
+  fireEvent.pointerDown(trigger, { button: 0 });
+  fireEvent.click(trigger);
+  const option = screen.getByRole("option", { name: label });
+  fireEvent.pointerDown(option, { pointerType: "mouse" });
+  fireEvent.click(option);
+}
+
 beforeEach(() => {
   post.mockReset();
   searchParams.current = new URLSearchParams();
@@ -99,6 +115,11 @@ describe.each([
   function fill() {
     fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "tester01" } });
     fireEvent.change(screen.getByLabelText("密码"), { target: { value: "Password1" } });
+    if (label === "注册") {
+      fireEvent.change(screen.getByLabelText("昵称"), { target: { value: "测试用户" } });
+      // 性别是必填且不再给默认值：不选就无法提交
+      selectRegisterSex("男");
+    }
   }
 
   it("显示字段错误并阻止无效提交", async () => {
@@ -168,6 +189,43 @@ describe("登录页的 ?next= 处理（CLI 授权流程要用）", () => {
     );
   }
 
+  /**
+   * D-14 图例 21：被 `anynote auth login` 带过来的用户看到的是一个"突然要登录"
+   * 的页面，不说一句他多半以为点错了链接。
+   */
+  it("next 指向 CLI 授权页时显示提示条", () => {
+    searchParams.current = new URLSearchParams({
+      next: "/cli/authorize?port=51234&state=s&challenge=c",
+    });
+    showLogin();
+
+    expect(screen.getByTestId("cli-authorize-hint")).toHaveTextContent(
+      "登录后将回到「授权 CLI 登录」继续",
+    );
+  });
+
+  it.each([
+    ["没有 next", ""],
+    ["next 是工作台", "next=/dashboard"],
+    ["next 只是名字里含 cli", "next=/cli"],
+    ["next 指向别的站内页", "next=/docs"],
+  ])("%s 时不显示提示条", (_label, search) => {
+    searchParams.current = new URLSearchParams(search);
+    showLogin();
+
+    expect(screen.queryByTestId("cli-authorize-hint")).toBeNull();
+  });
+
+  it.each([
+    ["外站绝对地址", "https://evil.example/cli/authorize"],
+    ["协议相对地址", "//evil.example/cli/authorize"],
+  ])("next 是 %s 时不显示提示条（它本来就会被拦掉，界面不能说谎）", (_label, next) => {
+    searchParams.current = new URLSearchParams({ next });
+    showLogin();
+
+    expect(screen.queryByTestId("cli-authorize-hint")).toBeNull();
+  });
+
   it("带合法的站内 next 时，登录后回到该路径", async () => {
     searchParams.current = new URLSearchParams({
       next: "/cli/authorize?port=51234&state=s&challenge=c",
@@ -205,17 +263,15 @@ it("注册发送昵称、可选邮箱以及后端约定的性别值（0 男 / 1 
       <RegisterPage />
     </AuthLayout>,
   );
-  expect(screen.getByRole("option", { name: "男" })).toHaveValue("0");
-  expect(screen.getByRole("option", { name: "女" })).toHaveValue("1");
   for (const [label, value] of [
     ["用户名", "tester01"],
     ["密码", "Password1"],
     ["昵称", "测试用户"],
     ["邮箱（选填）", "test@example.com"],
-    ["性别", "1"],
   ] as const) {
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   }
+  selectRegisterSex("女");
   fireEvent.click(screen.getByRole("button", { name: "注册并登录" }));
   await waitFor(() =>
     expect(post).toHaveBeenCalledExactlyOnceWith("/register", {
@@ -223,4 +279,35 @@ it("注册发送昵称、可选邮箱以及后端约定的性别值（0 男 / 1 
       signal: expect.any(AbortSignal),
     }),
   );
+});
+
+it("注册页性别是必填：不选就提交会被挡下", async () => {
+  post.mockResolvedValue(upstream());
+  renderWithProviders(
+    <AuthLayout>
+      <RegisterPage />
+    </AuthLayout>,
+  );
+  for (const [label, value] of [
+    ["用户名", "tester01"],
+    ["密码", "Password1"],
+    ["昵称", "测试用户"],
+  ] as const) {
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  }
+  fireEvent.click(screen.getByRole("button", { name: "注册并登录" }));
+
+  expect(await screen.findByText("请选择性别")).toBeInTheDocument();
+  expect(post).not.toHaveBeenCalled();
+});
+
+it("注册页性别不再给默认值（默认选「男」等于替用户做决定）", () => {
+  renderWithProviders(
+    <AuthLayout>
+      <RegisterPage />
+    </AuthLayout>,
+  );
+  expect(screen.getByTestId("register-sex")).toHaveTextContent("请选择性别");
+  // 原生 select 在深色下无法用 Token 上色，也对不齐输入框
+  expect(document.querySelector("select")).toBeNull();
 });

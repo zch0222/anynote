@@ -87,6 +87,38 @@ describe("CliAuthorize 组件", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  /** D-15 图例 2：`**独立的**` 曾被原样渲染成字面星号。 */
+  it("说明里不出现字面星号，「独立的」用加粗元素渲染", async () => {
+    fetchMock.mockResolvedValue(envelope({ id: 1, username: "alice" }));
+    renderWithProviders(<CliAuthorize params={params} />);
+
+    const body = document.body.textContent ?? "";
+    expect(body).not.toContain("**");
+    expect(body).toContain("独立的");
+
+    const strong = screen.getByText("独立的");
+    expect(strong.tagName).toBe("STRONG");
+  });
+
+  /** D-15 图例 4：端口必须显示，用户才能和终端里的地址核对。 */
+  it("显示回调端口，与链接参数一致", async () => {
+    fetchMock.mockResolvedValue(envelope({ id: 1, username: "alice" }));
+    renderWithProviders(<CliAuthorize params={{ ...params, port: 53817 }} />);
+
+    expect(screen.getByText("回调到本机 127.0.0.1:53817")).toBeInTheDocument();
+  });
+
+  /** D-15 图例 7：安全说明换成把 PKCE 讲成人话的版本。 */
+  it("安全说明不再说「地址栏以外」那套开发者语言", async () => {
+    fetchMock.mockResolvedValue(envelope({ id: 1, username: "alice" }));
+    renderWithProviders(<CliAuthorize params={params} />);
+
+    const body = document.body.textContent ?? "";
+    expect(body).toContain("60 秒内有效");
+    expect(body).toContain("必须配合 CLI 私有的校验码才能兑换");
+    expect(body).not.toContain("不会出现在浏览器地址栏以外的任何地方");
+  });
+
   it("点击授权后把参数提交给 BFF 并整页跳到回环地址", async () => {
     fetchMock.mockImplementation(async (url: string) => {
       if (url === "/api/auth/me") return envelope({ id: 1, username: "alice" });
@@ -183,7 +215,8 @@ describe("授权页 RSC", () => {
   it("参数非法时渲染可读错误，不跳登录、不渲染授权按钮", async () => {
     render(await show("port=80&state=s&challenge=c"));
     expect(screen.getByRole("heading", { name: "授权链接无效" })).toBeInTheDocument();
-    expect(screen.getByText(/port 必须在 1024-65535 之间/)).toBeInTheDocument();
+    // 文案表：{原因}。请在终端重新执行 anynote auth login。
+    expect(screen.getByText(/port 必须在 1024-65535 之间。请在终端重新执行/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "授权" })).not.toBeInTheDocument();
     expect(redirectMock).not.toHaveBeenCalled();
   });
