@@ -220,7 +220,13 @@ pnpm --filter web test:e2e -- --project=mobile
       tab 导航、13 条路由的无横向滚动断言、笔记三级导航、编辑器写入与自动保存、工具条横滑与 40px
       触摸目标、动作表二次确认、AI 列表→对话、PDF 上传入口、搜索页跳转。**25 条用例，只在
       `--project=mobile` 下跑**（桌面 project 用 `testIgnore` 排除，避免 `workers: 1` 下翻倍）。
-- [ ] **T5.2 Lighthouse 移动模式跑通** —— `pnpm --filter web lighthouse:budget:mobile`，5 条路由
+- [x] **T5.2 Lighthouse 移动模式跑通** —— `pnpm --filter web lighthouse:budget:mobile`，5 条路由
+      **2026-09-16 实跑通过**（M12 UI 补稿期间）：login 93 / m-dashboard 89 / m-notes 87 /
+      m-docs 85 / m-ai-chat 89，门槛 85 全部达标；无障碍 96–100（门槛 95）。
+      `/m/dashboard` 修前是 **74 未达标**——根因是 CLS 0.286（三处"骨架/占位与最终内容
+      不等高"），修后 0.024、分数 89。细节与修法见
+      [`docs/changelist/2026-09-16-ui-supplement.md`](../changelist/2026-09-16-ui-supplement.md)
+      的「未完成项」第 7 条
       （`/login`、`/m/dashboard`、`/m/notes`、`/m/docs`、`/m/ai/chat`）达标。**未跑**：脚本与阈值
       已就位且有单测，但跑分要生产前端 + E2E 攒的会话 Cookie，本轮没有真实栈。
       "是否改为多次取中位数"也因此留到实测时再定。
@@ -247,7 +253,8 @@ pnpm --filter web test:e2e                      # 两个 project 全绿
 - [x] changelist 文档覆盖所有改动文件 —— `docs/changelist/2026-09-12-mobile-adaptation.md`，
       文件清单按 `git diff --name-status` 输出逐条核对
 - [ ] 真机清单 8 条全部通过并签字（设备型号 / 系统版本写进验收记录）—— **未做**
-- [ ] 桌面 Lighthouse 分数与移动端工作前相比未下降 —— **未跑**（同 T5.2）
+- [x] 桌面 Lighthouse 分数与移动端工作前相比未下降 —— **2026-09-16 实跑**：login 100 /
+      notes 99 / docs 98 / ai-chat 99（门槛 90），无障碍均 96（门槛 95）
 
 ---
 

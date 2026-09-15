@@ -35,6 +35,8 @@
 | `pnpm check`（Biome） | **No fixes applied**（临时 worktree 存在时扫 1143 个文件、清理后 604 个——差异是 `.worktrees/` 里那份副本） |
 | `pnpm --filter web bundle:budget` | **PASS**：桌面 300.4 / 310 KB、`/m/*` 250.0 / 250 KB、编辑器 14.1 / 250 KB |
 | `pnpm --filter web test:e2e`（真实栈） | **118 passed / 0 failed / 0 skipped**（chromium 78 + mobile 41）。此前三轮出现过 1–5 条偶发，两处根因均已定位并修复，见下 |
+| `pnpm --filter web lighthouse:budget`（桌面） | **PASS 全部 5 条**：login 100 / notes 99 / docs 98 / ai/chat 99，无障碍均 96（门槛 90 / 95） |
+| `pnpm --filter web lighthouse:budget:mobile` | **PASS 全部 5 条**：login 93 / m-dashboard 89 / m-notes 87 / m-docs 85 / m-ai-chat 89（门槛 85 / 95）。`/m/dashboard` 修前是 **74 未达标**，见「未完成项」第 7 条 |
 | `node apps/web/scripts/ui-supplement-compare.mjs` | **30 场景 / 60 张真实浏览器截图**，全部有与画板的并排对比图；**横向溢出 0 处**；深色对浅色的平均亮度差 **209–235**（说明深色在各页真的生效，不是只改了根类名） |
 | `docker exec mysql < infra/sql/migrations/…` | 列已补，`GET /moocs/{id}` 由 B0001 转 `00000` |
 | `pnpm openapi:check` | 无漂移（后端分支上跑的，baseline 已入库） |
@@ -259,3 +261,28 @@
    "字体渲染差异"与"整块位置错位"给的分几乎一样，会掩盖真正要看的东西。
    故已弃用，不作为验收依据。
    主观部分请打开 `apps/web/e2e/.ui-supplement/index.html` 逐屏确认。
+
+7. **`/m/dashboard` 的 Lighthouse 曾不达标，本轮定位并修复（74 → 89）。**
+   M-01 画板自己标着「Lighthouse 81–83 / 85 未达标」，而移动端里程碑 T5.2
+   （`lighthouse:budget:mobile`）一直是**未跑**状态——这个红灯此前没被真正看过，
+   所以也不知道它是什么造成的。本轮实跑后定位到根因是 **CLS 0.286**（不是 JS 或网络，
+   TBT 只有 20ms），逐条追出三处"骨架/占位与最终内容不等高"：
+   「最近笔记」骨架 6 行 vs 内容最多 4 条、「待办」在知识库到齐前渲染空态、
+   尾部「查看全部知识库」加载完成前不渲染。
+
+   修法不是"把骨架行数调大"这种碰运气的做法，而是两层：
+   行数与内容上限常量对齐（`RECENT_NOTE_COUNT` 等）；给三段内容区**固定最小高度**
+   （`minHeightClass`）——因为这些区块的内容高度**本来就由数据决定**
+   （0 条空态 vs 4 条列表），骨架无论给几行都会差一截，只有让高度变化发生在其内部
+   才不影响后续内容的纵向位置。
+
+   实测 CLS **0.286 → 0.024**（低于 0.1 的"良好"线），`/m/dashboard` **74 → 89**，
+   5 条移动路由全部达标。新增两条回归用例，并**验证过它们能抓住这两个缺陷**
+   （把 `minHeightClass` 去掉、把骨架行数改回默认，各自变红）——
+   这类"不显眼的 class 丢了页面照样能跑"的回归，只有用例能拦住。
+
+   顺带记一个环境坑：`scripts/lighthouse.mjs` 原先用 `chrome-launcher` 的默认探测，
+   在 WSL 里它会优先找到 `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe`
+   （Windows 那份），而 Windows 进程的 `--remote-debugging-port` 监听在 Windows 的
+   loopback 上，WSL 侧连必然 `ECONNREFUSED`——报错长得像脚本坏了。
+   已改为优先选 Linux 侧 `google-chrome`（可用 `CHROME_PATH` 覆盖）。
