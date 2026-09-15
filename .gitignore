@@ -67,9 +67,11 @@ apps/web/e2e/.auth/
 apps/web/e2e/.output/
 apps/web/playwright-report/
 apps/web/test-results/
-# UI 还原度对比的截图产物（scripts/ui-capture.mjs）。每次跑都变，只作验收证据，
-# 结论写进 docs/changelist；设计稿的参考图另在 apps/web/e2e/reference/（入库）。
+# UI 还原度对比的截图产物（scripts/ui-capture.mjs 对 PDF 原稿、
+# scripts/ui-supplement-compare.mjs 对补稿画板）。每次跑都变，只作验收证据，
+# 结论写进 docs/changelist；**参考图**另在 apps/web/e2e/reference/（入库）。
 apps/web/e2e/.ui-capture/
+apps/web/e2e/.ui-supplement/
 
 # ===== Logs =====
 *.log
