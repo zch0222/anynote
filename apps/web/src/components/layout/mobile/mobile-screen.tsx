@@ -82,7 +82,7 @@ export function MobileScreen({
             onClick={goBack}
             aria-label="返回"
             data-testid="mobile-back"
-            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-grouped focus-visible:ring-2 focus-visible:ring-ring"
+            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-fill-hover focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ChevronLeft className="size-5" aria-hidden="true" />
           </button>

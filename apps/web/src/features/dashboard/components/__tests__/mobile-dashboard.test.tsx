@@ -87,7 +87,7 @@ describe("MobileDashboard", () => {
     expect(screen.getByRole("link", { name: /未命名笔记/ })).toBeInTheDocument();
   });
 
-  it("只列出未提交的任务，最多三条", () => {
+  it("待办只列 0 与 3 的前三条（1 与 2 都不列）", () => {
     setup({
       tasks: {
         ...IDLE,
@@ -95,9 +95,10 @@ describe("MobileDashboard", () => {
           rows: [
             { id: 1, taskName: "任务一", submissionStatus: 0 },
             { id: 2, taskName: "已交", submissionStatus: 1 },
-            { id: 3, taskName: "任务三", submissionStatus: 2 },
-            { id: 4, taskName: "任务四", submissionStatus: 0 },
+            { id: 3, taskName: "管理员自己", submissionStatus: 2 },
+            { id: 4, taskName: "已退回的", submissionStatus: 3 },
             { id: 5, taskName: "任务五", submissionStatus: 0 },
+            { id: 6, taskName: "任务六", submissionStatus: 0 },
           ],
         },
       },
@@ -105,10 +106,37 @@ describe("MobileDashboard", () => {
     renderWithProviders(<MobileDashboard />);
 
     const list = screen.getByTestId("dashboard-tasks");
+    // 0/0/3 三条（第 4 条 0 被条数上限截掉）
     expect(within(list).getAllByRole("listitem")).toHaveLength(3);
     expect(within(list).queryByText("已交")).toBeNull();
-    // 已退回也算待办，状态文案要照实显示
+    // §1.4 第 2 条：2 是「无需提交」（管理员自己），不是待办
+    expect(within(list).queryByText("管理员自己")).toBeNull();
+    // 已退回也算待办，状态文案照实显示
     expect(within(list).getByText("已退回")).toBeInTheDocument();
+  });
+
+  it("任务行可点，去当前库的任务 Tab", () => {
+    setup({
+      tasks: {
+        ...IDLE,
+        data: { rows: [{ id: 1, taskName: "任务一", submissionStatus: 0 }] },
+      },
+    });
+    renderWithProviders(<MobileDashboard />);
+
+    expect(screen.getByTestId("dashboard-task-1")).toHaveAttribute("href", "/m/notes/3/tasks");
+  });
+
+  it("「待办 · 全部」指向当前库的任务 Tab，不是跨库的 /m/tasks", () => {
+    setup({});
+    renderWithProviders(<MobileDashboard />);
+
+    // 三个分组各有一个「全部」，取「待办」那一节里的
+    const pending = screen.getByText("待办").closest("section") as HTMLElement;
+    expect(within(pending).getByRole("link", { name: /全部/ })).toHaveAttribute(
+      "href",
+      "/m/notes/3/tasks",
+    );
   });
 
   it("没有知识库时给创建引导，而不是空白或报错", () => {

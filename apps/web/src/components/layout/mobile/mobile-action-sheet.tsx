@@ -98,7 +98,7 @@ export function MobileActionSheet({
                   onClick={() => handleSelect(action)}
                   className={cn(
                     "flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-left text-sm outline-none transition-colors",
-                    "hover:bg-grouped focus-visible:bg-grouped disabled:pointer-events-none disabled:opacity-50",
+                    "hover:bg-fill-hover focus-visible:bg-fill-hover disabled:pointer-events-none disabled:opacity-50",
                     action.destructive && "text-danger",
                   )}
                 >

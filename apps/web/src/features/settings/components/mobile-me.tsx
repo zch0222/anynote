@@ -1,15 +1,17 @@
 "use client";
 
+import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { ViewSwitch } from "@/components/layout/mobile/view-switch";
 import { mobileMoreRoutes, mobileUnavailableRoutes } from "@/components/layout/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useLogoutMutation } from "@/features/auth/use-logout-mutation";
 import { useMe } from "@/features/auth/use-me";
-import { SETTINGS_SECTIONS } from "@/features/settings/components/account-settings";
+import { MOBILE_SETTINGS_SECTIONS } from "@/features/settings/components/mobile/settings-sections";
+import { cn } from "@/lib/utils";
 import { ChevronRight, LogOut } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
 /**
@@ -21,12 +23,21 @@ import { toast } from "sonner";
 export function MobileMePage() {
   const me = useMe();
   const logout = useLogoutMutation();
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
   const name = me.data?.nickname || me.data?.username || "我的账户";
 
   return (
     <MobileScreen title="我的">
       <div className="space-y-6 p-4" data-testid="mobile-me">
-        <section className="flex items-center gap-3 rounded-lg bg-surface p-4 shadow-card">
+        {/*
+          资料卡整卡可点（M-02 图例 2，原先行不可点）。卡片本身就是"去改资料"
+          最自然的落点，比在卡里再塞一个"编辑"按钮少一次点击。
+        */}
+        <Link
+          href="/m/settings/profile"
+          data-testid="me-profile-card"
+          className="flex min-h-[76px] items-center gap-3 rounded-lg bg-surface p-4 shadow-card outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <Avatar className="size-12">
             <AvatarImage src={me.data?.avatar || undefined} alt="" />
             <AvatarFallback>{name.slice(0, 1)}</AvatarFallback>
@@ -38,10 +49,11 @@ export function MobileMePage() {
               {me.data?.username ? `@${me.data.username}` : "账号资料加载中"}
             </p>
           </div>
-        </section>
+          <ChevronRight className="size-4 shrink-0 text-label-tertiary" aria-hidden="true" />
+        </Link>
 
         <MeGroup label="设置">
-          {SETTINGS_SECTIONS.map((section) => (
+          {MOBILE_SETTINGS_SECTIONS.map((section) => (
             <MeLink
               key={section.key}
               href={`/m/settings/${section.key}`}
@@ -81,32 +93,61 @@ export function MobileMePage() {
 
         <div className="space-y-2">
           <ViewSwitch className="w-full justify-start rounded-lg bg-surface px-4 py-3 text-footnote shadow-card" />
+          {/*
+            退出登录先弹动作表确认（M-02 图例 15，原实现一点就走）。
+            退出会丢掉当前编辑页未保存的内容，且重新登录要再输一次密码——
+            这是"代价明显高于误触成本"的操作，必须挡一道。
+          */}
           <button
             type="button"
             disabled={logout.isPending}
             data-testid="mobile-logout"
-            onClick={() =>
-              logout.mutate(undefined, { onError: () => toast.error("退出登录失败，请重试") })
-            }
-            className="flex min-h-12 w-full items-center gap-2 rounded-lg bg-surface px-4 text-footnote text-danger shadow-card outline-none transition-colors hover:bg-danger/5 disabled:opacity-50"
+            onClick={() => setConfirmingLogout(true)}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-surface px-4 text-footnote font-medium text-danger shadow-card outline-none transition-colors hover:bg-danger/5 disabled:opacity-50"
           >
             <LogOut className="size-4" aria-hidden="true" />
             {logout.isPending ? "正在退出…" : "退出登录"}
           </button>
         </div>
       </div>
+
+      {confirmingLogout ? (
+        <MobileActionSheet
+          open
+          onOpenChange={(next) => {
+            if (!next) setConfirmingLogout(false);
+          }}
+          title="退出登录？"
+          description="退出后需要重新输入账号密码，未保存的内容会丢失。"
+          actions={[
+            {
+              label: "退出登录",
+              icon: LogOut,
+              destructive: true,
+              onSelect: () => {
+                setConfirmingLogout(false);
+                logout.mutate(undefined, { onError: () => toast.error("退出登录失败，请重试") });
+              },
+            },
+          ]}
+        />
+      ) : null}
     </MobileScreen>
   );
 }
 
 const ROW_CLASS =
-  "flex min-h-14 items-center gap-3 px-4 py-2 outline-none transition-colors focus-visible:bg-grouped";
+  "flex min-h-14 items-center gap-3 px-4 py-2 outline-none transition-colors focus-visible:bg-fill-hover";
 
 function MeGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className="space-y-2">
       <h2 className="text-xs font-medium text-label-tertiary">{label}</h2>
-      <ul className="divide-y divide-separator overflow-hidden rounded-lg bg-surface shadow-card">
+      <ul
+        className={cn(
+          "divide-y divide-separator overflow-hidden rounded-lg bg-surface shadow-card",
+        )}
+      >
         {children}
       </ul>
     </section>

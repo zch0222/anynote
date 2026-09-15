@@ -51,6 +51,12 @@ export type ToolbarVariant = "full" | "minimal" | "mobile" | "none";
 export type ToolbarProps = {
   editor: Editor | null;
   variant?: ToolbarVariant;
+  /**
+   * 要置灰的命令 id。宿主明确知道某些能力在当前场景没有实现时（如协同文档的
+   * 图片上传）用它停用按钮——可点后弹「未配置」比一开始就灰着更让人困惑。
+   * 置灰只影响点击，命令本身仍按 id 注册。
+   */
+  disabledCommands?: readonly string[] | undefined;
 };
 
 type ToolbarButtonProps = {
@@ -307,6 +313,7 @@ function buildCommands(
 function renderSlots(
   slots: readonly ToolbarSlot[],
   commands: Record<ToolbarCommandId, ToolbarCommand>,
+  disabledCommands?: readonly string[] | undefined,
 ) {
   return slots.map((slot, index) => {
     if (slot === TOOLBAR_DIVIDER) {
@@ -320,7 +327,7 @@ function renderSlots(
         key={slot}
         label={command.label}
         active={command.active}
-        disabled={command.disabled}
+        disabled={command.disabled || disabledCommands?.includes(slot)}
         onClick={command.run}
       >
         {command.icon}
@@ -338,7 +345,7 @@ function renderSlots(
  * - `none`：不渲染工具栏（笔记 / 协同文档的桌面版）。设计稿的桌面编辑器从
  *   标题直接进正文，没有常驻工具条；格式化走选区气泡菜单、Slash 菜单与快捷键
  */
-export function Toolbar({ editor, variant = "full" }: ToolbarProps) {
+export function Toolbar({ editor, variant = "full", disabledCommands }: ToolbarProps) {
   const [overflowOpen, setOverflowOpen] = useState(false);
   const state = useEditorState({
     editor,
@@ -392,7 +399,7 @@ export function Toolbar({ editor, variant = "full" }: ToolbarProps) {
         role="toolbar"
         aria-label="编辑器工具栏"
       >
-        {renderSlots(MOBILE_PRIMARY, commands)}
+        {renderSlots(MOBILE_PRIMARY, commands, disabledCommands)}
         <Sheet open={overflowOpen} onOpenChange={setOverflowOpen}>
           <SheetTrigger
             render={
@@ -425,7 +432,10 @@ export function Toolbar({ editor, variant = "full" }: ToolbarProps) {
                         <button
                           key={id}
                           type="button"
-                          disabled={command.disabled}
+                          disabled={command.disabled || disabledCommands?.includes(id)}
+                          title={
+                            disabledCommands?.includes(id) ? "协同文档暂不支持图片" : undefined
+                          }
                           onClick={() => {
                             setOverflowOpen(false);
                             command.run();
