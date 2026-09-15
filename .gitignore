@@ -73,6 +73,15 @@ apps/web/test-results/
 apps/web/e2e/.ui-capture/
 apps/web/e2e/.ui-supplement/
 
+# ===== Chrome / Lighthouse 临时产物 =====
+# Lighthouse 在 WSL 下会误把 Chrome 的 user-data-dir 拼成
+# `<cwd>\wsl.localhost\...\undefined：\Users\undefined\AppData\Local\lighthouse.NNN`，
+# 在仓库里生成几千个浏览器缓存文件。它们不是源码，也不该入库。
+# 用通配兜住这种畸形路径（含 Windows 盘符形态与 `undefined` 段）。
+**/lighthouse.[0-9]*/
+**/\\wsl.localhost*
+**/undefined：/Users/undefined/
+
 # ===== Logs =====
 *.log
 logs/
