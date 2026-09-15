@@ -16,8 +16,10 @@ function roomState(overrides: Partial<CollabRoomState> = {}): CollabRoomState {
     provider: null,
     user: { id: "7", name: "小明", color: "#2563eb" },
     status: "connected",
+    synced: true,
     error: null,
     peers: [],
+    reconnect: () => {},
     ...overrides,
   };
 }

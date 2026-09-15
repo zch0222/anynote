@@ -10,7 +10,7 @@ vi.mock("@/lib/collab/session", () => ({ openCollabRoom }));
 type Listener = (payload: never) => void;
 
 /** 够用的假会话：只实现 hook 真正触碰到的那几个成员。 */
-function createSession(options: { connected?: boolean } = {}) {
+function createSession(options: { connected?: boolean; synced?: boolean } = {}) {
   const listeners = new Map<string, Listener[]>();
   const awarenessListeners: Listener[] = [];
   const states = new Map<number, unknown>();
@@ -22,6 +22,9 @@ function createSession(options: { connected?: boolean } = {}) {
     destroy: vi.fn(),
     provider: {
       wsconnected: options.connected ?? false,
+      synced: options.synced ?? false,
+      disconnect: vi.fn(),
+      connect: vi.fn(),
       awareness: {
         getStates: () => states,
         on: (_event: string, listener: Listener) => awarenessListeners.push(listener),
@@ -170,5 +173,118 @@ describe("useCollabRoom", () => {
 
     await waitFor(() => expect(result.current.doc).toBe(second.doc));
     expect(first.session.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  describe("synced（D-11 的「文档已移除」判定要用）", () => {
+    it("建立会话时 provider 已完成同步就直接为真", async () => {
+      const fake = createSession({ connected: true, synced: true });
+      openCollabRoom.mockResolvedValue(fake.session);
+      const { result } = renderHook(() => useCollabRoom("index"));
+
+      await waitFor(() => expect(result.current.synced).toBe(true));
+    });
+
+    it("只握手成功、还没收到快照时为假（否则会把正常文档读成已移除）", async () => {
+      const fake = createSession({ connected: true });
+      openCollabRoom.mockResolvedValue(fake.session);
+      const { result } = renderHook(() => useCollabRoom("index"));
+
+      await waitFor(() => expect(result.current.status).toBe("connected"));
+      expect(result.current.synced).toBe(false);
+    });
+
+    it("跟随 provider 的 sync 事件翻转", async () => {
+      const fake = createSession({ connected: true });
+      openCollabRoom.mockResolvedValue(fake.session);
+      const { result } = renderHook(() => useCollabRoom("index"));
+      await waitFor(() => expect(result.current.status).toBe("connected"));
+
+      act(() => fake.emit("sync", true));
+      expect(result.current.synced).toBe(true);
+
+      // 断线时 y-websocket 会把它置回 false，重连后我们仍能知道索引是否又完整了
+      act(() => fake.emit("sync", false));
+      expect(result.current.synced).toBe(false);
+    });
+
+    it("换房间时退回未同步，不沿用上一间的 synced", async () => {
+      const first = createSession({ connected: true, synced: true });
+      const second = createSession({ connected: true });
+      openCollabRoom.mockResolvedValueOnce(first.session).mockResolvedValueOnce(second.session);
+
+      const { result, rerender } = renderHook(({ room }) => useCollabRoom(room), {
+        initialProps: { room: "index" },
+      });
+      await waitFor(() => expect(result.current.synced).toBe(true));
+
+      rerender({ room: "doc:abcdefgh" });
+
+      await waitFor(() => expect(result.current.doc).toBe(second.doc));
+      expect(result.current.synced).toBe(false);
+    });
+  });
+
+  describe("reconnect（D-10 图例 16 · D-11 图例 12）", () => {
+    it("先 disconnect 再 connect，同一个 provider，不重建会话", async () => {
+      const fake = createSession({ connected: true });
+      openCollabRoom.mockResolvedValue(fake.session);
+      const { result } = renderHook(() => useCollabRoom("index"));
+      await waitFor(() => expect(result.current.status).toBe("connected"));
+
+      const provider = fake.session.provider as unknown as {
+        disconnect: ReturnType<typeof vi.fn>;
+        connect: ReturnType<typeof vi.fn>;
+      };
+      // 顺序是契约的一部分：先 disconnect 才能把已有的 socket 与退避定时器收干净，
+      // 直接 connect 会被 shouldConnect 挡住而什么都没发生。
+      const order: string[] = [];
+      provider.disconnect.mockImplementation(() => order.push("disconnect"));
+      provider.connect.mockImplementation(() => order.push("connect"));
+
+      act(() => result.current.reconnect());
+
+      expect(order).toEqual(["disconnect", "connect"]);
+      // 重连不该换会话：换了 Y.Doc 就地丢掉本地还没同步的改动
+      expect(openCollabRoom).toHaveBeenCalledTimes(1);
+      expect(fake.session.destroy).not.toHaveBeenCalled();
+      expect(result.current.provider).toBe(fake.session.provider);
+    });
+
+    it("重连期间状态回到「连接中」，连接恢复后跟着 provider 变回已连接", async () => {
+      const fake = createSession({ connected: true });
+      openCollabRoom.mockResolvedValue(fake.session);
+      const { result } = renderHook(() => useCollabRoom("index"));
+      await waitFor(() => expect(result.current.status).toBe("connected"));
+
+      act(() => result.current.reconnect());
+      expect(result.current.status).toBe("connecting");
+
+      act(() => fake.emit("status", { status: "connected" }));
+      expect(result.current.status).toBe("connected");
+    });
+
+    it("会话尚未建立时重跑建立流程（换令牌失败后 provider 还是 null）", async () => {
+      openCollabRoom.mockRejectedValueOnce(new Error("登录状态已过期"));
+      const fake = createSession({ connected: true });
+      openCollabRoom.mockResolvedValueOnce(fake.session);
+
+      const { result } = renderHook(() => useCollabRoom("index"));
+      await waitFor(() => expect(result.current.status).toBe("error"));
+
+      act(() => result.current.reconnect());
+
+      await waitFor(() => expect(result.current.status).toBe("connected"));
+      expect(openCollabRoom).toHaveBeenCalledTimes(2);
+      // 错误提示要跟着清掉，否则重连成功了页面上还挂着旧原因
+      expect(result.current.error).toBeNull();
+    });
+
+    it("没有房间时不炸（provider 为 null）", () => {
+      const { result } = renderHook(() => useCollabRoom(null));
+      expect(() => {
+        act(() => result.current.reconnect());
+      }).not.toThrow();
+      expect(result.current.status).toBe("disconnected");
+    });
   });
 });

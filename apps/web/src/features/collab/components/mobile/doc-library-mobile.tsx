@@ -16,6 +16,7 @@ import {
 import { CollabStatusBadge } from "@/features/collab/components/collab-status";
 import { type CollabDocTitleInput, collabDocTitleSchema } from "@/features/collab/schemas";
 import { useCollabIndex } from "@/features/collab/use-collab-index";
+import { formatRelativeTime } from "@/lib/format-time";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FileText, MoreHorizontal, Plus } from "lucide-react";
 import Link from "next/link";
@@ -24,8 +25,12 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-function formatTime(value: number) {
-  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+/**
+ * 索引里的 `updatedAt` 是毫秒时间戳，`formatRelativeTime` 吃字符串，
+ * 这里转一次 ISO——不引 dayjs（移动端 250KB 预算里没有它的位置）。
+ */
+function relativeTime(value: number) {
+  return formatRelativeTime(new Date(value).toISOString());
 }
 
 /**
@@ -58,7 +63,8 @@ export function MobileDocLibrary() {
   }
 
   return (
-    <MobileScreen title="文档" actions={<CollabStatusBadge status={status} />}>
+    // M-08 图例 1：本页不是 tab 根页，必须有返回键；深链直开兜底回「我的」
+    <MobileScreen title="协同文档" back="/m/me" actions={<CollabStatusBadge status={status} />}>
       <div className="space-y-4 p-4" data-testid="mobile-doc-library">
         {status === "error" ? (
           <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
@@ -80,13 +86,14 @@ export function MobileDocLibrary() {
               <li key={item.id} className="flex items-center">
                 <Link
                   href={`/m/docs/${item.id}`}
-                  className="flex min-h-16 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-grouped"
+                  className="flex min-h-16 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-fill-hover"
                 >
                   <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{item.title}</span>
-                    <span className="block truncate text-xs text-label-secondary">
-                      {item.createdBy} · 更新于 {formatTime(item.updatedAt)}
+                    {/* M-08 图例 6：「陈可 · 2 小时前更新」，不铺全量时间戳 */}
+                    <span className="block truncate text-xs text-label-tertiary">
+                      {item.createdBy} · {relativeTime(item.updatedAt)}更新
                     </span>
                   </span>
                 </Link>
@@ -94,7 +101,7 @@ export function MobileDocLibrary() {
                   type="button"
                   aria-label={`${item.title} 的操作`}
                   onClick={() => setActing({ id: item.id, title: item.title })}
-                  className="flex size-11 shrink-0 items-center justify-center text-label-secondary outline-none focus-visible:bg-grouped"
+                  className="flex size-11 shrink-0 items-center justify-center text-label-secondary outline-none focus-visible:bg-fill-hover"
                 >
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </button>
@@ -156,10 +163,12 @@ export function MobileDocLibrary() {
             if (!next) setActing(null);
           }}
           title={acting.title}
+          description="移除后所有成员的文档库里都看不到它。"
           actions={[
             {
               label: "从文档库移除",
               destructive: true,
+              // 动作表自带二次确认：第一次点只把标签换成这句，第二次才真的移除
               confirm: "再点一次确认移除",
               onSelect: () => {
                 if (removeDoc(acting.id)) toast.success("已从文档库移除");
