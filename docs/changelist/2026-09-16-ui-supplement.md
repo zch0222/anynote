@@ -32,12 +32,12 @@
 |------|------|
 | `npx vitest run`（apps/web） | **148 files / 1696 tests passed** |
 | `npx tsc --noEmit`（apps/web） | `src/` 与 `e2e/` **0 错误** |
-| `pnpm check`（Biome） | Checked 1143 files，**No fixes applied** |
+| `pnpm check`（Biome） | **No fixes applied**（临时 worktree 存在时扫 1143 个文件、清理后 604 个——差异是 `.worktrees/` 里那份副本） |
 | `pnpm --filter web bundle:budget` | **PASS**：桌面 300.4 / 310 KB、`/m/*` 250.0 / 250 KB、编辑器 14.1 / 250 KB |
 | `pnpm --filter web test:e2e`（真实栈） | **117 passed / 1 skipped / 0 failed**（chromium 77 + mobile 41，其中 1 条 skip）。此前三轮有 1–5 条偶发，成因与处理见「未完成项」第 1 条 |
 | `docker exec mysql < infra/sql/migrations/…` | 列已补，`GET /moocs/{id}` 由 B0001 转 `00000` |
 | `pnpm openapi:check` | 无漂移（后端分支上跑的，baseline 已入库） |
-| `mvn test -pl note` / `-pl system` | Tests run 42 / 31，Failures 0（后端分支上跑的） |
+| `mvn -o test -pl note` / `-pl system`（合并后在 `dev` 上复跑） | Tests run **42** / **31**，Failures 0，BUILD SUCCESS |
 
 ## 一、基建（M12.0）
 
