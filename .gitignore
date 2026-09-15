@@ -77,3 +77,6 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+
+# 本机临时探查产物（非仓库内容）
+.workbuddy/
