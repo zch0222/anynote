@@ -328,8 +328,15 @@ test.describe("UI 补稿还原度", () => {
     await page.waitForURL(/\/docs\/.+/, { timeout: 20_000 });
     await page.goto("/docs");
 
+    /*
+     * 等**自己那一篇**出现，而不是"任何一张卡片"。
+     *
+     * 文档库是共享的协同索引房间，全量跑时前面几个用例建的文档都还在列表里；
+     * 按"第一张卡片"取会删到别人的文档（而且并发跑时那张可能刚被删掉，
+     * 于是报 element not found）。按标题精确定位后这条用例与执行顺序无关。
+     */
     const del = page.getByRole("button", { name: `删除 ${title}` });
-    await expect(del).toBeVisible({ timeout: 20_000 });
+    await expect(del).toBeVisible({ timeout: 30_000 });
     await del.click();
 
     const confirm = page.getByRole("dialog");

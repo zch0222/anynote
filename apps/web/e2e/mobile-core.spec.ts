@@ -348,12 +348,18 @@ test.describe("移动端 AI", () => {
 });
 
 test.describe("移动端搜索", () => {
-  test("搜索页替代 ⌘K，可过滤并跳转", async ({ page }) => {
+  test("搜索页替代 ⌘K，可过滤并跳转到知识库", async ({ page }) => {
     await page.goto("/m/search");
     await expect(page.getByTestId("mobile-search")).toBeVisible({ timeout: 30_000 });
 
-    await page.getByLabel("搜索页面或操作").fill("任务");
-    await page.getByRole("link", { name: /任务/ }).first().click();
-    await expect(page).toHaveURL(/\/m\/tasks$/, { timeout: 30_000 });
+    /*
+     * 占位文案按 M-10 图例 3 扩成「搜索页面、知识库或操作…」（多了知识库一组）。
+     * 命中的目标也从「任务」换成「知识库」：2026-09-15 已拍板任务与慕课不再作为
+     * 独立入口（只在各自知识库的 Tab 里出现），所以搜索里不该再有 /m/tasks 候选——
+     * 这一点由 `mobile-supplement.spec.ts` 的 M-10 用例专门断言。
+     */
+    await page.getByLabel("搜索页面、知识库或操作").fill("知识库");
+    await page.getByRole("link", { name: /知识库/ }).first().click();
+    await expect(page).toHaveURL(/\/m\/notes$/, { timeout: 30_000 });
   });
 });
