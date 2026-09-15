@@ -861,6 +861,42 @@ public class NoteTaskServiceImpl extends ServiceImpl<NoteTaskMapper, NoteTask>
     }
 
     @Override
+    public MemberNoteTaskDTO getMemberNoteTaskById(NoteTaskQueryParam queryParam) {
+        Long noteTaskId = queryParam.getNoteTaskId();
+        NoteTask noteTask = this.baseMapper.selectById(noteTaskId);
+        if (StringUtils.isNull(noteTask)) {
+            throw new UserParamException("任务不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND);
+        }
+
+        LoginUser loginUser = tokenUtil.getLoginUser();
+        Long userId = loginUser.getSysUser().getId();
+        // 权限锚在任务所在知识库上：不是该库成员（或权限低于 READ）一律拒绝
+        Integer knowledgeBasePermission = knowledgeBaseService
+                .getUserKnowledgeBasePermissions(userId, noteTask.getKnowledgeBaseId());
+        if (StringUtils.isNull(knowledgeBasePermission)
+                || knowledgeBasePermission > KnowledgeBasePermissions.READ.getValue()) {
+            throw new AuthException("没有权限查看该任务", ResCode.UNAUTHORIZED_ERROR);
+        }
+
+        // 复用成员侧列表的 SQL，保证单条返回与列表行同结构
+        List<MemberNoteTaskDTO> rows = this.baseMapper.selectMemberNoteTaskList(
+                NoteTaskQueryParam.NoteTaskQueryParamBuilder()
+                        .noteTaskId(noteTaskId)
+                        .submitUserId(userId)
+                        .build());
+        if (rows.isEmpty()) {
+            throw new UserParamException("任务不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND);
+        }
+        MemberNoteTaskDTO memberNoteTaskDTO = rows.get(0);
+        if (StringUtils.isNull(memberNoteTaskDTO.getSubmissionStatus())) {
+            // submission_status 来自 n_user_note_task 的内连接条件，为空即不在任务成员名单里
+            throw new AuthException("没有权限查看该任务", ResCode.UNAUTHORIZED_ERROR);
+        }
+        return memberNoteTaskDTO;
+    }
+
+
+    @Override
     public List<UserNoteTask> getTaskUsers(Long taskId) {
         LambdaQueryWrapper<UserNoteTask> userNoteTaskLambdaQueryWrapper = new LambdaQueryWrapper<>();
         userNoteTaskLambdaQueryWrapper

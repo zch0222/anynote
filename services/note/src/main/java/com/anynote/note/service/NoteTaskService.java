@@ -88,4 +88,11 @@ public interface NoteTaskService extends IService<NoteTask> {
      * @return 任务时间窗口内的逐日编辑次数矩阵
      */
     public NoteTaskEditHeatmapVO getNoteTaskEditHeatmap(NoteTaskEditHeatmapQueryParam queryParam);
+
+    /**
+     * 成员侧获取单个任务（权限为任务所在知识库 READ，不在任务成员里时无权限）
+     * @param queryParam 任务id与知识库id入参
+     * @return 与任务列表行同结构的任务信息
+     */
+    public MemberNoteTaskDTO getMemberNoteTaskById(NoteTaskQueryParam queryParam);
 }
