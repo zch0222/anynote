@@ -1,7 +1,7 @@
 import { noteQueryKeys } from "@/features/notes/query-keys";
 import { noteApi } from "@/lib/api/openapi";
 import { renderHookWithProviders } from "@/test/render";
-import { act } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useCreateNoteMutation } from "../use-create-note";
@@ -55,6 +55,12 @@ describe("useCreateNoteMutation", () => {
     });
 
     expect(post).toHaveBeenCalledTimes(1);
-    expect(result.current.isError).toBe(true);
+    /*
+     * `mutateAsync` 的 rejection 已经消化在 catch 里了，但 mutation 的
+     * `isError` 是 React state，要等一次重渲染才可见。直接断言会在某些调度下
+     * 读到上一帧的 false —— 这是本条用例此前 8/10 失败的原因（在干净的 dev 上
+     * 同样复现）。用 `waitFor` 等它落定，而不是靠 `act` 的时序运气。
+     */
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });
