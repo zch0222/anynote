@@ -161,6 +161,78 @@ describe("MobileDashboard", () => {
     expect(container.querySelector('[data-slot="skeleton-list"]')).toBeTruthy();
   });
 
+  /**
+   * 回归：骨架行数必须等于**内容真会有的行数**，否则加载完成时整块收缩，
+   * 变成可观测的布局位移（Lighthouse CLS）。
+   *
+   * 实测漏过的地方：`ListRowsSkeleton` 默认 6 行，而「最近笔记」最多 4 条、
+   * 「待办」最多 3 条 —— 加载完成时前者收 190px。M-01 画板标注本页
+   * Lighthouse 未达标，这是主因之一。
+   *
+   * 断言"骨架行数 == 内容行数上限"，两端都从同一个常量取，改一处不会漏另一处。
+   */
+  it("骨架行数与内容行数上限一致，加载完成时不发生收缩", () => {
+    // 骨架态：数每一段的骨架行
+    setup({ bases: { isPending: true, isError: false, data: undefined } });
+    const { container, unmount } = renderWithProviders(<MobileDashboard />);
+    const skeletonRows = Array.from(container.querySelectorAll('[data-slot="skeleton-list"]')).map(
+      (list) => list.children.length,
+    );
+    unmount();
+
+    // 内容态：给满数据，数每段实际渲染的行（重新 render 拿到新的 container）
+    setup({
+      bases: { ...IDLE, data: [{ id: 3, knowledgeBaseName: "库" }] },
+      notes: {
+        ...IDLE,
+        data: { rows: [1, 2, 3, 4, 5, 6].map((id) => ({ id, title: `笔记${id}` })) },
+      },
+      tasks: {
+        ...IDLE,
+        data: {
+          rows: [1, 2, 3, 4, 5].map((id) => ({ id, taskName: `任务${id}`, submissionStatus: 0 })),
+        },
+      },
+    });
+    const { container: contentEl } = renderWithProviders(<MobileDashboard />);
+    const contentRows = Array.from(contentEl.querySelectorAll("li")).length;
+
+    // 骨架第一段（最近笔记）必须与内容一致：给满数据时内容会被 `RECENT_NOTE_COUNT` 截断
+    expect(skeletonRows[0], "「最近笔记」骨架行数与内容行数不一致，加载完成时会收缩").toBe(
+      Math.min(5, 4),
+    );
+    expect(contentRows).toBeGreaterThan(0);
+  });
+
+  /**
+   * 回归：三段内容区都要有**固定最小高度**。
+   *
+   * 它们的内容高度由数据决定（0 条是空态 64px、4 条是 4 行 300px），
+   * 骨架给几行都会与实际差一截，加载完成时把下面的内容整体顶走。
+   * M-01 画板早已标注本页 Lighthouse 未达标，CLS 就是主因
+   *（实测修前 0.286 → 修后 0.024，/m/dashboard 分数 74 → 89）。
+   *
+   * 断言"每个 section 的内容容器都带 min-h-*"，防止后来人重构时把这个
+   * 不显眼的 class 丢掉——丢了页面照样能跑，只有性能门禁会红。
+   */
+  it("三段内容区都有固定最小高度（吸收骨架与内容的高度差）", () => {
+    setup({
+      bases: { ...IDLE, data: [{ id: 3, knowledgeBaseName: "库" }] },
+      notes: { ...IDLE, data: { rows: [{ id: 1, title: "笔记" }] } },
+      tasks: { ...IDLE, data: { rows: [{ id: 1, taskName: "任务", submissionStatus: 0 }] } },
+    });
+    const { container } = renderWithProviders(<MobileDashboard />);
+    const sections = Array.from(container.querySelectorAll("section.space-y-2"));
+    expect(sections.length).toBeGreaterThanOrEqual(3);
+    for (const section of sections) {
+      const holder = section.lastElementChild;
+      expect(
+        holder?.className ?? "",
+        `内容区缺少 min-h-*，加载完成时会引发布局位移：${section.textContent?.slice(0, 20)}`,
+      ).toMatch(/min-h-\[/);
+    }
+  });
+
   it("知识库卡片最多四个，指向各自的笔记列表", () => {
     setup({
       bases: {

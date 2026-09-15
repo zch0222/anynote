@@ -5,7 +5,7 @@
 //   node scripts/lighthouse.mjs --mobile               # 移动 form factor + /m/* 路由
 //   node scripts/lighthouse.mjs --url http://localhost:3000/notes
 //   node scripts/lighthouse.mjs --budget               # 不达标以非零退出码失败
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as chromeLauncher from "chrome-launcher";
@@ -43,7 +43,32 @@ if (!cookieHeader) {
   console.warn("[lighthouse] 未找到 e2e/.auth/state.json，需要登录的路由会被重定向到登录页");
 }
 
+/**
+ * 挑一个**能被 WSL 访问到 devtools 端口**的 Chrome。
+ *
+ * 不能只靠 `chromeLauncher.launch()` 的默认探测：在 WSL 里它会优先找到
+ * `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe`（Windows 侧那份），
+ * 而 Windows 进程的 `--remote-debugging-port` 监听在 Windows 的 loopback 上，
+ * WSL 侧连 `127.0.0.1:<port>` 必然 `ECONNREFUSED`——报错长得像脚本坏了，
+ * 实际是选错了浏览器。
+ *
+ * 优先级：显式 `CHROME_PATH` → Linux 侧 `google-chrome` → 系统 chromium。
+ * 都没有时退回默认探测（让 chrome-launcher 自己报错，错误信息更贴近它的预期）。
+ */
+function resolveChromePath() {
+  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
+  const candidates = [
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+  ];
+  return candidates.find((p) => existsSync(p));
+}
+
+const chromePath = resolveChromePath();
 const chrome = await chromeLauncher.launch({
+  ...(chromePath ? { chromePath } : {}),
   chromeFlags: ["--headless=new", "--no-sandbox", "--disable-gpu"],
 });
 

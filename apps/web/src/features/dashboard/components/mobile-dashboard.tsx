@@ -70,7 +70,12 @@ export function MobileDashboard() {
 
   return (
     <MobileScreen
-      title={`你好，${name}`}
+      /*
+       * 问候语用**占位昵称**而不是"朋友"：`me` 是异步的，先用兜底文案再换成真昵称，
+       * 会让标题栏文字重新排版（实测 CLS 0.024）。骨架态用不换行空格保宽，
+       * 视觉上仍是一句完整的问候。
+       */
+      title={me.isPending ? "你好，\u00a0" : `你好，${name}`}
       actions={
         <Link
           href="/m/settings/profile"
@@ -99,12 +104,25 @@ export function MobileDashboard() {
         </nav>
 
         <DashboardSection
-          title={bases.data?.length ? `「${baseName}」最近笔记` : "最近笔记"}
+          /*
+           * 标题在知识库到齐后才拼上库名（「最近笔记」→「「X」最近笔记」），
+           * 那一下标题从一行变两行、把整段往下推（实测 CLS 0.024）。
+           * 加载中就先按"带库名"的形态占位，文字换了但行数不变。
+           */
+          title={baseId ? `「${baseName}」最近笔记` : "最近笔记"}
           moreHref={baseId ? `/m/notes/${baseId}` : undefined}
           moreLabel="全部"
+          // 理由同「待办」：内容 0–4 条，高度由数据决定，固定最小高度吸收骨架差
+          minHeightClass="min-h-[17.5rem]"
         >
           {bases.isPending || (baseId > 0 && notes.isPending) ? (
-            <ListRowsSkeleton />
+            /*
+             * 骨架行数必须等于**内容真会有的行数**（这里是 `RECENT_NOTE_COUNT`）。
+             * `ListRowsSkeleton` 的默认值是 6，比实际多两行——加载完成时整块
+             * 往上收 190px，直接变成可观测的布局位移（Lighthouse CLS 0.15）。
+             * M-01 画板早已标注本页 Lighthouse 未达标，这是其中一个主因。
+             */
+            <ListRowsSkeleton count={RECENT_NOTE_COUNT} />
           ) : bases.isError ? (
             <ErrorLine message={bases.error.message} />
           ) : !baseId ? (
@@ -150,9 +168,22 @@ export function MobileDashboard() {
           title="待办"
           moreHref={baseId ? `/m/notes/${baseId}/tasks` : undefined}
           moreLabel="全部"
+          /*
+           * 这一段的内容高度**随数据变**（0 条 → 一行空态 64px；1–3 条 → 每条约 62px），
+           * 所以骨架给几行都会在加载完成时对上或错开。给它一个固定的最小高度，
+           * 让"从骨架到内容"这一步只在自己的框里发生，不把下面的内容顶走。
+           */
+          minHeightClass="min-h-[13.75rem]"
         >
-          {baseId > 0 && tasks.isPending ? (
-            <ListRowsSkeleton count={2} />
+          {/*
+            `bases.isPending` 也要算进来：知识库还没回来时 `baseId` 是 0，
+            待办查询处于 disabled、`isPending` 为 false，于是这里会渲染**空态**，
+            等知识库到齐再换成骨架/列表——那一下整块从 78px 长到 252px，
+            把下面所有内容顶下去。
+          */}
+          {bases.isPending || (baseId > 0 && tasks.isPending) ? (
+            // 待办最多 `PENDING_TASK_COUNT` 条，骨架就照这个数给
+            <ListRowsSkeleton count={PENDING_TASK_COUNT} />
           ) : tasks.isError ? (
             <ErrorLine message={tasks.error.message} />
           ) : pendingTasks.length === 0 ? (
@@ -187,9 +218,15 @@ export function MobileDashboard() {
           )}
         </DashboardSection>
 
-        <DashboardSection title="我的知识库" moreHref="/m/notes" moreLabel="全部">
+        <DashboardSection
+          title="我的知识库"
+          moreHref="/m/notes"
+          moreLabel="全部"
+          minHeightClass="min-h-[12rem]"
+        >
           {bases.isPending ? (
-            <ListRowsSkeleton count={2} />
+            // 骨架行数照内容上限给（`BASE_CARD_COUNT`），给少了加载完成时会往下长
+            <ListRowsSkeleton count={BASE_CARD_COUNT} />
           ) : (bases.data?.length ?? 0) === 0 ? (
             <p className="rounded-lg border border-dashed border-separator p-4 text-footnote text-label-secondary">
               还没有知识库。
@@ -220,15 +257,23 @@ export function MobileDashboard() {
           )}
         </DashboardSection>
 
-        {bases.data?.length ? (
-          <Link
-            href="/m/notes"
-            className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-separator text-footnote text-label-secondary outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Library className="size-4" aria-hidden="true" />
-            查看全部知识库
-          </Link>
-        ) : null}
+        {/*
+          这个入口的显隐条件是「有没有知识库」，而它在知识库加载完成前一直不渲染：
+          出现的那一刻把整页内容往下推 48px（实测 CLS 0.06）。
+          占位而不是延迟渲染——用等高的空链接撑住，位置就不动。
+          `invisible` 保留布局但不可见/不可点，读屏也不会念到。
+        */}
+        <Link
+          href="/m/notes"
+          aria-hidden={bases.data?.length ? undefined : true}
+          tabIndex={bases.data?.length ? undefined : -1}
+          className={`flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-separator text-footnote text-label-secondary outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            bases.data?.length ? "" : "invisible"
+          }`}
+        >
+          <Library className="size-4" aria-hidden="true" />
+          查看全部知识库
+        </Link>
       </div>
     </MobileScreen>
   );
@@ -238,11 +283,21 @@ function DashboardSection({
   title,
   moreHref,
   moreLabel,
+  minHeightClass,
   children,
 }: {
   title: string;
   moreHref?: string | undefined;
   moreLabel: string;
+  /**
+   * 给内容区一个固定最小高度，吸收"骨架 → 内容"的高度差。
+   *
+   * 为什么需要它：这几个区块的内容高度**由数据决定**（0 条是空态、3 条是三行），
+   * 骨架无论给几行都会与实际差一截，加载完成时把下面的内容顶走——这正是
+   * M-01 画板标注的 Lighthouse 未达标的主因（CLS）。固定最小高度让高度变化
+   * 只发生在区块内部，不影响后续内容的纵向位置。
+   */
+  minHeightClass?: string | undefined;
   children: ReactNode;
 }) {
   return (
@@ -259,7 +314,7 @@ function DashboardSection({
           </Link>
         ) : null}
       </div>
-      {children}
+      <div className={minHeightClass}>{children}</div>
     </section>
   );
 }
