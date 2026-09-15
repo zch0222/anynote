@@ -6,8 +6,9 @@ import { renderWithProviders } from "@/test/render";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { push, mutateAsync } = vi.hoisted(() => ({
+const { push, replace, mutateAsync } = vi.hoisted(() => ({
   push: vi.fn(),
+  replace: vi.fn(),
   mutateAsync: vi.fn(),
 }));
 
@@ -15,7 +16,7 @@ const pathname = vi.hoisted(() => ({ current: "/notes" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname.current,
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
 }));
 
 vi.mock("@/features/notes/use-knowledge-bases", () => ({
@@ -28,6 +29,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   pathname.current = "/notes";
   mutateAsync.mockResolvedValue(42);
+  // 关闭时读 window.location.search 判断有没有 ?new=1
+  window.history.replaceState({}, "", "/notes");
 });
 
 /**
@@ -103,6 +106,57 @@ describe("CreateBaseDialog", () => {
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce());
     expect(push).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+});
+
+/** D-04 ②15 / ②16：「关闭并清空表单」，从 `?new=1` 打开时还要摘掉该参数。 */
+describe("CreateBaseDialog 关闭行为", () => {
+  it("「取消」关闭对话框并清空表单", async () => {
+    renderWithProviders(<CreateBaseDialog />);
+    fireEvent.click(screen.getByRole("button", { name: /新建知识库/ }));
+    fireEvent.change(await screen.findByLabelText("名称"), { target: { value: "写了一半" } });
+    fireEvent.change(screen.getByLabelText("简介"), { target: { value: "草稿" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(screen.queryByLabelText("名称")).not.toBeInTheDocument();
+
+    // 再打开时是空表单：留着上次没提交的内容会让人以为"已经建过了"
+    fireEvent.click(screen.getByRole("button", { name: /新建知识库/ }));
+    expect(await screen.findByLabelText("名称")).toHaveValue("");
+    expect(screen.getByLabelText("简介")).toHaveValue("");
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("从 ?new=1 打开时，关闭后地址栏不再带该参数", async () => {
+    window.history.replaceState({}, "", "/notes?new=1");
+    renderWithProviders(<CreateBaseDialog defaultOpen />);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalled());
+    // 不带参数：回到裸路径；用 replace 而不是 push，后退里不多一格
+    expect(replace).toHaveBeenCalledWith("/notes", { scroll: false });
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("?new=1 之外还带别的参数时只摘掉 new", async () => {
+    window.history.replaceState({}, "", "/notes?scope=mine&new=1");
+    renderWithProviders(<CreateBaseDialog defaultOpen />);
+
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/notes?scope=mine", { scroll: false }));
+  });
+
+  it("地址栏没有 ?new=1 时不做无谓的 history 操作", async () => {
+    window.history.replaceState({}, "", "/notes");
+    renderWithProviders(<CreateBaseDialog />);
+    fireEvent.click(screen.getByRole("button", { name: /新建知识库/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "取消" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
   });
 });
 

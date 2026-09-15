@@ -8,9 +8,11 @@ import { z } from "zod";
 import { moocQueryKeys } from "./query-keys";
 import {
   type Mooc,
+  type MoocDetail,
   type MoocItem,
   type MoocItemDetail,
   type ObjectUrl,
+  moocDetailSchema,
   moocItemDetailSchema,
   moocItemPageSchema,
   moocPageSchema,
@@ -38,24 +40,54 @@ export function useMoocsQuery(knowledgeId: number) {
   });
 }
 
+/**
+ * 单门课程详情（D-06 页头 · 旧地址重定向）。
+ *
+ * 与列表查询分开一棵 key：列表按知识库分页、详情按 id，两者的失效时机不同
+ * （改课程名只影响这一门，不该把整库列表都作废）。
+ */
+export function useMoocQuery(moocId: number) {
+  return useQuery({
+    queryKey: moocQueryKeys.detail(moocId),
+    enabled: Number.isSafeInteger(moocId) && moocId > 0,
+    queryFn: async (): Promise<MoocDetail> => {
+      const { response } = await noteApi.GET("/moocs/{id}", {
+        params: { path: { id: moocId } },
+        parseAs: "stream",
+        signal: AbortSignal.timeout(15_000),
+      });
+      return unwrapEnvelope(response, moocDetailSchema.parse);
+    },
+  });
+}
+
+/**
+ * 按父级取课程条目（`GET /moocs/items`）。
+ *
+ * 抽成独立函数是为了让「下一节」能命令式地按需取：它要沿着目录往下走，
+ * 走到哪一章才取哪一章的子条目（用 `queryClient.fetchQuery` 调这个函数，
+ * 已缓存的章节不会再发请求）。挂成 hook 就只能在渲染期取，走不了这种惰性遍历。
+ */
+export async function fetchMoocItems(moocId: number, parentId: number): Promise<MoocItem[]> {
+  const { response } = await noteApi.GET("/moocs/items", {
+    params: {
+      query: { moocItemListDTO: { moocId, parentId, page: 1, pageSize: MOOC_PAGE_SIZE } },
+    },
+    querySerializer: flattenedDtoQuerySerializer,
+    parseAs: "stream",
+    signal: AbortSignal.timeout(15_000),
+  });
+  const page = await unwrapEnvelope(response, moocItemPageSchema.parse);
+  return page.rows;
+}
+
 /** 课程条目（按父级；parentId=0 为顶层章节/内容）。 */
 export function useMoocItemsQuery(moocId: number, parentId: number) {
   return useQuery({
     queryKey: moocQueryKeys.items(moocId, parentId),
     enabled: Number.isSafeInteger(moocId) && moocId > 0,
     placeholderData: (previous) => previous,
-    queryFn: async (): Promise<MoocItem[]> => {
-      const { response } = await noteApi.GET("/moocs/items", {
-        params: {
-          query: { moocItemListDTO: { moocId, parentId, page: 1, pageSize: MOOC_PAGE_SIZE } },
-        },
-        querySerializer: flattenedDtoQuerySerializer,
-        parseAs: "stream",
-        signal: AbortSignal.timeout(15_000),
-      });
-      const page = await unwrapEnvelope(response, moocItemPageSchema.parse);
-      return page.rows;
-    },
+    queryFn: () => fetchMoocItems(moocId, parentId),
   });
 }
 

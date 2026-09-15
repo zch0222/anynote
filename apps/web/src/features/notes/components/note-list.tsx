@@ -1,16 +1,38 @@
 "use client";
 
 import { ListRowsSkeleton } from "@/components/loading/skeletons";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { EmptyState, QueryError } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DEFAULT_PAGE_SIZE, type NoteListItem } from "@/features/notes/schemas";
-import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
+import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
+import {
+  useKnowledgeBaseQuery,
+  useKnowledgeBasesQuery,
+} from "@/features/notes/use-knowledge-bases";
+import { useMoveNoteMutation } from "@/features/notes/use-move-note";
 import { useNotesQuery } from "@/features/notes/use-notes";
+import { toUserMessage } from "@/lib/api/errors";
 import { formatRelativeTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, NotebookPen, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreHorizontal, NotebookPen, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 import { CreateNoteDialog } from "./create-note-dialog";
+
+/** 页头与空态的主按钮样式：两处必须是同一个按钮，只换措辞不换形。 */
+const CREATE_TRIGGER_CLASS =
+  "inline-flex min-h-9 items-center gap-1.5 rounded-full bg-accent px-4 text-footnote font-medium text-white outline-none transition-colors hover:bg-accent/85 focus-visible:ring-2 focus-visible:ring-ring";
 
 /**
  * 知识库「笔记」Tab（`/notes/[baseId]`）。
@@ -21,8 +43,12 @@ import { CreateNoteDialog } from "./create-note-dialog";
 export function NoteList({ baseId }: { baseId: number }) {
   const [page, setPage] = useState(1);
   const base = useKnowledgeBaseQuery(baseId);
+  const bases = useKnowledgeBasesQuery();
   const notes = useNotesQuery({ knowledgeBaseId: baseId, page, pageSize: DEFAULT_PAGE_SIZE });
   const totalPages = notes.data?.pages ?? 1;
+
+  // 移动目标只列**别的**库：把自己列进去点了没反应，等于给了个假选项。
+  const otherBases = (bases.data ?? []).filter((item) => item.id !== baseId);
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-4" data-testid="note-list">
@@ -44,22 +70,38 @@ export function NoteList({ baseId }: { baseId: number }) {
               新建笔记
             </>
           }
-          triggerClassName="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-accent px-4 text-footnote font-medium text-white outline-none transition-colors hover:bg-accent/85 focus-visible:ring-2 focus-visible:ring-ring"
+          triggerClassName={CREATE_TRIGGER_CLASS}
         />
       </header>
 
       {notes.isPending ? (
         <ListRowsSkeleton />
       ) : notes.isError ? (
-        <p role="alert" className="rounded-lg bg-danger/5 p-6 text-footnote text-danger">
-          笔记加载失败：{notes.error.message}
-        </p>
+        <QueryError
+          object="笔记"
+          message={toUserMessage(notes.error)}
+          onRetry={() => void notes.refetch()}
+          retrying={notes.isFetching}
+        />
       ) : notes.data.rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-separator p-10 text-center">
-          <NotebookPen className="mx-auto size-8 text-label-tertiary" aria-hidden="true" />
-          <p className="mt-3 text-headline text-label">这个知识库还没有笔记</p>
-          <p className="mt-1 text-footnote text-label-secondary">新建一篇，开始记录。</p>
-        </div>
+        <EmptyState
+          icon={NotebookPen}
+          title="这个知识库还没有笔记"
+          hint="新建一篇，开始记录。"
+          action={
+            <CreateNoteDialog
+              knowledgeBaseId={baseId}
+              triggerTestId="note-create-empty"
+              trigger={
+                <>
+                  <Plus className="size-4" aria-hidden="true" />
+                  新建笔记
+                </>
+              }
+              triggerClassName={CREATE_TRIGGER_CLASS}
+            />
+          }
+        />
       ) : (
         <>
           <ul
@@ -67,8 +109,8 @@ export function NoteList({ baseId }: { baseId: number }) {
             data-testid="note-list-items"
           >
             {notes.data.rows.map((note) => (
-              <li key={note.id}>
-                <NoteRow baseId={baseId} note={note} />
+              <li key={note.id} className="group relative">
+                <NoteRow baseId={baseId} note={note} otherBases={otherBases} />
               </li>
             ))}
           </ul>
@@ -103,25 +145,141 @@ export function NoteList({ baseId }: { baseId: number }) {
   );
 }
 
-function NoteRow({ baseId, note }: { baseId: number; note: NoteListItem }) {
+function NoteRow({
+  baseId,
+  note,
+  otherBases,
+}: {
+  baseId: number;
+  note: NoteListItem;
+  otherBases: readonly { id: number; knowledgeBaseName?: string | null | undefined }[];
+}) {
   // 列表页优先展示"最后一次动过"的时间；没有操作记录才退回更新时间
   const touched = note.latestOperationTime ?? note.updateTime;
+  const title = note.title?.trim() || "未命名笔记";
   return (
-    <Link
-      href={`/notes/${baseId}/${note.id}`}
-      data-testid={`note-row-${note.id}`}
-      className={cn(
-        "flex min-h-14 items-center gap-3 px-4 py-2.5 outline-none transition-colors",
-        "hover:bg-grouped focus-visible:bg-grouped focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-      )}
-    >
-      <NotebookPen className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate text-body text-label">
-        {note.title?.trim() || "未命名笔记"}
-      </span>
-      <span className="tabular shrink-0 text-xs text-label-tertiary">
-        {formatRelativeTime(touched)}
-      </span>
-    </Link>
+    <>
+      <Link
+        href={`/notes/${baseId}/${note.id}`}
+        data-testid={`note-row-${note.id}`}
+        className={cn(
+          "flex min-h-14 items-center gap-3 py-2.5 pr-12 pl-4 outline-none transition-colors",
+          "hover:bg-fill-hover focus-visible:bg-fill-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        )}
+      >
+        <NotebookPen className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate text-body text-label">{title}</span>
+        <span className="tabular shrink-0 text-xs text-label-tertiary">
+          {formatRelativeTime(touched)}
+        </span>
+      </Link>
+      <NoteRowMenu noteId={note.id} title={title} otherBases={otherBases} />
+    </>
+  );
+}
+
+/**
+ * 行操作「⋯」（D-01 图例 22）。
+ *
+ * 三个刻意的决定：
+ * 1. **按钮绝对定位在行右侧**而不是塞进 `Link` 里——`<a>` 内嵌 `<button>` 是非法
+ *    嵌套，浏览器会把按钮提出来，点击落到链接上变成"打开笔记"。
+ * 2. **只在悬停 / 行内聚焦时显示**（`opacity-0 group-hover:…`），但仍然留在 Tab
+ *    序列里：键盘用户 Tab 到它时 `group-focus-within` 让它显形，不是"看得见才可点"。
+ * 3. **菜单打开期间强制可见**：弹层渲染在 portal 里，焦点离开行之后
+ *    `group-focus-within` 会失效，否则菜单还开着、触发按钮先消失了。
+ */
+function NoteRowMenu({
+  noteId,
+  title,
+  otherBases,
+}: {
+  noteId: number;
+  title: string;
+  otherBases: readonly { id: number; knowledgeBaseName?: string | null | undefined }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const move = useMoveNoteMutation();
+  const remove = useDeleteNoteMutation();
+
+  async function handleMove(target: { id: number; knowledgeBaseName?: string | null | undefined }) {
+    try {
+      await move.mutateAsync({ noteId, knowledgeBaseId: target.id });
+      toast.success(`已移动到 ${target.knowledgeBaseName?.trim() || "未命名知识库"}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "移动失败，请稍后重试");
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      await remove.mutateAsync(noteId);
+      toast.success("笔记已删除");
+      setConfirming(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "删除失败，请稍后重试");
+    }
+  }
+
+  return (
+    <>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={cn(
+                "absolute top-1/2 right-2 -translate-y-1/2 text-label-secondary transition-opacity",
+                "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                open && "opacity-100",
+              )}
+            />
+          }
+          aria-label={`「${title}」的操作`}
+          data-testid={`note-actions-${noteId}`}
+        >
+          <MoreHorizontal className="size-4" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>移动到知识库</DropdownMenuLabel>
+            {otherBases.length === 0 ? (
+              <p className="px-1.5 py-1 text-xs text-label-tertiary">没有其他知识库</p>
+            ) : (
+              otherBases.map((base) => (
+                <DropdownMenuItem
+                  key={base.id}
+                  disabled={move.isPending}
+                  onClick={() => void handleMove(base)}
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {base.knowledgeBaseName?.trim() || "未命名知识库"}
+                  </span>
+                </DropdownMenuItem>
+              ))
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
+              <Trash2 className="size-4" aria-hidden="true" />
+              删除笔记
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="删除笔记？"
+        description={`「${title}」删除后无法恢复。`}
+        confirmLabel="删除"
+        pendingLabel="删除中…"
+        tone="danger"
+        pending={remove.isPending}
+        onConfirm={() => void handleDelete()}
+      />
+    </>
   );
 }

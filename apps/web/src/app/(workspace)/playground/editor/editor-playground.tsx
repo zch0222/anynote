@@ -119,7 +119,7 @@ export function EditorPlayground() {
             className={cn(
               "rounded-md border px-3 py-1.5 text-sm",
               sample === name
-                ? "border-transparent bg-grouped text-label"
+                ? "border-transparent bg-fill-hover text-label"
                 : "border-separator bg-surface text-label-secondary hover:text-label",
             )}
           >
@@ -147,7 +147,7 @@ export function EditorPlayground() {
           </h2>
           <pre
             data-testid="playground-output"
-            className="h-[420px] overflow-auto rounded-xl border bg-grouped p-4 text-xs leading-relaxed"
+            className="h-[420px] overflow-auto rounded-xl border bg-fill-hover p-4 text-xs leading-relaxed"
           >
             {markdown}
           </pre>

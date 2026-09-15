@@ -1,13 +1,14 @@
 "use client";
 
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
-import { knowledgeBaseSections } from "@/components/layout/navigation";
 import { ListRowsSkeleton } from "@/components/loading/skeletons";
+import { QueryError } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
-import { coverClassName } from "@/features/notes/lib/cover-gradient";
+import { MobileBaseHeader } from "@/features/notes/components/mobile/base-section-tabs";
 import { DEFAULT_PAGE_SIZE } from "@/features/notes/schemas";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { useNotesQuery } from "@/features/notes/use-notes";
+import { toUserMessage } from "@/lib/api/errors";
 import { formatRelativeTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
 import { NotebookPen, Plus } from "lucide-react";
@@ -16,26 +17,20 @@ import { useState } from "react";
 
 export type MobileNoteListProps = {
   baseId: number;
-  /** 详情页前缀：`/m/notes` 进编辑器，`/m/wikis` 进只读阅读页。 */
-  basePath?: "/m/notes" | "/m/wikis";
   showCreate?: boolean;
 };
 
 /**
- * `/m/notes/[baseId]` 与 `/m/wikis/[baseId]`：知识库详情。
+ * `/m/notes/[baseId]`：知识库详情 · 笔记 Tab。
  *
- * 版式对齐设计稿：顶栏（返回 + 库名 + 更多）→ 库头（渐变块 + 类型/篇数）
- * → 横向 Tab（笔记 / 慕课 / 任务 / 资料）→ 笔记卡片列表。
+ * 版式对齐设计稿：顶栏（返回 + 库名 + 新建）→ 库头（渐变块 + 类型/篇数）
+ * → 横向 Tab（笔记 / 慕课 / 任务 / 资料）→ 笔记行列表。
  *
- * 只读浏览（`/m/wikis`）不带 Tab 与新建入口——它的语义就是"看"。
+ * 库头与 Tab 走 12.7.2 抽出的 `MobileBaseHeader`，四个 Tab 共用同一份。
  * 翻页复用桌面同一个 `useNotesQuery`（按页取、不是无限滚动），
  * 所以这里是"换页"而不是"累积追加"。
  */
-export function MobileNoteList({
-  baseId,
-  basePath = "/m/notes",
-  showCreate = true,
-}: MobileNoteListProps) {
+export function MobileNoteList({ baseId, showCreate = true }: MobileNoteListProps) {
   const [page, setPage] = useState(1);
   const base = useKnowledgeBaseQuery(baseId);
   const notes = useNotesQuery({
@@ -46,12 +41,11 @@ export function MobileNoteList({
 
   const totalPages = notes.data?.pages ?? 1;
   const title = base.data?.knowledgeBaseName?.trim() || "知识库";
-  const editable = basePath === "/m/notes";
 
   return (
     <MobileScreen
       title={title}
-      back={basePath}
+      back="/m/notes"
       actions={
         showCreate ? (
           <Link
@@ -66,28 +60,22 @@ export function MobileNoteList({
       }
     >
       <div className="space-y-4 pb-4" data-testid="mobile-note-list">
-        {/*
-          库头（设计稿 p08）：渐变块 + 一行「类型 · 篇数」。
-          不展示 `detail`：设计稿那里只有一行，而简介可能很长，塞进来会把
-          Tab 条挤到首屏之外——移动端的正文才是主角。
-        */}
-        <header className="flex items-center gap-3 px-4 pt-4" data-testid="mobile-base-header">
-          <span className={`${coverClassName(baseId)} size-12 rounded-lg`} aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate text-footnote text-label-secondary">
-            {base.data?.type === 1 ? "组织知识库" : editable ? "普通知识库" : "只读浏览"}
-            {notes.data?.total ? ` · ${notes.data.total} 篇笔记` : ""}
-          </span>
-        </header>
-
-        {editable ? <BaseSectionTabs baseId={baseId} /> : null}
+        <MobileBaseHeader
+          baseId={baseId}
+          current="notes"
+          meta={notes.data?.total ? `${notes.data.total} 篇笔记` : undefined}
+        />
 
         <div className="px-4">
           {notes.isPending ? (
             <ListRowsSkeleton count={3} />
           ) : notes.isError ? (
-            <p role="alert" className="rounded-lg bg-danger/5 p-4 text-footnote text-danger">
-              笔记加载失败：{notes.error.message}
-            </p>
+            <QueryError
+              object="笔记"
+              message={toUserMessage(notes.error)}
+              onRetry={() => void notes.refetch()}
+              retrying={notes.isFetching}
+            />
           ) : notes.data.rows.length === 0 ? (
             <div className="rounded-lg border border-dashed border-separator p-6 text-center">
               <NotebookPen className="mx-auto size-8 text-label-tertiary" aria-hidden="true" />
@@ -106,7 +94,7 @@ export function MobileNoteList({
                 {notes.data.rows.map((note) => (
                   <li key={note.id} className="border-b border-separator last:border-b-0">
                     <Link
-                      href={`${basePath}/${baseId}/${note.id}`}
+                      href={`/m/notes/${baseId}/${note.id}`}
                       data-testid={`mobile-note-${note.id}`}
                       className={cn(
                         "block min-h-16 px-3 py-3 outline-none",
@@ -154,48 +142,5 @@ export function MobileNoteList({
         </div>
       </div>
     </MobileScreen>
-  );
-}
-
-/**
- * 知识库内的横向 Tab。
- *
- * 只列**移动端真的有页面**的四项：概览与成员在移动端没有独立页
- * （概览的信息已铺在这页头部），列出来只会得到 404。
- */
-function BaseSectionTabs({ baseId }: { baseId: number }) {
-  const tabs = knowledgeBaseSections.filter((section) =>
-    (["notes", "mooc", "tasks", "docs"] as const).includes(
-      section.key as "notes" | "mooc" | "tasks" | "docs",
-    ),
-  );
-
-  return (
-    <nav
-      aria-label="知识库内容"
-      className="-mx-0 flex gap-2 overflow-x-auto px-4 pb-1"
-      data-testid="mobile-base-tabs"
-    >
-      {tabs.map((section) => {
-        const href =
-          section.key === "notes" ? `/m/notes/${baseId}` : `/m/notes/${baseId}/${section.key}`;
-        const active = section.key === "notes";
-        return (
-          <Link
-            key={section.key}
-            href={href}
-            aria-current={active ? "page" : undefined}
-            data-active={active ? "true" : "false"}
-            className={cn(
-              "shrink-0 rounded-full px-3.5 py-1.5 text-footnote outline-none transition-colors",
-              "focus-visible:ring-2 focus-visible:ring-ring",
-              active ? "bg-accent font-medium text-white" : "bg-separator/40 text-label-secondary",
-            )}
-          >
-            {section.title}
-          </Link>
-        );
-      })}
-    </nav>
   );
 }

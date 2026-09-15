@@ -23,21 +23,22 @@ export function AccountBadge() {
   const { data, isPending, isError } = useMe();
 
   if (isPending) {
-    return <p className="text-sm text-label-secondary">正在读取当前账号…</p>;
+    return <p className="text-footnote text-label-secondary">正在读取当前账号…</p>;
   }
   if (isError || !data) {
+    /* Q-02 给 D-15 的错误文案：刷新是这个页面上唯一有效的动作（重新登录也读不到） */
     return (
-      <p className="text-sm text-danger" role="alert">
+      <p className="text-footnote text-danger" role="alert">
         无法读取当前账号，请刷新页面重试。
       </p>
     );
   }
 
   return (
-    <div className="rounded-lg border bg-grouped/40 p-3">
+    <div className="rounded-lg border bg-fill-hover/60 p-3">
       <p className="text-xs text-label-secondary">将以以下账号授权</p>
-      <p className="mt-1 text-sm font-medium">{displayName(data)}</p>
-      {data.username ? <p className="text-xs text-label-secondary">@{data.username}</p> : null}
+      <p className="mt-1 text-footnote font-medium text-label">{displayName(data)}</p>
+      {data.username ? <p className="text-xs text-label-tertiary">@{data.username}</p> : null}
     </div>
   );
 }

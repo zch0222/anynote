@@ -42,6 +42,14 @@ export type TiptapEditorProps = {
    */
   toolbar?: ToolbarVariant;
   /**
+   * 工具条上要**置灰**的命令 id（设计稿 M-09 图例 9）。
+   *
+   * 协同文档没有配置图片上传（MinIO D3「本期不接」），点图片按钮只会弹一句
+   * 「当前编辑器未配置图片上传」。与其让它可点后报错，不如直接停用；
+   * 命令本身仍在注册表里，将来接上上传实现只需不再传这一项。
+   */
+  disabledCommands?: readonly string[];
+  /**
    * 外层已经把编辑器约束到确定高度（如笔记页占满视口）时传 `true`：
    * 正文会撑满可滚动区，长文在编辑器内部滚动而不是把整页顶长。
    * 高度自适应的场景（playground、AI 输出）保持 `false`。
@@ -77,6 +85,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
     collaboration,
     onReady,
     toolbar,
+    disabledCommands,
     fill = false,
     flush = false,
     className,
@@ -171,7 +180,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
     >
       {/* 移动端工具条贴底（靠近软键盘），所以放在正文之后 */}
       {effectiveEditable && !isMobileToolbar && !hasNoToolbar ? (
-        <Toolbar editor={editor} variant={toolbarVariant} />
+        <Toolbar editor={editor} variant={toolbarVariant} disabledCommands={disabledCommands} />
       ) : null}
       {/*
         气泡菜单在触摸端关掉：选区一出现，系统自己的「复制 / 粘贴 / 全选」菜单
@@ -183,7 +192,9 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
       */}
       {effectiveEditable && !isMobileToolbar ? <BubbleMenuPortal editor={editor} /> : null}
       <EditorContent editor={editor} className="anynote-editor__surface" />
-      {effectiveEditable && isMobileToolbar ? <Toolbar editor={editor} variant="mobile" /> : null}
+      {effectiveEditable && isMobileToolbar ? (
+        <Toolbar editor={editor} variant="mobile" disabledCommands={disabledCommands} />
+      ) : null}
     </div>
   );
 }

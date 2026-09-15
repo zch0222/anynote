@@ -138,7 +138,7 @@ export function MobilePdfList() {
               <li key={row.id} className="flex items-center" data-testid={`doc-item-${row.id}`}>
                 <Link
                   href={`/m/ai/pdf/${row.id}`}
-                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-grouped"
+                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-fill-hover"
                 >
                   <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
                   <span className="min-w-0 flex-1 truncate">{row.docName ?? "未命名文档"}</span>
@@ -150,7 +150,7 @@ export function MobilePdfList() {
                   type="button"
                   aria-label={`「${row.docName ?? "未命名文档"}」的操作`}
                   onClick={() => setActing({ id: row.id, name: row.docName ?? "未命名文档" })}
-                  className="flex size-11 shrink-0 items-center justify-center text-label-secondary outline-none focus-visible:bg-grouped"
+                  className="flex size-11 shrink-0 items-center justify-center text-label-secondary outline-none focus-visible:bg-fill-hover"
                 >
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </button>

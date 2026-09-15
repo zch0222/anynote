@@ -35,7 +35,7 @@ export function AiSettings() {
             className={`cursor-pointer rounded-lg border px-4 py-2 text-sm outline-none transition-colors ${
               model === option.value
                 ? "border-accent bg-accent-soft text-accent"
-                : "hover:bg-grouped"
+                : "hover:bg-fill-hover"
             }`}
             data-testid={`model-option-${option.value}`}
           >

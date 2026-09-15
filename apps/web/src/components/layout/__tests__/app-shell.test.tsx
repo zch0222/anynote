@@ -16,7 +16,9 @@ const { push, replace, setTheme, refetch, bases, profile } = vi.hoisted(() => ({
     ],
     isPending: false,
     isError: false,
+    isFetching: false,
     error: null as Error | null,
+    refetch: vi.fn(),
   },
   profile: {
     data: { nickname: "陈可", username: "chenke", avatar: null },
@@ -70,6 +72,8 @@ beforeEach(() => {
   ];
   bases.isPending = false;
   bases.isError = false;
+  bases.isFetching = false;
+  bases.error = null;
   localStorage.clear();
   useUIStore.setState({ sidebarOpen: true, commandPaletteOpen: false });
   vi.stubGlobal(
@@ -136,10 +140,10 @@ describe("AppShell 交互", () => {
       </AppShell>,
     );
     // 侧栏右侧那一列是编辑器的白底；非满幅页面用灰底衬托卡片。
-    // 只看内容区所属的那一层——`.bg-grouped` 在顶栏/侧栏里也出现，全局查会误判。
+    // 只看内容区所属的那一层——`.bg-fill-hover` 在顶栏/侧栏里也出现，全局查会误判。
     const inset = document.getElementById("workspace-content")?.parentElement;
     expect(inset?.className).toContain("bg-surface");
-    expect(inset?.className).not.toContain("bg-grouped");
+    expect(inset?.className).not.toContain("bg-fill-hover");
     unmount();
   });
 
@@ -306,6 +310,34 @@ describe("AppShell 交互", () => {
     expect(within(userCard).getByText("陈可")).toBeInTheDocument();
   });
 
+  /**
+   * D-12 图例 1：设置不进一级导航，**入口就是这张用户卡**——
+   * 所以进到设置里时它必须显示选中态，否则侧栏上看不出"我在设置里"。
+   */
+  it("用户卡在 /settings/* 下显示选中态，离开后取消", () => {
+    pathname.current = "/settings/profile";
+    const { unmount } = render(<AppShell>内容</AppShell>);
+
+    const userCard = screen.getByTestId("sidebar-user");
+    expect(userCard).toHaveAttribute("data-active", "true");
+    expect(userCard).toHaveAttribute("aria-current", "page");
+    expect(userCard.className).toContain("bg-accent-soft");
+    unmount();
+
+    pathname.current = "/notes";
+    render(<AppShell>内容</AppShell>);
+    const idle = screen.getByTestId("sidebar-user");
+    expect(idle).toHaveAttribute("data-active", "false");
+    expect(idle.className).not.toContain("bg-accent-soft");
+  });
+
+  it("前缀相同但不是设置页的地址不高亮用户卡", () => {
+    // `/settingsomething` 不是设置页；用 startsWith("/settings") 会把它算进来
+    pathname.current = "/settingsomething";
+    render(<AppShell>内容</AppShell>);
+    expect(screen.getByTestId("sidebar-user")).toHaveAttribute("data-active", "false");
+  });
+
   it("所有工作区页面受会话保护，失败可重试", async () => {
     profile.isError = true;
     profile.error = new ApiError(401, "A0311", "会话失效");
@@ -340,5 +372,20 @@ describe("AppShell 交互", () => {
     const navigation = screen.getByRole("navigation", { name: "主导航" });
     expect(within(navigation).getByText("还没有知识库")).toBeInTheDocument();
     expect(screen.getByTestId("sidebar-new-base")).toHaveAttribute("href", "/notes?new=1");
+  });
+
+  it("侧栏知识库出错时给 compact 错误态，点重试重新请求", () => {
+    bases.isError = true;
+    bases.error = new Error("网络异常");
+    render(<AppShell>内容</AppShell>);
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("知识库加载失败：网络异常");
+    // 12.0.3 的 compact 形态：不带图标，窄栏里才塞得下
+    expect(alert.querySelector("svg")).toBeNull();
+    expect(alert.className).toContain("px-2.5");
+
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(bases.refetch).toHaveBeenCalledTimes(1);
   });
 });

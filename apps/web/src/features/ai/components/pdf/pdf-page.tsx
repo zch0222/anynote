@@ -25,7 +25,8 @@ import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, FileText, Trash2, Upload } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChatPanel } from "../chat-panel";
 import { PdfViewer } from "./pdf-viewer";
@@ -34,16 +35,65 @@ import { PdfViewer } from "./pdf-viewer";
 type PdfPane = "docs" | "chat";
 
 /**
+ * 地址参数解析：只接受合法正整数。
+ *
+ * `?baseId=abc` / `?baseId=0` / `?baseId=-1` 一律当没传——退回到"默认选第一个库"
+ * 的正常路径，而不是把 NaN 塞进请求（那会打出一个 400 且用户看不出原因）。
+ */
+export function parsePositiveInt(raw: string | null): number | null {
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+/**
  * Chat PDF：左侧文档库（选知识库 → 上传/列表），中间 PDF 预览，右侧文档问答。
  * 上传链路：multipart 直传 note 服务 → 自动触发 RAG 索引（异步）→ 轮询索引状态。
  *
  * 版式：`lg` 以上是三栏；`lg` 以下预览栏隐藏，文档库与问答**不并排**，
  * 由 `pane` 决定显示哪一个——两者并排时宽度之和恒大于手机视口，会把整页顶出横向滚动条。
+ *
+ * 外层 `Suspense` 是 `useSearchParams()` 在 Next 15 下的硬要求：它让这个
+ * 客户端组件在静态预渲染时被排除到边界之外，否则 `next build` 直接报错。
+ * 边界放在**本组件内部**而不是 page.tsx，是为了让这条路由的页面文件保持
+ * 纯参数解析、不掺 UI 细节。
  */
 export function PdfChatPage() {
+  return (
+    <Suspense fallback={<PdfChatSkeleton />}>
+      <PdfChatPane />
+    </Suspense>
+  );
+}
+
+function PdfChatSkeleton() {
+  return (
+    <div className="flex h-[calc(100svh-9rem)] min-h-0 flex-col lg:flex-row" aria-busy="true">
+      <div className="w-full p-3 lg:w-72 lg:shrink-0">
+        <ListRowsSkeleton count={4} />
+      </div>
+      <div className="hidden min-w-0 flex-1 items-center justify-center lg:flex">
+        <Skeleton className="h-2/3 w-2/3" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 地址参数（`?baseId=&docId=`）是资料 Tab 的直达入口（D-08）：知识库内的
+ * 「上传 PDF」与每一行资料都带参过来。参数只作为两个 state 的**初始值**，
+ * 之后由页内交互接管——跟着地址走会让"在页里换个文档"变成改 URL，
+ * 那是资料 Tab 的职责，不是这里。
+ */
+function PdfChatPane() {
   const bases = useKnowledgeBasesQuery();
-  const [baseId, setBaseId] = useState<number | null>(null);
-  const [docId, setDocId] = useState<number | null>(null);
+  const searchParams = useSearchParams();
+  const [baseId, setBaseId] = useState<number | null>(() =>
+    parsePositiveInt(searchParams.get("baseId")),
+  );
+  const [docId, setDocId] = useState<number | null>(() =>
+    parsePositiveInt(searchParams.get("docId")),
+  );
   const [progress, setProgress] = useState<number | null>(null);
   const [pane, setPane] = useState<PdfPane>("docs");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -246,7 +296,7 @@ export function PdfChatPage() {
               <div
                 key={row.id}
                 className={`group flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors ${
-                  row.id === docId ? "bg-accent-soft text-accent" : "hover:bg-grouped"
+                  row.id === docId ? "bg-accent-soft text-accent" : "hover:bg-fill-hover"
                 }`}
                 data-testid={`doc-item-${row.id}`}
               >
@@ -324,7 +374,7 @@ export function PdfChatPage() {
                 </Badge>
               )}
             </div>
-            <div className="min-h-0 flex-1 bg-grouped/30 p-4">
+            <div className="min-h-0 flex-1 bg-fill-hover/50 p-4">
               <PdfViewer url={doc.data.url} />
             </div>
           </>

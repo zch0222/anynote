@@ -55,8 +55,15 @@ export function MobileDashboard() {
   const notes = useNotesQuery({ knowledgeBaseId: baseId, page: 1, pageSize: RECENT_NOTE_COUNT });
   const tasks = useTasksQuery(baseId);
 
+  /*
+   * 待办 = 未提交（0）与已退回（3）。
+   *
+   * 不能写成 `status !== 1`：那样的"待办"里会混进 2（无需提交，即本库管理员
+   * 自己）与任何后端将来新增的状态。§1.4 第 2 条刚把 2 的语义从"已退回"
+   * 掰回"无需提交"，工作台是同一套枚举的第二个出口，必须按白名单过滤。
+   */
   const pendingTasks = (tasks.data?.rows ?? [])
-    .filter((task) => task.submissionStatus !== 1)
+    .filter((task) => task.submissionStatus === 0 || task.submissionStatus === 3)
     .slice(0, PENDING_TASK_COUNT);
 
   const name = me.data?.nickname || me.data?.username || "朋友";
@@ -138,7 +145,12 @@ export function MobileDashboard() {
           )}
         </DashboardSection>
 
-        <DashboardSection title="待办" moreHref={baseId ? "/m/tasks" : undefined} moreLabel="全部">
+        {/* 任务只属于知识库（2026-09-15 拍板）：跨库的 /m/tasks 已重定向，这里直指当前库 */}
+        <DashboardSection
+          title="待办"
+          moreHref={baseId ? `/m/notes/${baseId}/tasks` : undefined}
+          moreLabel="全部"
+        >
           {baseId > 0 && tasks.isPending ? (
             <ListRowsSkeleton count={2} />
           ) : tasks.isError ? (
@@ -150,17 +162,25 @@ export function MobileDashboard() {
           ) : (
             <ul className="space-y-2" data-testid="dashboard-tasks">
               {pendingTasks.map((task) => (
-                <li
-                  key={task.id}
-                  className="flex min-h-14 items-center gap-3 rounded-lg bg-surface px-3 text-footnote text-label shadow-card"
-                >
-                  <ListTodo className="size-4 shrink-0 text-warning" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate">
-                    {task.taskName?.trim() || "未命名任务"}
-                  </span>
-                  <span className="shrink-0 text-xs text-label-tertiary">
-                    {submissionStatusText(task.submissionStatus)}
-                  </span>
+                <li key={task.id}>
+                  {/* M-01 图例 12：整行可点，去当前库的任务 Tab（原先行不可点） */}
+                  <Link
+                    href={`/m/notes/${baseId}/tasks`}
+                    data-testid={`dashboard-task-${task.id}`}
+                    className="flex min-h-14 items-center gap-3 rounded-lg bg-surface px-3 text-footnote text-label shadow-card outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ListTodo className="size-4 shrink-0 text-warning" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {task.taskName?.trim() || "未命名任务"}
+                    </span>
+                    <span className="shrink-0 text-xs text-label-tertiary">
+                      {submissionStatusText(task.submissionStatus)}
+                    </span>
+                    <ChevronRight
+                      className="size-4 shrink-0 text-label-tertiary"
+                      aria-hidden="true"
+                    />
+                  </Link>
                 </li>
               ))}
             </ul>

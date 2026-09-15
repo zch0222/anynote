@@ -55,7 +55,7 @@ export function MobileConversationList() {
           href="/m/ai/chat/new"
           aria-label="新对话"
           data-testid="mobile-conversation-new"
-          className="flex size-10 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-grouped focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex size-10 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-fill-hover focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Plus className="size-5" aria-hidden="true" />
         </Link>
@@ -84,7 +84,7 @@ export function MobileConversationList() {
               >
                 <Link
                   href={`/m/ai/chat/${summary.id}`}
-                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-grouped"
+                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-fill-hover"
                 >
                   <MessageSquare
                     className="size-4 shrink-0 text-label-secondary"
@@ -96,7 +96,7 @@ export function MobileConversationList() {
                   type="button"
                   aria-label={`会话「${summary.title ?? "未命名会话"}」操作`}
                   onClick={() => setActing(summary)}
-                  className="flex size-11 shrink-0 items-center justify-center text-label-secondary outline-none focus-visible:bg-grouped"
+                  className="flex size-11 shrink-0 items-center justify-center text-label-secondary outline-none focus-visible:bg-fill-hover"
                 >
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </button>

@@ -1,5 +1,6 @@
 "use client";
 
+import { QueryError } from "@/components/shared/states";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMe } from "@/features/auth/use-me";
@@ -105,7 +106,16 @@ export function SidebarKnowledgeBases() {
       {bases.isPending ? (
         <BaseListSkeleton />
       ) : bases.isError ? (
-        <p className="px-2 py-1.5 text-xs text-danger">知识库加载失败</p>
+        /* 侧栏是窄容器，用 compact：图标与内边距去掉之后才塞得进 240px 的栏宽，
+           否则"重试"按钮会把这一栏撑出横向滚动条。 */
+        <QueryError
+          object="知识库"
+          error={bases.error}
+          onRetry={() => void bases.refetch()}
+          retrying={bases.isFetching}
+          compact
+          className="mx-2"
+        />
       ) : bases.data.length === 0 ? (
         <p className="px-2 py-1.5 text-xs text-label-tertiary">还没有知识库</p>
       ) : (
@@ -172,27 +182,59 @@ export function SidebarToolGroups() {
   );
 }
 
-/** 侧栏页脚：用户卡。设置入口收在这里，不再占一格一级导航。 */
+/**
+ * 侧栏页脚：用户卡。设置入口收在这里，不再占一格一级导航。
+ *
+ * D-12 图例 1：设置不进一级导航，所以**用户卡就是设置那一格**——
+ * 进到 `/settings/*` 时它必须显示选中态，否则侧栏上看不出"我在设置里"。
+ * 匹配整段 `/settings`（含子路径）：四个分区共用同一个入口。
+ */
 export function SidebarUserCard() {
   const { data } = useMe();
+  const pathname = usePathname();
+  const active = isSettingsActive(pathname);
   const name = data?.nickname || data?.username || "我的账户";
 
   return (
     <Link
       href="/settings/profile"
       data-testid="sidebar-user"
-      className="flex min-h-12 items-center gap-2.5 rounded-md px-2 py-1.5 outline-none transition-colors hover:bg-separator/40 focus-visible:ring-2 focus-visible:ring-ring"
+      aria-current={active ? "page" : undefined}
+      data-active={active ? "true" : "false"}
+      className={cn(
+        "flex min-h-12 items-center gap-2.5 rounded-md px-2 py-1.5 outline-none transition-colors",
+        "focus-visible:ring-2 focus-visible:ring-ring",
+        active ? "bg-accent-soft" : "hover:bg-separator/40",
+      )}
     >
       <Avatar className="size-8">
         <AvatarImage src={data?.avatar || undefined} alt="" />
         <AvatarFallback>{name.slice(0, 1)}</AvatarFallback>
       </Avatar>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-footnote font-medium text-label">{name}</span>
+        <span
+          className={cn(
+            "block truncate text-footnote font-medium",
+            active ? "text-accent" : "text-label",
+          )}
+        >
+          {name}
+        </span>
         <span className="block truncate text-xs text-label-tertiary">
           {data?.username ? `${data.username}@anynote` : "个人设置"}
         </span>
       </span>
     </Link>
   );
+}
+
+/**
+ * 是否处在设置页。
+ *
+ * 只认精确的 `/settings` 与其子路径：`/settingsomething` 不是设置页，
+ * 用 `startsWith("/settings")` 会把它也算进来。首页 `/settings` 本身会
+ * 重定向到 `/settings/profile`，所以两态都要覆盖。
+ */
+export function isSettingsActive(pathname: string): boolean {
+  return pathname === "/settings" || pathname.startsWith("/settings/");
 }

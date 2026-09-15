@@ -35,11 +35,27 @@ const DOC = {
 };
 
 describe("MobileDocLibrary", () => {
-  it("单列渲染文档并跳移动端详情", () => {
+  it("单列渲染文档并跳移动端详情，标题是「协同文档」", () => {
     setDocs([DOC]);
     renderWithProviders(<MobileDocLibrary />);
 
     expect(screen.getByRole("link", { name: /周会纪要/ })).toHaveAttribute("href", "/m/docs/doc-1");
+    expect(screen.getByRole("heading", { name: "协同文档" })).toBeInTheDocument();
+  });
+
+  it("提供返回键（本页不是 tab 根页），兜底回「我的」", () => {
+    setDocs([DOC]);
+    renderWithProviders(<MobileDocLibrary />);
+    expect(screen.getByTestId("mobile-back")).toBeInTheDocument();
+  });
+
+  it("行元信息是「{创建者} · {相对时间}更新」，不铺全量时间戳", () => {
+    setDocs([DOC]);
+    renderWithProviders(<MobileDocLibrary />);
+    const meta = screen.getByText(/小明 · /);
+    expect(meta.textContent).toMatch(/小明 · .*更新/);
+    // toLocaleString 那种全量时间不该出现
+    expect(meta.textContent).not.toMatch(/\d{4}\/\d{1,2}\/\d{1,2}/);
   });
 
   it("协同未连接时禁用新建并显示骨架", () => {
@@ -69,6 +85,9 @@ describe("MobileDocLibrary", () => {
     renderWithProviders(<MobileDocLibrary />);
 
     fireEvent.click(screen.getByRole("button", { name: "周会纪要 的操作" }));
+    // 动作表带说明文案
+    expect(screen.getByText("移除后所有成员的文档库里都看不到它。")).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "从文档库移除" }));
     expect(index.removeDoc).not.toHaveBeenCalled();
 

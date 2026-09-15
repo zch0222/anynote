@@ -15,7 +15,14 @@ export const registerSchema = z.object({
       "密码须为 8–15 位，包含大小写字母和数字",
     ),
   nickname: z.string(),
-  sex: z.union([z.literal(0), z.literal(1)]),
+  /**
+   * 性别（D-14 图例 14）：接口要求必填，所以只有 0 男 / 1 女 两个合法值。
+   *
+   * 用 `z.literal(...)` 的联合而不是 `z.number().int()`：后者会放过 7 这种值，
+   * 而后端的 `sys_user.sex` 只有这三态。没选时给中文提示——
+   * zod 对联合的默认文案是「Invalid input」，摆到表单下方没法读。
+   */
+  sex: z.union([z.literal(0), z.literal(1)], { error: "请选择性别" }),
   email: z
     .string()
     .regex(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$|^$/, "请输入有效邮箱")

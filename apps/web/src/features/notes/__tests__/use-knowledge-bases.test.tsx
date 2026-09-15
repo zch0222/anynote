@@ -7,8 +7,10 @@ import type { Mock } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   useCreateKnowledgeBaseMutation,
+  useKnowledgeBaseMembersQuery,
   useKnowledgeBaseQuery,
   useKnowledgeBasesQuery,
+  useRemoveMemberMutation,
 } from "../use-knowledge-bases";
 
 vi.mock("@/lib/api/openapi", () => ({
@@ -17,6 +19,7 @@ vi.mock("@/lib/api/openapi", () => ({
 
 const get = noteApi.GET as unknown as Mock;
 const post = noteApi.POST as unknown as Mock;
+const remove = noteApi.DELETE as unknown as Mock;
 
 function envelope(data: unknown, code = "00000") {
   return {
@@ -30,6 +33,7 @@ function envelope(data: unknown, code = "00000") {
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
+  remove.mockReset();
 });
 
 describe("useKnowledgeBasesQuery", () => {
@@ -102,6 +106,71 @@ describe("useCreateKnowledgeBaseMutation", () => {
     });
 
     expect(post).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+describe("useKnowledgeBaseMembersQuery", () => {
+  it("username 进 query 参数，默认空串（不按用户名过滤）", async () => {
+    get.mockResolvedValue(envelope({ rows: [{ userId: 2, nickname: "周宁", permissions: 3 }] }));
+    const { result } = renderHookWithProviders(() => useKnowledgeBaseMembersQuery(7));
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(get).toHaveBeenCalledExactlyOnceWith("/bases/users", {
+      params: { query: { knowledgeBaseId: 7, page: 1, pageSize: 20, username: "" } },
+      parseAs: "stream",
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("搜索关键词同时进参数与 query key，切换关键词是另一次请求", async () => {
+    get.mockResolvedValue(envelope({ rows: [] }));
+    const { queryClient } = renderHookWithProviders(() =>
+      useKnowledgeBaseMembersQuery(7, { username: "zhou" }),
+    );
+
+    await waitFor(() =>
+      expect(queryClient.getQueryData(noteQueryKeys.baseMembers(7, "zhou"))).toBeDefined(),
+    );
+    expect(get).toHaveBeenCalledWith(
+      "/bases/users",
+      expect.objectContaining({
+        params: { query: { knowledgeBaseId: 7, page: 1, pageSize: 20, username: "zhou" } },
+      }),
+    );
+    // 不同关键词是不同缓存条目（否则切词只看到上一个结果）
+    expect(queryClient.getQueryData(noteQueryKeys.baseMembers(7, ""))).toBeUndefined();
+  });
+});
+
+describe("useRemoveMemberMutation", () => {
+  it("按 userId + knowledgeBaseId 请求 DELETE，并失效整棵成员子树", async () => {
+    remove.mockResolvedValue(envelope(null));
+    const { result, queryClient } = renderHookWithProviders(() => useRemoveMemberMutation());
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    await act(async () => {
+      await result.current.mutateAsync({ userId: 2, knowledgeBaseId: 7 });
+    });
+
+    expect(remove).toHaveBeenCalledExactlyOnceWith("/bases/users", {
+      params: { query: { userId: 2, knowledgeBaseId: 7 } },
+      parseAs: "stream",
+      signal: expect.any(AbortSignal),
+    });
+    // 一个人可能出现在多个搜索关键词的结果里，所以按整棵子树失效
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: noteQueryKeys.baseMembersRoot });
+  });
+
+  it("后端禁止移除自己时进入错误态且不重试", async () => {
+    remove.mockResolvedValue(envelope(null, "B0001"));
+    const { result } = renderHookWithProviders(() => useRemoveMemberMutation());
+
+    await act(async () => {
+      await result.current.mutateAsync({ userId: 1, knowledgeBaseId: 7 }).catch(() => undefined);
+    });
+
+    expect(remove).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });

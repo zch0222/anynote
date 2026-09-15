@@ -84,7 +84,7 @@ export function ConversationList({ activeId }: ConversationListProps) {
             <div
               key={summary.id}
               className={`group flex items-center gap-1 rounded-lg px-2 py-2 text-sm transition-colors ${
-                summary.id === activeId ? "bg-accent-soft text-accent" : "hover:bg-grouped"
+                summary.id === activeId ? "bg-accent-soft text-accent" : "hover:bg-fill-hover"
               }`}
               data-testid={`conversation-item-${summary.id}`}
               data-active={summary.id === activeId ? "true" : "false"}

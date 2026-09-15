@@ -1,165 +1,143 @@
 "use client";
 
-import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { ListRowsSkeleton } from "@/components/loading/skeletons";
+import { EmptyState, QueryError } from "@/components/shared/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
-import { type MemberTask, isTaskOpen, submissionStatusText } from "@/features/tasks/schemas";
+import { Segmented } from "@/components/ui/segmented";
+import { MobileBaseHeader } from "@/features/notes/components/mobile/base-section-tabs";
+import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
+import { canResubmit, canSubmit, formatTaskWindow } from "@/features/tasks/lib/task-window";
+import {
+  type MemberTask,
+  TASK_STATUS,
+  submissionStatusBadgeVariant,
+  submissionStatusText,
+} from "@/features/tasks/schemas";
 import { useTasksQuery } from "@/features/tasks/use-tasks";
-import { ChevronDown, ListTodo } from "lucide-react";
+import { mobileTaskDetailHref } from "@/lib/mobile/hrefs";
+import { ListTodo } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useState } from "react";
 
 /**
- * 提交对话框只在点"提交笔记"时才用得上，却会连带拉进笔记列表查询、知识库选择器
- * 与 dropdown-menu。静态引入时 `/m/tasks` 首屏 247.7KB，离 250KB 预算只剩 2.3KB，
- * 任何后续改动都会把它顶破——改成按需加载。
+ * 提交面板只在点"提交"时才用得上，却会连带拉进笔记列表查询、知识库查询与 Sheet。
+ * 静态引入时 `/m/tasks` 首屏 247.7KB，离 250KB 预算只剩 2.3KB，
+ * 任何后续改动都会把它顶破——继续按需加载（12.7.3 要点 2）。
  */
-const SubmitTaskDialog = dynamic(
-  () =>
-    import("@/features/tasks/components/submit-task-dialog").then((mod) => mod.SubmitTaskDialog),
+const SubmitTaskSheet = dynamic(
+  () => import("./submit-task-sheet").then((mod) => mod.SubmitTaskSheet),
   { ssr: false },
 );
 
-/** 状态筛选项；`null` 表示不筛。取值与后端 MemberNoteTaskStatusEnum 对齐。 */
+/** 状态筛选项；`null` 表示不筛。取值与后端 `UserNoteTaskStatus` 对齐。 */
 const STATUS_FILTERS = [
-  { label: "全部", value: null },
-  { label: "未提交", value: 0 },
-  { label: "已提交", value: 1 },
-  { label: "已退回", value: 2 },
+  { key: "all", label: "全部", value: null },
+  { key: "todo", label: "未提交", value: TASK_STATUS.NOT_SUBMITTED },
+  { key: "returned", label: "已退回", value: TASK_STATUS.RETURNED },
+  { key: "done", label: "已提交", value: TASK_STATUS.SUBMITTED },
 ] as const;
 
-const statusVariant: Record<string, "secondary" | "outline" | "destructive"> = {
-  已提交: "secondary",
-  未提交: "outline",
-  已退回: "destructive",
-};
+type FilterKey = (typeof STATUS_FILTERS)[number]["key"];
 
 /**
- * `/m/tasks`：任务卡片列表。
+ * `/m/notes/[baseId]/tasks`：知识库内的「任务」Tab（M-04）。
  *
- * 桌面用 `@tanstack/react-table` 摊成五列表格，在 375px 下必然横向溢出；
- * 移动端改成卡片，并且**不引入 react-table**——它只为表格语义服务，
- * 卡片用不上，却会占掉移动端 250KB 预算里的一大块（方案 D6 / D8）。
+ * 旧实现渲染的是**跨库**任务列表（顶栏「任务」+ 知识库选择器 + 状态动作表），
+ * 默认落在第一个库而不是当前库。现在收回知识库：`baseId` 由路由给，
+ * 状态筛选平铺成全宽 `Segmented`（少一次点击），行尾按钮收窄到 32 高。
  *
- * 数据、提交对话框、状态文案全部复用既有实现。
+ * 状态语义（§1.4 第 2、3 条）：
+ * - `3` 才是「已退回」，`2` 是「无需提交」（本库管理员自己）；
+ * - **已提交的任务只出 accent 文字「查看」**，不出任何提交类按钮——
+ *   后端拒绝重复提交，旧实现那个「重新提交」点了必失败。
  */
-export function MobileTaskCards() {
-  const bases = useKnowledgeBasesQuery();
-  const [baseId, setBaseId] = useState<number | null>(null);
-  const [status, setStatus] = useState<number | null>(null);
+export function MobileTaskCards({ baseId }: { baseId: number }) {
+  const base = useKnowledgeBaseQuery(baseId);
+  const [filter, setFilter] = useState<FilterKey>("all");
   const [submitting, setSubmitting] = useState<MemberTask | null>(null);
-  const tasks = useTasksQuery(baseId ?? 0);
+  const tasks = useTasksQuery(baseId);
+  const now = new Date();
 
-  const firstBase = bases.data?.[0];
-  useEffect(() => {
-    if (baseId === null && firstBase) {
-      setBaseId(firstBase.id);
-    }
-  }, [firstBase, baseId]);
-
-  const currentBase = bases.data?.find((base) => base.id === baseId);
-  const rows = (tasks.data?.rows ?? []).filter(
-    (task) => status === null || task.submissionStatus === status,
+  const rows = tasks.data?.rows ?? [];
+  const active = STATUS_FILTERS.find((item) => item.key === filter) ?? STATUS_FILTERS[0];
+  const filtered = rows.filter(
+    (task) => active.value === null || task.submissionStatus === active.value,
   );
-  const statusLabel = STATUS_FILTERS.find((item) => item.value === status)?.label ?? "全部";
+  const countOf = (value: number | null) =>
+    value === null ? rows.length : rows.filter((task) => task.submissionStatus === value).length;
 
   return (
-    <MobileScreen
-      title="任务"
-      toolbar={
-        <div className="flex items-center gap-2">
-          <MobileActionSheet
-            title="选择知识库"
-            description="任务挂在知识库下，先选一个库。"
-            actions={(bases.data ?? []).map((base) => ({
-              label: base.knowledgeBaseName ?? "未命名知识库",
-              onSelect: () => setBaseId(base.id),
+    <MobileScreen title={base.data?.knowledgeBaseName?.trim() || "任务"} back="/m/notes">
+      <div className="space-y-4 pb-4" data-testid="mobile-tasks">
+        {/* 只有全部/未提交/已退回/已提交四格，计数取全量、不随筛选变 */}
+        <MobileBaseHeader
+          baseId={baseId}
+          current="tasks"
+          meta={rows.length ? `${rows.length} 个任务` : undefined}
+        />
+
+        <div className="space-y-3 px-4">
+          <Segmented
+            label="按状态筛选"
+            value={filter}
+            onChange={setFilter}
+            options={STATUS_FILTERS.map((item) => ({
+              value: item.key,
+              label: `${item.label} ${countOf(item.value)}`,
             }))}
-            trigger={
-              <Button variant="outline" className="min-h-10 flex-1 justify-between">
-                <span className="truncate">{currentBase?.knowledgeBaseName ?? "选择知识库"}</span>
-                <ChevronDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
-              </Button>
-            }
+            className="w-full [&>button]:flex-1"
           />
-          <MobileActionSheet
-            title="按状态筛选"
-            actions={STATUS_FILTERS.map((item) => ({
-              label: item.label,
-              onSelect: () => setStatus(item.value),
-            }))}
-            trigger={
-              <Button variant="outline" className="min-h-10 shrink-0" data-testid="task-filter">
-                {statusLabel}
-              </Button>
-            }
-          />
+
+          {tasks.isPending ? (
+            <ListRowsSkeleton count={3} />
+          ) : tasks.isError ? (
+            <QueryError
+              object="任务"
+              error={tasks.error}
+              onRetry={() => void tasks.refetch()}
+              retrying={tasks.isFetching}
+            />
+          ) : filtered.length === 0 ? (
+            rows.length === 0 ? (
+              <EmptyState
+                icon={ListTodo}
+                title="这个知识库下还没有任务"
+                hint="任务由知识库管理员发布。"
+              />
+            ) : (
+              <EmptyState
+                title={`没有${active.label}的任务`}
+                hint="换个筛选条件看看。"
+                action={
+                  <Button variant="outline" size="sm" onClick={() => setFilter("all")}>
+                    查看全部
+                  </Button>
+                }
+              />
+            )
+          ) : (
+            <ul className="overflow-hidden rounded-lg bg-surface" data-testid="mobile-task-items">
+              {filtered.map((task) => (
+                <li key={task.id} className="border-b border-separator last:border-b-0">
+                  <TaskRow
+                    baseId={baseId}
+                    task={task}
+                    now={now}
+                    onOpenSubmit={() => setSubmitting(task)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-      }
-    >
-      <div className="space-y-3 p-4" data-testid="mobile-tasks">
-        {!baseId ? (
-          <EmptyBox
-            title={bases.isPending ? "正在加载知识库" : "还没有可用的知识库"}
-            hint="任务挂在知识库下，先到笔记页创建一个。"
-          />
-        ) : tasks.isPending ? (
-          <ListRowsSkeleton count={2} />
-        ) : tasks.isError ? (
-          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-            任务加载失败：{tasks.error.message}
-          </p>
-        ) : rows.length === 0 ? (
-          <EmptyBox
-            title={status === null ? "这个知识库还没有任务" : `没有${statusLabel}的任务`}
-            hint={status === null ? "任务由知识库管理者发布。" : "换个筛选条件看看。"}
-          />
-        ) : (
-          rows.map((task) => {
-            const text = submissionStatusText(task.submissionStatus);
-            const open = isTaskOpen(task.endTime);
-            return (
-              <article
-                key={task.id}
-                className="space-y-2 rounded-xl border bg-surface p-4"
-                data-testid={`task-card-${task.id}`}
-              >
-                <div className="flex items-start gap-2">
-                  <h2 className="min-w-0 flex-1 text-sm font-medium">
-                    {task.taskName ?? "未命名任务"}
-                  </h2>
-                  <Badge variant={statusVariant[text] ?? "outline"} data-testid="task-status">
-                    {text}
-                  </Badge>
-                </div>
-                {task.taskDescribe?.trim() ? (
-                  <p className="line-clamp-2 text-sm text-label-secondary">{task.taskDescribe}</p>
-                ) : null}
-                <p className="text-xs text-label-secondary">
-                  {(task.startTime ?? "").slice(0, 10) || "?"} ~{" "}
-                  {(task.endTime ?? "").slice(0, 10) || "?"}
-                  {open ? "" : "（已截止）"}
-                </p>
-                <Button
-                  variant="outline"
-                  className="min-h-10 w-full"
-                  disabled={!open}
-                  onClick={() => setSubmitting(task)}
-                  data-testid={`task-submit-${task.id}`}
-                >
-                  {task.submissionStatus === 1 ? "重新提交" : "提交笔记"}
-                </Button>
-              </article>
-            );
-          })
-        )}
       </div>
 
       {submitting ? (
-        <SubmitTaskDialog
+        <SubmitTaskSheet
+          baseId={baseId}
           task={submitting}
           onOpenChange={(next) => {
             if (!next) setSubmitting(null);
@@ -170,12 +148,76 @@ export function MobileTaskCards() {
   );
 }
 
-function EmptyBox({ title, hint }: { title: string; hint: string }) {
+/**
+ * 任务行（M-04 图例 3 / 5 / 8 / 10）。
+ *
+ * 整行是 `<Link>`，行尾按钮是**独立的 button** 而不是嵌在链接里——
+ * HTML 不允许 `<a>` 套 `<button>`，浏览器会把它拆开，点击行为随机。
+ * 两者是兄弟节点，按钮的点击不会冒泡到链接（不同分支）。
+ */
+function TaskRow({
+  baseId,
+  task,
+  now,
+  onOpenSubmit,
+}: {
+  baseId: number;
+  task: MemberTask;
+  now: Date;
+  onOpenSubmit: () => void;
+}) {
+  const status = task.submissionStatus;
+  /* 图例 5：2（无需提交，本库管理员自己）返回 null，这一行不画徽标 */
+  const variant = submissionStatusBadgeVariant(status);
+  const href = mobileTaskDetailHref(baseId, task.id);
+  const submit = canSubmit(task, now);
+  const resubmit = canResubmit(task, now);
+  const submitted = !submit && !resubmit && status === TASK_STATUS.SUBMITTED;
+
   return (
-    <div className="rounded-xl border border-dashed p-6 text-center">
-      <ListTodo className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
-      <p className="mt-3 text-sm font-medium">{title}</p>
-      <p className="mt-1 text-sm text-label-secondary">{hint}</p>
+    <div className="flex items-center gap-2 py-4 pr-2">
+      <Link
+        href={href}
+        data-testid={`task-card-${task.id}`}
+        className="flex min-w-0 flex-1 flex-col gap-1.5 pl-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      >
+        <span className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-headline text-label">
+            {task.taskName?.trim() || "未命名任务"}
+          </span>
+          {variant ? (
+            <Badge variant={variant} data-testid="task-status">
+              {submissionStatusText(status)}
+            </Badge>
+          ) : null}
+        </span>
+        <span className="tabular truncate text-footnote text-label-tertiary">
+          {formatTaskWindow(task.startTime, task.endTime)}
+        </span>
+      </Link>
+
+      {/* 行尾动作区：点击不触发行跳转（两者是兄弟节点，不共用一个链接） */}
+      <div className="flex shrink-0 items-center">
+        {submit || resubmit ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={onOpenSubmit}
+            data-testid={`task-submit-${task.id}`}
+          >
+            {resubmit ? "重新提交" : "提交"}
+          </Button>
+        ) : submitted ? (
+          <Link
+            href={href}
+            data-testid={`task-view-${task.id}`}
+            className="flex min-h-11 items-center px-2 text-footnote font-medium text-accent outline-none focus-visible:underline"
+          >
+            查看
+          </Link>
+        ) : null}
+      </div>
     </div>
   );
 }

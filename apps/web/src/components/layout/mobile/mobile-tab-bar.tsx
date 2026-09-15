@@ -42,7 +42,7 @@ export function MobileTabBar() {
                   "focus-visible:ring-2 focus-visible:ring-ring",
                   isActive
                     ? "bg-accent font-medium text-white"
-                    : "text-label-secondary hover:bg-grouped",
+                    : "text-label-secondary hover:bg-fill-hover",
                 )}
               >
                 <Icon className="size-5" aria-hidden="true" />

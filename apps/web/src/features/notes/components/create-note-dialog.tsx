@@ -14,10 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { type CreateNoteInput, createNoteSchema } from "@/features/notes/schemas";
 import { useCreateNoteMutation } from "@/features/notes/use-create-note";
+import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
+import { toUserMessage } from "@/lib/api/errors";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "lucide-react";
+import { Library, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -44,10 +46,28 @@ export function CreateNoteDialog({
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const create = useCreateNoteMutation();
+  // 归属提示胶囊要报库名（D-04 ①3）。详情多半已在缓存里（用户是从这个库的
+  // 列表页点进来的），所以这次查询通常不会产生请求
+  const base = useKnowledgeBaseQuery(knowledgeBaseId);
+  const baseName = base.data?.knowledgeBaseName?.trim() || "当前知识库";
   const form = useForm<CreateNoteInput>({
     resolver: zodResolver(createNoteSchema),
     defaultValues: { title: "" },
   });
+
+  /**
+   * 关闭时的统一善后：清空表单（D-04 ①7）。
+   *
+   * 「取消」与右上角 × / Esc 走的是同一条路径——只让 × 清空、取消不清空的话，
+   * 下次打开还留着上次写了一半的标题，看着像"已经建过了"。
+   */
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      if (!next) form.reset();
+    },
+    [form],
+  );
 
   async function onSubmit(values: CreateNoteInput) {
     try {
@@ -57,18 +77,12 @@ export function CreateNoteDialog({
       form.reset();
       router.push(`/notes/${knowledgeBaseId}/${noteId}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "创建失败，请稍后重试");
+      toast.error(toUserMessage(error));
     }
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) form.reset();
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         aria-label={triggerLabel}
         data-testid={triggerTestId}
@@ -89,6 +103,19 @@ export function CreateNoteDialog({
             <DialogTitle>新建笔记</DialogTitle>
             <DialogDescription>先取个标题，正文可以随后再写。</DialogDescription>
           </DialogHeader>
+          {/*
+            归属提示胶囊（D-04 ①3）。它回答的是"这篇会进哪个库"——
+            对话框里既不显示当前库名、也没有选库入口，不说的话用户只能猜。
+            用 `bg-fill` 底而不是 accent：它是说明，不是可点的筛选器。
+          */}
+          <p
+            data-testid="create-note-base-hint"
+            className="inline-flex min-h-7 items-center gap-1.5 rounded-full bg-fill-hover px-2.5 text-footnote text-label-secondary"
+          >
+            <span>创建到</span>
+            <Library className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 truncate font-medium text-label">{baseName}</span>
+          </p>
           <div className="space-y-2">
             <Label htmlFor="note-title">标题</Label>
             <Input id="note-title" autoComplete="off" {...form.register("title")} />
@@ -97,6 +124,14 @@ export function CreateNoteDialog({
             ) : null}
           </div>
           <DialogFooter>
+            {/*
+              「取消」在「创建」左边（D-04 ①7）：主按钮在最右是全局页脚规格，
+              而且取消键排在 DOM 前面，基座 Dialog 的初始焦点自然落在它身上，
+              回车不会直接建出一篇标题还没填的笔记。
+            */}
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+              取消
+            </Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "创建中…" : "创建"}
             </Button>

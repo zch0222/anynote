@@ -10,6 +10,14 @@ import {
   mobileMoreRoutes,
   mobileTabs,
   mobileUnavailableRoutes,
+  mobileMoocDetailHref,
+  mobileNoteHistoryHref,
+  mobileTaskDetailHref,
+  moocDetailHref,
+  noteHistoryHref,
+  taskDetailHref,
+  taskEditHref,
+  taskNewHref,
   toDesktopHref,
   toMobileHref,
   toolGroups,
@@ -59,9 +67,18 @@ describe("满幅路由", () => {
    * 只有笔记编辑器：设计稿里它的顶栏分隔线与正文底色一直延伸到侧栏右侧与窗口右缘，
    * 外面再套一层留白，正文就变成"灰底上浮着的一张卡片"，与"编辑器占满剩余所有空间"相反。
    */
-  it("只有笔记编辑器（知识库 id + 笔记 id 两段数字）满幅", () => {
+  it("笔记编辑器与笔记历史版本（两段数字，可带 history）满幅", () => {
     expect(isFullBleedRoute("/notes/7/42")).toBe(true);
     expect(isFullBleedRoute("/notes/1/1")).toBe(true);
+    // D-16：历史版本左右两栏各自满幅，同样不能有外层留白
+    expect(isFullBleedRoute("/notes/3/7/history")).toBe(true);
+  });
+
+  it("知识库内的其它详情页仍然走文档流", () => {
+    // 任务详情 / 任务表单 / 慕课详情都要留白，不能因为「多一层 id」被误判满幅
+    expect(isFullBleedRoute("/notes/3/tasks/9")).toBe(false);
+    expect(isFullBleedRoute("/notes/3/tasks/new")).toBe(false);
+    expect(isFullBleedRoute("/notes/3/mooc/12")).toBe(false);
   });
 
   it("二级页与列表页仍走文档流（要有留白）", () => {
@@ -100,8 +117,10 @@ describe("移动端导航映射", () => {
 
   it("子路由点亮所属 tab", () => {
     expect(activeMobileTab("/m/notes/3/7")?.title).toBe("知识库");
-    // 只读浏览与可写笔记同源，归到"知识库"而不是再占一格
-    expect(activeMobileTab("/m/wikis/3")?.title).toBe("知识库");
+    // 知识库内二级 Tab / 详情页都归到「知识库」，不额外占一格
+    expect(activeMobileTab("/m/notes/3/tasks")?.title).toBe("知识库");
+    expect(activeMobileTab("/m/notes/3/tasks/9")?.title).toBe("知识库");
+    expect(activeMobileTab("/m/notes/3/7/history")?.title).toBe("知识库");
     expect(activeMobileTab("/m/ai/pdf")?.title).toBe("AI");
     expect(activeMobileTab("/m/settings/appearance")?.title).toBe("我的");
   });
@@ -159,6 +178,7 @@ describe("移动端导航映射", () => {
 
   it("沉浸式路由只覆盖详情页，列表页仍显示 tab bar", () => {
     expect(isImmersiveMobileRoute("/m/notes/3/7")).toBe(true);
+    expect(isImmersiveMobileRoute("/m/notes/3/7/history")).toBe(true);
     expect(isImmersiveMobileRoute("/m/docs/abc")).toBe(true);
     expect(isImmersiveMobileRoute("/m/ai/chat/9")).toBe(true);
     expect(isImmersiveMobileRoute("/m/search")).toBe(true);
@@ -170,10 +190,53 @@ describe("移动端导航映射", () => {
     expect(isImmersiveMobileRoute("/m/ai/chat")).toBe(false);
   });
 
+  it("知识库内 Tab 与详情不隐藏 tab bar（按数字段判定，§1.4 第 7 条）", () => {
+    // 回归：旧模式 /^\/m\/notes\/[^/]+\/[^/]+$/ 会把 /m/notes/3/tasks 当成编辑器，
+    // 底部 tab bar 被误隐藏，与画板 M-03 – M-05 不符
+    expect(isImmersiveMobileRoute("/m/notes/3/tasks")).toBe(false);
+    expect(isImmersiveMobileRoute("/m/notes/3/mooc")).toBe(false);
+    expect(isImmersiveMobileRoute("/m/notes/3/docs")).toBe(false);
+    expect(isImmersiveMobileRoute("/m/notes/3/mooc/12")).toBe(false);
+    expect(isImmersiveMobileRoute("/m/notes/3/tasks/9")).toBe(false);
+  });
+
+  it("更多入口不再列出任务与慕课", () => {
+    const hrefs = mobileMoreRoutes.map((route) => route.href);
+    expect(hrefs).not.toContain("/m/tasks");
+    expect(hrefs).not.toContain("/m/mooc");
+    expect(hrefs).toEqual(["/m/docs", "/m/ai/pdf"]);
+  });
+
   it("更多入口与不可用路由都指向存在的地址", () => {
     for (const route of mobileMoreRoutes) expect(route.href.startsWith("/m/")).toBe(true);
     for (const route of mobileUnavailableRoutes) {
       expect(toMobileHref(route.desktopHref)).toBeNull();
     }
+  });
+});
+
+describe("知识库内详情页地址函数", () => {
+  /**
+   * 这些函数是**唯一**的地址来源：页面里再手拼字符串就会在两层 id 上拼错，
+   * 而拼错的结果往往是落到别的页面而不是 404，只在真实点击时才暴露。
+   */
+  it("桌面地址", () => {
+    expect(moocDetailHref(3, 12)).toBe("/notes/3/mooc/12");
+    expect(taskDetailHref(3, 9)).toBe("/notes/3/tasks/9");
+    expect(taskNewHref(3)).toBe("/notes/3/tasks/new");
+    expect(taskEditHref(3, 9)).toBe("/notes/3/tasks/9/edit");
+    expect(noteHistoryHref(3, 42)).toBe("/notes/3/42/history");
+  });
+
+  it("移动端地址", () => {
+    expect(mobileMoocDetailHref(3, 12)).toBe("/m/notes/3/mooc/12");
+    expect(mobileTaskDetailHref(3, 9)).toBe("/m/notes/3/tasks/9");
+    expect(mobileNoteHistoryHref(3, 42)).toBe("/m/notes/3/42/history");
+  });
+
+  it("新建任务不会被 [taskId] 抢走（静态段在 docs 侧靠路由优先级，这里保证格式）", () => {
+    // 单段 new 与数字 id 形态不同，Next 的静态段优先级因此能正确分流
+    expect(taskNewHref(3).endsWith("/new")).toBe(true);
+    expect(taskDetailHref(3, 9)).not.toContain("/new");
   });
 });

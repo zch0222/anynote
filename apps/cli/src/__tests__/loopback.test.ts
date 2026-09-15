@@ -36,6 +36,40 @@ describe("回环回调服务", () => {
     await expect(waiting).resolves.toEqual({ code: "the-code", state: "expected-state" });
   });
 
+  /**
+   * D-15 图例 13：回调完成页与 `apps/web` 的认证卡片同一视觉。
+   *
+   * 断言的是**契约性的三件事**：品牌标记在、文案与卡片一致、版式是居中卡片。
+   * 不逐条比对色值——那些抄自 `globals.css`，改主题色板时这里跟着漂是预期的。
+   */
+  it("完成页是品牌标记 + 居中卡片，文案与 D-15 图例一致", async () => {
+    const server = await listen();
+    const waiting = server.waitForCode({ timeoutMs: 5_000 });
+    const response = await callback(server.port, "code=c&state=expected-state");
+    const body = await response.text();
+    await waiting;
+
+    expect(body).toContain("已收到授权，请回到终端继续。此页面可以关闭。");
+    expect(body).toContain("Anynote CLI");
+    // 品牌方块 + 书形描边（与 apps/web 的 AnynoteLogo 同一几何）
+    expect(body).toContain('class="mark"');
+    expect(body).toContain("M12 6.7 L6.4 4.6");
+    // 居中卡片：flex 居中 + 圆角 20 + 卡片阴影（与登录卡同一套规格）
+    expect(body).toContain("align-items:center");
+    expect(body).toContain("border-radius:20px");
+    expect(body).toContain("box-shadow:var(--shadow)");
+  });
+
+  it("深色下不落到白底黑字（回调页读的是系统偏好）", async () => {
+    const server = await listen();
+    const waiting = server.waitForCode({ timeoutMs: 5_000 });
+    const response = await callback(server.port, "code=c&state=expected-state");
+    const body = await response.text();
+    await waiting;
+
+    expect(body).toContain("prefers-color-scheme:dark");
+  });
+
   it("state 不匹配时拒绝该请求，且继续等待真正的回调", async () => {
     const ignored: Array<{ url: string; reason: string }> = [];
     const server = await startLoopbackServer({

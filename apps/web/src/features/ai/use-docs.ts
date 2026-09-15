@@ -66,12 +66,40 @@ export function useDocQuery(docId: number) {
 const createResEntitySchema = z.object({ id: z.number().nullish() });
 
 /**
+ * 触发异步 RAG 索引（`POST /docs/{id}/index`）。
+ *
+ * 从 `useUploadPdfMutation` 的第 2 步抽出（12.2.5）：资料 Tab 的「建立索引」
+ * 与上传链路是同一个动作，各写一份的话后端换端点或换参数时必然漏改一处。
+ *
+ * 这是一个**投递**而不是等待：RocketMQ 消费完 `indexStatus` 才会变 1，
+ * 所以调用方不能靠它返回后重取列表，而要轮询 `useDocIndexStatus`。
+ */
+export function useIndexDocMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (docId: number): Promise<void> => {
+      const { response } = await noteApi.POST("/docs/{id}/index", {
+        params: { path: { id: docId } },
+        parseAs: "stream",
+        signal: AbortSignal.timeout(30_000),
+      });
+      await unwrapEnvelope(response, () => undefined);
+    },
+    retry: false,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: aiQueryKeys.docs }),
+  });
+}
+
+/**
  * 上传 PDF 并建索引（两步合一个 mutation）：
  * 1. multipart POST /docs/pdfs（note 服务经内部 Feign 转存 file 服务）
  * 2. POST /docs/{id}/index 触发异步 RAG 索引（RocketMQ → ES），indexStatus 稍后变 1
+ *
+ * 第 2 步复用 `useIndexDocMutation`，上传链路与「资料」Tab 只有一份实现。
  */
 export function useUploadPdfMutation(uploadFn: typeof uploadPdf = uploadPdf) {
   const queryClient = useQueryClient();
+  const indexDoc = useIndexDocMutation();
   return useMutation({
     mutationFn: async ({
       file,
@@ -89,12 +117,7 @@ export function useUploadPdfMutation(uploadFn: typeof uploadPdf = uploadPdf) {
         uploadId,
         ...(onProgress ? { onProgress } : {}),
       });
-      const { response } = await noteApi.POST("/docs/{id}/index", {
-        params: { path: { id } },
-        parseAs: "stream",
-        signal: AbortSignal.timeout(30_000),
-      });
-      await unwrapEnvelope(response, () => undefined);
+      await indexDoc.mutateAsync(id);
       return id;
     },
     retry: false,

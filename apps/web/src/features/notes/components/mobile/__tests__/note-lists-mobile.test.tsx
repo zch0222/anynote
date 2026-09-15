@@ -45,11 +45,11 @@ describe("MobileNoteBases", () => {
     expect(screen.getByText("简介")).toBeInTheDocument();
   });
 
-  it("wikis 复用同一列表，跳只读路由且不给新建入口", () => {
+  it("showCreate=false 时不渲染新建入口（标题可覆写）", () => {
     mockBases({ ...IDLE, data: [{ id: 3, knowledgeBaseName: "我的库" }] });
-    renderWithProviders(<MobileNoteBases basePath="/m/wikis" title="知识库" showCreate={false} />);
+    renderWithProviders(<MobileNoteBases title="知识库" showCreate={false} />);
 
-    expect(screen.getByRole("link", { name: /我的库/ })).toHaveAttribute("href", "/m/wikis/3");
+    expect(screen.getByRole("link", { name: /我的库/ })).toHaveAttribute("href", "/m/notes/3");
     expect(screen.queryByRole("button", { name: /新建知识库/ })).toBeNull();
     expect(screen.getByRole("heading", { name: "知识库" })).toBeInTheDocument();
   });
@@ -62,7 +62,7 @@ describe("MobileNoteBases", () => {
 
     mockBases({ isPending: false, isError: true, error: new Error("网络异常") });
     renderWithProviders(<MobileNoteBases />);
-    expect(screen.getByText(/知识库加载失败：网络异常/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("知识库加载失败：网络异常");
   });
 });
 
@@ -81,11 +81,12 @@ describe("MobileNoteList", () => {
     );
   });
 
-  it("wikis 模式跳只读路由且没有新建入口", () => {
+  it("列表项 href 与新建入口：basePath 参数已删，一律走 /m/notes", () => {
     mockNotes({ ...IDLE, data: { rows: [{ id: 7, title: "会议纪要" }], pages: 1 } });
-    renderWithProviders(<MobileNoteList baseId={3} basePath="/m/wikis" showCreate={false} />);
+    renderWithProviders(<MobileNoteList baseId={3} showCreate={false} />);
 
-    expect(screen.getByRole("link", { name: /会议纪要/ })).toHaveAttribute("href", "/m/wikis/3/7");
+    // 12.1.3：`/m/wikis` 已删除，列表项只剩 /m/notes 一种落点
+    expect(screen.getByRole("link", { name: /会议纪要/ })).toHaveAttribute("href", "/m/notes/3/7");
     expect(screen.queryByTestId("mobile-note-create")).toBeNull();
   });
 
@@ -108,20 +109,20 @@ describe("MobileNoteList", () => {
     });
   });
 
-  it("空态文案区分可写与只读", () => {
+  it("空态文案区分有没有新建入口", () => {
     mockNotes({ ...IDLE, data: { rows: [], pages: 1 } });
     const { unmount } = renderWithProviders(<MobileNoteList baseId={3} />);
     expect(screen.getByText("新建一篇，开始记录。")).toBeInTheDocument();
     unmount();
 
     mockNotes({ ...IDLE, data: { rows: [], pages: 1 } });
-    renderWithProviders(<MobileNoteList baseId={3} basePath="/m/wikis" showCreate={false} />);
+    renderWithProviders(<MobileNoteList baseId={3} showCreate={false} />);
     expect(screen.getByText("等有人往这个库里写点什么再来看看。")).toBeInTheDocument();
   });
 
   it("加载失败展示错误", () => {
     mockNotes({ isPending: false, isError: true, isFetching: false, error: new Error("超时") });
     renderWithProviders(<MobileNoteList baseId={3} />);
-    expect(screen.getByText(/笔记加载失败：超时/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("笔记加载失败：超时");
   });
 });

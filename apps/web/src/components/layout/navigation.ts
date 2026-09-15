@@ -69,6 +69,54 @@ export function mobileKnowledgeBaseSectionHref(baseId: number, section: Knowledg
   return section === "notes" ? `/m/notes/${baseId}` : `/m/notes/${baseId}/${section}`;
 }
 
+/* ------------------------------------------------------------------ *
+ * 知识库内详情页的地址函数（UI 补稿 §12.0.4）。
+ *
+ * 页面里一律调这些函数，**不再手拼字符串**：本轮新增的 5 条桌面路由与
+ * 3 条移动路由都带两层 id，拼错的后果是落到别的页而不是 404，
+ * 只在真实点击时才暴露。集中一处之后地址格式有单测兜着。
+ *
+ * 桌面与移动各一组，命名前缀区分（移动端加 `mobile`）。
+ * ------------------------------------------------------------------ */
+
+/** 慕课详情：`/notes/:baseId/mooc/:moocId`（取代跨库的 `/mooc/:id`）。 */
+export function moocDetailHref(baseId: number, moocId: number) {
+  return `/notes/${baseId}/mooc/${moocId}`;
+}
+
+/** 任务详情：`/notes/:baseId/tasks/:taskId`。 */
+export function taskDetailHref(baseId: number, taskId: number) {
+  return `/notes/${baseId}/tasks/${taskId}`;
+}
+
+/** 新建任务：`/notes/:baseId/tasks/new`（静态段优先于 `[taskId]`）。 */
+export function taskNewHref(baseId: number) {
+  return `/notes/${baseId}/tasks/new`;
+}
+
+/** 编辑任务：`/notes/:baseId/tasks/:taskId/edit`。 */
+export function taskEditHref(baseId: number, taskId: number) {
+  return `/notes/${baseId}/tasks/${taskId}/edit`;
+}
+
+/** 笔记历史版本：`/notes/:baseId/:noteId/history`。 */
+export function noteHistoryHref(baseId: number, noteId: number) {
+  return `/notes/${baseId}/${noteId}/history`;
+}
+
+/**
+ * 三个移动端详情地址的实现在 `lib/mobile/hrefs.ts`。
+ *
+ * 它们是纯字符串拼接，但放在这里会让**每一个**想拼地址的页面都拖上本文件顶层的
+ * 整棵导航注册表（几十个图标）。编辑器那条路由（`/m/*` 里预算最紧的几条之一）
+ * 实测为此多背约 3KB gzip。实现在 lib 里，这里只再导出，调用方 import 路径不变。
+ */
+export {
+  mobileMoocDetailHref,
+  mobileNoteHistoryHref,
+  mobileTaskDetailHref,
+} from "@/lib/mobile/hrefs";
+
 /** AI 助手与协作：不挂在任何单个知识库下的能力，单独成组。 */
 export const toolGroups = [
   {
@@ -154,15 +202,16 @@ export function isRouteActive(pathname: string, href: string) {
 /**
  * 满幅路由：内容区**不留内边距**，由页面自己吃到视口边缘的页面。
  *
- * 只有笔记编辑器：设计稿里它的顶栏分隔线与正文底色一直延伸到侧栏右侧与窗口右缘，
- * 外面再套一层 20/32px 的留白，正文就成了一块浮在灰底上的卡片——
- * 与「编辑器占满剩余所有空间」正好相反。
+ * 只有笔记编辑器与笔记历史版本：设计稿里它们的顶栏分隔线与正文底色一直延伸到
+ * 侧栏右侧与窗口右缘，外面再套一层 20/32px 的留白，正文就成了一块浮在灰底上的卡片——
+ * 与「占满剩余所有空间」正好相反。历史版本（D-16）是左右两栏各自满幅，
+ * 同样不能有外层留白。
  *
  * 必须按**数字段**判定：`/notes/7/42` 是编辑器，而 `/notes/7/overview`、
  * `/notes/7/members` 这些二级页是普通文档流页面，仍然要有留白。
  */
 export function isFullBleedRoute(pathname: string): boolean {
-  return /^\/notes\/\d+\/\d+$/.test(pathname);
+  return /^\/notes\/\d+\/\d+$/.test(pathname) || /^\/notes\/\d+\/\d+\/history$/.test(pathname);
 }
 
 export function getWorkspaceRoute(pathname: string) {
@@ -198,7 +247,7 @@ export const MOBILE_PREFIX = "/m";
  */
 export const mobileTabs = [
   { title: "工作台", href: "/m/dashboard", icon: LayoutDashboard, match: ["/m/dashboard"] },
-  { title: "知识库", href: "/m/notes", icon: BookOpen, match: ["/m/notes", "/m/wikis"] },
+  { title: "知识库", href: "/m/notes", icon: BookOpen, match: ["/m/notes"] },
   { title: "AI", href: "/m/ai/chat", icon: Sparkles, match: ["/m/ai"] },
   { title: "我的", href: "/m/me", icon: UserRound, match: ["/m/me", "/m/settings"] },
 ] as const;
@@ -210,12 +259,15 @@ export type MobileTab = (typeof mobileTabs)[number];
  *
  * `/ai/workflow` 不在列内（画布需要拖拽与大屏），`/playground` 同理。
  * 匹配按**整段**比较，避免 `/ai/chat` 的前缀吃掉 `/ai/chatroom` 这类将来的路由。
+ *
+ * `/tasks`、`/mooc` 保留在列内**只为承接旧书签的重定向**：
+ * 它们本身已经是 `redirect()` 页，但地址仍要能被映射成 `/m/tasks`、
+ * `/m/mooc`，由那两个页面再转到 `/m/notes`。删掉会让旧链接在移动端 404。
  */
 const MOBILE_ROUTE_PREFIXES = [
   "/dashboard",
   "/notes",
   "/docs",
-  "/wikis",
   "/tasks",
   "/mooc",
   "/ai/chat",
@@ -269,12 +321,18 @@ export function activeMobileTab(pathname: string): MobileTab | undefined {
 /**
  * 沉浸式路由：隐藏底部 tab bar 的页面。
  *
- * 都是"进去就专心做一件事"的详情页——编辑器、对话、阅读、搜索。
+ * 都是"进去就专心做一件事"的详情页——编辑器、历史版本、对话、阅读、搜索。
  * 用显式模式表而不是 CSS `:has()`：判定要能被单测覆盖，也不依赖浏览器支持。
+ *
+ * **必须按数字段判定**：旧的 `/^\/m\/notes\/[^/]+\/[^/]+$/` 会把
+ * `/m/notes/3/tasks` 这类知识库内 Tab 也当成编辑器，tab bar 被误隐藏，
+ * 与画板 M-03 – M-05 不符（§1.4 第 7 条）。
  */
 const IMMERSIVE_PATTERNS = [
-  /^\/m\/notes\/[^/]+\/[^/]+$/,
-  /^\/m\/wikis\/[^/]+\/[^/]+$/,
+  // 笔记编辑器：/m/notes/:baseId/:noteId（两段都是数字）
+  /^\/m\/notes\/\d+\/\d+$/,
+  // 笔记历史版本：/m/notes/:baseId/:noteId/history
+  /^\/m\/notes\/\d+\/\d+\/history$/,
   /^\/m\/docs\/[^/]+$/,
   /^\/m\/ai\/chat\/[^/]+$/,
   /^\/m\/ai\/pdf\/[^/]+$/,
@@ -285,11 +343,14 @@ export function isImmersiveMobileRoute(pathname: string): boolean {
   return IMMERSIVE_PATTERNS.some((pattern) => pattern.test(pathname));
 }
 
-/** 「我的」页里的更多入口：tab 放不下、但移动端仍然可用的页面。 */
+/**
+ * 「我的」页里的更多入口：tab 放不下、但移动端仍然可用的页面。
+ *
+ * 「任务」「慕课」已按 2026-09-15 拍板移除：两者只属于知识库，
+ * 从「我的」进去会看不到"在哪个库"，与本库 Tab 里的同一份数据变成两条不同路径。
+ */
 export const mobileMoreRoutes = [
   { title: "协同文档", href: "/m/docs", icon: FileText, description: "多人实时协作的文档库。" },
-  { title: "任务", href: "/m/tasks", icon: CheckSquare, description: "查看并提交我的任务。" },
-  { title: "慕课", href: "/m/mooc", icon: BookOpen, description: "继续未看完的课程。" },
   { title: "PDF 问答", href: "/m/ai/pdf", icon: Bot, description: "围绕 PDF 文档提问。" },
 ] as const;
 
