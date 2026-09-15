@@ -192,6 +192,46 @@
             n_note_task_submission_record.note_task_id = #{noteTaskId};
     </select>
 
+    <resultMap id="NoteTaskEditHeatmapPOResultMap" type="com.anynote.note.model.po.NoteTaskEditHeatmapPO">
+        <result property="userId" column="user_id" />
+        <result property="username" column="username" />
+        <result property="nickname" column="nickname" />
+        <result property="noteId" column="note_id" />
+        <result property="editDate" column="edit_date" />
+        <result property="editCount" column="edit_count" />
+    </resultMap>
+
+    <resultMap id="NoteTaskSubmitMemberPOResultMap" type="com.anynote.note.model.po.NoteTaskSubmitMemberPO">
+        <result property="userId" column="user_id" />
+        <result property="username" column="username" />
+        <result property="nickname" column="nickname" />
+        <result property="noteId" column="note_id" />
+    </resultMap>
+
+    <!-- 按天聚合，区间限定在任务时间窗口内；一次查询覆盖全部成员 x 日期 -->
+    <select id="selectNoteTaskEditHeatmap" resultMap="NoteTaskEditHeatmapPOResultMap">
+        SELECT r.user_id, u.username, u.nickname, r.note_id,
+               DATE(l.operation_time) AS edit_date, COUNT(*) AS edit_count
+        FROM n_note_task_submission_record r
+        JOIN n_note_operation_log l ON l.note_id = r.note_id AND l.operation_type = 1
+        JOIN sys_user u ON u.id = r.user_id
+        WHERE r.note_task_id = #{noteTaskId}
+          AND r.status = 0 AND r.is_delete = 0
+          AND l.operation_time &gt;= #{rangeStart} AND l.operation_time &lt; #{rangeEnd}
+          AND l.is_delete = 0
+        GROUP BY r.user_id, u.username, u.nickname, r.note_id, DATE(l.operation_time)
+    </select>
+
+    <!-- 已提交但窗口内没有编辑的成员不会出现在上面那条里，用这份名单补齐 -->
+    <select id="selectNoteTaskSubmitMembers" resultMap="NoteTaskSubmitMemberPOResultMap">
+        SELECT r.user_id, u.username, u.nickname, r.note_id
+        FROM n_note_task_submission_record r
+        JOIN sys_user u ON u.id = r.user_id
+        WHERE r.note_task_id = #{noteTaskId}
+          AND r.status = 0 AND r.is_delete = 0
+        GROUP BY r.user_id, u.username, u.nickname, r.note_id
+    </select>
+
 
 
 

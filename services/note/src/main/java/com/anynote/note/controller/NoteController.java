@@ -16,7 +16,6 @@ import com.anynote.file.api.model.dto.CompleteUploadDTO;
 import com.anynote.file.api.model.dto.OssSliceUploadTaskCreatePublicDTO;
 import com.anynote.file.api.model.vo.OssSliceUploadTaskVO;
 import com.anynote.note.api.model.po.Note;
-import com.anynote.note.api.model.po.NoteOperationLog;
 import com.anynote.note.datascope.annotation.RequiresNotePermissions;
 import com.anynote.note.enums.NotePermissions;
 import com.anynote.note.mapper.NoteHistoryMapper;
@@ -28,7 +27,6 @@ import com.anynote.note.model.vo.NoteHistoryVO;
 import com.anynote.note.model.vo.NoteListVO;
 import com.anynote.note.model.vo.NoteSaveResultVO;
 import com.anynote.note.service.NoteHistoryService;
-import com.anynote.note.service.NoteOperationLogService;
 import com.anynote.note.service.NoteService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
@@ -41,6 +39,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
@@ -59,11 +58,6 @@ public class NoteController {
 
     @Resource
     private NoteHistoryService noteHistoryService;
-
-//    @Resource
-//    private NoteOperationLogMapper noteOperationLogMapper;
-    @Resource
-    private NoteOperationLogService noteOperationLogService;
 
     @Operation(summary = "分页查询当前用户的笔记列表", description = "可按 knowledgeBaseId 过滤")
     @GetMapping()
@@ -211,8 +205,16 @@ public class NoteController {
      * @param pageSize
      * @return
      */
+    @Operation(summary = "笔记历史版本列表", description = "分页返回笔记的编辑历史，按操作时间倒序")
     @GetMapping("historyList")
-    public ResData<PageBean<NoteHistoryListItemVO>> getHistoryList(Long noteId, Integer page, Integer pageSize) {
+    public ResData<PageBean<NoteHistoryListItemVO>> getHistoryList(
+            @Parameter(description = "笔记id", required = true)
+            @NotNull(message = "笔记id不能为空") Long noteId,
+            @Parameter(description = "页码，从 1 起", required = true)
+            @NotNull(message = "页码不能为空") @Min(value = 1, message = "页码错误") Integer page,
+            @Parameter(description = "页面大小，上限 50", required = true)
+            @NotNull(message = "页面大小不能为空") @Min(value = 1, message = "页面大小错误")
+            @Max(value = 50, message = "页面大小错误") Integer pageSize) {
         return ResUtil.success(noteHistoryService.getNoteHistoryListItemVOList(NoteHistoryListItemQueryParam.NoteHistoryListItemQueryParamBuilder()
                 .noteId(noteId)
                 .page(page)
@@ -220,13 +222,17 @@ public class NoteController {
                 .build()));
     }
 
+    /**
+     * 笔记历史版本内容
+     * @param operationId 操作日志id
+     * @return 该操作对应的历史版本
+     */
+    @Operation(summary = "笔记历史版本内容", description = "按操作日志id返回历史版本；操作日志不存在时返回 A0404 业务错误，而不是 500")
     @GetMapping("history")
-    public ResData<NoteHistoryVO> getNoteHistory(Long operationId) {
-        NoteOperationLog noteOperationLog = noteOperationLogService.getBaseMapper().selectById(operationId);
-        return ResUtil.success(noteHistoryService.getNoteHistory(NoteHistoryQueryParam.NoteHistoryQueryParamBuilder()
-                        .noteId(noteOperationLog.getNoteId())
-                        .operationId(operationId)
-                .build()));
+    public ResData<NoteHistoryVO> getNoteHistory(
+            @Parameter(description = "操作日志id", required = true)
+            @NotNull(message = "操作id不能为空") Long operationId) {
+        return ResUtil.success(noteHistoryService.getNoteHistoryByOperationId(operationId));
     }
 
 

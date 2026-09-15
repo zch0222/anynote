@@ -23,4 +23,16 @@ public interface NoteHistoryService extends IService<NoteHistory> {
     public PageBean<NoteHistoryListItemVO> getNoteHistoryListItemVOList(NoteHistoryListItemQueryParam queryParam);
 
     public NoteHistoryVO getNoteHistory(NoteHistoryQueryParam noteHistoryQueryParam);
+
+    /**
+     * 按操作日志id查询历史版本
+     *
+     * <p>先按 operationId 定位操作日志取 noteId，再查快照。操作日志不存在时抛
+     * {@code UserParamException("历史版本不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND)}，
+     * 而不是让调用方对 null 取 noteId 触发空指针（那是 500）。</p>
+     *
+     * @param operationId 操作日志id
+     * @return 历史版本内容
+     */
+    public NoteHistoryVO getNoteHistoryByOperationId(Long operationId);
 }

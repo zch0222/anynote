@@ -18,11 +18,13 @@ import com.anynote.system.mapper.SysUserMapper;
 import com.anynote.system.api.model.bo.SysUserQueryParam;
 import com.anynote.system.api.model.dto.CreateUserDTO;
 import com.anynote.system.model.dto.ResetPasswordDTO;
+import com.anynote.system.model.dto.UpdateMyProfileDTO;
 import com.anynote.system.service.SysOrganizationService;
 import com.anynote.system.service.SysPermissionService;
 import com.anynote.system.service.SysRoleService;
 import com.anynote.system.service.SysUserService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -233,6 +235,29 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public SysUser getMyUserInfo() {
         LoginUser loginUser = tokenUtil.getLoginUser();
         return this.getSysUserInfoById(loginUser.getSysUser().getId());
+    }
+
+    /**
+     * 当前登录用户更新自己的资料。
+     *
+     * <p>用 {@link LambdaUpdateWrapper} 显式 set 四个白名单字段，避免 {@code updateById}
+     * 把请求里没打算改的列（密码、状态等）一起写进去。{@code where} 只锚当前登录用户，
+     * 且请求体里没有 userId，改别人资料无从下手。</p>
+     */
+    @Override
+    public SysUser updateMyProfile(UpdateMyProfileDTO updateMyProfileDTO) {
+        LoginUser loginUser = tokenUtil.getLoginUser();
+        Long userId = loginUser.getSysUser().getId();
+        this.update(new LambdaUpdateWrapper<SysUser>()
+                .set(SysUser::getNickname, updateMyProfileDTO.getNickname())
+                .set(SysUser::getSex, updateMyProfileDTO.getSex())
+                // null 与空串都写成空串：sys_user.email / phone_number 的列默认值就是空串
+                .set(SysUser::getEmail, StringUtils.nvl(updateMyProfileDTO.getEmail(), ""))
+                .set(SysUser::getPhoneNumber, StringUtils.nvl(updateMyProfileDTO.getPhoneNumber(), ""))
+                .set(SysUser::getUpdateBy, userId)
+                .set(SysUser::getUpdateTime, new Date())
+                .eq(SysUser::getId, userId));
+        return this.getMyUserInfo();
     }
 
     @Override

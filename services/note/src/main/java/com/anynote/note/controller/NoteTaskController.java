@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
@@ -87,5 +89,20 @@ public class NoteTaskController {
         NoteTaskChartsQueryParam noteTaskChartsQueryParam = new NoteTaskChartsQueryParam();
         noteTaskChartsQueryParam.setNoteTaskId(id);
         return ResUtil.success(noteTaskService.getNoteTaskChartsData(noteTaskChartsQueryParam));
+    }
+
+    /**
+     * 成员侧获取单个任务
+     * @param id 笔记任务id
+     * @return 与任务列表行同结构的任务信息
+     */
+    @Operation(summary = "获取单个笔记任务", description = "成员侧单个任务查询，权限为该任务所在知识库 READ；不在任务成员里时返回无权限")
+    @GetMapping("{id}")
+    public ResData<MemberNoteTaskDTO> getMemberNoteTaskById(
+            @Parameter(description = "笔记任务id", required = true)
+            @NotNull(message = "任务id不能为空") @PathVariable("id") Long id) {
+        return ResUtil.success(noteTaskService.getMemberNoteTaskById(NoteTaskQueryParam.NoteTaskQueryParamBuilder()
+                .noteTaskId(id)
+                .build()));
     }
 }

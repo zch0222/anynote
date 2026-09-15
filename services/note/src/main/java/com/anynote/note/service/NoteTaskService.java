@@ -9,6 +9,7 @@ import com.anynote.note.model.bo.*;
 import com.anynote.note.api.model.vo.AdminNoteTaskVO;
 import com.anynote.note.model.dto.MemberNoteTaskDTO;
 import com.anynote.note.api.model.vo.NoteTaskChartsVO;
+import com.anynote.note.model.vo.NoteTaskEditHeatmapVO;
 import com.anynote.note.model.vo.NoteTaskHistoryVO;
 import com.anynote.note.model.vo.NoteTaskUserAnalyzeVO;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -80,4 +81,18 @@ public interface NoteTaskService extends IService<NoteTask> {
 
 
     public List<UserNoteTask> getTaskUsers(Long taskId);
+
+    /**
+     * 获取任务成员的编辑热力图（按天聚合、区间限定在任务时间窗口内）
+     * @param queryParam 任务id入参（权限切面据此校验 MANAGE）
+     * @return 任务时间窗口内的逐日编辑次数矩阵
+     */
+    public NoteTaskEditHeatmapVO getNoteTaskEditHeatmap(NoteTaskEditHeatmapQueryParam queryParam);
+
+    /**
+     * 成员侧获取单个任务（权限为任务所在知识库 READ，不在任务成员里时无权限）
+     * @param queryParam 任务id与知识库id入参
+     * @return 与任务列表行同结构的任务信息
+     */
+    public MemberNoteTaskDTO getMemberNoteTaskById(NoteTaskQueryParam queryParam);
 }
