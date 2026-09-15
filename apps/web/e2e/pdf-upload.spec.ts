@@ -83,15 +83,33 @@ test.describe("关键路径 5：Chat PDF 上传", () => {
     expect(uploaded).toBe(false);
   });
 
-  test("没选知识库时不上传，并提示先选知识库", async ({ page }) => {
+  test("没有知识库时上传按钮不可用，且不会发起上传", async ({ page }) => {
+    /*
+     * 这个分支只在**账号一个知识库都没有**时出现：页面会自动选中第一个库，
+     * 所以有库的环境里它永远不会触发（原用例因此每次都 `test.skip`，从不真正断言）。
+     * 把知识库列表打桩成空数组，才让这条用例每次都走它该走的分支。
+     */
+    await page.route("**/api/proxy/note/bases**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "00000", msg: "操作成功", data: [] }),
+      }),
+    );
+
     await page.goto("/ai/pdf");
     await expect(page.getByTestId("pdf-chat-page")).toBeVisible({ timeout: 30_000 });
 
-    // 页面默认可能已带上第一个知识库；只有确实未选中时这条断言才有意义
     const uploadButton = page.getByTestId("pdf-upload-button");
-    if (await uploadButton.isEnabled()) {
-      test.skip(true, "页面已自动选中知识库，本分支无法复现");
-    }
+    // 没有可选的库 → 按钮保持禁用（`disabled={!baseId}`）
     await expect(uploadButton).toBeDisabled();
+
+    // 而且真的不会发出上传请求：用例的第二半才是它存在的理由
+    let uploadCalled = false;
+    page.on("request", (req) => {
+      if (req.url().includes("/docs/pdfs") && req.method() === "POST") uploadCalled = true;
+    });
+    await page.waitForTimeout(800);
+    expect(uploadCalled, "没有知识库时不该发起上传").toBe(false);
   });
 });

@@ -34,7 +34,7 @@
 | `npx tsc --noEmit`（apps/web） | `src/` 与 `e2e/` **0 错误** |
 | `pnpm check`（Biome） | **No fixes applied**（临时 worktree 存在时扫 1143 个文件、清理后 604 个——差异是 `.worktrees/` 里那份副本） |
 | `pnpm --filter web bundle:budget` | **PASS**：桌面 300.4 / 310 KB、`/m/*` 250.0 / 250 KB、编辑器 14.1 / 250 KB |
-| `pnpm --filter web test:e2e`（真实栈） | **117 passed / 1 skipped / 0 failed**（chromium 77 + mobile 41，其中 1 条 skip），连跑两轮同一结果。此前三轮出现过 1–5 条偶发，成因已定位并修复，见下 |
+| `pnpm --filter web test:e2e`（真实栈） | **118 passed / 0 failed / 0 skipped**（chromium 78 + mobile 41）。此前三轮出现过 1–5 条偶发，两处根因均已定位并修复，见下 |
 | `node apps/web/scripts/ui-supplement-compare.mjs` | **30 场景 / 60 张真实浏览器截图**，全部有与画板的并排对比图；**横向溢出 0 处**；深色对浅色的平均亮度差 **209–235**（说明深色在各页真的生效，不是只改了根类名） |
 | `docker exec mysql < infra/sql/migrations/…` | 列已补，`GET /moocs/{id}` 由 B0001 转 `00000` |
 | `pnpm openapi:check` | 无漂移（后端分支上跑的，baseline 已入库） |
@@ -200,22 +200,30 @@
 
 ## 未完成项与偏差（如实记录）
 
-1. **E2E 偶发失败已定位并修复主要成因，连跑两轮全绿。**
+1. **E2E 偶发失败已定位并修复两处根因，全量跑不再有 skip。**
    中间三轮出现过 `116/1 failed`、`116/1 failed`、`112/5 failed`，失败用例每轮不同、单跑必过。
-   追下去是两类原因，第一类是**真实竞态**而非用例噪声：
+   追下去都是**真实竞态**，不是用例噪声：
 
-   - `loading-system.spec.ts` 的「纸面宽度」：它打完字立刻 `goto` 回列表，
+   - `loading-system.spec.ts` 的「纸面宽度」：打完字立刻 `goto` 回列表，
      而列表来自 `n_note_operation_log`——那条日志由 RocketMQ 消费者在内容 diff 非空时
      **异步**写入。消费者没跑完就回列表，读到的自然是空的。改为等编辑器保存徽标
      落到 `[data-status="saved"]`，再轮询确认这一行真的出现；连跑 4 次全绿。
-   - 其余（`cli-authorize` 回跳、`ai-stream` 流式切页）是**共享固定测试数据**导致的
-     用例间干扰：多个 spec 用同一套写死的知识库名（`E2E 知识库` / `E2E 加载体系知识库`），
-     多轮运行会累积数据；**本轮没有改成各自的临时库**，因为那要动 5 个既有 spec
-     的造数方式、超出本次授权范围（本次只授权 apps/web 的 UI 补稿改造）。
+   - `pdf-upload.spec.ts` 的「没选知识库时不上传」：按钮是 `disabled={!baseId}`，
+     而 `baseId` 在知识库列表回来之前一直是空的。用例在列表到达**之前**读了一次
+     `isEnabled()`（读到 false），紧接着 effect 自动选中第一个库、按钮变 enabled，
+     最后那句 `toBeDisabled()` 就红了。
+     更值得记的是它**原来的写法是假绿**：有库的环境里它每次都走
+     `test.skip("页面已自动选中知识库")`，**从不真正断言**。现改为把知识库列表
+     打桩成空数组，让它每次都走该走的分支，并额外断言"没有发出上传请求"。
+     结果从 `117 passed + 1 skipped` 变成 **`118 passed + 0 skipped`**。
 
    补充一条实测到的坑：**对比截图脚本与 E2E 全量跑不能并发**。
    两者共用同一个 e2e 临时账号，并发时 `pdf-upload` 的 2 条会红
-   （单跑 3 次全绿）。验收时请串行执行。
+   （单独跑 3 次全绿）。验收时请串行执行。
+
+   仍存留的干扰源：多个 spec 共用写死的知识库名（`E2E 知识库` / `E2E 加载体系知识库`），
+   多轮运行会累积数据。**本轮没有改成各自的临时库**——那要动 5 个既有 spec 的造数方式，
+   超出本次授权范围（本次只授权 `apps/web` 的 UI 补稿改造）。
 
 2. **`notes-image-upload` 的 3 条曾长期失败，本轮定位到是环境配置而非代码。**
    `sys_config.MIN_IO_CONFIG` 的 `accessKey`/`secretKey` 是空串
