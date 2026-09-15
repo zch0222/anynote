@@ -692,6 +692,7 @@ M6 开工前先按 §2 的强制配合点补齐后端契约，变更提案与核
 3. **课程条目权限规则缺失**：`GET /moocs/items/{id}` 返回「获取SysPermissionRule：n:mooc:read失败」——系统权限规则表无 `n:mooc:read` 配置（数据问题）。
 4. **PDF 上传后端链路失败**：`POST /docs/pdfs` 经 note→file Feign multipart 转存触发 fallback（「上传文档失败」），note 日志中根因被 gson 序列化 Throwable 的二次异常掩盖。与 M5.10 的图片直传 `@InnerAuth` 同族——**上传/解析链路的后端配合点未达成**。
 5. **Settings 资料保存无可用对外端点**：`PUT /system/user/{userId}` 标注 `@InnerAuth`（内部端点），浏览器经代理调用被 A0301 拒绝；auth 域无资料更新端点。改密码（auth `/resetPassword`）不受影响。需后端提供对外资料更新端点或去除该端点 InnerAuth。
+   - **✅ 2026-09-16 关闭（M12 / B-3）**：后端新增对外端点 `PUT /user/mine/profile`（从登录态取用户 id、只收白名单四字段、空串表示清空），前端 `useUpdateMyProfileMutation` 改调它。D-12 资料保存与 M-11 移动端设置分节因此可用。契约见 `.claude/openspec/changes/2026-09-16-system-update-my-profile.md`。
 
 **前端侧修正（本轮发现并修复）**：
 
