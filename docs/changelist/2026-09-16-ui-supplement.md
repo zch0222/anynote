@@ -9,16 +9,16 @@
 
 | 项 | 数值 |
 |----|------|
-| 文件总数 | **360**（新增 194 / 修改 156 / 删除 10，含 `docs/ui/` 的 73 张画板与参考图） |
-| 代码行数 | **+26533 / −2460**；**排除 `docs/ui/` 的二进制大图后是 287 文件 / +23430 / −2460** |
-| 前端（`apps/web/src` + `e2e` + `scripts`） | 249 文件，+21130 / −2426 |
+| 文件总数 | **362**（新增 194 / 修改 158 / 删除 10，含 `docs/ui/` 的 71 张画板与参考图） |
+| 代码行数 | **+26804 / −2467**；**排除 `docs/ui/` 的二进制大图后是 289 文件 / +23701 / −2467** |
+| 前端（`apps/web/src` + `e2e` + `scripts`） | 251 文件，+21365 / −2431 |
 | 后端（`services` + `openapi`） | 25 文件，+1560 / −16 |
 | 新增测试文件 | 前端 **32** 个；后端 **5** 个测试类 |
 
 按目录分布（`git diff --name-only origin/dev...HEAD | cut -d/ -f1-3 | sort | uniq -c`）：
 
 ```
-211 apps/web/src          34 apps/web/e2e          17 services/note/src
+211 apps/web/src          36 apps/web/e2e          17 services/note/src
  71 docs/ui/ui-supplement  6 services/system/src     4 .claude/openspec/changes
   4 apps/web/scripts       2 openapi/specs           2 apps/cli/src
   2 docs/ui                1 infra/sql/migrations    1 docs/refactor
