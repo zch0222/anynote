@@ -17,18 +17,23 @@
   },
   "files": {
     "ignore": [
-      "node_modules",
       ".next",
-      "dist",
       ".turbo",
-      "packages/api-client/src",
+      "apps/cli/src/bundled.ts",
       "apps/web-legacy",
       "apps/web/.next",
+      "apps/web/e2e/.output",
+      "apps/web/e2e/.ui-capture",
+      "apps/web/e2e/.ui-supplement",
+      "apps/web/playwright-report",
+      "apps/web/public/pdf.worker.min.mjs",
       "apps/web/src/components/ui",
       "apps/web/src/styles/katex.css",
-      "apps/web/public/pdf.worker.min.mjs",
+      "apps/web/test-results",
+      "dist",
+      "node_modules",
       "openapi/specs",
-      "apps/cli/src/bundled.ts"
+      "packages/api-client/src"
     ]
   }
 }
