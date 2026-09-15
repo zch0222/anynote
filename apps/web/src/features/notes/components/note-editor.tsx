@@ -6,6 +6,7 @@ import type { AiContinueFn } from "@/components/editor/presets/types";
 import { EditorSkeleton } from "@/components/loading/skeletons";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
 import { SaveStatusBadge } from "@/components/note/save-status";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { noteHistoryHref } from "@/components/layout/navigation";
 import { ensureLeadingHeading, stripLeadingHeading } from "@/features/notes/lib/leading-heading";
 import { DEFAULT_PAGE_SIZE, toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
@@ -27,7 +29,7 @@ import { useNotesQuery } from "@/features/notes/use-notes";
 import { useSaveNote } from "@/features/notes/use-save-note";
 import { continueWriting } from "@/lib/ai/sse";
 import { formatRelativeTime } from "@/lib/format-time";
-import { MoreHorizontal, Trash2 } from "lucide-react";
+import { Clock, MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -66,6 +68,8 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   const [initialContent, setInitialContent] = useState<string | null>(null);
   const loadedNoteId = useRef<number | null>(null);
   const contentRef = useRef("");
+  /** 删除确认框（D-04 ④）：取代 `window.confirm`。 */
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const save = useSaveNote({ noteId, initialVersion: toVersion(note.data?.updateTime) });
   const { scheduleSave, flush, resolveConflict, status, lastSavedAt, conflict } = save;
@@ -112,17 +116,30 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   );
 
   async function handleDelete() {
-    if (!window.confirm("删除后无法恢复，确认删除这篇笔记？")) return;
     try {
       await remove.mutateAsync(noteId);
+      setDeleteOpen(false);
       toast.success("笔记已删除");
       // 回知识库的笔记**列表**。不能写 `/notes/<baseId>/notes`：那条地址会落到
       // `[baseId]/[noteId]` 上、把字面量 "notes" 当成 noteId，然后 notFound()。
       router.push(`/notes/${baseId}`);
     } catch (error) {
+      // 失败时**不关确认框**：关掉的话错误一飘就没了，用户看不到原因
       toast.error(error instanceof Error ? error.message : "删除失败，请稍后重试");
     }
   }
+
+  /**
+   * 打开历史版本页（D-16 图例 1）。
+   *
+   * 跳转前先 `flush()`：历史页读到的是**服务端**的快照，而这一秒还在 debounce 里
+   * 的改动尚未落盘。不 flush 的话，用户点进历史看到的"当前版本"是上一版，
+   * 默认选中的"上一个版本"更是错位一格——他会以为自己的改动丢了。
+   */
+  const handleOpenHistory = useCallback(async () => {
+    await flush();
+    router.push(noteHistoryHref(baseId, noteId));
+  }, [baseId, flush, noteId, router]);
 
   const handleMove = useCallback(
     async (input: { noteId: number; knowledgeBaseId: number }) => {
@@ -172,6 +189,17 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuGroup>
+                {/*
+                  「历史版本」是菜单**第一项**（D-16 图例 1，已拍板）。
+                  它在「移动到知识库」那组之前、单独成组：历史是"看"，
+                  下面那组是"改归属 / 删"，两者不是一类操作，
+                  混在一组里会让"删除"紧挨着最常用的入口，误点代价太高。
+                */}
+                <DropdownMenuItem onClick={() => void handleOpenHistory()}>
+                  <Clock className="size-4" aria-hidden="true" />
+                  历史版本
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuLabel>移动到知识库</DropdownMenuLabel>
                 {(bases.data ?? [])
                   .filter((base) => base.id !== baseId)
@@ -184,7 +212,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                     </DropdownMenuItem>
                   ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={() => void handleDelete()}>
+                <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
                   <Trash2 className="size-4" aria-hidden="true" />
                   删除笔记
                 </DropdownMenuItem>
@@ -247,6 +275,23 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
       </section>
 
       <ConflictDialog conflict={conflict} onResolve={(choice) => void resolveConflict(choice)} />
+
+      {/*
+        删除确认（D-04 ④）。取代原来的 `window.confirm`：原生确认框在深色下是
+        系统灰、无法用语义 Token 上色、还会阻塞主线程。文案沿用图例：
+        标题给出对象，说明给出后果，按钮是明确动词「删除」而不是「确定」。
+      */}
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="删除这篇笔记？"
+        description="删除后无法恢复。"
+        confirmLabel="删除"
+        pendingLabel="删除中…"
+        tone="danger"
+        pending={remove.isPending}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

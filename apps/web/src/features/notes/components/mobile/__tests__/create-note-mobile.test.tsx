@@ -104,12 +104,33 @@ describe("MobileCreateNote", () => {
     expect(createNote.mutateAsync).not.toHaveBeenCalled();
   });
 
-  it("没有知识库时引导先建库", () => {
+  it("没有知识库时引导先建库（「新建知识库」行始终在）", () => {
     search.current = "";
     mockBases({ isPending: false, isError: false, data: [] });
     renderWithProviders(<MobileCreateNote />);
 
-    expect(screen.getByText("还没有知识库")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /新建知识库/ })).toBeInTheDocument();
+    expect(screen.getByText(/还没有知识库/)).toBeInTheDocument();
+    expect(screen.getByTestId("create-note-new-base")).toBeInTheDocument();
+    // 没有库可选时主按钮禁用，避免提交一个必然失败的创建
+    expect(screen.getByRole("button", { name: "创建笔记" })).toBeDisabled();
+  });
+
+  it("?title= 预填标题（M-10 的「用「{q}」新建笔记」带过来）", () => {
+    search.current = "title=周报模板";
+    mockBases({ isPending: false, isError: false, data: BASES });
+    renderWithProviders(<MobileCreateNote />);
+
+    expect(screen.getByLabelText("标题")).toHaveValue("周报模板");
+    expect(screen.getByText("4 / 15")).toBeInTheDocument();
+  });
+
+  it("已选库行是 accent + ✓，库行左侧用渐变方块", () => {
+    search.current = "baseId=5";
+    mockBases({ isPending: false, isError: false, data: BASES });
+    renderWithProviders(<MobileCreateNote />);
+
+    const selected = screen.getByTestId("create-note-base-5");
+    expect(selected.className).toContain("text-accent");
+    expect(selected.querySelector(".kb-cover")).toBeTruthy();
   });
 });

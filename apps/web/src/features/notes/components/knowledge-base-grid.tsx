@@ -1,13 +1,20 @@
 "use client";
 
 import { CardGridSkeleton } from "@/components/loading/skeletons";
+import { EmptyState, QueryError } from "@/components/shared/states";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { Library } from "lucide-react";
 import Link from "next/link";
 import { CreateBaseDialog } from "./create-base-dialog";
 
-/** `/notes` 首屏：把用户能访问的知识库铺成卡片，点进去看这个库下的笔记。 */
+/**
+ * 知识库卡片网格。
+ *
+ * **当前没有路由引用它**（`/notes` 已改用 `KnowledgeBaseGallery`）。保留在这里是因为
+ * 它仍是 12.0.3 清单里的一处错误态；等 12.1 路由迁移收口后一并判定去留，
+ * 这里只做错误态与空态的替换，不动版式。
+ */
 export function KnowledgeBaseGrid() {
   const bases = useKnowledgeBasesQuery();
 
@@ -24,15 +31,14 @@ export function KnowledgeBaseGrid() {
       {bases.isPending ? (
         <CardGridSkeleton count={3} cardClassName="h-36" />
       ) : bases.isError ? (
-        <p className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-sm text-danger">
-          知识库加载失败：{bases.error.message}
-        </p>
+        <QueryError
+          object="知识库"
+          error={bases.error}
+          onRetry={() => void bases.refetch()}
+          retrying={bases.isFetching}
+        />
       ) : bases.data.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center">
-          <Library className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
-          <p className="mt-3 text-sm font-medium">还没有知识库</p>
-          <p className="mt-1 text-sm text-label-secondary">先建一个知识库，笔记会归到它下面。</p>
-        </div>
+        <EmptyState icon={Library} title="还没有知识库" hint="先建一个知识库，笔记会归到它下面。" />
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {bases.data.map((base) => (

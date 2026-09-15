@@ -86,3 +86,59 @@ export const createNoteSchema = z.object({
   title: z.string().trim().min(3, "标题至少 3 个字符").max(15, "标题最多 15 个字符"),
 });
 export type CreateNoteInput = z.infer<typeof createNoteSchema>;
+
+/* ------------------------------------------------------------------ *
+ * 笔记历史版本（D-16）。两个端点字段很少，只取画板用到的。
+ * ------------------------------------------------------------------ */
+
+/** 历史版本列表项（`GET /notes/historyList`）。 */
+export const noteHistoryItemSchema = z.object({
+  /** 列表与内容两端点的关联键：点一条版本拿它去请求 `GET /notes/history`。 */
+  operationLogId: z.number(),
+  operationTime: z.string().nullish(),
+  updaterId: z.number().nullish(),
+  updaterNickname: z.string().nullish(),
+  updaterUsername: z.string().nullish(),
+});
+export type NoteHistoryItem = z.infer<typeof noteHistoryItemSchema>;
+
+/**
+ * 单个历史版本的内容（`GET /notes/history`）。
+ *
+ * `noteEditList` 是后端逐次编辑留下的原文 / 改后片段。本期「本次改动」
+ * 按 `diffLines` 做**行级**比较（§1.4 第 4 条），所以只解析不渲染；
+ * 留着它是为了下一期做行内词级高亮时不必再回来改 schema。
+ */
+export const noteHistoryDetailSchema = z.object({
+  noteHistoryId: z.number().nullish(),
+  noteId: z.number().nullish(),
+  title: z.string().nullish(),
+  content: z.string().nullish(),
+  historyTime: z.string().nullish(),
+  createBy: z.number().nullish(),
+  noteEditList: z
+    .array(
+      z.object({
+        editLogId: z.number().nullish(),
+        originalText: z.string().nullish(),
+        revisedText: z.string().nullish(),
+        changeType: z.number().nullish(),
+      }),
+    )
+    .nullish(),
+});
+export type NoteHistoryDetail = z.infer<typeof noteHistoryDetailSchema>;
+
+/**
+ * 版本行的显示名：昵称优先，没有昵称的账号（导入的常见）退回用户名。
+ *
+ * 参数写成 `?: string | null | undefined`：`exactOptionalPropertyTypes` 下
+ * `z.string().nullish()` 推出来的是 `string | null | undefined`，而调用方传的是
+ * 整个 `NoteHistoryItem`。别处沿用同一写法。
+ */
+export function historyUpdaterName(item: {
+  updaterNickname?: string | null | undefined;
+  updaterUsername?: string | null | undefined;
+}): string {
+  return item.updaterNickname?.trim() || item.updaterUsername?.trim() || "未知用户";
+}

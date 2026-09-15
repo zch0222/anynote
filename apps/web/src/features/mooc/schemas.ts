@@ -13,6 +13,21 @@ export const moocSchema = z.object({
 });
 export type Mooc = z.infer<typeof moocSchema>;
 
+/**
+ * 课程详情（MoocVO 白名单）。
+ *
+ * `knowledgeBaseId` 是 D-06 的关键字段：页头的「‹ 慕课」要回到本库的慕课 Tab，
+ * 旧地址 `/mooc/:id` 的重定向也只能从这里推出知识库 id。
+ * `moocKnowledgeBaseName` 供页头/面包屑显示库名。
+ */
+export const moocDetailSchema = moocSchema.extend({
+  cover: z.string().nullish(),
+  moocKnowledgeBaseName: z.string().nullish(),
+  creatorUsername: z.string().nullish(),
+  userPermissions: z.number().nullish(),
+});
+export type MoocDetail = z.infer<typeof moocDetailSchema>;
+
 /** 课程条目（MoocItemListVO）：moocItemType 0 章节 / 1 视频 / 2 文档。 */
 export const moocItemSchema = z.object({
   id: z.number(),

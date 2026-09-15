@@ -172,6 +172,22 @@ describe("MobileNoteEditor", () => {
     expect(router.push).toHaveBeenCalledWith("/m/notes/5/7");
   });
 
+  it("动作表第一项是「历史版本」，先 flush 再跳", async () => {
+    save.flush.mockClear();
+    router.push.mockClear();
+    mockNote(LOADED);
+    renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+    fireEvent.click(screen.getByTestId("mobile-note-actions"));
+    const entries = screen.getAllByRole("button").filter((node) => node.textContent === "历史版本");
+    expect(entries).toHaveLength(1);
+
+    fireEvent.click(entries[0] as HTMLElement);
+    // 先落盘再跳：否则刚敲下的那几秒改动不会出现在历史列表里
+    await waitFor(() => expect(save.flush).toHaveBeenCalled());
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/m/notes/3/7/history"));
+  });
+
   it("删除需要二次确认，确认后回到该知识库的列表", async () => {
     mockNote(LOADED);
     renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);

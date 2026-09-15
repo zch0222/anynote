@@ -1,8 +1,10 @@
 "use client";
 
 import { CardGridSkeleton } from "@/components/loading/skeletons";
+import { EmptyState, QueryError } from "@/components/shared/states";
 import { Segmented } from "@/components/ui/segmented";
 import { useMe } from "@/features/auth/use-me";
+import { type BaseScopeSource, selectBases } from "@/features/notes/lib/base-scope";
 import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import {
   type BaseScope,
@@ -25,43 +27,12 @@ import { CreateBaseDialog } from "./create-base-dialog";
 /** 画廊只铺一屏放得下的量；再多交给搜索。 */
 const GALLERY_LIMIT = 12;
 
-export type BaseScopeSource = {
-  /** `/bases`：我参与的普通知识库。 */
-  mine: readonly KnowledgeBase[];
-  /** `/bases/managerList`：我管理的普通知识库。 */
-  managed: readonly KnowledgeBase[];
-  /** `/bases/organizations`：我所属组织的组织知识库。 */
-  organization: readonly KnowledgeBase[];
-};
-
 /**
- * 分段筛选。
- *
- * 三个分段对应**三个不同口径的后端查询**，不是同一份数据的本地切片：
- * 普通知识库与组织知识库在 `n_knowledge_base.type` 上就是两棵树，
- * 所以「全部」= 普通 ∪ 组织，而不是"不过滤"。
- *
- * 去重按 id：组织库也可能出现在「我管理的」里（我是该库管理员又是组织成员），
- * 同一张卡不能出现两次。
+ * 分段筛选与它的类型已抽到 `lib/base-scope.ts`（移动端 `/m/notes` 也要用它，
+ * 而那份文件顶层引着整棵画框图）。这里**再导出**，桌面的调用方与测试
+ * import 路径不用改；真相只有 lib 里那一份。
  */
-export function selectBases(scope: BaseScope, source: BaseScopeSource): KnowledgeBase[] {
-  const pools =
-    scope === "all"
-      ? [source.mine, source.organization]
-      : scope === "mine"
-        ? [source.managed]
-        : [source.organization];
-  const seen = new Set<number>();
-  const result: KnowledgeBase[] = [];
-  for (const pool of pools) {
-    for (const base of pool) {
-      if (seen.has(base.id)) continue;
-      seen.add(base.id);
-      result.push(base);
-    }
-  }
-  return result;
-}
+export { type BaseScopeSource, selectBases } from "@/features/notes/lib/base-scope";
 
 /**
  * `/notes`：知识库画廊。
@@ -142,12 +113,12 @@ export function KnowledgeBaseGallery({ openCreate = false }: { openCreate?: bool
       </header>
 
       {failed ? (
-        <p
-          role="alert"
-          className="rounded-lg border border-danger/30 bg-danger/5 p-6 text-footnote text-danger"
-        >
-          知识库加载失败：{failed.error.message}
-        </p>
+        <QueryError
+          object="知识库"
+          error={failed.error}
+          onRetry={() => void failed.refetch()}
+          retrying={failed.isFetching}
+        />
       ) : loading ? (
         <CardGridSkeleton />
       ) : visible.length === 0 ? (
@@ -243,15 +214,11 @@ function CreateBaseCard() {
 function EmptyScope({ scope }: { scope: BaseScope }) {
   const label = baseScopeOptions.find((option) => option.value === scope)?.label ?? "";
   return (
-    <div className="rounded-lg border border-dashed border-separator p-10 text-center">
-      <Library className="mx-auto size-8 text-label-tertiary" aria-hidden="true" />
-      <p className="mt-3 text-headline text-label">
-        {scope === "all" ? "还没有知识库" : `没有「${label}」范围的知识库`}
-      </p>
-      <p className="mt-1 text-footnote text-label-secondary">
-        先建一个知识库，笔记、慕课与任务都会归到它下面。
-      </p>
-    </div>
+    <EmptyState
+      icon={Library}
+      title={scope === "all" ? "还没有知识库" : `没有「${label}」范围的知识库`}
+      hint="先建一个知识库，笔记、慕课与任务都会归到它下面。"
+    />
   );
 }
 

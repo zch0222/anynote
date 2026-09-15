@@ -3,6 +3,7 @@
 import { unwrapEnvelope } from "@/lib/api/errors";
 import { noteApi } from "@/lib/api/openapi";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import { noteQueryKeys } from "./query-keys";
 import {
   ALL_BASE_PERMISSIONS,
@@ -113,21 +114,53 @@ const baseMemberPageSchema = pageBeanSchema(baseMemberSchema);
 /** 知识库成员列表（设计稿「成员」Tab）。用户名传空串表示不按用户名过滤。 */
 export function useKnowledgeBaseMembersQuery(
   baseId: number,
-  { page = 1, pageSize = DEFAULT_PAGE_SIZE } = {},
+  { username = "", page = 1, pageSize = DEFAULT_PAGE_SIZE } = {},
 ) {
   return useQuery({
-    queryKey: noteQueryKeys.baseMembers(baseId),
+    queryKey: noteQueryKeys.baseMembers(baseId, username),
     enabled: Number.isFinite(baseId) && baseId > 0,
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<{ rows: KnowledgeBaseMember[]; total: number }> => {
       const { response } = await noteApi.GET("/bases/users", {
-        params: { query: { knowledgeBaseId: baseId, page, pageSize, username: "" } },
+        params: { query: { knowledgeBaseId: baseId, page, pageSize, username } },
         parseAs: "stream",
         signal: AbortSignal.timeout(15_000),
       });
       const result = await unwrapEnvelope(response, baseMemberPageSchema.parse);
       return { rows: result.rows, total: result.total ?? result.rows.length };
     },
+  });
+}
+
+/**
+ * 移除知识库成员（D-09 图例 16）。
+ *
+ * 后端禁止移除自己，前端则在「自己那行」干脆不出菜单——不靠后端兜底是因为
+ * "点了才被拒绝"对用户是白跑一趟。
+ *
+ * 失效的是**整棵成员子树**（`baseMembersRoot`）而不是当前关键词下的那一条：
+ * 同一个用户可能同时出现在多个搜索结果里，只清当前 key 会让改完关键词再搜时
+ * 又看到已经移除的人。
+ */
+export function useRemoveMemberMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      knowledgeBaseId,
+    }: {
+      userId: number;
+      knowledgeBaseId: number;
+    }): Promise<void> => {
+      const { response } = await noteApi.DELETE("/bases/users", {
+        params: { query: { userId, knowledgeBaseId } },
+        parseAs: "stream",
+        signal: AbortSignal.timeout(15_000),
+      });
+      await unwrapEnvelope(response, z.unknown().parse);
+    },
+    retry: false,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: noteQueryKeys.baseMembersRoot }),
   });
 }
 

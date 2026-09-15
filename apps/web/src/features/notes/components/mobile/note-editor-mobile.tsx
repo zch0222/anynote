@@ -18,7 +18,8 @@ import { useNoteTitle } from "@/features/notes/use-note-title";
 import { useSaveNote } from "@/features/notes/use-save-note";
 import { continueWriting } from "@/lib/ai/sse";
 import { formatRelativeTime } from "@/lib/format-time";
-import { FolderInput, MoreHorizontal, Trash2 } from "lucide-react";
+import { mobileNoteHistoryHref } from "@/lib/mobile/hrefs";
+import { FolderInput, History, MoreHorizontal, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -108,6 +109,22 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
     [flush, move, noteId, router],
   );
 
+  /**
+   * 进历史版本页前先 `flush()`。
+   *
+   * 自动保存是防抖的：刚敲下的那几秒还在本地。不先落盘，历史列表里就看不到
+   * 这次改动，而用户点「历史版本」的动机十有八九正是"我刚改了什么"。
+   */
+  const handleHistory = useCallback(async () => {
+    try {
+      await flush();
+    } catch {
+      // flush 失败不拦住跳转：历史页自己能拉到服务端的最新列表，
+      // 用户看到的是"这次改动还没进版本"，比一个跳不过去的按钮强
+    }
+    router.push(mobileNoteHistoryHref(baseId, noteId));
+  }, [baseId, flush, noteId, router]);
+
   const handleDelete = useCallback(async () => {
     try {
       await remove.mutateAsync(noteId);
@@ -145,8 +162,10 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
           open={actionsOpen}
           onOpenChange={setActionsOpen}
           title={title || "未命名笔记"}
-          description="移动到别的知识库，或删除这篇笔记。"
+          description="查看历史版本、移动到别的知识库，或删除这篇笔记。"
           actions={[
+            // M-13 图例 1：「历史版本」是动作表**第一项**
+            { label: "历史版本", icon: History, onSelect: () => void handleHistory() },
             ...moveActions,
             {
               label: "删除笔记",
@@ -161,7 +180,7 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
               type="button"
               aria-label="笔记操作"
               data-testid="mobile-note-actions"
-              className="flex size-10 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-grouped focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex size-10 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-fill-hover focus-visible:ring-2 focus-visible:ring-ring"
             >
               <MoreHorizontal className="size-5" aria-hidden="true" />
             </button>

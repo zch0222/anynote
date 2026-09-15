@@ -1,5 +1,5 @@
 import { renderWithProviders } from "@/test/render";
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { KnowledgeBaseGallery } from "../knowledge-base-gallery";
 
@@ -12,10 +12,12 @@ const bases = vi.hoisted(() => ({
   data: [
     { id: 11, knowledgeBaseName: "产品设计知识库", detail: "128 篇笔记" },
     { id: 22, knowledgeBaseName: "算法与工程实践", detail: "" },
-  ],
+  ] as { id: number; knowledgeBaseName: string; detail: string }[],
   isPending: false,
   isError: false,
+  isFetching: false,
   error: null as Error | null,
+  refetch: vi.fn(),
 }));
 
 vi.mock("@/features/notes/use-knowledge-bases", () => ({
@@ -89,5 +91,49 @@ describe("知识库画廊版式", () => {
       screen.getByText("先建一个知识库，笔记、慕课与任务都会归到它下面。"),
     ).toBeInTheDocument();
     bases.data = original;
+  });
+
+  it("出错 → 点重试 → 重新请求（12.0.3：24 处错误态都必须能重试）", async () => {
+    bases.isError = true;
+    bases.error = new Error("网络异常");
+    renderWithProviders(<KnowledgeBaseGallery />);
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("知识库加载失败：网络异常");
+    // 出错时不该同时给出"还没有知识库"的空态——那会把失败说成没数据
+    expect(screen.queryByText("先建一个知识库，笔记、慕课与任务都会归到它下面。")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(bases.refetch).toHaveBeenCalledTimes(1);
+
+    bases.isError = false;
+    bases.error = null;
+  });
+
+  it("重试中按钮禁用并转圈，避免重复发请求", () => {
+    bases.isError = true;
+    bases.error = new Error("网络异常");
+    bases.isFetching = true;
+    renderWithProviders(<KnowledgeBaseGallery />);
+
+    const button = screen.getByRole("button", { name: /重试中…/ });
+    expect(button).toBeDisabled();
+
+    bases.isError = false;
+    bases.error = null;
+    bases.isFetching = false;
+  });
+
+  it("实现细节不外泄：collab 字样被换成兜底文案", async () => {
+    bases.isError = true;
+    bases.error = new Error("请确认 collab 服务已启动");
+    renderWithProviders(<KnowledgeBaseGallery />);
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("知识库加载失败：服务暂时不可用，请稍后重试");
+    expect(alert).not.toHaveTextContent("collab");
+
+    bases.isError = false;
+    bases.error = null;
   });
 });

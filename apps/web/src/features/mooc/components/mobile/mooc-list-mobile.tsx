@@ -1,94 +1,84 @@
 "use client";
 
-import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { ListRowsSkeleton } from "@/components/loading/skeletons";
-import { Button } from "@/components/ui/button";
+import { EmptyState, QueryError } from "@/components/shared/states";
 import { useMoocsQuery } from "@/features/mooc/use-moocs";
-import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
-import { ChevronDown, GraduationCap, Library } from "lucide-react";
+import { MobileBaseHeader } from "@/features/notes/components/mobile/base-section-tabs";
+import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
+import { toUserMessage } from "@/lib/api/errors";
+import { formatRelativeTime } from "@/lib/format-time";
+import { GraduationCap } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 /**
- * `/m/mooc`：课程单列卡片。
+ * `/m/notes/[baseId]/mooc`：知识库内的「慕课」Tab（M-03）。
  *
- * 新建课程不进移动端：它要填封面、简介等一堆字段，在手机上是反体验，
- * 且课程通常由管理者在桌面端建。这里只做"看与学"。
+ * 这个路由原先渲染的是**跨库**课程列表（顶栏「课程」+ 知识库选择器，返回键回
+ * `/m/me`），从「笔记」切过来会以为跳出了当前知识库。现在收回知识库里：
+ * `baseId` 由路由给，选择器删掉，库头与 Tab 用 12.7.2 的公共头部。
+ *
+ * 版式从描边卡片堆换成行列表（92 高 + 1px 分隔线），与笔记列表同一种语言。
  */
-export function MobileMoocList() {
-  const bases = useKnowledgeBasesQuery();
-  const [baseId, setBaseId] = useState<number | null>(null);
-  const moocs = useMoocsQuery(baseId ?? 0);
-
-  const firstBase = bases.data?.[0];
-  useEffect(() => {
-    if (baseId === null && firstBase) {
-      setBaseId(firstBase.id);
-    }
-  }, [firstBase, baseId]);
-
-  const currentBase = bases.data?.find((base) => base.id === baseId);
+export function MobileMoocList({ baseId }: { baseId: number }) {
+  const base = useKnowledgeBaseQuery(baseId);
+  const moocs = useMoocsQuery(baseId);
+  const rows = moocs.data?.rows ?? [];
 
   return (
-    <MobileScreen
-      title="课程"
-      back="/m/me"
-      toolbar={
-        <MobileActionSheet
-          title="选择知识库"
-          description="课程挂在知识库下。"
-          actions={(bases.data ?? []).map((base) => ({
-            label: base.knowledgeBaseName ?? "未命名知识库",
-            onSelect: () => setBaseId(base.id),
-          }))}
-          trigger={
-            <Button variant="outline" className="min-h-10 w-full justify-between">
-              <span className="truncate">{currentBase?.knowledgeBaseName ?? "选择知识库"}</span>
-              <ChevronDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
-            </Button>
-          }
+    <MobileScreen title={base.data?.knowledgeBaseName?.trim() || "慕课"} back="/m/notes">
+      <div className="space-y-4 pb-4" data-testid="mobile-mooc-list">
+        <MobileBaseHeader
+          baseId={baseId}
+          current="mooc"
+          meta={moocs.data?.total ? `${moocs.data.total} 门课程` : undefined}
         />
-      }
-    >
-      <div className="space-y-3 p-4" data-testid="mobile-mooc-list">
-        {!baseId ? (
-          <div className="rounded-xl border border-dashed p-6 text-center">
-            <Library className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
-            <p className="mt-3 text-sm font-medium">
-              {bases.isPending ? "正在加载知识库" : "还没有可用的知识库"}
-            </p>
-            <p className="mt-1 text-sm text-label-secondary">
-              课程挂在知识库下，先到笔记页创建一个。
-            </p>
-          </div>
-        ) : moocs.isPending ? (
-          <ListRowsSkeleton count={2} />
-        ) : moocs.isError ? (
-          <p className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-            课程加载失败：{moocs.error.message}
-          </p>
-        ) : moocs.data.rows.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-6 text-center">
-            <GraduationCap className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
-            <p className="mt-3 text-sm font-medium">这个知识库还没有课程</p>
-            <p className="mt-1 text-sm text-label-secondary">课程在桌面版创建。</p>
-          </div>
-        ) : (
-          moocs.data.rows.map((mooc) => (
-            <Link
-              key={mooc.id}
-              href={`/m/mooc/${mooc.id}`}
-              className="block space-y-1 rounded-xl border bg-surface p-4 outline-none transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring"
-              data-testid={`mooc-card-${mooc.id}`}
-            >
-              <p className="truncate text-sm font-medium">{mooc.title ?? "未命名课程"}</p>
-              <p className="line-clamp-2 text-sm text-label-secondary">
-                {mooc.moocDescription?.trim() || "还没有课程简介"}
-              </p>
-            </Link>
-          ))
-        )}
+
+        <div className="px-4">
+          {moocs.isPending ? (
+            <ListRowsSkeleton count={3} />
+          ) : moocs.isError ? (
+            <QueryError
+              object="课程"
+              message={toUserMessage(moocs.error)}
+              onRetry={() => void moocs.refetch()}
+              retrying={moocs.isFetching}
+            />
+          ) : rows.length === 0 ? (
+            // 图例 M-03：空态只给文案，**不给按钮**——移动端不建课程（要填封面、简介）
+            <EmptyState
+              icon={GraduationCap}
+              title="这个知识库还没有课程"
+              hint="课程在桌面版创建。"
+            />
+          ) : (
+            <ul className="overflow-hidden rounded-lg bg-surface" data-testid="mobile-mooc-items">
+              {rows.map((mooc) => (
+                <li key={mooc.id} className="border-b border-separator last:border-b-0">
+                  <Link
+                    href={`/m/notes/${baseId}/mooc/${mooc.id}`}
+                    data-testid={`mobile-mooc-${mooc.id}`}
+                    className="flex min-h-[92px] flex-col justify-center gap-1 px-3 py-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    <span className="truncate text-headline font-semibold text-label">
+                      {mooc.title?.trim() || "未命名课程"}
+                    </span>
+                    {mooc.moocDescription?.trim() ? (
+                      <span className="line-clamp-2 text-footnote text-label-secondary">
+                        {mooc.moocDescription}
+                      </span>
+                    ) : null}
+                    {mooc.updateTime ? (
+                      <span className="tabular text-xs text-label-tertiary">
+                        更新于 {formatRelativeTime(mooc.updateTime)}
+                      </span>
+                    ) : null}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </MobileScreen>
   );

@@ -8,11 +8,13 @@ vi.mock("@/lib/api/openapi", () => ({
   aiApi: { GET: vi.fn() },
 }));
 
+import { aiQueryKeys } from "@/features/ai/query-keys";
 import { workflowDataSchema } from "@/features/ai/schemas";
 import {
   uploadPdf,
   useDeleteDocMutation,
   useDocsQuery,
+  useIndexDocMutation,
   useUploadPdfMutation,
 } from "@/features/ai/use-docs";
 import {
@@ -93,6 +95,35 @@ describe("use-docs", () => {
       expect.objectContaining({ params: { path: { id: 12 } } }),
     );
     expect(invalidateSpy).toHaveBeenCalled();
+  });
+
+  it("useIndexDocMutation：单个文档触发索引，成功后失效整个 docs 子树", async () => {
+    noteApiMock.POST.mockResolvedValueOnce(envelope("SUCCESS"));
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useIndexDocMutation(), {
+      wrapper: wrapperWith(queryClient),
+    });
+
+    await result.current.mutateAsync(42);
+
+    expect(noteApiMock.POST).toHaveBeenCalledExactlyOnceWith("/docs/{id}/index", {
+      params: { path: { id: 42 } },
+      parseAs: "stream",
+      signal: expect.any(AbortSignal),
+    });
+    // 索引是异步的，这里只投递；列表由「已索引」的轮询结果驱动失效
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: aiQueryKeys.docs });
+  });
+
+  it("useIndexDocMutation：业务失败进入错误态且不重试", async () => {
+    noteApiMock.POST.mockResolvedValueOnce(envelope(null, "A0301"));
+    const { result } = renderHook(() => useIndexDocMutation(), {
+      wrapper: wrapperWith(new QueryClient()),
+    });
+
+    await expect(result.current.mutateAsync(42)).rejects.toBeDefined();
+    expect(noteApiMock.POST).toHaveBeenCalledTimes(1);
   });
 
   it("删除文档成功后失效列表并移除详情", async () => {

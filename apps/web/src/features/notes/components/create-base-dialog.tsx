@@ -19,7 +19,7 @@ import { useCreateKnowledgeBaseMutation } from "@/features/notes/use-knowledge-b
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -70,6 +70,37 @@ export function CreateBaseDialog({
     defaultValues: { name: "", detail: "" },
   });
 
+  /**
+   * 关闭对话框时的统一善后（D-04 ②15 / ②16）。
+   *
+   * 三件事各有理由：
+   * 1. 清空表单——否则下次打开还留着上一次没提交的内容，看着像"已经建过了"。
+   * 2. 去掉地址栏里的 `?new=1`——它是**打开意图**而不是页面状态。留着的话
+   *    刷新页面会第二次弹出对话框（用户刚取消的事又冒出来），
+   *    分享出去的链接也会让别人一进来就被弹窗挡住。
+   *    用 `router.replace` 而不是 `push`：不希望在浏览器后退里多出一格。
+   * 3. 只在**确实带着这个参数**时替换，避免无谓的 history 操作。
+   *
+   * 参数来源是 `window.location.search` 而不是 `useSearchParams()`：
+   * 这个对话框同时被画廊、侧栏、新建笔记页与移动端列表页渲染，
+   * 而 `useSearchParams` 会让**每一个**调用方都需要 Suspense 边界，
+   * 否则整页退化成动态渲染。这里只在关闭那一刻读一次，用 location 更合适。
+   */
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      if (next) return;
+      form.reset();
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
+      if (!params.has("new")) return;
+      params.delete("new");
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [form, pathname, router],
+  );
+
   async function onSubmit(values: CreateBaseInput) {
     try {
       const baseId = await create.mutateAsync(values);
@@ -80,6 +111,7 @@ export function CreateBaseDialog({
       // 跳转要跟着**当前所在版式**走：在 `/m/*` 下创作却跳到 `/notes/:id`
       // 会把人从移动端布局扔进桌面布局（同一个知识库，两套壳）。
       if (redirectOnCreated) {
+        // 目标地址不带 query，`?new=1` 自然被丢掉——不会在新库里再弹一次
         router.push(isMobilePath(pathname) ? `/m/notes/${baseId}` : `/notes/${baseId}`);
       }
     } catch (error) {
@@ -88,13 +120,7 @@ export function CreateBaseDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) form.reset();
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       {/*
         `trigger` 是内容不是元素：`DialogTrigger` 自己渲染那个可点元素。
         自定义内容时换成 `<div>` 并把 `nativeButton` 关掉——Base UI 在
@@ -136,6 +162,10 @@ export function CreateBaseDialog({
             ) : null}
           </div>
           <DialogFooter>
+            {/* 「取消」在「创建」左边（D-04 ②16、②15 的 × 同效）：主按钮最右是页脚规格 */}
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+              取消
+            </Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "创建中…" : "创建"}
             </Button>

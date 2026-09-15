@@ -1,6 +1,7 @@
 "use client";
 
 import { CardGridSkeleton } from "@/components/loading/skeletons";
+import { QueryError } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,15 +13,19 @@ import {
 } from "@/features/notes/schemas";
 import { useCreateNoteMutation } from "@/features/notes/use-create-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
+import { toUserMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Library } from "lucide-react";
+import { Check, Library, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { CreateBaseDialog } from "./create-base-dialog";
+
+/** 与 `createNoteSchema` 的上限一致（后端 `NoteCreateDTO` 是 `@Size(max = 15)`）。 */
+const TITLE_MAX = 15;
 
 /**
  * `/notes/new`：命令面板与侧栏的「创建笔记」落到这里。
@@ -29,7 +34,9 @@ import { CreateBaseDialog } from "./create-base-dialog";
  * 而不是下拉框——选库是这一步唯一的决策，值得占视觉重心。
  *
  * 后端要求笔记必须归属一个知识库，所以还没有任何知识库时引导先建库，
- * 避免提交后才被后端打回。
+ * 避免提交后才被后端打回。**有库的时候也要留这个入口**（D-03 图例 17）：
+ * 用户是在"要给这篇笔记挑个家"的语境里才意识到缺一个库的，
+ * 把他赶回画廊页再回来，等于把刚想好的标题丢掉。
  */
 export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | undefined } = {}) {
   const router = useRouter();
@@ -45,6 +52,22 @@ export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | und
   // 传了 baseId 就用它；否则默认第一个库（用户多半只有一个）
   const effectiveBaseId = selectedBaseId ?? baseList[0]?.id ?? null;
 
+  // 计数徽标按**已输入字符数**（trim 之前）报，与用户眼里看到的一致；
+  // 超上限时转 danger，让"打不下了"在提交之前就可见（图例 19）
+  const titleLength = form.watch("title")?.length ?? 0;
+  const overLimit = titleLength > TITLE_MAX;
+
+  /**
+   * 取消的去向（图例 23）：带 `?baseId=` 进来时回那个库，否则回知识库列表。
+   *
+   * 从知识库内点「+」过来的人，取消时想去的是**刚才那个库**，
+   * 回到跨库的 `/notes` 等于让他重新找一遍。
+   */
+  const cancelHref =
+    typeof initialBaseId === "number" && initialBaseId > 0
+      ? `/notes/${initialBaseId}`
+      : "/notes";
+
   async function onSubmit(values: CreateNoteInput) {
     if (effectiveBaseId === null) {
       toast.error("请先选择一个知识库");
@@ -58,7 +81,7 @@ export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | und
       toast.success("笔记已创建");
       router.push(`/notes/${effectiveBaseId}/${noteId}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "创建失败，请稍后重试");
+      toast.error(toUserMessage(error));
     }
   }
 
@@ -75,9 +98,12 @@ export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | und
         // 卡片高 16 跟着 `BaseOption` 的 min-h-16 走，骨架与真卡片同高才不跳
         <CardGridSkeleton count={4} cardClassName="h-16" />
       ) : bases.isError ? (
-        <p role="alert" className="rounded-lg bg-danger/5 p-6 text-footnote text-danger">
-          知识库加载失败：{bases.error.message}
-        </p>
+        <QueryError
+          object="知识库"
+          message={toUserMessage(bases.error)}
+          onRetry={() => void bases.refetch()}
+          retrying={bases.isRefetching}
+        />
       ) : baseList.length === 0 ? (
         <div className="rounded-lg border border-dashed border-separator p-10 text-center">
           <Library className="mx-auto size-8 text-label-tertiary" aria-hidden="true" />
@@ -108,15 +134,35 @@ export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | und
                   onSelect={() => setSelectedBaseId(base.id)}
                 />
               ))}
+              {/*
+                虚线卡片排在选项**末尾**、与选项同尺寸（图例 17）。
+                放在末尾而不是开头：它是个出口，不该抢走"选一个已有的库"这个主路径；
+                同尺寸则保证网格的第二列不会因为这张卡矮一截而参差。
+              */}
+              <NewBaseOption onCreated={(baseId) => setSelectedBaseId(baseId)} />
             </div>
           </fieldset>
 
           <div className="space-y-2">
-            <Label htmlFor="note-title">标题</Label>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label htmlFor="note-title">标题</Label>
+              {/* 计数在输入框外侧右上：塞进输入框会与占位文案打架 */}
+              <span
+                data-testid="title-counter"
+                aria-live="polite"
+                className={cn("text-xs tabular-nums", overLimit ? "text-danger" : "text-label-tertiary")}
+              >
+                {titleLength} / {TITLE_MAX}
+              </span>
+            </div>
             <Input
               id="note-title"
+              // 40 高（图例 19）：比 Input 默认的 h-8 高一档，标题是这一步唯一的输入
+              className="h-10 rounded-md"
+              // 浏览器的历史建议会在标题这种短字段上盖住整块列表，且拼错一次就长期留着
               autoComplete="off"
               placeholder="3-15 个字符"
+              aria-invalid={overLimit || undefined}
               {...form.register("title")}
             />
             {form.formState.errors.title ? (
@@ -128,13 +174,42 @@ export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | und
             <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "创建中…" : "创建笔记"}
             </Button>
-            <Button type="button" variant="ghost" render={<Link href="/notes" />}>
+            {/* 「取消」是幽灵按钮（图例 23）：它是出口而不是并列的决策 */}
+            <Button type="button" variant="ghost" render={<Link href={cancelHref} />}>
               取消
             </Button>
           </div>
         </form>
       )}
     </section>
+  );
+}
+
+/**
+ * 末尾的「新建知识库」虚线卡片（图例 17）。
+ *
+ * 创建成功后**留在本页并自动选中新库**（`redirectOnCreated={false}`）：
+ * 用户是从"创建笔记"这条路走进来的，把他带去新库的画廊页，
+ * 相当于把"新建笔记"这件事半路丢掉。
+ */
+function NewBaseOption({ onCreated }: { onCreated: (baseId: number) => void }) {
+  return (
+    <CreateBaseDialog
+      onCreated={onCreated}
+      redirectOnCreated={false}
+      triggerTestId="create-note-new-base"
+      trigger={
+        <>
+          <Plus className="size-4" aria-hidden="true" />
+          新建知识库
+        </>
+      }
+      triggerClassName={cn(
+        "flex min-h-16 items-center justify-center gap-2 rounded-lg border border-dashed border-separator px-3 py-2.5",
+        "text-footnote font-medium text-accent outline-none transition-colors",
+        "hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-ring",
+      )}
+    />
   );
 }
 
@@ -156,7 +231,9 @@ function BaseOption({
       className={cn(
         "flex min-h-16 items-center gap-3 rounded-lg px-3 py-2.5 text-left outline-none transition-colors",
         "focus-visible:ring-2 focus-visible:ring-ring",
-        selected ? "bg-accent-soft ring-1 ring-accent" : "bg-surface shadow-card hover:bg-grouped",
+        selected
+          ? "bg-accent-soft ring-1 ring-accent"
+          : "bg-surface shadow-card hover:bg-fill-hover",
       )}
     >
       <span className={coverAvatarClassName(base.id, "size-8 rounded-md")} aria-hidden="true" />

@@ -225,10 +225,13 @@ describe("NoteEditor 布局与编辑器接线", () => {
    * 回归：删除后曾经 push 到 `/notes/<baseId>/notes`，那条地址会命中
    * `[baseId]/[noteId]` 路由、把字面量 "notes" 当 noteId，然后 notFound()——
    * 用户删完笔记直接掉进 404。列表页的地址是裸的 `/notes/<baseId>`。
+   *
+   * 同时盯住删除**不再走 `window.confirm`**：原生确认框无法用语义 Token 上色、
+   * 深色下是系统灰、还会阻塞主线程，本轮 D-04 ④ 统一换成 `ConfirmDialog`。
    */
-  it("删除成功后回到知识库的笔记列表，而不是会 404 的 /notes/<id>/notes", async () => {
+  it("删除走 ConfirmDialog：先弹确认，确认后才请求并回到笔记列表", async () => {
     vi.mocked(noteApi.DELETE).mockResolvedValue(envelope(null) as never);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = vi.spyOn(window, "confirm");
 
     renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
     await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
@@ -236,7 +239,92 @@ describe("NoteEditor 布局与编辑器接线", () => {
     fireEvent.click(screen.getByTestId("note-actions"));
     fireEvent.click(await screen.findByRole("menuitem", { name: "删除笔记" }));
 
+    // 只弹确认框，还没有发请求
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("删除这篇笔记？")).toBeInTheDocument();
+    expect(within(dialog).getByText("删除后无法恢复。")).toBeInTheDocument();
+    expect(noteApi.DELETE).not.toHaveBeenCalled();
+    expect(confirmSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "删除" }));
+
     await waitFor(() => expect(router.push).toHaveBeenCalledWith(`/notes/${BASE_ID}`));
+    expect(noteApi.DELETE).toHaveBeenCalledTimes(1);
     expect(router.push).not.toHaveBeenCalledWith(`/notes/${BASE_ID}/notes`);
+  });
+
+  it("删除确认框里点取消不发请求，也不跳转", async () => {
+    vi.mocked(noteApi.DELETE).mockResolvedValue(envelope(null) as never);
+
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("note-actions"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "删除笔记" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+
+    await waitFor(() => expect(screen.queryByText("删除后无法恢复。")).not.toBeInTheDocument());
+    expect(noteApi.DELETE).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+});
+
+describe("NoteEditor 顶部 ⋯ 菜单入口（D-16 图例 1）", () => {
+  it("第一项是「历史版本」，点击前先把未保存的正文落盘", async () => {
+    vi.mocked(noteApi.PATCH).mockResolvedValue(envelope({ version: "next" }) as never);
+
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+
+    // 制造一段还没落盘的改动（debounce 1.5s，这里不等它自然到期）
+    act(() => {
+      editorProps.mock.calls.at(-1)?.[0].onChange("# 测试笔记\n\n刚敲的字", {
+        state: {
+          doc: {
+            firstChild: {
+              type: { name: "heading" },
+              attrs: { level: 1 },
+              textContent: "测试笔记",
+            },
+          },
+        },
+      });
+    });
+
+    fireEvent.click(screen.getByTestId("note-actions"));
+    const items = await screen.findAllByRole("menuitem");
+    expect(items[0]).toHaveTextContent("历史版本");
+
+    fireEvent.click(items[0] as HTMLElement);
+
+    // 先落盘再跳转：历史页读到的是服务端快照，不 flush 会少看到刚写的那一版
+    await waitFor(() =>
+      expect(noteApi.PATCH).toHaveBeenCalledWith(
+        "/notes/{noteId}",
+        expect.objectContaining({
+          body: expect.objectContaining({ content: "# 测试笔记\n\n刚敲的字" }),
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith(`/notes/${BASE_ID}/${NOTE_ID}/history`),
+    );
+    // 顺序：PATCH 一定在 push 之前
+    const patchOrder = vi.mocked(noteApi.PATCH).mock.invocationCallOrder[0] ?? 0;
+    const pushOrder = router.push.mock.invocationCallOrder[0] ?? 0;
+    expect(patchOrder).toBeLessThan(pushOrder);
+  });
+
+  it("没有未保存改动时也直接进历史页", async () => {
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("note-actions"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "历史版本" }));
+
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith(`/notes/${BASE_ID}/${NOTE_ID}/history`),
+    );
   });
 });
