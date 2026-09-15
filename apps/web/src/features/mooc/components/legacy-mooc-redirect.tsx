@@ -1,9 +1,9 @@
 "use client";
 
-import { NotFoundState } from "@/components/shared/states";
-import { moocDetailHref, mobileMoocDetailHref } from "@/components/layout/navigation";
-import { useMoocQuery } from "@/features/mooc/use-moocs";
+import { mobileMoocDetailHref, moocDetailHref } from "@/components/layout/navigation";
 import { CardGridSkeleton } from "@/components/loading/skeletons";
+import { NotFoundState } from "@/components/shared/states";
+import { useMoocQuery } from "@/features/mooc/use-moocs";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 

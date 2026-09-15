@@ -45,27 +45,127 @@ const SHARP_SPEC = "sharp@0.34.5";
  */
 const BOARDS = [
   // —— 桌面：知识库内 ——
-  { file: "D-01-kb-notes.png", name: "d01-kb-notes", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
-  { file: "D-02-kb-overview.png", name: "d02-kb-overview", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
-  { file: "D-05-kb-mooc.png", name: "d05-kb-mooc", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
-  { file: "D-06-kb-mooc-detail.png", name: "d06-kb-mooc-detail", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
-  { file: "D-07-kb-tasks.png", name: "d07-kb-tasks", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
-  { file: "D-08-kb-docs.png", name: "d08-kb-docs", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
-  { file: "D-09-kb-members.png", name: "d09-kb-members", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
-  { file: "D-03-note-new.png", name: "d03-note-new", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
-  { file: "D-10-collab-library.png", name: "d10-collab-library", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
-  { file: "D-12-settings-account.png", name: "d12-settings-account", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
-  { file: "D-13-settings-appearance.png", name: "d13-settings-appearance", crop: { left: 140, top: 300, width: 2680, height: 1230 }, expect: { width: 1340, height: 615 } },
+  {
+    file: "D-01-kb-notes.png",
+    name: "d01-kb-notes",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
+  {
+    file: "D-02-kb-overview.png",
+    name: "d02-kb-overview",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
+  {
+    file: "D-05-kb-mooc.png",
+    name: "d05-kb-mooc",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
+  {
+    file: "D-06-kb-mooc-detail.png",
+    name: "d06-kb-mooc-detail",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
+  {
+    file: "D-07-kb-tasks.png",
+    name: "d07-kb-tasks",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
+  {
+    file: "D-08-kb-docs.png",
+    name: "d08-kb-docs",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
+  {
+    file: "D-09-kb-members.png",
+    name: "d09-kb-members",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
+  {
+    file: "D-03-note-new.png",
+    name: "d03-note-new",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
+  {
+    file: "D-10-collab-library.png",
+    name: "d10-collab-library",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
+  {
+    file: "D-12-settings-account.png",
+    name: "d12-settings-account",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
+  {
+    file: "D-13-settings-appearance.png",
+    name: "d13-settings-appearance",
+    crop: { left: 140, top: 300, width: 2680, height: 1230 },
+    expect: { width: 1340, height: 615 },
+  },
   // —— 移动：390×844 ——
-  { file: "M-01-dashboard.png", name: "m01-dashboard", crop: { left: 130, top: 260, width: 1400, height: 2000 }, expect: { width: 390, height: 557 } },
-  { file: "M-02-me.png", name: "m02-me", crop: { left: 130, top: 260, width: 1400, height: 2000 }, expect: { width: 390, height: 557 } },
-  { file: "M-03-kb-mooc.png", name: "m03-kb-mooc", crop: { left: 130, top: 260, width: 1400, height: 2000 }, expect: { width: 390, height: 557 } },
-  { file: "M-04-kb-tasks.png", name: "m04-kb-tasks", crop: { left: 130, top: 260, width: 1400, height: 2000 }, expect: { width: 390, height: 557 } },
-  { file: "M-05-kb-docs.png", name: "m05-kb-docs", crop: { left: 130, top: 260, width: 1400, height: 2000 }, expect: { width: 390, height: 557 } },
-  { file: "M-07-note-new.png", name: "m07-note-new", crop: { left: 130, top: 260, width: 1400, height: 2000 }, expect: { width: 390, height: 557 } },
-  { file: "M-08-doc-library.png", name: "m08-doc-library", crop: { left: 130, top: 260, width: 1400, height: 2000 }, expect: { width: 390, height: 557 } },
-  { file: "M-10-search.png", name: "m10-search", crop: { left: 130, top: 260, width: 1400, height: 2000 }, expect: { width: 390, height: 557 } },
-  { file: "M-11-settings.png", name: "m11-settings", crop: { left: 130, top: 260, width: 1400, height: 2000 }, expect: { width: 390, height: 557 } },
+  {
+    file: "M-01-dashboard.png",
+    name: "m01-dashboard",
+    crop: { left: 130, top: 260, width: 1400, height: 2000 },
+    expect: { width: 390, height: 557 },
+  },
+  {
+    file: "M-02-me.png",
+    name: "m02-me",
+    crop: { left: 130, top: 260, width: 1400, height: 2000 },
+    expect: { width: 390, height: 557 },
+  },
+  {
+    file: "M-03-kb-mooc.png",
+    name: "m03-kb-mooc",
+    crop: { left: 130, top: 260, width: 1400, height: 2000 },
+    expect: { width: 390, height: 557 },
+  },
+  {
+    file: "M-04-kb-tasks.png",
+    name: "m04-kb-tasks",
+    crop: { left: 130, top: 260, width: 1400, height: 2000 },
+    expect: { width: 390, height: 557 },
+  },
+  {
+    file: "M-05-kb-docs.png",
+    name: "m05-kb-docs",
+    crop: { left: 130, top: 260, width: 1400, height: 2000 },
+    expect: { width: 390, height: 557 },
+  },
+  {
+    file: "M-07-note-new.png",
+    name: "m07-note-new",
+    crop: { left: 130, top: 260, width: 1400, height: 2000 },
+    expect: { width: 390, height: 557 },
+  },
+  {
+    file: "M-08-doc-library.png",
+    name: "m08-doc-library",
+    crop: { left: 130, top: 260, width: 1400, height: 2000 },
+    expect: { width: 390, height: 557 },
+  },
+  {
+    file: "M-10-search.png",
+    name: "m10-search",
+    crop: { left: 130, top: 260, width: 1400, height: 2000 },
+    expect: { width: 390, height: 557 },
+  },
+  {
+    file: "M-11-settings.png",
+    name: "m11-settings",
+    crop: { left: 130, top: 260, width: 1400, height: 2000 },
+    expect: { width: 390, height: 557 },
+  },
 ];
 
 /** 深色版只需换文件名后缀；排板布局与浅色版一致。 */
@@ -94,9 +194,7 @@ async function main() {
   for (const board of BOARDS) {
     for (const theme of ["light", "dark"]) {
       const file =
-        theme === "dark"
-          ? board.file.replace(/\.png$/, `${DARK_SUFFIX}.png`)
-          : board.file;
+        theme === "dark" ? board.file.replace(/\.png$/, `${DARK_SUFFIX}.png`) : board.file;
       if (!available.has(file)) {
         console.warn(`  跳过（设计图里没有）：${file}`);
         skipped += 1;

@@ -89,7 +89,9 @@ describe("MobileMePage", () => {
     fireEvent.click(screen.getByTestId("mobile-logout"));
     expect(logout.mutate).not.toHaveBeenCalled();
     expect(screen.getByTestId("mobile-action-sheet")).toBeInTheDocument();
-    expect(screen.getByText("退出后需要重新输入账号密码，未保存的内容会丢失。")).toBeInTheDocument();
+    expect(
+      screen.getByText("退出后需要重新输入账号密码，未保存的内容会丢失。"),
+    ).toBeInTheDocument();
   });
 
   it("动作表里确认后才真的登出", () => {

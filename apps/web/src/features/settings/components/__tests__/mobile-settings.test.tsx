@@ -14,9 +14,7 @@ const profile = vi.hoisted(() => ({
 }));
 
 vi.mock("@/features/settings/use-profile", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>(
-    "@/features/settings/use-profile",
-  );
+  const actual = await vi.importActual<Record<string, unknown>>("@/features/settings/use-profile");
   return {
     ...actual,
     useMyProfileQuery: profile.query,

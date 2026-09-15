@@ -22,7 +22,7 @@
  *   apps/web/e2e/.ui-supplement/report.json                    每个场景的可比较指标
  *   apps/web/e2e/.ui-supplement/index.html                     一页看完全部对比
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // 从 `@playwright/test` 取 chromium：只有它是 package.json 声明的依赖，

@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from "@/components/loading/spinner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Spinner } from "@/components/loading/spinner";
 import type { ReactNode } from "react";
 
 export type ConfirmDialogProps = {

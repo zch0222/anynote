@@ -64,9 +64,7 @@ export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | und
    * 回到跨库的 `/notes` 等于让他重新找一遍。
    */
   const cancelHref =
-    typeof initialBaseId === "number" && initialBaseId > 0
-      ? `/notes/${initialBaseId}`
-      : "/notes";
+    typeof initialBaseId === "number" && initialBaseId > 0 ? `/notes/${initialBaseId}` : "/notes";
 
   async function onSubmit(values: CreateNoteInput) {
     if (effectiveBaseId === null) {
@@ -150,7 +148,10 @@ export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | und
               <span
                 data-testid="title-counter"
                 aria-live="polite"
-                className={cn("text-xs tabular-nums", overLimit ? "text-danger" : "text-label-tertiary")}
+                className={cn(
+                  "text-xs tabular-nums",
+                  overLimit ? "text-danger" : "text-label-tertiary",
+                )}
               >
                 {titleLength} / {TITLE_MAX}
               </span>

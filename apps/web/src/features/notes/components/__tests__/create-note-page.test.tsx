@@ -192,10 +192,7 @@ describe("CreateNotePage 末尾的新建知识库入口", () => {
 
     // 新库出现在选项里，并且**已经是选中的那一个**
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /新库/ })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      ),
+      expect(screen.getByRole("button", { name: /新库/ })).toHaveAttribute("aria-pressed", "true"),
     );
     expect(screen.getByRole("button", { name: /甲库/ })).toHaveAttribute("aria-pressed", "false");
     // 留在本页：没有跳进新库

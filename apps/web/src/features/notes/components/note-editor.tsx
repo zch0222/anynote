@@ -3,6 +3,7 @@
 import { TiptapEditor, type TiptapEditorProps } from "@/components/editor/TiptapEditor";
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
 import type { AiContinueFn } from "@/components/editor/presets/types";
+import { noteHistoryHref } from "@/components/layout/navigation";
 import { EditorSkeleton } from "@/components/loading/skeletons";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
 import { SaveStatusBadge } from "@/components/note/save-status";
@@ -17,7 +18,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { noteHistoryHref } from "@/components/layout/navigation";
 import { ensureLeadingHeading, stripLeadingHeading } from "@/features/notes/lib/leading-heading";
 import { DEFAULT_PAGE_SIZE, toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";

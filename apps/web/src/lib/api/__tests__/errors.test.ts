@@ -4,9 +4,7 @@ import { toUserMessage } from "../errors";
 
 describe("toUserMessage", () => {
   it("网络层 TypeError 说成网络问题，不透出 Failed to fetch", () => {
-    expect(toUserMessage(new TypeError("Failed to fetch"))).toBe(
-      "网络连接超时，请检查网络后重试",
-    );
+    expect(toUserMessage(new TypeError("Failed to fetch"))).toBe("网络连接超时，请检查网络后重试");
   });
 
   it("TimeoutError 归入同一类", () => {

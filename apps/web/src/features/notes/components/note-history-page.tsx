@@ -432,9 +432,7 @@ function VersionPanel({
             {groups.map((group) => (
               <div key={group.label} className="mb-2">
                 {/* 分组标题（图例 11）：今天 / 昨天 / 09-12 周六 */}
-                <p className="px-2 py-1 text-xs font-semibold text-label-tertiary">
-                  {group.label}
-                </p>
+                <p className="px-2 py-1 text-xs font-semibold text-label-tertiary">{group.label}</p>
                 <ul>
                   {group.items.map((item) => (
                     <li key={item.operationLogId}>

@@ -16,9 +16,7 @@ vi.mock("next/navigation", () => ({
 
 /** 只读 TipTap 是重依赖（动态加载），测试里换成能显示正文的桩件。 */
 vi.mock("@/components/editor/TiptapEditor", () => ({
-  TiptapEditor: ({ value }: { value: string }) => (
-    <div data-testid="readonly-editor">{value}</div>
-  ),
+  TiptapEditor: ({ value }: { value: string }) => <div data-testid="readonly-editor">{value}</div>,
 }));
 
 const get = noteApi.GET as unknown as Mock;
@@ -57,9 +55,7 @@ function defaultGet(options?: { permissions?: number; versions?: number }) {
 
   return (path: string, init: { params?: { query?: { operationId?: number } } }) => {
     if (path === "/notes/historyList") {
-      return Promise.resolve(
-        envelope({ current: 1, pages: 1, total: rows.length, rows }),
-      );
+      return Promise.resolve(envelope({ current: 1, pages: 1, total: rows.length, rows }));
     }
     if (path === "/notes/history") {
       const id = init.params?.query?.operationId ?? 0;
@@ -74,9 +70,7 @@ function defaultGet(options?: { permissions?: number; versions?: number }) {
       );
     }
     if (path === "/bases/{id}") {
-      return Promise.resolve(
-        envelope({ id: BASE_ID, knowledgeBaseName: "测试库", permissions }),
-      );
+      return Promise.resolve(envelope({ id: BASE_ID, knowledgeBaseName: "测试库", permissions }));
     }
     if (path === "/notes/{noteId}") {
       // 恢复的第 1 步：拿服务端当前版本号
@@ -104,7 +98,9 @@ describe("NoteHistoryPage 布局与默认选中", () => {
     );
     expect(screen.getByTestId("history-row-900")).toHaveAttribute("aria-pressed", "false");
     // 左栏加载的是被选中那一版的内容
-    await waitFor(() => expect(screen.getByTestId("readonly-editor")).toHaveTextContent("版本 901"));
+    await waitFor(() =>
+      expect(screen.getByTestId("readonly-editor")).toHaveTextContent("版本 901"),
+    );
     expect(get).toHaveBeenCalledWith("/notes/history", {
       params: { query: { operationId: 901 } },
       parseAs: "stream",
@@ -126,7 +122,9 @@ describe("NoteHistoryPage 布局与默认选中", () => {
     renderWithProviders(<NoteHistoryPage baseId={BASE_ID} noteId={NOTE_ID} />);
 
     await waitFor(() => expect(screen.getByTestId("history-viewing")).toBeInTheDocument());
-    expect(screen.getByTestId("history-viewing")).toHaveTextContent(/正在查看 作者1 于 .* 保存的版本/);
+    expect(screen.getByTestId("history-viewing")).toHaveTextContent(
+      /正在查看 作者1 于 .* 保存的版本/,
+    );
   });
 
   it("第一条带「当前版本」徽标", async () => {
@@ -140,10 +138,14 @@ describe("NoteHistoryPage 布局与默认选中", () => {
     renderWithProviders(<NoteHistoryPage baseId={BASE_ID} noteId={NOTE_ID} />);
     await waitFor(() => expect(screen.getByTestId("history-row-902")).toBeInTheDocument());
 
-    const listCallsBefore = get.mock.calls.filter((call) => call[0] === "/notes/historyList").length;
+    const listCallsBefore = get.mock.calls.filter(
+      (call) => call[0] === "/notes/historyList",
+    ).length;
     fireEvent.click(screen.getByTestId("history-row-902"));
 
-    await waitFor(() => expect(screen.getByTestId("readonly-editor")).toHaveTextContent("版本 902"));
+    await waitFor(() =>
+      expect(screen.getByTestId("readonly-editor")).toHaveTextContent("版本 902"),
+    );
     expect(screen.getByTestId("history-row-902")).toHaveAttribute("aria-pressed", "true");
     const listCallsAfter = get.mock.calls.filter((call) => call[0] === "/notes/historyList").length;
     expect(listCallsAfter).toBe(listCallsBefore);
@@ -183,9 +185,7 @@ describe("NoteHistoryPage 只有一个版本", () => {
 
     await waitFor(() => expect(screen.getByTestId("history-empty")).toBeInTheDocument());
     expect(screen.getByText("这篇笔记还没有历史版本")).toBeInTheDocument();
-    expect(
-      screen.getByText("之后每次保存都会在这里留下一个版本。"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("之后每次保存都会在这里留下一个版本。")).toBeInTheDocument();
     expect(screen.queryByTestId("history-restore")).toBeNull();
     // 唯一那条仍然是选中的（列表里标成当前版本）
     expect(screen.getByTestId("history-row-900")).toHaveAttribute("aria-pressed", "true");
@@ -218,7 +218,9 @@ describe("NoteHistoryPage 本次改动的增删行样式", () => {
         );
       }
       if (path === "/bases/{id}") {
-        return Promise.resolve(envelope({ id: BASE_ID, knowledgeBaseName: "测试库", permissions: 2 }));
+        return Promise.resolve(
+          envelope({ id: BASE_ID, knowledgeBaseName: "测试库", permissions: 2 }),
+        );
       }
       return Promise.resolve(envelope(null));
     };
@@ -257,36 +259,40 @@ describe("NoteHistoryPage 本次改动的增删行样式", () => {
 describe("NoteHistoryPage 版本加载失败", () => {
   it("显示「这个版本加载失败」并可重试", async () => {
     let attempt = 0;
-    get.mockImplementation((path: string, init: { params?: { query?: { operationId?: number } } }) => {
-      if (path === "/notes/historyList") {
-        return Promise.resolve(
-          envelope({
-            current: 1,
-            pages: 1,
-            total: 2,
-            rows: [historyRow(900, NOW_ISO, "作者0"), historyRow(901, YESTERDAY_ISO, "作者1")],
-          }),
-        );
-      }
-      if (path === "/notes/history") {
-        attempt += 1;
-        // 第一次失败，重试成功
-        if (attempt === 1) {
-          return Promise.resolve({
-            response: new Response(JSON.stringify({ code: "B0001", msg: "版本不存在" }), {
-              status: 200,
+    get.mockImplementation(
+      (path: string, init: { params?: { query?: { operationId?: number } } }) => {
+        if (path === "/notes/historyList") {
+          return Promise.resolve(
+            envelope({
+              current: 1,
+              pages: 1,
+              total: 2,
+              rows: [historyRow(900, NOW_ISO, "作者0"), historyRow(901, YESTERDAY_ISO, "作者1")],
             }),
-          });
+          );
         }
-        return Promise.resolve(
-          envelope({ noteHistoryId: 901, title: "重试后的标题", content: "# 重试后的正文" }),
-        );
-      }
-      if (path === "/bases/{id}") {
-        return Promise.resolve(envelope({ id: BASE_ID, knowledgeBaseName: "测试库", permissions: 2 }));
-      }
-      return Promise.resolve(envelope(null));
-    });
+        if (path === "/notes/history") {
+          attempt += 1;
+          // 第一次失败，重试成功
+          if (attempt === 1) {
+            return Promise.resolve({
+              response: new Response(JSON.stringify({ code: "B0001", msg: "版本不存在" }), {
+                status: 200,
+              }),
+            });
+          }
+          return Promise.resolve(
+            envelope({ noteHistoryId: 901, title: "重试后的标题", content: "# 重试后的正文" }),
+          );
+        }
+        if (path === "/bases/{id}") {
+          return Promise.resolve(
+            envelope({ id: BASE_ID, knowledgeBaseName: "测试库", permissions: 2 }),
+          );
+        }
+        return Promise.resolve(envelope(null));
+      },
+    );
 
     renderWithProviders(<NoteHistoryPage baseId={BASE_ID} noteId={NOTE_ID} />);
 
@@ -311,7 +317,9 @@ describe("NoteHistoryPage 版本加载失败", () => {
         });
       }
       if (path === "/bases/{id}") {
-        return Promise.resolve(envelope({ id: BASE_ID, knowledgeBaseName: "测试库", permissions: 2 }));
+        return Promise.resolve(
+          envelope({ id: BASE_ID, knowledgeBaseName: "测试库", permissions: 2 }),
+        );
       }
       return Promise.resolve(envelope(null));
     });
@@ -336,7 +344,9 @@ describe("NoteHistoryPage 恢复流程", () => {
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("恢复到这个版本？")).toBeInTheDocument();
-    expect(dialog).toHaveTextContent("当前内容会先作为一个新版本保留在历史记录里，随时可以再换回来。");
+    expect(dialog).toHaveTextContent(
+      "当前内容会先作为一个新版本保留在历史记录里，随时可以再换回来。",
+    );
     // 默认焦点在取消，回车不会直接生效
     await waitFor(() => expect(within(dialog).getByRole("button", { name: "取消" })).toHaveFocus());
   });

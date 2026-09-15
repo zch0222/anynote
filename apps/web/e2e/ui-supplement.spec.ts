@@ -170,7 +170,10 @@ test.describe("UI 补稿还原度", () => {
     await page.goto(`/notes/${baseId}/${noteId}`);
     await expect(page.locator(".anynote-editor__content")).toBeVisible({ timeout: 30_000 });
 
-    await page.getByRole("button", { name: /更多|⋯/ }).first().click();
+    await page
+      .getByRole("button", { name: /更多|⋯/ })
+      .first()
+      .click();
     await page.getByRole("menuitem", { name: "删除笔记" }).click();
 
     const dialog = page.getByRole("dialog");
@@ -326,7 +329,10 @@ test.describe("UI 补稿还原度", () => {
 
     await page.goto(`/notes/${baseId}/${noteId}`);
     await expect(page.locator(".anynote-editor__content")).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: /更多|⋯/ }).first().click();
+    await page
+      .getByRole("button", { name: /更多|⋯/ })
+      .first()
+      .click();
     const first = page.getByRole("menuitem").first();
     await expect(first).toHaveText(/历史版本/);
     await first.click();

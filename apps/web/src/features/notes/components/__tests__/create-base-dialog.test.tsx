@@ -146,7 +146,9 @@ describe("CreateBaseDialog 关闭行为", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/notes?scope=mine", { scroll: false }));
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith("/notes?scope=mine", { scroll: false }),
+    );
   });
 
   it("地址栏没有 ?new=1 时不做无谓的 history 操作", async () => {

@@ -1,8 +1,8 @@
-import { RES_CODE } from "@anynote/api-core/codes";
-import { QueryClient } from "@tanstack/react-query";
 import { noteQueryKeys } from "@/features/notes/query-keys";
 import { noteApi } from "@/lib/api/openapi";
 import { renderHookWithProviders } from "@/test/render";
+import { RES_CODE } from "@anynote/api-core/codes";
+import { QueryClient } from "@tanstack/react-query";
 import { act, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -111,7 +111,12 @@ describe("useNoteHistoryInfinite", () => {
 describe("useNoteHistoryQuery", () => {
   it("按 operationId 取版本内容", async () => {
     get.mockResolvedValue(
-      envelope({ noteHistoryId: 5, title: "旧标题", content: "# 旧正文", historyTime: "2026-09-12T03:00:00.000Z" }),
+      envelope({
+        noteHistoryId: 5,
+        title: "旧标题",
+        content: "# 旧正文",
+        historyTime: "2026-09-12T03:00:00.000Z",
+      }),
     );
 
     const { result } = renderHookWithProviders(() => useNoteHistoryQuery(901));
@@ -160,7 +165,11 @@ describe("useRestoreNoteVersionMutation", () => {
     expect(patch).toHaveBeenCalledExactlyOnceWith("/notes/{noteId}", {
       params: { path: { noteId: 42 } },
       // version 取 GET 的 updateTime 派生的毫秒时间戳，不是调用方传的
-      body: { title: "旧标题", content: "# 旧正文", version: String(Date.parse("2026-09-16T03:00:00.000Z")) },
+      body: {
+        title: "旧标题",
+        content: "# 旧正文",
+        version: String(Date.parse("2026-09-16T03:00:00.000Z")),
+      },
       parseAs: "stream",
       signal: expect.any(AbortSignal),
     });
@@ -194,7 +203,11 @@ describe("useRestoreNoteVersionMutation", () => {
     });
 
     await act(async () => {
-      await result.current.mutateAsync({ noteId: 42, title: "恢复后标题", content: "# 恢复后正文" });
+      await result.current.mutateAsync({
+        noteId: 42,
+        title: "恢复后标题",
+        content: "# 恢复后正文",
+      });
     });
 
     expect(queryClient.getQueryData(noteQueryKeys.detail(42))).toMatchObject({

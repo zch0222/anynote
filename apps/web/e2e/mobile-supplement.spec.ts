@@ -128,7 +128,11 @@ test.describe("UI 补稿 · 移动端", () => {
 
     const style = await title.evaluate((el) => {
       const s = getComputedStyle(el);
-      return { radius: s.borderRadius, fontSize: s.fontSize, height: el.getBoundingClientRect().height };
+      return {
+        radius: s.borderRadius,
+        fontSize: s.fontSize,
+        height: el.getBoundingClientRect().height,
+      };
     });
     expect(style.radius).toBe("10px");
     // 小于 16px 时 iOS 会在聚焦时自动放大整页 —— 这条是硬要求

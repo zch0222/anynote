@@ -66,7 +66,10 @@ describe("groupByDay", () => {
   it("周几按本地日历取，周日是 周日 不是 周一", () => {
     // 2026-09-13 是周日，2026-09-14 是周一
     const groups = groupByDay(
-      [row(1, new Date(2026, 8, 13, 9, 0).toISOString()), row(2, new Date(2026, 8, 14, 9, 0).toISOString())],
+      [
+        row(1, new Date(2026, 8, 13, 9, 0).toISOString()),
+        row(2, new Date(2026, 8, 14, 9, 0).toISOString()),
+      ],
       NOW,
     );
 
@@ -84,7 +87,10 @@ describe("groupByDay", () => {
   });
 
   it("时间缺失或非法时归到「未知时间」，不静默丢条目", () => {
-    const groups = groupByDay([row(1, null), row(2, "不是时间"), row(3, "2026-09-16T03:00:00.000Z")], NOW);
+    const groups = groupByDay(
+      [row(1, null), row(2, "不是时间"), row(3, "2026-09-16T03:00:00.000Z")],
+      NOW,
+    );
 
     expect(groups[0]?.label).toBe(UNKNOWN_DAY_LABEL);
     expect(groups[0]?.items.map((item) => item.id)).toEqual([1, 2]);
@@ -92,7 +98,10 @@ describe("groupByDay", () => {
   });
 
   it("兼容单版本详情的 historyTime 字段名", () => {
-    const groups = groupByDay([{ id: 1, historyTime: new Date(2026, 8, 16, 11, 5).toISOString() }], NOW);
+    const groups = groupByDay(
+      [{ id: 1, historyTime: new Date(2026, 8, 16, 11, 5).toISOString() }],
+      NOW,
+    );
 
     expect(groups[0]?.label).toBe("今天");
   });
@@ -108,7 +117,9 @@ describe("formatHistoryTime", () => {
   it("今天 / 昨天带时分，其余带日期与时分", () => {
     expect(formatHistoryTime(new Date(2026, 8, 16, 11, 5).toISOString(), NOW)).toBe("今天 11:05");
     expect(formatHistoryTime(new Date(2026, 8, 15, 23, 59).toISOString(), NOW)).toBe("昨天 23:59");
-    expect(formatHistoryTime(new Date(2026, 8, 12, 9, 0).toISOString(), NOW)).toBe("09-12 周六 09:00");
+    expect(formatHistoryTime(new Date(2026, 8, 12, 9, 0).toISOString(), NOW)).toBe(
+      "09-12 周六 09:00",
+    );
   });
 
   /**
@@ -118,7 +129,10 @@ describe("formatHistoryTime", () => {
    */
   it("刚过午夜时与分组标签一致，不出现「15 分钟前」与「昨天」并存", () => {
     const justAfterMidnight = new Date(2026, 8, 16, 0, 5);
-    const groups = groupByDay([row(1, new Date(2026, 8, 15, 23, 50).toISOString())], justAfterMidnight);
+    const groups = groupByDay(
+      [row(1, new Date(2026, 8, 15, 23, 50).toISOString())],
+      justAfterMidnight,
+    );
 
     expect(groups[0]?.label).toBe("昨天");
     expect(formatHistoryTime(new Date(2026, 8, 15, 23, 50).toISOString(), justAfterMidnight)).toBe(
