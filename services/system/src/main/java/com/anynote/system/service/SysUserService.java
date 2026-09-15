@@ -8,6 +8,7 @@ import com.anynote.system.api.model.vo.KnowledgeBaseUserVO;
 import com.anynote.system.api.model.bo.SysUserQueryParam;
 import com.anynote.system.api.model.dto.CreateUserDTO;
 import com.anynote.system.model.dto.ResetPasswordDTO;
+import com.anynote.system.model.dto.UpdateMyProfileDTO;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 /**
@@ -49,6 +50,17 @@ public interface SysUserService extends IService<SysUser> {
      * @return 获取用户自己的信息
      */
     public SysUser getMyUserInfo();
+
+    /**
+     * 当前登录用户更新自己的资料
+     *
+     * <p>身份从登录态取，请求体里没有 userId；PUT 语义是整体替换四个字段，
+     * {@code email} / {@code phoneNumber} 的 null 与空串都写成空串（清空）。</p>
+     *
+     * @param updateMyProfileDTO 白名单字段（昵称、性别、邮箱、手机号）
+     * @return 更新后的资料
+     */
+    public SysUser updateMyProfile(UpdateMyProfileDTO updateMyProfileDTO);
 
     public SysUser getPublicUserInfoByUsername(String username);
 

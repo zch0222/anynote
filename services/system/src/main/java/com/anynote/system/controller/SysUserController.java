@@ -19,6 +19,7 @@ import com.anynote.system.api.model.vo.KnowledgeBaseUserVO;
 import com.anynote.system.api.model.bo.SysUserQueryParam;
 import com.anynote.system.api.model.dto.CreateUserDTO;
 import com.anynote.system.model.dto.ResetPasswordDTO;
+import com.anynote.system.model.dto.UpdateMyProfileDTO;
 import com.anynote.system.model.vo.PublicUserInfoVO;
 import com.anynote.system.service.SysUserService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -119,6 +120,19 @@ public class SysUserController {
     @GetMapping("mine")
     public ResData<SysUser> getMyInfo() {
         return ResUtil.success(sysUserService.getMyUserInfo());
+    }
+
+    /**
+     * 当前登录用户更新自己的资料。
+     *
+     * <p>对外开放（不加 {@code @InnerAuth}）：身份从登录态取，请求体里没有 userId，
+     * 只收昵称 / 性别 / 邮箱 / 手机号四个白名单字段。原 {@code PUT /user/{userId}}
+     * 保持 {@code @InnerAuth} 内部端点不变。</p>
+     */
+    @Operation(summary = "更新当前登录用户资料", description = "只更新昵称、性别、邮箱、手机号；邮箱与手机号的空串表示清空")
+    @PutMapping("mine/profile")
+    public ResData<SysUser> updateMyProfile(@Valid @RequestBody UpdateMyProfileDTO updateMyProfileDTO) {
+        return ResUtil.success(sysUserService.updateMyProfile(updateMyProfileDTO));
     }
 
     @RolePermissions(value = {Role.TEACHER})
