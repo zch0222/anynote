@@ -31,7 +31,7 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **代码完成，发版待定** — M0-M7 已于 2026-09-11 全部 `--no-ff` 合并 `dev`。**M8（协同 + 桌面 + E2E/性能 + 收尾）同日完成**：`apps/collab` 自建协同服务 + `/docs` 协同文档库、`apps/desktop` Tauri 骨架与 `/api/auth/exchange` 令牌交换、Playwright 20 条用例（2026-09-12 笔记模块重构后扩充）、Lighthouse（性能 97-100 / 无障碍 100）、产物预算全绿；全仓前端单测 **619**（移动端 M10.x 之后 **835**）+ 协同服务 **75**。**未做**：桌面构建验证（本机无 Rust/MSVC 工具链）、删除 `apps/web-legacy/`（M7.6 的 5 个后端缺口未解，新前端还不能替代它）、合并 `main` 与打 tag `v0.6.0`。AI 流式与 PDF 上传仍受后端阻塞（见里程碑 M7.6）。详见 `docs/refactor/FRONTEND_MILESTONES.md` M7/M7.6/M8/M8.6/§5 与 `docs/refactor/TASKS.md` Phase 5；E2E 与性能门禁命令见 README「测试」 |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **代码完成，发版待定** — M0-M7 已于 2026-09-11 全部 `--no-ff` 合并 `dev`。**M8（协同 + 桌面 + E2E/性能 + 收尾）同日完成**：`apps/collab` 自建协同服务 + `/docs` 协同文档库、`apps/desktop` Tauri 骨架与 `/api/auth/exchange` 令牌交换、Playwright 用例（2026-09-12 笔记模块重构后扩充，2026-09-16 UI 补稿后 **118** 条）、Lighthouse（性能 97-100 / 无障碍 100）、产物预算全绿；全仓前端单测 **1696**（M12 UI 补稿后）+ 协同服务 **75**。**未做**：桌面构建验证（本机无 Rust/MSVC 工具链）、删除 `apps/web-legacy/`（M7.6 的 5 个后端缺口未解，新前端还不能替代它）、合并 `main` 与打 tag `v0.6.0`。AI 流式与 PDF 上传仍受后端阻塞（见里程碑 M7.6）。详见 `docs/refactor/FRONTEND_MILESTONES.md` M7/M7.6/M8/M8.6/§5 与 `docs/refactor/TASKS.md` Phase 5；E2E 与性能门禁命令见 README「测试」 |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
@@ -95,8 +95,8 @@ pnpm format              # Biome format only
 ### 端到端与性能门禁（需生产构建 + 真实后端栈）
 
 ```bash
-pnpm --filter web test:e2e          # Playwright 52 条用例：桌面 23（chromium）+ 移动端 29（mobile）
-pnpm --filter web bundle:budget     # 首屏 JS ≤ 300KB、/m/* ≤ 250KB、编辑器 ≤ 250KB（gzip）
+pnpm --filter web test:e2e          # Playwright 118 条用例：桌面 77（chromium）+ 移动端 41（mobile）
+pnpm --filter web bundle:budget     # 首屏 JS ≤ 310KB、/m/* ≤ 250KB、编辑器 ≤ 250KB（gzip）
 pnpm --filter web lighthouse:budget # 桌面 Performance ≥ 90、Accessibility ≥ 95
 pnpm --filter web lighthouse:budget:mobile  # 移动口径 Performance ≥ 85、Accessibility ≥ 95
 pnpm --filter @anynote/cli test:e2e # CLI 端到端：知识库/笔记增删改查闭环（需先 build CLI）
@@ -331,7 +331,7 @@ CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分�
 - ❌ 手改 `apps/cli/src/bundled.ts`（它是 `.claude/skills/anynote-{cli,notes}` 的**构建期快照**，由 `pnpm --filter @anynote/cli build` 生成、CI 卡 diff；要改 skill 就改 `.claude/skills/` 下的源文再重新构建）
 - ❌ 在 `apps/cli/src/version.ts` 再写一份版本号字面量（版本号只在 `package.json` 写一次，`version.ts` 是 `bundled.ts` 的再导出；构建脚本会拒绝第二份副本）
 - ❌ 在纯 Web 部署里配置 `DESKTOP_EXCHANGE_KEY`（那是把真实 Token 交给 JS 的开关，不配即关闭）
-- ❌ 静态引入重依赖（编辑器整包、yjs / y-websocket、pdfjs、ReactFlow）——一律 `dynamic(..., { ssr: false })`，改完跑 `pnpm --filter web bundle:budget` 确认没顶出首屏 300KB 预算
+- ❌ 静态引入重依赖（编辑器整包、yjs / y-websocket、pdfjs、ReactFlow）——一律 `dynamic(..., { ssr: false })`，改完跑 `pnpm --filter web bundle:budget` 确认没顶出首屏预算（桌面 310KB / `/m/*` 250KB；上调依据见 `apps/web/scripts/lib/bundle.mjs` 的 `DEFAULT_BUDGETS` 注释）
 - ❌ 新增 / 修改 Service、工具类、前端 hook、BFF Route Handler 后不写单元测试就提交（见[「测试要求」](#测试要求强制)）
 - ❌ 只为凑覆盖率写"调一次断言不报错"的空测试；断言必须覆盖实际业务分支与异常路径
 - ❌ 修 bug 时不先写复现用例直接改代码

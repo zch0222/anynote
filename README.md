@@ -645,7 +645,7 @@ cd services && mvn test -pl file -am -Dtest.excluded.groups=
 | 命令 | 内容 | 门槛 |
 |------|------|------|
 | `pnpm --filter web test:e2e` | 登录 / 创建笔记 / 编辑保存 / AI 流式 / PDF 上传 / 浅深色切换 6 条关键路径，UI 重设计的语义 Token、知识库信息架构、画廊与编辑器版式，笔记编辑器的高度、保存冲突与代码块回归，协同编辑的双上下文实时同步，笔记图片分片直传 MinIO 并渲染（含刷新后仍可加载），外加**加载体系**（骨架屏的扫光与深浅两态、转圈与进度的动效及 aria 数值、品牌启动的三段描边与骨架兜底、AI 流式的思考三点与光标） | 全绿 |
-| `pnpm --filter web bundle:budget` | 各路由首屏 JS（含各级 layout chunk）与编辑器整包的 gzip 体积 | 首屏 ≤ 300KB、编辑器 ≤ 250KB |
+| `pnpm --filter web bundle:budget` | 各路由首屏 JS（含各级 layout chunk）与编辑器整包的 gzip 体积 | 首屏 ≤ 310KB、编辑器 ≤ 250KB |
 | `pnpm --filter web lighthouse:budget` | `/login`、`/notes`、`/docs`、`/ai/chat` 四条路由 | Performance ≥ 90、Accessibility ≥ 95 |
 
 **UI 还原度对比**（人眼验收，不是门禁）：
@@ -666,7 +666,7 @@ node apps/web/scripts/ui-capture.mjs                 # 真实构建上截图 + �
 | 命令 | 内容 | 门槛 |
 |------|------|------|
 | `pnpm --filter web test:e2e -- --project=mobile` | Pixel 5 视口下的移动端用例：入口分流与逃生口、4 格 tab 导航与胶囊选中态、多条路由无横向滚动、知识库两级导航与自动保存、工具条横滑与 40px 触摸目标、AI 与 PDF 形态、搜索跳转 | 全绿 |
-| `pnpm --filter web bundle:budget` | 同一条命令：`/m/*` 路由按**路径段**单独分桶判定 | `/m/*` 首屏 ≤ 250KB，其余仍 ≤ 300KB |
+| `pnpm --filter web bundle:budget` | 同一条命令：`/m/*` 路由按**路径段**单独分桶判定 | `/m/*` 首屏 ≤ 250KB，其余仍 ≤ 310KB |
 | `pnpm --filter web lighthouse:budget:mobile` | `/login`、`/m/dashboard`、`/m/notes`、`/m/docs`、`/m/ai/chat` | Performance ≥ 85、Accessibility ≥ 95 |
 
 移动端 Performance 门槛低于桌面是**口径差异不是退化**：Lighthouse 移动预设自带 4× CPU 降速与 150ms RTT 节流，
