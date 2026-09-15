@@ -232,7 +232,12 @@ async function setTheme(page, label) {
 /** 用 BFF 直接建好场景需要的数据，返回真实 id。 */
 async function seedData(page) {
   return page.evaluate(async () => {
-    const baseName = `UI 补稿对比 ${Date.now().toString(36)}`;
+    /*
+     * 名称必须落在后端要求的 2–15 字（含中文计数）里。
+     * `Date.now().toString(36)` 是 8 位，加前缀会超；取后 5 位即可，
+     * 同一轮里多个场景共用一次造数，不会撞名。
+     */
+    const baseName = `补稿对比 ${Date.now().toString(36).slice(-5)}`;
     const post = async (path, body) => {
       const res = await fetch(`/api/proxy/note/${path}`, {
         method: "POST",
@@ -246,9 +251,12 @@ async function seedData(page) {
     const baseId = await post("bases", {
       name: baseName,
       detail: "UI 补稿对比造数",
+      // cover 是后端必填（缺了返回「知识库封面不能为空」），与前端默认值同址
+      cover: "https://anynote.obs.cn-east-3.myhuaweicloud.com/images/knowledge_base_cover.png",
       type: 0,
     });
     // 三篇笔记：列表要看出"图标 + 标题 + 相对时间"的行形态，一篇看不出密度
+    // 笔记标题同样是 3–15 字
     for (const title of ["设计原则速查", "组件命名约定", "评审检查清单"]) {
       await post("notes", { title, knowledgeBaseId: baseId, content: `# ${title}\n\n正文占位。` });
     }

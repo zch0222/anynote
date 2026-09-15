@@ -358,8 +358,17 @@ test.describe("移动端搜索", () => {
      * 独立入口（只在各自知识库的 Tab 里出现），所以搜索里不该再有 /m/tasks 候选——
      * 这一点由 `mobile-supplement.spec.ts` 的 M-10 用例专门断言。
      */
+    /*
+     * 搜索「知识库」会命中两类候选：**页面**组里的「知识库」（/m/notes）
+     * 与**知识库**组里按名称列出的每个库（/m/notes/{id}）。点第一项落到哪一边
+     * 取决于分组顺序与查询缓存，所以断言放宽到 `/m/notes` 前缀——
+     * 这条用例要证明的是"搜索能过滤并跳到知识库"，不是具体命中哪一条。
+     */
     await page.getByLabel("搜索页面、知识库或操作").fill("知识库");
-    await page.getByRole("link", { name: /知识库/ }).first().click();
-    await expect(page).toHaveURL(/\/m\/notes$/, { timeout: 30_000 });
+    await page
+      .getByRole("link", { name: /知识库/ })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/m\/notes(\/\d+)?$/, { timeout: 30_000 });
   });
 });
