@@ -41,3 +41,13 @@ export function stripLeadingHeading(markdown: string): string {
   // 顺手吃掉标题后面那一行空行：它属于标题与正文之间的排版，不是正文的开头
   return markdown.replace(/^[ \t]*#[ \t][^\n]*(?:\n|$)/, "").replace(/^\n+/, "");
 }
+
+/**
+ * 正文字数：去掉顶部 H1 之后的字符数。
+ *
+ * 抽成具名函数是为了让**桌面与移动两处字数统计走同一条口径**——它们此前各写一遍
+ * `stripLeadingHeading(x).length`，改一处漏一处就会两个端显示不同的数字。
+ */
+export function bodyCharCount(markdown: string): number {
+  return stripLeadingHeading(markdown).length;
+}

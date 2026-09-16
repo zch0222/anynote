@@ -103,6 +103,35 @@ describe("MobileNoteEditor", () => {
     expect(screen.getByTestId("mobile-note-meta")).toHaveTextContent(/^0 字$/);
   });
 
+  /*
+   * 回归（与桌面同一处 bug）：字数曾经取自 `initialContent`，
+   * 那个值只在打开笔记时设一次，于是打字时数字不动、要刷新才更新。
+   */
+  it("字数随输入实时更新，不再停在打开时的快照", () => {
+    mockNote(LOADED);
+    renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+    expect(screen.getByTestId("mobile-note-meta")).toHaveTextContent("4 字");
+
+    act(() => {
+      // 正文由"正文内容"（4 字）改成"正文内容改了"（6 字）
+      editorProps.mock.calls.at(-1)?.[0].onChange("# 会议纪要\n\n正文内容改了", {
+        state: {
+          doc: {
+            firstChild: {
+              type: { name: "heading" },
+              attrs: { level: 1 },
+              textContent: "会议纪要",
+            },
+          },
+        },
+      });
+    });
+
+    // 标题不算进去，只量正文；数字必须跟着这次输入走
+    expect(screen.getByTestId("mobile-note-meta")).toHaveTextContent("6 字");
+  });
+
   it("保存状态显示在顶栏而不是占正文空间", () => {
     mockNote(LOADED);
     renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);

@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ensureLeadingHeading, stripLeadingHeading } from "@/features/notes/lib/leading-heading";
+import { bodyCharCount, ensureLeadingHeading } from "@/features/notes/lib/leading-heading";
 import { DEFAULT_PAGE_SIZE, toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -65,6 +65,14 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   const { setTitle, onEditorReady, getTitleForContent } = useNoteTitle();
   // 只在笔记切换时重置一次编辑器初始值，避免自动保存的回写打断输入
   const [initialContent, setInitialContent] = useState<string | null>(null);
+  /**
+   * 正文字数（不含顶部 H1）。
+   *
+   * 单独立一个 state 而不是从 `initialContent` 现算：后者是"打开笔记时的快照"，
+   * 拿它算出来的字数在整段编辑过程中不会变。初值在笔记加载时设一次，
+   * 之后每次 `docChanged` 由 `handleContentChange` 推进。
+   */
+  const [charCount, setCharCount] = useState(0);
   const loadedNoteId = useRef<number | null>(null);
   const contentRef = useRef("");
   /** 删除确认框（D-04 ④）：取代 `window.confirm`。 */
@@ -82,11 +90,20 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
     const content = ensureLeadingHeading(note.data.content ?? "", note.data.title);
     contentRef.current = content;
     setInitialContent(content);
+    // 初值跟着同一次设置走，避免首屏先闪一个 0 再跳到真实值
+    setCharCount(bodyCharCount(content));
   }, [note.data, noteId, setTitle]);
 
   const handleContentChange = useCallback<NonNullable<TiptapEditorProps["onChange"]>>(
     (markdown, editor) => {
       contentRef.current = markdown;
+      /*
+       * 字数在这里更新，**不能**从 `initialContent` 现算：那个值只在打开笔记时设一次，
+       * 拿它算出来的数字会一直停在打开那一刻，用户边打字边看就是"统计不动"。
+       * 放在 `handleContentChange` 里而不是订阅编辑器状态：这一条回调本来就在每次
+       * `docChanged` 时触发，是同一份正文，不需要再建一条订阅。
+       */
+      setCharCount(bodyCharCount(markdown));
       scheduleSave({ title: getTitleForContent(editor), content: markdown });
     },
     [scheduleSave, getTitleForContent],
@@ -269,7 +286,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                   flush
                   className="mt-6"
                 />
-                <NoteFooter contentLength={stripLeadingHeading(initialContent).length} />
+                <NoteFooter contentLength={charCount} />
               </article>
             </div>
           )}

@@ -201,6 +201,33 @@ describe("NoteEditor 布局与编辑器接线", () => {
     expect(container.querySelector('[aria-label="笔记目录"]')).toBeNull();
   });
 
+  /*
+   * 回归：字数曾经取自 `initialContent`（打开笔记时设一次、之后不再变），
+   * 所以一边打字一边看，数字一直停在打开那一刻的值——要刷新页面才会更新。
+   * 现在按 `handleContentChange` 收到的实时正文算。
+   */
+  it("字数随输入实时更新，不再停在打开时的快照", async () => {
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+
+    // 初始正文是"正文"两个字
+    expect(screen.getByTestId("note-char-count")).toHaveTextContent("2 字");
+
+    const fakeEditor = {
+      state: {
+        doc: {
+          firstChild: { type: { name: "heading" }, attrs: { level: 1 }, textContent: "测试笔记" },
+        },
+      },
+    };
+    act(() => {
+      // 用户把正文从"正文"（2 字）改成"正文加五个字"（6 字）
+      editorProps.mock.calls.at(-1)?.[0].onChange("# 测试笔记\n\n正文加五个字", fakeEditor);
+    });
+
+    // 标题（H1）不算进去，只量正文；数字必须跟着这次输入走
+    expect(screen.getByTestId("note-char-count")).toHaveTextContent("6 字");
+  });
   it("给编辑器接上图片上传实现，笔记里才能插图", async () => {
     renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
     await waitFor(() => expect(editorProps).toHaveBeenCalled());

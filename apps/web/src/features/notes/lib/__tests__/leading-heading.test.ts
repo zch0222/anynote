@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ensureLeadingHeading, stripLeadingHeading } from "../leading-heading";
+import { bodyCharCount, ensureLeadingHeading, stripLeadingHeading } from "../leading-heading";
 
 describe("ensureLeadingHeading", () => {
   it("正文已经有顶部 H1 时原样返回，连前导空行都不动", () => {
@@ -67,5 +67,30 @@ describe("stripLeadingHeading", () => {
 
   it("只吃第一行，正文里后面的 H1 保持不动", () => {
     expect(stripLeadingHeading("# 标题\n\n一、按钮\n\n# 二级标题")).toBe("一、按钮\n\n# 二级标题");
+  });
+});
+
+/**
+ * 桌面与移动两处字数统计都走这个函数，所以它的口径就是"用户看到的字数"。
+ */
+describe("bodyCharCount", () => {
+  it("只算正文，标题与它后面那行空行都不计", () => {
+    // "# 会议纪要\n\n" 是 8 个字符，但不该出现在字数里
+    expect(bodyCharCount("# 会议纪要\n\n正文内容")).toBe(4);
+    expect(bodyCharCount("# 会议纪要")).toBe(0);
+  });
+
+  it("没有顶部 H1 时整段都算正文", () => {
+    expect(bodyCharCount("正文内容")).toBe(4);
+  });
+
+  it("空正文是 0", () => {
+    expect(bodyCharCount("")).toBe(0);
+  });
+
+  it("随正文长度单调增长——这是'实时统计'的前提", () => {
+    const short = bodyCharCount("# 标题\n\n正文");
+    const long = bodyCharCount("# 标题\n\n正文继续写下去");
+    expect(long).toBeGreaterThan(short);
   });
 });

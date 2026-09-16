@@ -8,7 +8,7 @@ import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { EditorSkeleton } from "@/components/loading/skeletons";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
 import { SaveStatusBadge } from "@/components/note/save-status";
-import { ensureLeadingHeading, stripLeadingHeading } from "@/features/notes/lib/leading-heading";
+import { bodyCharCount, ensureLeadingHeading } from "@/features/notes/lib/leading-heading";
 import { toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -49,6 +49,11 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
   const { title, setTitle, onEditorReady, getTitleForContent } = useNoteTitle();
   // 只在笔记切换时重置一次编辑器初始值，避免自动保存的回写打断输入
   const [initialContent, setInitialContent] = useState<string | null>(null);
+  /**
+   * 正文字数（不含顶部 H1）。与桌面同一处口径，理由见 `note-editor.tsx` 的同名 state：
+   * 从 `initialContent` 现算的数字会一直停在"打开笔记那一刻"，打字时不跟着动。
+   */
+  const [charCount, setCharCount] = useState(0);
   const loadedNoteId = useRef<number | null>(null);
   const contentRef = useRef("");
 
@@ -63,11 +68,15 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
     const content = ensureLeadingHeading(note.data.content ?? "", note.data.title);
     contentRef.current = content;
     setInitialContent(content);
+    // 初值跟着同一次设置走，避免首屏先闪一个 0 再跳到真实值
+    setCharCount(bodyCharCount(content));
   }, [note.data, noteId, setTitle]);
 
   const handleContentChange = useCallback<NonNullable<TiptapEditorProps["onChange"]>>(
     (markdown, editor) => {
       contentRef.current = markdown;
+      // 字数随每次 docChanged 推进，不留在打开时的快照上
+      setCharCount(bodyCharCount(markdown));
       scheduleSave({ title: getTitleForContent(editor), content: markdown });
     },
     [scheduleSave, getTitleForContent],
@@ -207,9 +216,7 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
             className="shrink-0 border-b px-4 pb-3 text-footnote text-label-tertiary"
           >
             {note.data?.updateTime ? `${formatRelativeTime(note.data.updateTime)}更新 · ` : ""}
-            <span className="tabular">
-              {stripLeadingHeading(initialContent).length.toLocaleString("zh-CN")} 字
-            </span>
+            <span className="tabular">{charCount.toLocaleString("zh-CN")} 字</span>
             {note.data?.knowledgeBaseName ? ` · ${note.data.knowledgeBaseName}` : ""}
           </p>
           <TiptapEditor
