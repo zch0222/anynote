@@ -93,7 +93,7 @@ id= 6 'n:mooc:read'              association='' ua=0 uat='' is_delete=0
 |------|------|------|
 | 拆栈 | `docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml down -v --remove-orphans` | 20 容器 / 11 卷 / 1 网络全清 |
 | 建 JAR | `pnpm services:build` | BUILD SUCCESS，9 个 JAR |
-| 建镜像并起栈 | 同组 `-f` 参数 + `up -d --build` | 首次全量构建，20 容器 healthy |
+| 建镜像并起栈 | 同组 `-f` 参数 + `up -d --build` | 首次全量构建；**20 容器最终全部 healthy**（logstash 冷启动慢，见未完成项 3） |
 | 健康自检 | 7 个 Java 服务 `/actuator/health` + collab `/healthz` + 前端 `/login` | 全部 UP / ok / 200 |
 
 ### 拆栈暴露的一个必要的手工步骤
@@ -163,7 +163,8 @@ id= 6 'n:mooc:read'              association='' ua=0 uat='' is_delete=0
 2. **MinIO 凭据仍需人工补**（见「需要知道」第 1 条）。未设计自动注入，
    因为它与 `MINIO_PLAN` 的「secretKey 不入库」约定冲突，需要先拍板。
 
-3. **`logstash` 显示 unhealthy，但功能未受影响。** 容器在跑、日志正常输出，
-   只有 healthcheck 判定不过。与本批改动无关（未触碰 logstash），
-   也未被任何门禁依赖（E2E、预算与 Lighthouse 都不用 logstash ——
-   后两者的两条命令在本轮重建的栈上都已实跑通过）。本轮未深究。
+3. **`logstash` 冷启动较慢，曾短暂显示 unhealthy，随后自行恢复。**
+   首次起的头几分钟 healthcheck 不过（日志只有 ECS 兼容性提示，无报错），
+   约 20 分钟后转为 healthy。**最终 20/20 容器全部 healthy**。
+   与本批改动无关（未触碰 logstash），也没有被任何门禁依赖。
+   记在这里是提醒：**刚起栈时别急着判定失败**，给它一点时间。
