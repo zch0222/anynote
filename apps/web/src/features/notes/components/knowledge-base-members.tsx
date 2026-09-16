@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { MoreHorizontal, UserMinus, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { KB_CONTENT_COLUMN, KnowledgeBasePageHeader } from "./knowledge-base-page-header";
 
 /** 搜索防抖时长（D-09 图例 7）：300ms 是"打字停下来"与"按键即请求"之间的常用折中。 */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -78,28 +79,44 @@ export function KnowledgeBaseMembers({ baseId }: { baseId: number }) {
     }
   }
 
+  /*
+   * 副标题走画板口径（D-09 实测：`12 位成员 · 我的权限：管理员`）：报真实统计
+   * 与**我自己的权限**。原来那句「能访问这个知识库的人，以及他们各自的权限档位。」
+   * 在任何一个库上读起来都一样，等于没提供信息；而"我的权限"恰恰是这一页最该
+   * 在页头回答的问题（用户点进成员 Tab，多半就是想确认自己能做什么）。
+   */
+  const memberCount = members.data?.total ?? rows.length;
+  const myPermission = base.data?.permissions;
+  const subtitle = memberCount
+    ? `${memberCount} 位成员 · 我的权限：${permissionLabel(myPermission)}`
+    : "能访问这个知识库的人，以及他们各自的权限档位。";
+
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-4" data-testid="kb-members">
-      <header className="space-y-1">
-        <h1 className="text-title text-label">成员</h1>
-        <p className="text-footnote text-label-secondary">
-          能访问这个知识库的人，以及他们各自的权限档位。
-        </p>
-      </header>
+    <div className={cn(KB_CONTENT_COLUMN, "space-y-4")} data-testid="kb-members">
+      <KnowledgeBasePageHeader title="成员" subtitle={subtitle} />
 
       <PermissionGuide />
 
-      <div className="relative">
-        <Input
-          value={keyword}
-          onChange={(event) => {
-            setKeyword(event.target.value);
-          }}
-          placeholder="按用户名搜索"
-          aria-label="按用户名搜索"
-          className="h-9 bg-grouped"
-          data-testid="member-search"
-        />
+      <div className="flex items-center gap-3">
+        <div className="relative min-w-0 flex-1">
+          <Input
+            value={keyword}
+            onChange={(event) => {
+              setKeyword(event.target.value);
+            }}
+            placeholder="按用户名搜索"
+            aria-label="按用户名搜索"
+            className="h-9 bg-grouped"
+            data-testid="member-search"
+          />
+        </div>
+        {/* D-09：搜索行右侧的「共 N 位」计数——搜索后才知道筛掉了多少人 */}
+        <span
+          className="tabular shrink-0 text-footnote text-label-tertiary"
+          data-testid="member-count"
+        >
+          共 {memberCount} 位
+        </span>
       </div>
 
       {members.isError ? (

@@ -4,7 +4,7 @@ import {
   getWorkspaceRoute,
   isFullBleedRoute,
   isImmersiveMobileRoute,
-  isKnowledgeBaseOverviewRoute,
+  isKnowledgeBaseTabRoute,
   isMobilePath,
   isRouteActive,
   knowledgeBaseRoute,
@@ -103,36 +103,45 @@ describe("满幅路由", () => {
 });
 
 /**
- * 概览页的顶栏抑制（D-02 图例 7 / 8 / 9）。
+ * 知识库内 Tab 页的顶栏抑制（D-01 / D-05 / D-07 / D-08 / D-09，含 D-02 概览）。
  *
- * 画板上搜索、主题与「新建笔记」都在头图卡片的动作行里，屏幕顶部没有 56 高的栏。
- * 顶栏若照常渲染，同一屏会出现两套「切换主题」/「打开命令面板」——
- * 读屏会念两遍，`getByRole` 也会变成 strict mode violation。
+ * 2026-09-17 拍板：**以补稿画板为准**。画板里这些页屏幕顶部都没有 56 高的栏，
+ * 页头（Display 大标题 + 副标题）直接贴窗口上沿开始，搜索 / 主题落在页头动作行里。
+ * 顶栏若照常渲染，除了多一条画板没有的横栏，还会让同一屏出现两套「切换主题」/
+ * 「打开命令面板」——读屏会念两遍，`getByRole` 也会变成 strict mode violation。
+ *
+ * 这条推翻了 `ui-redesign.spec.ts` 里对 PDF 原稿（p01–p16）的旧断言，该用例已同步改。
  */
-describe("知识库概览页（D-02）不渲染顶栏", () => {
-  it("只有 /notes/{id}/overview 命中", () => {
-    expect(isKnowledgeBaseOverviewRoute("/notes/7/overview")).toBe(true);
-    expect(isKnowledgeBaseOverviewRoute("/notes/128/overview")).toBe(true);
+describe("知识库内 Tab 页不渲染顶栏", () => {
+  it("六个 Tab 与库根都命中", () => {
+    expect(isKnowledgeBaseTabRoute("/notes/7")).toBe(true);
+    expect(isKnowledgeBaseTabRoute("/notes/128")).toBe(true);
+    expect(isKnowledgeBaseTabRoute("/notes/7/overview")).toBe(true);
+    expect(isKnowledgeBaseTabRoute("/notes/7/mooc")).toBe(true);
+    expect(isKnowledgeBaseTabRoute("/notes/7/tasks")).toBe(true);
+    expect(isKnowledgeBaseTabRoute("/notes/7/docs")).toBe(true);
+    expect(isKnowledgeBaseTabRoute("/notes/7/members")).toBe(true);
   });
 
-  it("同级的其它 Tab 与更深的路径都不命中", () => {
-    // 这几个页面画板上仍有各自的页头，顶栏要保留
-    expect(isKnowledgeBaseOverviewRoute("/notes/7")).toBe(false);
-    expect(isKnowledgeBaseOverviewRoute("/notes/7/docs")).toBe(false);
-    expect(isKnowledgeBaseOverviewRoute("/notes/7/members")).toBe(false);
-    expect(isKnowledgeBaseOverviewRoute("/notes/7/tasks")).toBe(false);
-    // 编辑器 / 历史版本按满幅处理，与顶栏抑制是两件事
-    expect(isKnowledgeBaseOverviewRoute("/notes/7/42")).toBe(false);
-    expect(isKnowledgeBaseOverviewRoute("/notes/7/42/history")).toBe(false);
+  it("编辑器、历史版本与各详情页不命中（它们自带页头/返回键）", () => {
+    // 编辑器与历史版本是满幅路由，顶栏属于它们自己，且没有 Display 页头
+    expect(isKnowledgeBaseTabRoute("/notes/7/42")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/notes/7/42/history")).toBe(false);
+    // 详情页自带返回键与页头
+    expect(isKnowledgeBaseTabRoute("/notes/7/mooc/9")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/notes/7/tasks/new")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/notes/7/tasks/9")).toBe(false);
   });
 
   it("按完整段匹配，不接受尾随段、前缀或非数字 id", () => {
-    expect(isKnowledgeBaseOverviewRoute("/notes/7/overview/extra")).toBe(false);
-    expect(isKnowledgeBaseOverviewRoute("/notes/7/overviewX")).toBe(false);
-    expect(isKnowledgeBaseOverviewRoute("/notes/abc/overview")).toBe(false);
-    expect(isKnowledgeBaseOverviewRoute("/notes/overview")).toBe(false);
-    expect(isKnowledgeBaseOverviewRoute("/notes/7/overview/")).toBe(false);
-    expect(isKnowledgeBaseOverviewRoute("/ai/chat")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/notes/7/overview/extra")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/notes/7/overviewX")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/notes/abc/tasks")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/notes/new")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/notes/7/tasks/")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/notes")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/ai/chat")).toBe(false);
+    expect(isKnowledgeBaseTabRoute("/settings/profile")).toBe(false);
   });
 });
 

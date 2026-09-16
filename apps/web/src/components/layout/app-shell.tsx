@@ -8,7 +8,7 @@ import { type ReactNode, useEffect } from "react";
 import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
 import { CommandPalette } from "./command-palette";
-import { isFullBleedRoute, isKnowledgeBaseOverviewRoute } from "./navigation";
+import { isFullBleedRoute, isKnowledgeBaseTabRoute } from "./navigation";
 import { RouteProgressBar } from "./route-progress-bar";
 import { WorkspaceSession } from "./workspace-session";
 
@@ -27,10 +27,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const fullBleed = isFullBleedRoute(pathname);
   /*
-   * 概览页（D-02）不渲染顶栏：搜索 / 主题 / 新建笔记三个动作都在头图卡片的
-   * 动作行里（图例 7 / 8 / 9），顶栏再渲染一份会出现两套同名按钮。
+   * 知识库内的 Tab 页（D-01 笔记 / D-05 慕课 / D-07 任务 / D-08 资料 / D-09 成员）
+   * 与概览页（D-02）都不渲染顶栏：补稿画板里屏幕顶部没有 56 高的栏，
+   * 搜索 / 主题两个动作落在各页页头右侧的动作行里。
    */
-  const hideHeader = isKnowledgeBaseOverviewRoute(pathname);
+  const hideHeader = isKnowledgeBaseTabRoute(pathname);
   const sidebarOpen = useUIStore((state) => state.sidebarOpen);
   const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 
@@ -69,7 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {/*
           路由进度条紧跟顶栏：`sticky top-14` 与顶栏的 `min-h-14` 对齐，
           长页面滚动时它随顶栏一起留在视口顶部，不会滑出视野。
-          概览页没有顶栏，进度条也就没有要对齐的东西，一并省略。
+          无顶栏的页面没有要对齐的东西，进度条也就一并省略。
         */}
         {hideHeader ? null : <RouteProgressBar />}
         <div
@@ -80,9 +81,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               ? "flex min-h-0 flex-1 flex-col outline-none"
               : hideHeader
                 ? /*
-                   * 概览页没有顶栏，得自己补上顶部留白：画板实测内容从 y=27 起，
-                   * 而常规页面那 56 高的顶栏本身就相当于留白。少了这一段，
-                   * 头图卡片会贴着窗口上沿，整页比画板高 27px。
+                   * 知识库内的 Tab 页没有顶栏，得自己补上顶部留白：画板实测页头内容
+                   * 从 y=27 起，而常规页面那 56 高的顶栏本身就相当于留白。少了这一段，
+                   * 页头会贴着窗口上沿，整页比画板高 27px。
                    */
                   "flex-1 px-5 pt-7 pb-5 outline-none sm:px-8"
                 : "flex-1 px-5 pb-5 outline-none sm:px-8"

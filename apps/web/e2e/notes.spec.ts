@@ -160,6 +160,8 @@ test.describe("笔记编辑器：布局与保存冲突", () => {
     await page.keyboard.type(`离开前 ${Date.now()}`);
     // 用顶栏的知识库切换器（客户端路由，保留 TanStack Query 缓存）回到画廊。
     // 侧栏里也有裸 `/notes` 链接，但切换器是编辑页顶栏里语义最明确的那一个。
+    // 编辑器（`/notes/:baseId/:noteId`）是满幅路由、**不在** `isKnowledgeBaseTabRoute`
+    // 之内，所以它仍然保留顶栏与切换器。
     await page.getByTestId("kb-switcher").click();
     await expect(page).toHaveURL(/\/notes$/, { timeout: 30_000 });
 
