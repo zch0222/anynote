@@ -46,7 +46,7 @@ git ls-files --others --exclude-standard               # 新增未跟踪文件�
 |------|------|
 | `npx tsc --noEmit`（apps/web） | **通过，无输出**。注：宿主机 `packages/api-client/src/` 停在 2026-09-10，比 `openapi/specs/` 旧，先按 `infra/Dockerfile.web` 的同一命令重新派生 6 份类型后才干净——详见「审计要点」第 6 条 |
 | `npx vitest run`（apps/web） | **151 文件 / 1773 用例全部通过**（改前 151 / 1761；本批新增 12 条） |
-| `npx playwright test`（全量，含移动端） | **126 / 126 通过**。跑 3 轮：2 轮出现偶发（`cli-authorize` 1 条、`collab` 1 条），**单跑均全过**（`collab.spec.ts cli-authorize.spec.ts` 合跑 7/7、8.7s），第 3 轮 126/126 全绿 |
+| `npx playwright test`（全量，含移动端） | **126 / 126 通过**。在最终代码状态下连跑 5 轮：**3 轮 126/126 全绿**，另 2 轮各出现偶发（1 轮是 `cli-authorize` + `collab` 两条、1 轮是 `notes-image-upload` 一条）。**每一条偶发都单独复跑验证过**：`cli-authorize.spec.ts` 5/5、`collab.spec.ts cli-authorize.spec.ts` 7/7（8.7s）、`notes-image-upload.spec.ts` 4/4（11.3s）。偶发点每次都不同（含一条与本批完全无关的 MinIO 上传路径），符合既有的环境性抖动特征，非本批引入 |
 | `pnpm --filter web bundle:budget` | 单条路由首屏 **302.8 KB / 预算 310 PASS**；编辑器 chunk 14.1 / 250 PASS；移动端 `/m/notes/[baseId]/[noteId]` **250.9 / 250 FAIL —— 既有问题，非本批引入**（用 `git stash` 回退到改前源码重建，产物同为 250.9 KB，逐字节相同） |
 | `pnpm --filter web lighthouse:budget`（桌面） | **5 / 5 PASS**：login 100 · `/dashboard`→`/notes` 99 · `/notes` 99 · `/docs` 98–99 · `/ai/chat` 99，无障碍均 96（门槛 90 / 95） |
 | `pnpm --filter web lighthouse:budget:mobile` | **5 / 5 PASS**：login 93–95 · `/m/dashboard` 88–89 · `/m/notes` 87 · `/m/docs` 85 · `/m/ai/chat` 89，无障碍均 96（门槛 85 / 95） |
