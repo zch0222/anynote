@@ -89,6 +89,7 @@ D-02 要的是「头图卡片 + 5 格计数 + 三块预览」，而当时的实�
 | `components/__tests__/knowledge-base-overview.test.tsx` | 新增 | 27 条。六棵查询全部在 **hook 层**打桩（不 mock 全局 fetch）。覆盖：头图各字段与空值回退、权限 1/2/3/4/undefined 五态、动作行唯一性、5 格的 href 与计数、骨架而非 0、预览截断与行链接、资料行不可点、空态 / 错误态、**不存在 / 无权限三态（含"加载中不误判为不存在"）**、查询复用 |
 | `lib/__tests__/overview-sections.test.ts` | 新增 | 10 条。钉住 5 格与侧栏的**顺序与文案一致**、色块各不相同、资料用 `bg-indigo`、`tileCountText` 的边界 |
 | `components/__tests__/knowledge-base-detail.test.tsx` | 修改 | 概览的用例整体迁到新文件；import 改为只取 `KnowledgeBaseDocs`，并移除随之无用的 `useKnowledgeBaseQuery` 桩。余 7 条 |
+| `app/(workspace)/notes/[baseId]/overview/page.tsx` | 修改 | 改指向新文件的 `KnowledgeBaseOverview`（原从 `knowledge-base-detail` 导入）。路由段与 `notFound()` 守卫不变 |
 
 ### 另外两处真实缺陷（本轮由真实浏览器实测暴露并修复）
 
@@ -139,7 +140,18 @@ E2E 新增 1 条（第一条缺陷，跑真实栈）。
 |------|------|-----------|
 | `app/globals.css` | 修改 | 新增 `--state-indigo: #5856d6` 与 `--color-indigo` 映射。D-02 图例 14 给「资料」色块指定了**靛蓝 #5856D6**，而这个值此前不在 Token 表里（其他四个色块都能复用已有语义色）。深色沿用同一个值：靛蓝在深色下对比度足够，画板深色版也是同一支 |
 
-## 四、画板比对工具（`apps/web/scripts/`）
+## 四、加载骨架（`apps/web/src/components/loading/`、`app/(workspace)/notes/[baseId]/overview/`）
+
+对应图例 26。概览段此前没有自己的 `loading.tsx`，按 Next 的就近规则继承了
+`[baseId]/loading.tsx` 的**行列表**骨架——见第一节末「第二条缺陷」。
+
+| 文件 | 状态 | 作用与原因 |
+|------|------|-----------|
+| `app/(workspace)/notes/[baseId]/overview/loading.tsx` | 新增 | 概览段的加载态。放 `overview/` 而不是 `[baseId]/`：后者是笔记 Tab 专属，概览 / 资料 / 成员各有各的形状，段级就近覆盖才对 |
+| `components/loading/skeletons.tsx` | 修改 | 新增预设 `KnowledgeBaseOverviewSkeleton`，并在模块顶部的「骨架 → 宿主映射」表里登记一行（那张表是这套预设的索引，漏登记下一个页面就找不到它）。尺寸逐项对齐画板实测值：卡片 1000 宽 / 封面 96 / 5 格各 98 / 预览区同栅格断点。文本块按**行盒**给高（41 / 24 / 18），不是凑整数——见「审计要点」第 8 条 |
+| `components/loading/__tests__/skeletons.test.tsx` | 修改 | +5 条：纳入公共契约用例（`aria-busy` + 内部灰块对读屏隐藏）；另 4 条钉住结构（恰好 5 个 98 高的格）、封面 96、容器 1000 宽、预览区断点，以及三个行盒的具体值（41 / 24 / 18）并反向断言不再使用先前那套矮行盒 |
+
+## 五、画板比对工具（`apps/web/scripts/`）
 
 这一节修的是**工具缺陷**，不是概览页本身。但它决定了"截图对比"这件事是否可信，
 所以必须记下来：修之前，所有画板的参考图都是错位的。
@@ -168,7 +180,7 @@ M-07 / M-08 / M-10 / M-11 的浅深两态）。
 
 生成命令：`node apps/web/scripts/extract-supplement-reference.mjs`
 
-## 五、E2E（`apps/web/e2e/`）
+## 六、E2E（`apps/web/e2e/`）
 
 | 文件 | 状态 | 作用与原因 |
 |------|------|-----------|
@@ -179,6 +191,12 @@ M-07 / M-08 / M-10 / M-11 的浅深两态）。
 > 评审时只看用例列表会以为行高已被覆盖。真实栈上造不出资料数据
 > （只有上传端点，没有"创建一条文档记录"的接口），所以资料行高改由单测覆盖，
 > E2E 只断言新库必然出现的空态与「去上传」链接。
+
+## 七、文档（仓库根）
+
+| 文件 | 状态 | 作用与原因 |
+|------|------|-----------|
+| `CLAUDE.md` | 修改 | 按它自己的「文档维护约定」同步测试口径：Playwright 118 → **126** 条（桌面 85 + 移动端 41）、前端单测 1696 → **1761**。两处数字都用 `npx playwright test --list` 与 `npx vitest run` 的实测输出核对，不是按增量推算。CLAUDE.md 是"指针 + 约束集合"，其中的计数会随每批改动过期，不同步就会变成误导后来人的悬空事实 |
 
 ## 审计要点
 
