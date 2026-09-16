@@ -47,9 +47,11 @@ describe("CreateNotePage", () => {
     post.mockResolvedValue(envelope(88));
     renderWithProviders(<CreateNotePage />);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "甲库" })).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "甲库" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "乙库" })).toHaveAttribute("aria-pressed", "false");
+    // 用正则：D-03 给库卡加了副标题（`普通知识库 · 2 小时前更新`），
+    // 卡片的可访问名因此从「甲库」变成「甲库 普通知识库」。见下一条用例的说明。
+    await waitFor(() => expect(screen.getByRole("button", { name: /甲库/ })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /甲库/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /乙库/ })).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.change(screen.getByLabelText("标题"), { target: { value: "新笔记标题" } });
     fireEvent.click(screen.getByRole("button", { name: "创建笔记" }));
@@ -71,9 +73,15 @@ describe("CreateNotePage", () => {
     post.mockResolvedValue(envelope(99));
     renderWithProviders(<CreateNotePage />);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "乙库" })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "乙库" }));
-    expect(screen.getByRole("button", { name: "乙库" })).toHaveAttribute("aria-pressed", "true");
+    /*
+     * 用正则而不是精确串：D-03 给库卡加了副标题（`普通知识库 · 2 小时前更新`），
+     * 卡片的可访问名因此从「乙库」变成「乙库 普通知识库」。
+     * 精确匹配会把"副标题有没有渲染出来"和"能不能选中这个库"耦合成一条断言，
+     * 而这两件事该分开测（副标题有单独的用例）。
+     */
+    await waitFor(() => expect(screen.getByRole("button", { name: /乙库/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /乙库/ }));
+    expect(screen.getByRole("button", { name: /乙库/ })).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.change(screen.getByLabelText("标题"), { target: { value: "归属乙库" } });
     fireEvent.click(screen.getByRole("button", { name: "创建笔记" }));
@@ -94,6 +102,55 @@ describe("CreateNotePage", () => {
     await waitFor(() => expect(screen.getByText("标题至少 3 个字符")).toBeInTheDocument());
     expect(post).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  /*
+   * D-03：四处画板元素原来整个缺失。逐条钉住，因为它们的共同点是
+   * "画板上有、图例里没有编号、附录 A 也没收"——没有用例守着就还会再丢一次。
+   */
+  describe("D-03 画板元素", () => {
+    it("归属区块右侧有「笔记必须归属一个知识库」提示", async () => {
+      get.mockResolvedValue(envelope({ rows: [{ id: 100, knowledgeBaseName: "甲库" }] }));
+      renderWithProviders(<CreateNotePage />);
+      // 这句说明的是"能不能先写、之后再归类"这个真实误解（knowledgeBaseId 是必填）
+      expect(await screen.findByText("笔记必须归属一个知识库")).toBeInTheDocument();
+    });
+
+    it("库卡有「类型 · 更新时间」副标题", async () => {
+      get.mockResolvedValue(
+        envelope({
+          rows: [
+            {
+              id: 100,
+              knowledgeBaseName: "甲库",
+              type: 1,
+              updateTime: new Date(Date.now() - 2 * 3600_000).toISOString(),
+            },
+          ],
+        }),
+      );
+      renderWithProviders(<CreateNotePage />);
+
+      // 组织知识库（type=1）；普通库会渲染成「普通知识库」
+      expect(await screen.findByText(/组织知识库/)).toBeInTheDocument();
+      expect(screen.getByText(/组织知识库/).textContent).toMatch(/更新$/);
+    });
+
+    it("标题计数在输入框内右侧，且补了 H1 提示行", async () => {
+      get.mockResolvedValue(envelope({ rows: [{ id: 100, knowledgeBaseName: "甲库" }] }));
+      renderWithProviders(<CreateNotePage />);
+
+      const input = await screen.findByLabelText("标题");
+      const counter = screen.getByTestId("title-counter");
+      // 计数必须在输入框的**父容器**里（即视觉上叠在框内），而不是 label 行
+      expect(input.parentElement).toContainElement(counter);
+      expect(counter).toHaveTextContent("0 / 15");
+
+      // 标题会变成正文 H1——没有这句提示，用户会在正文里再写一遍标题
+      expect(
+        screen.getByText("标题会作为正文的第一个标题（H1），之后可以在编辑器里直接改。"),
+      ).toBeInTheDocument();
+    });
   });
 
   it("initialBaseId 预选归属库，不再退回第一个", async () => {
