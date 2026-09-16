@@ -137,7 +137,9 @@
 
 | 文件 | 状态 | 作用与原因 |
 |------|------|------------|
-| `infra/sql/migrations/2026-09-16-sys-permission-rule-user-associated.sql` | 新增 | **本轮最关键的环境修复**。`SysPermissionRule` 声明了 `is_user_associated` 与 `user_associated_table_name`，但建表语句与运行库都没有这两列，导致**所有走权限规则的查询**报 `Unknown column 'is_user_associated'`。最先撞上的是慕课读接口，所以 M7.6 第 3 条一直被认为是"权限规则数据缺失"——实际规则数据一直都在（id 5–8），根因是**列缺失**。影响面不止慕课：`ndoc:read`、`a:chatConversation:*` 走同一条查询 |
+| `infra/sql/migrations/2026-09-16-sys-permission-rule-user-associated.sql` | 新增 | **运行库**的一次性修复。`SysPermissionRule` 声明了 `is_user_associated` 与 `user_associated_table_name`，但建表语句与运行库都没有这两列，导致**所有走权限规则的查询**报 `Unknown column 'is_user_associated'`。最先撞上的是慕课读接口，所以 M7.6 第 3 条一直被认为是"权限规则数据缺失"——实际规则数据一直都在（id 5–8），根因是**列缺失**。影响面不止慕课：`ndoc:read`、`a:chatConversation:*` 走同一条查询。**本文件只修运行库；建表文件的修复见下面 4 行**，两者缺一不可（只修前者则新环境照旧踩坑） |
+| `infra/sql/anynote.sql`、`infra/sql/sys_permission_rule.sql` | 修改 | **建表语句补上同样两列**，让新建库不再漂移。`sys_permission_rule.sql` 同时改了 `INSERT`：它是**位置式**插入（8 条元组 × 18 值，不带列名），加列后不给元组补值就会列数不匹配、建表直接失败 |
+| `infra/docker/mysql/init/source/anynote.sql`、`…/sys_permission_rule.sql` | 修改 | 同上。**这两份才是容器初始化真正加载的**——compose 把 `infra/docker/mysql/init` 挂到 `/docker-entrypoint-initdb.d`，其中的 `00-import-sql.sh` 逐个导入 `source/*.sql`。它们与 `infra/sql/` 下是逐字节相同的副本（两份都入库），是本缺陷能潜伏这么久的直接原因：改一处、另一处照旧 |
 | `biome.json` | 修改 | 排除 `apps/web/e2e/.output` / `.ui-capture` / `.ui-supplement` / `playwright-report` / `test-results`：`pnpm check` 与正在跑的 Playwright 会撞车——后者往 `.output/` 写 trace 资源（含 CSS），前者把它当源码扫 |
 
 ## 七、测试与验收工具
@@ -165,12 +167,25 @@
 
 ## 审计要点
 
-1. **`infra/sql/migrations/2026-09-16-sys-permission-rule-user-associated.sql` 是本轮最该先看的文件。**
-   它不是一次普通的数据修正：`sys_permission_rule` 缺列意味着**所有**需要权限规则的端点都会失败，
+1. **`infra/sql/` 下建表语句与 `SysPermissionRule` 的列漂移，是本轮最该先看的改动。**
+   它不是一次普通的数据修正：`sys_permission_rule` 缺 `is_user_associated` 与
+   `user_associated_table_name` 两列，意味着**所有**需要权限规则的端点都会失败，
    而症状（「获取SysPermissionRule：n:mooc:read失败」）看起来像"某条规则没配"，
    M7.6 也因此把它归类成数据问题挂了三周。排查时若只看业务日志会一直往错误方向找。
-   落地后必须同步 `anynote.sql` 与 `sys_permission_rule.sql` 的建表语句（本次已一并补上），
-   否则新环境重建时会再次漂移。
+
+   **本轮分两步修完**（第一步曾不完整，第二步是补的）：
+   - 先加 `infra/sql/migrations/2026-09-16-…sql` 修**运行库**，解开本机验收阻塞；
+   - 再补 4 个**建表文件**，让新建环境不再踩同一个坑：
+     `infra/sql/{anynote,sys_permission_rule}.sql` 与
+     `infra/docker/mysql/init/source/{anynote,sys_permission_rule}.sql`。
+
+   **为什么是 4 个文件**：`infra/sql/` 是手工执行目录（`CLAUDE.md` 的约定），
+   而**容器初始化只挂载 `infra/docker/mysql/init/`**，加载的是 `init/source/` 下
+   另一份逐字节相同的副本。只改一处，另一个入口照旧漂移——这正是本缺陷的成因本身。
+
+   还有一个容易漏的连带点：`sys_permission_rule.sql` 用**位置式 INSERT**
+   （`INSERT INTO … VALUES (…)` 不带列名），加列必须同时给 8 条元组各补两个值，
+   否则重建库会因列数与值数不等而直接失败。已用 md5 校验两处副本逐字节一致。
 
 2. **`features/tasks/schemas.ts` 的状态枚举修正牵连三处界面。**
    `2 = 无需提交`（本库管理员自己）、`3 = 已退回`。旧代码把 2 显示成「已退回」，

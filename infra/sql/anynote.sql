@@ -951,6 +951,8 @@ CREATE TABLE `sys_permission_rule` (
   `permissions_field_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'permissions' COMMENT '权限字段名称',
   `knowledge_base_id_field_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '知识库id字段名',
   `association_table_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '实体知识库关联表名',
+  `is_user_associated` tinyint NOT NULL DEFAULT '0' COMMENT '是否有用户资源关联表(0表示没有，1表示有)',
+  `user_associated_table_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '用户资源关联表名称',
   `is_delete` tinyint(1) DEFAULT '0' COMMENT '删除标志(0标识未删除 1表示删除)',
   `delete_time` bigint NOT NULL DEFAULT '0' COMMENT '删除时间戳',
   `create_by` bigint unsigned DEFAULT '0' COMMENT '创建者',

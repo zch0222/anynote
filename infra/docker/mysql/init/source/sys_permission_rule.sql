@@ -32,6 +32,8 @@ CREATE TABLE `sys_permission_rule` (
   `permissions_field_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'permissions' COMMENT '权限字段名称',
   `knowledge_base_id_field_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '知识库id字段名',
   `association_table_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '实体知识库关联表名',
+  `is_user_associated` tinyint NOT NULL DEFAULT '0' COMMENT '是否有用户资源关联表(0表示没有，1表示有)',
+  `user_associated_table_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '用户资源关联表名称',
   `is_delete` tinyint(1) DEFAULT '0' COMMENT '删除标志(0标识未删除 1表示删除)',
   `delete_time` bigint NOT NULL DEFAULT '0' COMMENT '删除时间戳',
   `create_by` bigint unsigned DEFAULT '0' COMMENT '创建者',
@@ -49,7 +51,7 @@ CREATE TABLE `sys_permission_rule` (
 
 LOCK TABLES `sys_permission_rule` WRITE;
 /*!40000 ALTER TABLE `sys_permission_rule` DISABLE KEYS */;
-INSERT INTO `sys_permission_rule` VALUES (1,'ndoc:read',4,1,'n_doc','id','permissions','knowledge_base_id','',0,0,0,'2024-07-28 15:17:39',0,'2024-07-28 15:17:39',''),(2,'a:chatConversation:read',4,1,'a_chat_conversation','id','permissions','knowledge_base_id','',0,0,0,'2024-07-28 21:25:26',0,'2024-07-28 21:25:26',''),(3,'a:chatConversation:completions',6,1,'a_chat_conversation','id','permissions','knowledge_base_id','',0,0,0,'2024-07-30 00:01:00',0,'2024-07-30 00:01:00',''),(4,'a:chatConversation:update',6,1,'a_chat_conversation','id','permissions','knowledge_base_id','',0,0,0,'2024-07-30 00:16:51',0,'2024-07-30 00:16:51',''),(5,'n:mooc:update',6,1,'n_mooc','id','permissions','knowledge_base_id','',0,0,0,'2025-02-05 00:39:04',0,'2025-02-05 00:39:04',''),(6,'n:mooc:read',4,1,'n_mooc','id','permissions','knowledge_base_id','',0,0,0,'2025-02-05 00:42:06',0,'2025-02-05 00:42:06',''),(7,'n:mooc:manage',7,1,'n_mooc','id','permissions','knowledge_base_id','',0,0,0,'2025-03-29 17:04:23',0,'2025-03-29 17:04:23',''),(8,'a:chatConversation:manage',7,1,'a_chat_conversation','id','permissions','knowledge_base_id','',0,0,0,'2025-04-08 12:51:48',0,'2025-04-08 12:51:48','');
+INSERT INTO `sys_permission_rule` VALUES (1,'ndoc:read',4,1,'n_doc','id','permissions','knowledge_base_id','',0,'',0,0,0,'2024-07-28 15:17:39',0,'2024-07-28 15:17:39',''),(2,'a:chatConversation:read',4,1,'a_chat_conversation','id','permissions','knowledge_base_id','',0,'',0,0,0,'2024-07-28 21:25:26',0,'2024-07-28 21:25:26',''),(3,'a:chatConversation:completions',6,1,'a_chat_conversation','id','permissions','knowledge_base_id','',0,'',0,0,0,'2024-07-30 00:01:00',0,'2024-07-30 00:01:00',''),(4,'a:chatConversation:update',6,1,'a_chat_conversation','id','permissions','knowledge_base_id','',0,'',0,0,0,'2024-07-30 00:16:51',0,'2024-07-30 00:16:51',''),(5,'n:mooc:update',6,1,'n_mooc','id','permissions','knowledge_base_id','',0,'',0,0,0,'2025-02-05 00:39:04',0,'2025-02-05 00:39:04',''),(6,'n:mooc:read',4,1,'n_mooc','id','permissions','knowledge_base_id','',0,'',0,0,0,'2025-02-05 00:42:06',0,'2025-02-05 00:42:06',''),(7,'n:mooc:manage',7,1,'n_mooc','id','permissions','knowledge_base_id','',0,'',0,0,0,'2025-03-29 17:04:23',0,'2025-03-29 17:04:23',''),(8,'a:chatConversation:manage',7,1,'a_chat_conversation','id','permissions','knowledge_base_id','',0,'',0,0,0,'2025-04-08 12:51:48',0,'2025-04-08 12:51:48','');
 /*!40000 ALTER TABLE `sys_permission_rule` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

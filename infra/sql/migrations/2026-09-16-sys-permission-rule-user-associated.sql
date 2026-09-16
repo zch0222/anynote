@@ -25,8 +25,21 @@
 -- 幂等：重复执行安全（列已存在时跳过）。MySQL 8.0 不支持 ADD COLUMN IF NOT EXISTS，
 -- 所以用 information_schema 判断后再走 prepared statement。
 --
--- 落地后需同步 `infra/sql/anynote.sql` 与 `infra/sql/sys_permission_rule.sql` 的
--- 建表语句，避免新环境重建时再次漂移（本次改动已一并补上）。
+-- 建表语句已同步（本次一次性改齐 4 个文件，避免"只修本机、新环境照旧踩坑"）：
+--
+--   infra/sql/anynote.sql                                  CREATE TABLE 补两列
+--   infra/sql/sys_permission_rule.sql                      CREATE TABLE 补两列 + INSERT 补值
+--   infra/docker/mysql/init/source/anynote.sql             同上（容器 init 真正加载的那份）
+--   infra/docker/mysql/init/source/sys_permission_rule.sql 同上
+--
+-- 为什么是 4 个而不是 2 个：`infra/sql/` 是本文件所在的手工执行目录（README 的约定），
+-- 但**容器初始化只挂载 `infra/docker/mysql/init/`**（见 compose 的
+-- `/docker-entrypoint-initdb.d` 与其中的 `00-import-sql.sh`），它加载的是
+-- `init/source/` 下的另一份**逐字节相同的副本**。只改其中一处，另一个入口就照旧漂移。
+--
+-- `sys_permission_rule.sql` 用的是**位置式 INSERT**（`INSERT INTO ... VALUES (...)`，
+-- 不带列名），所以加列必须同时给 8 条元组各补两个值，否则重建库会因列数与值数
+-- 不等而直接失败。两处副本都已用 md5 校验逐字节一致。
 
 SET @db := DATABASE();
 
