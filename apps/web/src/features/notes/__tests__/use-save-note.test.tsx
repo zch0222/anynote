@@ -335,8 +335,12 @@ describe("useSaveNote：离线与卸载", () => {
    * 切到后台（切 App / 锁屏 / 切标签）是移动端**最后一个可靠时机**：
    * iOS 与 Android 常常不发 `pagehide` 就直接回收后台标签页，只在
    * `visibilitychange` 里补一次落盘，才能保证这段改动不随进程一起消失。
+   *
+   * 这里断言**走的是正常保存**（带 `keepalive` 的即发即忘路径不行）：页面并没有
+   * 卸载，用户切回来还会继续编辑，所以这次保存必须推进版本号——否则下一次保存
+   * 会拿过期令牌撞 A0409 并被静默吞掉。
    */
-  it("切到后台时立刻落盘，不等 debounce 到期", async () => {
+  it("切到后台时立刻落盘，走正常保存以推进版本号", async () => {
     patch.mockResolvedValue(okEnvelope(saveResult()));
     const { result } = renderHookWithProviders(() =>
       // debounce 给足够长，确保这次保存**只能**由 visibilitychange 触发
@@ -359,6 +363,55 @@ describe("useSaveNote：离线与卸载", () => {
         title: "切后台",
         content: "未保存",
       });
+      // 关键：不是 keepalive 那条即发即忘、不推进版本号的路
+      expect(patch.mock.calls[0]?.[1].keepalive).toBeUndefined();
+    } finally {
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
+    }
+  });
+
+  /**
+   * 回归：反复「打字 → 切后台 → 切回前台」时，第一轮之后的保存都撞 A0409
+   * 并被静默丢弃（真实浏览器实测服务端只剩第一轮）。根因是切后台曾走
+   * keepalive 路径，不推进 `versionRef`，后续保存一直拿着过期令牌。
+   */
+  it("反复切后台时每轮都用最新版本号，不会连续撞 A0409", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result } = renderHookWithProviders(() =>
+      useSaveNote({ noteId: NOTE_ID, initialVersion: "1000", debounceMs: 600_000 }),
+    );
+
+    const hide = () => {
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        configurable: true,
+      });
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+    };
+
+    try {
+      act(() => result.current.scheduleSave({ title: "第一轮", content: "1" }));
+      hide();
+      await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+      // 第一次用的是 seed 进来的版本号
+      expect(patch.mock.calls[0]?.[1].body).toMatchObject({ version: "1000" });
+
+      // 服务端推进到 3000，第二轮必须带上它
+      patch.mockResolvedValue(okEnvelope(saveResult({ version: "3000" })));
+      act(() => result.current.scheduleSave({ title: "第二轮", content: "2" }));
+      hide();
+      await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
+      expect(patch.mock.calls[1]?.[1].body).toMatchObject({ version: "2000" });
+
+      act(() => result.current.scheduleSave({ title: "第三轮", content: "3" }));
+      hide();
+      await waitFor(() => expect(patch).toHaveBeenCalledTimes(3));
+      expect(patch.mock.calls[2]?.[1].body).toMatchObject({ version: "3000" });
     } finally {
       Object.defineProperty(document, "visibilityState", {
         value: "visible",

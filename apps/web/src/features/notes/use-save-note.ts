@@ -343,11 +343,27 @@ export function useSaveNote(options: {
      * 切标签时**不保证触发**（iOS Safari 尤其明显），而系统随时可能直接把后台标签页
      * 回收掉。只靠那两个事件，用户"打了一段字、切去回消息、回来发现改动没了"。
      *
+     * **走正常保存路径，不能用 `flushOnUnload`**：后者是 keepalive 即发即忘、
+     * 不等待响应，因此**不推进 `versionRef`**。页面此时并没有卸载，用户切回来
+     * 还会继续编辑——下一次保存就会拿着过期令牌撞 A0409。
+     * 实测过这个坑：连打三轮字、每轮切一次后台，服务端只剩第一轮
+     * （后两轮的 A0409 被吞掉，用户看不到任何提示）。
+     * `flushOnUnload` 之所以对 pagehide / beforeunload 安全，正是因为那时页面
+     * 真的走了、不会再有下一次保存。
+     *
      * 判据取 `hidden`：切后台与锁屏都会进这个态，切回前台是 `visible`——
-     * 后者不该发请求（`flushOnUnload` 在没有待存内容时本来就会直接返回）。
+     * 后者不该发请求（没有待存内容时 `save` 自己会直接返回）。
      */
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") flushOnUnload();
+      if (document.visibilityState !== "hidden") return;
+      /*
+       * 已有请求在飞时让位：它在飞行途中拿到的更晚草稿会被 `save` 的循环与补排
+       * 接手（见 `runSave` 成功分支里的 `armDebounce`），此时再插一次请求
+       * 只会撞 `inFlight` 守卫。页面真被冻结的话，`pagehide` 那条 keepalive
+       * 兜底仍在。
+       */
+      if (inFlight.current) return;
+      void saveRef.current();
     };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
