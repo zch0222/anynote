@@ -5,134 +5,23 @@ import { Spinner } from "@/components/loading/spinner";
 import { EmptyState, QueryError } from "@/components/shared/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useDocIndexStatus, useIndexDocMutation } from "@/features/ai/use-docs";
-import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import { noteQueryKeys } from "@/features/notes/query-keys";
 import { DOC_INDEXED, type DocListItem } from "@/features/notes/schemas";
 import { useKnowledgeBaseDocsQuery } from "@/features/notes/use-docs";
-import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { toUserMessage } from "@/lib/api/errors";
 import { formatRelativeTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, FileText, Library, Plus, Upload } from "lucide-react";
-import dynamic from "next/dynamic";
+import { ChevronLeft, FileText, Library, Upload } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { KnowledgeBaseMembers } from "./knowledge-base-members";
 
-/*
- * 「新建笔记」对话框按需加载。
- *
- * 它顶层引着 react-hook-form + `@hookform/resolvers/zod`，而这条文件是
- * `/notes/:id`、`/overview`、`/docs`、`/members` 四个路由的共同入口——
- * 静态引入会把整棵表单依赖树压进这四个页面的首屏，而用户十有八九只是来看内容的。
- * 实测这一步就是桌面首屏从 288.7KB 涨到 307.3KB（预算 300KB）的主因。
- *
- * `ssr: false` 与移动端同款：对话框只在点击后才需要，服务端渲染它没有意义。
- */
-const CreateNoteDialog = dynamic(
-  () => import("./create-note-dialog").then((mod) => mod.CreateNoteDialog),
-  { ssr: false },
-);
-
 // 「成员」Tab 从本文件拆出（12.2.6），但路由页仍从 `knowledge-base-detail` 取，
 // 保持 import 路径稳定、避免同一轮里再改一次 page.tsx。
 export { KnowledgeBaseMembers };
-
-/** 概览页只取前几条做预览，"更多"回到对应 Tab。 */
-const OVERVIEW_PREVIEW = 4;
-
-/**
- * 知识库「概览」Tab（`/notes/[baseId]/overview`）。
- *
- * 设计稿里概览承担"这个库是什么、里面有什么"的一眼判断，
- * 所以只放元信息 + 两个预览块，不做统计图表——后端没有聚合端点，
- * 前端拼出来的图只会与真实列表越走越偏。
- */
-export function KnowledgeBaseOverview({ baseId }: { baseId: number }) {
-  const base = useKnowledgeBaseQuery(baseId);
-  const docs = useKnowledgeBaseDocsQuery(baseId);
-  const permissions = base.data?.permissions;
-
-  /*
-   * 新建入口只给「可编辑」及以上（permissions 1 管理 / 2 编辑，数值越小权限越大）。
-   * 权限未知时同样隐藏：宁可让按钮在数据到位后出现，也不要让只读成员先看到、
-   * 点进去才被后端拒绝——D-02 图例 9 要的正是"避免点了才报无权限"。
-   */
-  const canCreate = typeof permissions === "number" && permissions <= 2;
-
-  return (
-    <div className="mx-auto w-full max-w-4xl space-y-6" data-testid="kb-overview">
-      <section className="overflow-hidden rounded-lg bg-surface shadow-card">
-        <div aria-hidden="true" className={cn(coverClassName(baseId), "h-28 w-full")} />
-        <div className="space-y-3 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 space-y-1">
-              {base.isPending ? (
-                <Skeleton className="h-6 w-48" />
-              ) : (
-                <h1 className="text-title text-label">
-                  {base.data?.knowledgeBaseName?.trim() || "未命名知识库"}
-                </h1>
-              )}
-              {base.data?.updateTime ? (
-                <p className="text-xs text-label-tertiary">
-                  更新于 {formatRelativeTime(base.data.updateTime)}
-                </p>
-              ) : null}
-            </div>
-            {canCreate ? (
-              <CreateNoteDialog
-                knowledgeBaseId={baseId}
-                triggerTestId="kb-overview-note-create"
-                trigger={
-                  <>
-                    <Plus className="size-4" aria-hidden="true" />
-                    新建笔记
-                  </>
-                }
-                triggerClassName="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-accent px-4 text-footnote font-medium text-white outline-none transition-colors hover:bg-accent/85 focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            ) : null}
-          </div>
-          <p className="text-footnote text-label-secondary">
-            {base.data?.detail?.trim() || "这个知识库还没有填写简介。"}
-          </p>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <header className="flex items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-headline text-label">
-            <FileText className="size-4 text-label-secondary" aria-hidden="true" />
-            资料
-          </h2>
-          <Link
-            href={`/notes/${baseId}/docs`}
-            className="text-footnote text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            全部资料
-          </Link>
-        </header>
-        {docs.isError ? (
-          // Q-02 给概览资料块的口径：这里只是预览块，坏掉时说明「这个库不在」
-          // 就够了，不放重试——完整的重试在「资料」Tab。
-          <p className="text-footnote text-label-secondary">找不到这个知识库</p>
-        ) : (
-          <DocList
-            baseId={baseId}
-            docs={docs.data?.rows ?? []}
-            loading={docs.isPending}
-            limit={OVERVIEW_PREVIEW}
-          />
-        )}
-      </section>
-    </div>
-  );
-}
 
 /** 知识库「笔记」Tab 的空态与新建入口由 `NoteList` 承担，这里只做路由壳。 */
 

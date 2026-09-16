@@ -214,6 +214,21 @@ export function isFullBleedRoute(pathname: string): boolean {
   return /^\/notes\/\d+\/\d+$/.test(pathname) || /^\/notes\/\d+\/\d+\/history$/.test(pathname);
 }
 
+/**
+ * 概览页（D-02）：**自己没有页头**，顶栏整条不渲染。
+ *
+ * 这不是"少画了一条"：画板上搜索（图例 7）、主题（图例 8）与「新建笔记」（图例 9）
+ * 三个动作都在头图卡片的动作行里，屏幕顶部没有任何 56 高的栏。若顶栏照常渲染，
+ * 同一屏就会出现**两套同名控件**（两个「切换主题」按钮、两个「打开命令面板」），
+ * 读屏与 `getByRole` 都会产生歧义——这正是仓库里"两处都放等于两处都不像主导航"
+ * 那条结论要避免的情况。
+ *
+ * 判定用**完整段匹配**：`/notes/7/overview` 是概览，`/notes/7/overviewX` 不是。
+ */
+export function isKnowledgeBaseOverviewRoute(pathname: string): boolean {
+  return /^\/notes\/\d+\/overview$/.test(pathname);
+}
+
 export function getWorkspaceRoute(pathname: string) {
   if (pathname === newNoteRoute.href) return newNoteRoute;
   return workspaceRoutes.find((route) => isRouteActive(pathname, route.href));

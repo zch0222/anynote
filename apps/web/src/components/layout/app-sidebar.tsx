@@ -55,16 +55,17 @@ function Brand() {
  */
 export function AppSidebar() {
   const isMobile = useIsMobile();
+  const pathname = usePathname();
 
   const content = (
     <>
-      <SidebarHeader className="px-2 py-3">
+      <SidebarHeader className="px-4 py-3">
         <Brand />
       </SidebarHeader>
-      <SidebarContent className="gap-0 px-2 pb-2">
+      <SidebarContent className="gap-0 px-2.5 pb-2">
         <SidebarBody />
       </SidebarContent>
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="p-2.5">
         <SidebarUserCard />
       </SidebarFooter>
     </>
@@ -75,8 +76,26 @@ export function AppSidebar() {
     return <Sidebar collapsible="offcanvas">{content}</Sidebar>;
   }
 
+  /*
+   * 侧栏宽度**按路由分两档**，与画板实测一致（D-xx 知识库内一组 296，
+   * D-03/D-10/D-12/D-13 一组 272）：
+   * 库内要放下 264 宽的知识库卡片（名称 + 类型 + 篇数一行），窄了会截断；
+   * 库外只有搜索框与列表，272 就够。
+   *
+   * 用完整类名字面量而不是 `w-[296px]` 之外的条件拼接：Tailwind 的 JIT
+   * 只扫描源码里的字面类名，拼出来的字符串不会进产物。
+   */
+  const insideBase = parseBaseIdFromPath(pathname) !== null;
+
   return (
-    <aside data-testid="app-sidebar" className="hidden w-64 shrink-0 flex-col bg-sidebar md:flex">
+    <aside
+      data-testid="app-sidebar"
+      data-width={insideBase ? "wide" : "default"}
+      className={cn(
+        "hidden shrink-0 flex-col bg-sidebar md:flex",
+        insideBase ? "w-[296px]" : "w-[272px]",
+      )}
+    >
       {content}
     </aside>
   );

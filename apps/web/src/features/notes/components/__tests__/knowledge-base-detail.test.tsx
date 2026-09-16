@@ -2,11 +2,6 @@ import { renderWithProviders } from "@/test/render";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const useKnowledgeBaseQuery = vi.fn();
-vi.mock("@/features/notes/use-knowledge-bases", () => ({
-  useKnowledgeBaseQuery: (...args: unknown[]) => useKnowledgeBaseQuery(...args),
-}));
-
 // CreateNoteDialog 内部要跳转（创建成功后去编辑页）
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -25,7 +20,7 @@ vi.mock("@/features/ai/use-docs", () => ({
   useDocIndexStatus: (...args: unknown[]) => useDocIndexStatus(...args),
 }));
 
-import { KnowledgeBaseDocs, KnowledgeBaseOverview } from "../knowledge-base-detail";
+import { KnowledgeBaseDocs } from "../knowledge-base-detail";
 
 const IDLE = { isPending: false, isError: false, isFetching: false };
 
@@ -135,65 +130,5 @@ describe("KnowledgeBaseDocs（D-08）", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("资料加载失败：");
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     expect(refetch).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("KnowledgeBaseOverview（D-02）", () => {
-  function mockBase(permissions: number | undefined) {
-    useKnowledgeBaseQuery.mockReturnValue({
-      ...IDLE,
-      data: { id: 5, knowledgeBaseName: "产品设计", permissions },
-    });
-  }
-
-  it("权限 1 / 2 显示「新建笔记」，权限 3 / 4 隐藏", async () => {
-    for (const [permissions, visible] of [
-      [1, true],
-      [2, true],
-      [3, false],
-      [4, false],
-      [undefined, false],
-    ] as const) {
-      mockBase(permissions);
-      mockDocs([]);
-      const { unmount } = renderWithProviders(<KnowledgeBaseOverview baseId={5} />);
-      if (visible) {
-        // 对话框走 dynamic(..., { ssr: false })，要等一拍才挂上（省首屏预算）
-        expect(await screen.findByTestId("kb-overview-note-create")).toBeInTheDocument();
-      } else {
-        // 反向断言给一拍再查：立即查会因为"还没加载"而假通过，测不出权限逻辑
-        await waitFor(() => {
-          expect(screen.queryByTestId("kb-overview-note-create")).toBeNull();
-        });
-      }
-      unmount();
-    }
-  });
-
-  it("资料块加载失败时按 Q-02 文案提示「找不到这个知识库」", () => {
-    mockBase(1);
-    useKnowledgeBaseDocsQuery.mockReturnValue({
-      isPending: false,
-      isError: true,
-      isFetching: false,
-      error: new Error("boom"),
-    });
-    renderWithProviders(<KnowledgeBaseOverview baseId={5} />);
-
-    expect(screen.getByText("找不到这个知识库")).toBeInTheDocument();
-  });
-
-  it("资料块空态给「去上传」", () => {
-    mockBase(1);
-    mockDocs([]);
-    renderWithProviders(<KnowledgeBaseOverview baseId={5} />);
-
-    expect(
-      screen.getByText("还没有资料。上传 PDF 后可以在「PDF 问答」里围绕它提问。"),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "去上传" })).toHaveAttribute(
-      "href",
-      "/ai/pdf?baseId=5",
-    );
   });
 });

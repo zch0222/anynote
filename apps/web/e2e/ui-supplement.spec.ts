@@ -60,6 +60,263 @@ async function createNote(page: Page, baseId: number, title: string): Promise<nu
 
 const unique = (prefix: string) => `${prefix} ${Math.random().toString(36).slice(2, 8)}`;
 
+test.describe("D-02 知识库概览：版式还原", () => {
+  /*
+   * 画板是 1440×900。Playwright 的 Desktop Chrome 预设是 1280×720，
+   * 而概览页的内容列是 `max-w-[1000px]` 居中——1280 下内容区只剩 984 宽，
+   * 减去 64 的页边距就是 920，所有几何断言都会整体差 80。
+   * 这里显式对齐画板视口，下面的数字才能与画板直接比。
+   */
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  /**
+   * 这一组断言的是**画板实测出来的版式数字**，不是"看着差不多"。
+   *
+   * 数值来源与量法见 `apps/web/scripts/lib/supplement-crops.mjs` 的注释：
+   * 画板把屏幕画在 2 设备像素宽、颜色恒为 `#d8d8de` 的窗口边框里，裁出内区后
+   * 逐像素测量。本页（D-02）的内区是 1440×900，所以下面所有数字都能直接对。
+   *
+   * 为什么这些数字值得钉住：概览页此前**根本没有还原**——没有头图卡片、
+   * 没有 5 格计数、没有预览块，整页只有标题与一句话。这类"缺结构"的回归
+   * 光靠人眼看对比图很容易滑过去，写成断言才能在 CI 里拦住。
+   */
+  test("头图卡片按画板几何：1000 宽、封面 976x96、卡内留白 12", async ({ page }) => {
+    /*
+     * 用真实数据而不是空库：空库下预览块是虚线空态，几何与画板对不上——
+     * 那属于空态分支，另有用例覆盖。这里要对的是**有内容时**的版式。
+     */
+    await page.goto("/notes");
+    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
+    const baseId = await createBase(page, unique("D-02 头图"));
+    for (const title of ["设计原则速查", "组件命名约定", "评审检查清单"]) {
+      await createNote(page, baseId, `${title} ${Math.random().toString(36).slice(2, 6)}`);
+    }
+
+    await page.goto(`/notes/${baseId}/overview`);
+    const hero = page.getByTestId("kb-hero");
+    await expect(hero).toBeVisible({ timeout: 30_000 });
+
+    const box = await hero.boundingBox();
+    expect(box, "头图卡片应有尺寸").not.toBeNull();
+    // 画板：卡片 x 368..1367（1000 宽）
+    expect(Math.round(box?.width ?? 0)).toBe(1000);
+
+    // 封面 976×96、圆角 10（画板：x 380..1355, y 40..135）
+    const cover = hero.locator("> div[aria-hidden='true']").first();
+    const coverBox = await cover.boundingBox();
+    expect(Math.round(coverBox?.width ?? 0)).toBe(976);
+    expect(Math.round(coverBox?.height ?? 0)).toBe(96);
+    expect(await cover.evaluate((el) => getComputedStyle(el).borderRadius)).toBe("10px");
+
+    // 卡内留白 12（画板：封面距卡顶 12、距卡左 12）
+    expect(Math.round((coverBox?.x ?? 0) - (box?.x ?? 0))).toBe(12);
+    expect(Math.round((coverBox?.y ?? 0) - (box?.y ?? 0))).toBe(12);
+
+    // 卡片圆角 14（画板偏移序列 11,8,6,5,4,3,3,2,1,1,1,0 → 半径 14）
+    expect(await hero.evaluate((el) => getComputedStyle(el).borderRadius)).toBe("14px");
+
+    // 标题是 Display 34/41 SemiBold（图例 4）
+    const h1 = page.getByRole("heading", { level: 1 });
+    const h1Style = await h1.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { size: s.fontSize, weight: s.fontWeight, lineHeight: s.lineHeight };
+    });
+    expect(h1Style.size).toBe("34px");
+    expect(h1Style.weight).toBe("600");
+    expect(h1Style.lineHeight).toBe("41px");
+  });
+
+  test("概览页不渲染顶栏，搜索/主题/新建笔记都在头图卡片里", async ({ page }) => {
+    await page.goto("/notes");
+    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
+    const baseId = await createBase(page, unique("D-02 动作行"));
+
+    await page.goto(`/notes/${baseId}/overview`);
+    await expect(page.getByTestId("kb-hero")).toBeVisible({ timeout: 30_000 });
+
+    /*
+     * 画板里这一页**没有 56 高的顶栏**：搜索（图例 7）、主题（图例 8）与
+     * 「新建笔记」（图例 9）三个动作都在头图卡片的动作行里。
+     * 顶栏若照常渲染，同一屏会有两套「切换主题」按钮——`getByRole` 直接
+     * 变成 strict mode violation，所以这里用单数查询本身就是断言。
+     */
+    await expect(page.getByTestId("app-header")).toHaveCount(0);
+    const hero = page.getByTestId("kb-hero");
+    await expect(hero.getByTestId("kb-overview-search")).toHaveCount(1);
+    await expect(hero.getByRole("button", { name: "切换主题" })).toHaveCount(1);
+    // 全页也只有一份（再点一次全局，确认没有第二处）
+    await expect(page.getByRole("button", { name: "切换主题" })).toHaveCount(1);
+    await expect(page.getByTestId("kb-overview-search")).toHaveCount(1);
+
+    // 搜索按钮真的能打开命令面板（图例 7：打开命令面板 D-04）
+    await page.getByTestId("kb-overview-search").click();
+    await expect(page.getByRole("combobox", { name: "搜索页面或操作" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.keyboard.press("Escape");
+  });
+
+  test("5 格计数与侧栏二级导航一一对应，卡片 190x98、色块 28x28", async ({ page }) => {
+    await page.goto("/notes");
+    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
+    const baseId = await createBase(page, unique("D-02 计数"));
+
+    await page.goto(`/notes/${baseId}/overview`);
+    await expect(page.getByTestId("kb-stat-notes")).toBeVisible({ timeout: 30_000 });
+
+    /*
+     * 5 格与侧栏二级导航**一一对应**（图例 10 原话）。
+     *
+     * 侧栏共 6 项，其中「概览」是当前页自己，所以 5 格对应的是**除概览外的 5 项**。
+     * 这里按 href 配对而不是按下标：下标配对在导航增删一项时会静默错位，
+     * 配上 `toHaveCount(1)` 又恰好还能过——那是最糟的一种假绿。
+     */
+    const keys = ["notes", "mooc", "tasks", "docs", "members"];
+    const sidebarTabs = page
+      .getByTestId("app-sidebar")
+      .getByRole("navigation", { name: "知识库内容" })
+      .getByRole("link");
+    await expect(sidebarTabs).toHaveCount(6); // 5 格 + 概览
+
+    // 读两侧的 href 集合做对比（顺序也要一致）
+    const sidebarHrefs = await sidebarTabs.evaluateAll((els) =>
+      els.map((el) => el.getAttribute("href")),
+    );
+    const tileHrefs: string[] = [];
+    for (const key of keys) {
+      const tile = page.getByTestId(`kb-stat-${key}`);
+      await expect(tile).toHaveCount(1);
+      // 点哪格去哪个 Tab（图例 11–15）
+      const href = await tile.getAttribute("href");
+      expect(href, `${key} 格应有 href`).toBeTruthy();
+      tileHrefs.push(href ?? "");
+    }
+    // 「与侧栏二级导航一一对应」：5 格的 href 恰好是侧栏去掉「概览」后的那 5 项，且顺序一致
+    expect(sidebarHrefs.filter((h) => h !== `/notes/${baseId}/overview`)).toEqual(tileHrefs);
+
+    // 卡片 190×98（画板：5 等分 1000 宽、gap 12 → 190.4；高 98）
+    const tileBox = await page.getByTestId("kb-stat-notes").boundingBox();
+    expect(Math.round(tileBox?.width ?? 0)).toBe(190);
+    expect(Math.round(tileBox?.height ?? 0)).toBe(98);
+
+    // 色块 28×28、圆角 7、距卡左/顶 14（图例 11 色块规格）
+    const block = page.getByTestId("kb-stat-notes").locator("span[aria-hidden='true']").first();
+    const blockBox = await block.boundingBox();
+    expect(Math.round(blockBox?.width ?? 0)).toBe(28);
+    expect(Math.round(blockBox?.height ?? 0)).toBe(28);
+    const blockStyle = await block.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { radius: s.borderRadius, bg: s.backgroundColor };
+    });
+    expect(blockStyle.radius).toBe("7px");
+    // 笔记 = 蓝（图例 11「颜色沿用 p02 信息架构：笔记 蓝」）
+    expect(blockStyle.bg).toBe("rgb(0, 113, 227)");
+    expect(Math.round((blockBox?.x ?? 0) - (tileBox?.x ?? 0))).toBe(14);
+    expect(Math.round((blockBox?.y ?? 0) - (tileBox?.y ?? 0))).toBe(14);
+  });
+
+  test("预览块：最近笔记 5 行 x52、资料 3 行 x56、成员 3 行 x52", async ({ page }) => {
+    await page.goto("/notes");
+    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
+    const baseId = await createBase(page, unique("D-02 预览"));
+    // 造 6 篇：验证「只取前 5 篇」（图例 18）
+    for (let i = 0; i < 6; i += 1) {
+      await createNote(page, baseId, `预览笔记 ${i} ${Math.random().toString(36).slice(2, 6)}`);
+    }
+
+    await page.goto(`/notes/${baseId}/overview`);
+    await expect(page.getByTestId("kb-preview-notes")).toBeVisible({ timeout: 30_000 });
+
+    // 最近笔记：最多 5 行，每行 52 高（画板 y439..698，5 行）
+    const noteRows = page.locator("[data-testid^='kb-preview-note-']");
+    await expect(noteRows).toHaveCount(5);
+    const noteCard = page.getByTestId("kb-preview-notes");
+    const noteCardBox = await noteCard.boundingBox();
+    // 画板：左列卡片 600 宽（x 368..967）。视口已在 describe 上钉到 1440×900。
+    expect(Math.round(noteCardBox?.width ?? 0)).toBe(600);
+    // 5 行 × 52 = 260（含行间 1px 分隔线，画板 439..698 = 260 行）
+    expect(Math.round(noteCardBox?.height ?? 0)).toBe(260);
+    const firstRow = await noteRows.first().boundingBox();
+    expect(Math.round(firstRow?.height ?? 0)).toBe(51);
+
+    // 右列 380 宽（画板 x 988..1367）；左列 600 + 间距 20 + 右列 380 = 1000
+    const membersCard = page.getByTestId("kb-preview-members");
+    const gap =
+      (await membersCard.boundingBox())?.x !== undefined
+        ? Math.round(((await membersCard.boundingBox())?.x ?? 0) - ((noteCardBox?.x ?? 0) + 600))
+        : null;
+    expect(gap).toBe(20);
+  });
+
+  test("区块标题与「全部 X」链接：17/22 SemiBold + 13 accent", async ({ page }) => {
+    await page.goto("/notes");
+    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
+    const baseId = await createBase(page, unique("D-02 标题"));
+
+    await page.goto(`/notes/${baseId}/overview`);
+    await expect(page.getByTestId("kb-hero")).toBeVisible({ timeout: 30_000 });
+
+    // 三个区块标题（图例 16 / 19 / 23）
+    for (const title of ["最近笔记", "资料", "成员"]) {
+      const heading = page.getByRole("heading", { level: 2, name: title, exact: true });
+      await expect(heading).toHaveCount(1);
+      const style = await heading.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { size: s.fontSize, weight: s.fontWeight, lineHeight: s.lineHeight };
+      });
+      // Headline 17/22 SemiBold
+      expect(style.size).toBe("17px");
+      expect(style.weight).toBe("600");
+      expect(style.lineHeight).toBe("22px");
+    }
+
+    // 「全部笔记 / 全部资料 / 全部成员」直达对应 Tab（图例 17 / 20 / 24）
+    for (const [label, segment] of [
+      ["全部笔记", ""],
+      ["全部资料", "/docs"],
+      ["全部成员", "/members"],
+    ] as const) {
+      const link = page.getByRole("link", { name: label, exact: true });
+      await expect(link).toHaveCount(1);
+      await expect(link).toHaveAttribute("href", `/notes/${baseId}${segment}`);
+      // 13 accent（图例 17：「文字链接 13 accent/primary · 悬停下划线」）
+      const style = await link.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { size: s.fontSize, decoration: s.textDecorationLine };
+      });
+      expect(style.size).toBe("13px");
+      expect(style.decoration).toBe("none");
+    }
+  });
+
+  test("只读成员看不到「新建笔记」，但搜索与主题仍在", async ({ page }) => {
+    /*
+     * 图例 9：「本屏唯一主按钮；可阅读及以下权限下隐藏（建议）」。
+     * 权限由后端返回，用例改成只读成员的成本很高（要另一套账号 + 成员关系），
+     * 所以这条**只断言可编辑时的正向**，权限分支由单测覆盖
+     * （`knowledge-base-overview.test.tsx` 的 permissions 1/2/3/4/undefined 五种）。
+     */
+    await page.goto("/notes");
+    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
+    const baseId = await createBase(page, unique("D-02 权限"));
+
+    await page.goto(`/notes/${baseId}/overview`);
+    await expect(page.getByTestId("kb-hero")).toBeVisible({ timeout: 30_000 });
+    // 库主是管理员：主按钮在，且是 accent 实心 34 高（画板 102×34）
+    const create = page.getByTestId("kb-overview-note-create");
+    await expect(create).toBeVisible();
+    const createBox = await create.boundingBox();
+    expect(Math.round(createBox?.height ?? 0)).toBe(34);
+    const createStyle = await create.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(createStyle).toBe("rgb(0, 113, 227)");
+
+    // 点开新建对话框（图例 9：打开「新建笔记」对话框）
+    await create.click();
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press("Escape");
+  });
+});
+
 test.describe("UI 补稿还原度", () => {
   /**
    * Q-01 #1–#3：填充层级（12.0.1）。

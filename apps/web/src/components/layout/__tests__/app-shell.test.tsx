@@ -251,6 +251,35 @@ describe("AppShell 交互", () => {
     expect(screen.getByTestId("sidebar-base-1")).toBeInTheDocument();
   });
 
+  /**
+   * D-02：概览页的分工是"头图卡片当页头"。
+   *
+   * 画板上搜索（图例 7）、主题（图例 8）与「新建笔记」（图例 9）都在卡片里，
+   * 屏幕顶部没有 56 高的栏。顶栏若照常渲染，同一屏就有两套同名按钮：
+   * 读屏念两遍，`getByRole("button", { name: "切换主题" })` 直接变成
+   * strict mode violation。所以这里断言的是"一个都没有"而不是"存在"。
+   */
+  it("概览页不渲染顶栏，控件不会在同一屏出现两套", () => {
+    pathname.current = "/notes/7/overview";
+    render(<AppShell>内容</AppShell>);
+
+    expect(screen.queryByTestId("app-header")).toBeNull();
+    expect(screen.queryByTestId("kb-switcher")).toBeNull();
+    // 顶栏走掉后，进度条也没有要对齐的东西
+    expect(screen.queryByTestId("route-progress")).toBeNull();
+
+    // 侧栏不受影响：库卡片与二级导航照常在
+    expect(screen.getByTestId("sidebar-kb-card")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "知识库内容" })).toBeInTheDocument();
+  });
+
+  it("概览页之外仍然保留顶栏", () => {
+    pathname.current = "/notes/7/docs";
+    render(<AppShell>内容</AppShell>);
+    expect(screen.getByTestId("app-header")).toBeInTheDocument();
+    expect(screen.getByTestId("kb-switcher")).toBeInTheDocument();
+  });
+
   it("Ctrl+K 搜索并执行路由跳转，关闭面板", async () => {
     render(<AppShell>内容</AppShell>);
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });

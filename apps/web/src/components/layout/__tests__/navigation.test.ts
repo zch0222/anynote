@@ -4,6 +4,7 @@ import {
   getWorkspaceRoute,
   isFullBleedRoute,
   isImmersiveMobileRoute,
+  isKnowledgeBaseOverviewRoute,
   isMobilePath,
   isRouteActive,
   knowledgeBaseRoute,
@@ -98,6 +99,40 @@ describe("满幅路由", () => {
     expect(isFullBleedRoute("/notes/7/42/")).toBe(false);
     expect(isFullBleedRoute("/ai/chat")).toBe(false);
     expect(isFullBleedRoute("/")).toBe(false);
+  });
+});
+
+/**
+ * 概览页的顶栏抑制（D-02 图例 7 / 8 / 9）。
+ *
+ * 画板上搜索、主题与「新建笔记」都在头图卡片的动作行里，屏幕顶部没有 56 高的栏。
+ * 顶栏若照常渲染，同一屏会出现两套「切换主题」/「打开命令面板」——
+ * 读屏会念两遍，`getByRole` 也会变成 strict mode violation。
+ */
+describe("知识库概览页（D-02）不渲染顶栏", () => {
+  it("只有 /notes/{id}/overview 命中", () => {
+    expect(isKnowledgeBaseOverviewRoute("/notes/7/overview")).toBe(true);
+    expect(isKnowledgeBaseOverviewRoute("/notes/128/overview")).toBe(true);
+  });
+
+  it("同级的其它 Tab 与更深的路径都不命中", () => {
+    // 这几个页面画板上仍有各自的页头，顶栏要保留
+    expect(isKnowledgeBaseOverviewRoute("/notes/7")).toBe(false);
+    expect(isKnowledgeBaseOverviewRoute("/notes/7/docs")).toBe(false);
+    expect(isKnowledgeBaseOverviewRoute("/notes/7/members")).toBe(false);
+    expect(isKnowledgeBaseOverviewRoute("/notes/7/tasks")).toBe(false);
+    // 编辑器 / 历史版本按满幅处理，与顶栏抑制是两件事
+    expect(isKnowledgeBaseOverviewRoute("/notes/7/42")).toBe(false);
+    expect(isKnowledgeBaseOverviewRoute("/notes/7/42/history")).toBe(false);
+  });
+
+  it("按完整段匹配，不接受尾随段、前缀或非数字 id", () => {
+    expect(isKnowledgeBaseOverviewRoute("/notes/7/overview/extra")).toBe(false);
+    expect(isKnowledgeBaseOverviewRoute("/notes/7/overviewX")).toBe(false);
+    expect(isKnowledgeBaseOverviewRoute("/notes/abc/overview")).toBe(false);
+    expect(isKnowledgeBaseOverviewRoute("/notes/overview")).toBe(false);
+    expect(isKnowledgeBaseOverviewRoute("/notes/7/overview/")).toBe(false);
+    expect(isKnowledgeBaseOverviewRoute("/ai/chat")).toBe(false);
   });
 });
 

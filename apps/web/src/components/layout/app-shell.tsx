@@ -8,7 +8,7 @@ import { type ReactNode, useEffect } from "react";
 import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
 import { CommandPalette } from "./command-palette";
-import { isFullBleedRoute } from "./navigation";
+import { isFullBleedRoute, isKnowledgeBaseOverviewRoute } from "./navigation";
 import { RouteProgressBar } from "./route-progress-bar";
 import { WorkspaceSession } from "./workspace-session";
 
@@ -26,6 +26,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
   const pathname = usePathname();
   const fullBleed = isFullBleedRoute(pathname);
+  /*
+   * 概览页（D-02）不渲染顶栏：搜索 / 主题 / 新建笔记三个动作都在头图卡片的
+   * 动作行里（图例 7 / 8 / 9），顶栏再渲染一份会出现两套同名按钮。
+   */
+  const hideHeader = isKnowledgeBaseOverviewRoute(pathname);
   const sidebarOpen = useUIStore((state) => state.sidebarOpen);
   const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 
@@ -60,19 +65,27 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SidebarInset
         className={fullBleed ? "h-svh min-w-0 overflow-hidden bg-surface" : "min-w-0 bg-grouped"}
       >
-        <AppHeader />
+        {hideHeader ? null : <AppHeader />}
         {/*
           路由进度条紧跟顶栏：`sticky top-14` 与顶栏的 `min-h-14` 对齐，
           长页面滚动时它随顶栏一起留在视口顶部，不会滑出视野。
+          概览页没有顶栏，进度条也就没有要对齐的东西，一并省略。
         */}
-        <RouteProgressBar />
+        {hideHeader ? null : <RouteProgressBar />}
         <div
           id="workspace-content"
           tabIndex={-1}
           className={
             fullBleed
               ? "flex min-h-0 flex-1 flex-col outline-none"
-              : "flex-1 px-5 pb-5 outline-none sm:px-8"
+              : hideHeader
+                ? /*
+                   * 概览页没有顶栏，得自己补上顶部留白：画板实测内容从 y=27 起，
+                   * 而常规页面那 56 高的顶栏本身就相当于留白。少了这一段，
+                   * 头图卡片会贴着窗口上沿，整页比画板高 27px。
+                   */
+                  "flex-1 px-5 pt-7 pb-5 outline-none sm:px-8"
+                : "flex-1 px-5 pb-5 outline-none sm:px-8"
           }
         >
           <WorkspaceSession>{children}</WorkspaceSession>

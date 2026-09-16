@@ -44,6 +44,13 @@
   --color-danger: var(--state-danger);
   --color-organization: var(--state-organization);
   --color-info: var(--state-info);
+  /*
+   * 「资料」维度的信息架构色（D-02 图例 14：「色块 靛」#5856D6）。
+   *
+   * 不复用 `--state-info`：那是青色（#5AC8FA），与设计稿的靛蓝不是同一个色相。
+   * 概览的 5 格计数块靠颜色区分维度，色相错了就没有识别作用了。
+   */
+  --color-indigo: var(--state-indigo);
 
   /* —— 加载体系（设计稿 P12-16）——
    * 骨架块必须比宿主底色**高一档**：旧的 `bg-grouped` 在浅色分组底（#F2F2F7）上
@@ -333,6 +340,8 @@
   --state-danger: #ff3b30;
   --state-organization: #af52de;
   --state-info: #5ac8fa;
+  /* 资料维度：设计稿图例 14 的靛蓝，深浅两态同值（深色底上依然够亮）。 */
+  --state-indigo: #5856d6;
 
   color-scheme: light;
 }
@@ -378,6 +387,7 @@
   --state-danger: #ff453a;
   --state-organization: #bf5af2;
   --state-info: #64d2ff;
+  --state-indigo: #5856d6;
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 16px rgb(0 0 0 / 0.4);
   --shadow-popover: 0 8px 32px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.4);

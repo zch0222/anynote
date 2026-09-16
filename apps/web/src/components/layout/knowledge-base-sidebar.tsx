@@ -32,27 +32,27 @@ export function SidebarKnowledgeBaseCard({
       href="/notes"
       data-testid="sidebar-kb-card"
       className={cn(
-        "flex items-center gap-3 rounded-lg bg-surface p-3 shadow-card outline-none transition-shadow",
+        // 264x48（D-01 图例 2）：封面 36、圆角 10、白底 shadow-card。
+        // `mx-1.5` 是相对侧栏内容内缩（10）再补 6：画板里卡片左缘在 16，
+        // 而导航项 tint 从 10 起——卡片比导航项**多缩 6**，不是同一档内边距。
+        "mx-1.5 flex min-h-12 items-center gap-3 rounded-md bg-surface px-3 py-1.5 shadow-card outline-none transition-shadow",
         "hover:shadow-popover focus-visible:ring-2 focus-visible:ring-ring",
       )}
     >
       <span
         aria-hidden="true"
-        className={cn(
-          coverClassName(base?.id ?? 0),
-          "grid size-10 shrink-0 place-items-center rounded-md",
-        )}
+        className={cn(coverClassName(base?.id ?? 0), "size-9 shrink-0 rounded-md")}
       />
       <span className="min-w-0 flex-1">
         {isPending ? (
           <>
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="mt-1.5 h-3 w-24" />
+            <Skeleton className="h-3.5 w-32" />
+            <Skeleton className="mt-1 h-3 w-20" />
           </>
         ) : (
           <>
-            <span className="block truncate text-body font-semibold text-label">{name}</span>
-            <span className="tabular block truncate text-footnote text-label-tertiary">
+            <span className="block truncate text-footnote font-semibold text-label">{name}</span>
+            <span className="tabular block truncate text-[11px] text-label-tertiary">
               {typeLabel}
               {typeof noteCount === "number" ? ` · ${noteCount} 篇笔记` : ""}
             </span>

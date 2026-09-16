@@ -1,4 +1,4 @@
-import { KnowledgeBaseOverview } from "@/features/notes/components/knowledge-base-detail";
+import { KnowledgeBaseOverview } from "@/features/notes/components/knowledge-base-overview";
 import { notFound } from "next/navigation";
 
 export default async function Page({ params }: { params: Promise<{ baseId: string }> }) {
