@@ -22,6 +22,7 @@
       "apps/cli/src/bundled.ts",
       "apps/web-legacy",
       "apps/web/.next",
+      "apps/web/e2e/.auth",
       "apps/web/e2e/.output",
       "apps/web/e2e/.ui-capture",
       "apps/web/e2e/.ui-supplement",
