@@ -330,6 +330,90 @@ describe("useSaveNote：离线与卸载", () => {
     unmount();
     expect(patch).not.toHaveBeenCalled();
   });
+
+  /**
+   * 切到后台（切 App / 锁屏 / 切标签）是移动端**最后一个可靠时机**：
+   * iOS 与 Android 常常不发 `pagehide` 就直接回收后台标签页，只在
+   * `visibilitychange` 里补一次落盘，才能保证这段改动不随进程一起消失。
+   */
+  it("切到后台时立刻落盘，不等 debounce 到期", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result } = renderHookWithProviders(() =>
+      // debounce 给足够长，确保这次保存**只能**由 visibilitychange 触发
+      useSaveNote({ noteId: NOTE_ID, initialVersion: "1000", debounceMs: 600_000 }),
+    );
+
+    act(() => result.current.scheduleSave({ title: "切后台", content: "未保存" }));
+    expect(patch).not.toHaveBeenCalled();
+
+    Object.defineProperty(document, "visibilityState", {
+      value: "hidden",
+      configurable: true,
+    });
+    try {
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+      expect(patch.mock.calls[0]?.[1].body).toMatchObject({
+        title: "切后台",
+        content: "未保存",
+      });
+    } finally {
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
+    }
+  });
+
+  it("只是切回前台不发请求——没有待存内容时不该白跑一趟", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    renderHookWithProviders(() =>
+      useSaveNote({ noteId: NOTE_ID, initialVersion: "1000", debounceMs: 600_000 }),
+    );
+
+    Object.defineProperty(document, "visibilityState", {
+      value: "visible",
+      configurable: true,
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 请求已经发出、响应还没回来时离开页面：此时 `pendingRef` 已被清空，
+   * 而那次普通请求会被浏览器随页面一起中断——不补发就等于这次改动从没存在过。
+   */
+  it("保存请求在飞行中时离开，用 keepalive 补发一次，改动不会丢", async () => {
+    let releaseFirst: ((value: unknown) => void) | undefined;
+    patch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseFirst = resolve;
+        }),
+    );
+    const { result, unmount } = renderHookWithProviders(() =>
+      useSaveNote({ noteId: NOTE_ID, initialVersion: "1000", debounceMs: 20 }),
+    );
+
+    act(() => result.current.scheduleSave({ title: "飞行中", content: "未保存" }));
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+
+    // 第一次请求仍挂起（响应未回），此刻离开页面
+    unmount();
+
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
+    expect(patch.mock.calls[1]?.[1]).toMatchObject({
+      keepalive: true,
+      body: { title: "飞行中", content: "未保存" },
+    });
+
+    // 收尾：放掉挂起的那次，避免留下未 settle 的 promise
+    releaseFirst?.(okEnvelope(saveResult()));
+  });
 });
 
 describe("useSaveNote：版本号推进（回归 —— 正常编辑不该弹冲突）", () => {

@@ -103,6 +103,16 @@ export function useSaveNote(options: {
   /** 已经 seed 过版本号的笔记 id；换笔记时重新 seed，同一篇只 seed 一次。 */
   const seededFor = useRef<number | null>(null);
   const pendingRef = useRef<NoteDraft | null>(null);
+  /**
+   * 正在飞行中的那次保存送出的草稿。
+   *
+   * `runSave` 一开始就把 `pendingRef` 清空（避免飞行期间重复取同一份），
+   * 于是"请求已发出、响应未回"这个窗口里没有任何地方记着"正在保存什么"。
+   * 页面恰好在这个窗口关闭时，那次**普通**请求会被浏览器随页面一起中断，
+   * 而 `flushOnUnload` 因为 `pendingRef` 是 null 什么也不做——改动就丢了。
+   * 这个 ref 专门补上这个窗口。
+   */
+  const inFlightDraft = useRef<NoteDraft | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(false);
@@ -143,6 +153,8 @@ export function useSaveNote(options: {
     const draft = pendingRef.current;
     if (!draft) return "done";
     pendingRef.current = null;
+    // 记下"正在送什么"，供页面在响应回来之前被关掉时补发（见 `flushOnUnload`）
+    inFlightDraft.current = draft;
     setStatus("saving");
 
     const snapshot = queryClient.getQueryData<NoteDetail>(detailKey);
@@ -162,6 +174,8 @@ export function useSaveNote(options: {
         title: result.title ?? draft.title,
         content: result.content ?? draft.content,
       };
+      // 内容已确认落库，清掉"在飞草稿"：之后离开页面不该再补发一次
+      inFlightDraft.current = null;
       queryClient.setQueryData<NoteDetail>(detailKey, (current) =>
         current
           ? {
@@ -289,9 +303,15 @@ export function useSaveNote(options: {
    *    不写回就会用这一段没落盘前的旧正文接着编辑，等于凭空回滚一次；
    * 2. 把基线推到同一份草稿，之后的 A0409 才能被正确判成版本令牌漂移而不是真冲突；
    * 3. 让详情查询失效，回到这篇笔记时后台重新拉一份权威数据。
+   *
+   * **在飞的请求要补发**（`inFlight.current`）：`runSave` 一开头就把 `pendingRef`
+   * 清空并置 `inFlight`，此时 `pendingRef` 是 null，但那次**普通**（非 keepalive）
+   * 请求会随页面一起被浏览器掐断——不补发，这段改动就等于从没存在过。
+   * 补发的这份草稿可能已在服务端生效（响应只是没回来），重复提交是安全的：
+   * `save` 拿到的是同一份内容，服务端版本不同也只会走一次 resync 而不是报冲突。
    */
   const flushOnUnload = useCallback(() => {
-    const draft = pendingRef.current;
+    const draft = pendingRef.current ?? inFlightDraft.current;
     if (!draft || blocked.current) return;
     if (isOffline()) return;
     const version = versionRef.current;
@@ -301,6 +321,7 @@ export function useSaveNote(options: {
       { keepalive: true },
     ).catch(() => undefined);
     pendingRef.current = null;
+    inFlightDraft.current = null;
     baseRef.current = draft;
     queryClient.setQueryData<NoteDetail>(detailKey, (current) =>
       current ? { ...current, title: draft.title, content: draft.content } : current,
@@ -315,15 +336,30 @@ export function useSaveNote(options: {
     const handleOffline = () => {
       if (pendingRef.current) setStatus("offline");
     };
+    /**
+     * 切到后台就落盘。
+     *
+     * 这是移动端**最后一个可靠时机**：`pagehide` / `beforeunload` 在切 App、锁屏、
+     * 切标签时**不保证触发**（iOS Safari 尤其明显），而系统随时可能直接把后台标签页
+     * 回收掉。只靠那两个事件，用户"打了一段字、切去回消息、回来发现改动没了"。
+     *
+     * 判据取 `hidden`：切后台与锁屏都会进这个态，切回前台是 `visible`——
+     * 后者不该发请求（`flushOnUnload` 在没有待存内容时本来就会直接返回）。
+     */
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushOnUnload();
+    };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("pagehide", flushOnUnload);
     window.addEventListener("beforeunload", flushOnUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("pagehide", flushOnUnload);
       window.removeEventListener("beforeunload", flushOnUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [flushOnUnload]);
 
