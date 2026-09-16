@@ -3,6 +3,7 @@ import {
   canResubmit,
   canSubmit,
   completionRate,
+  formatRate,
   daysLeft,
   daysLeftText,
   defaultEndTime,
@@ -156,15 +157,31 @@ describe("completionRate", () => {
     expect(completionRate(4, 1)).toBe(0.25);
   });
 
-  it("应提交为 0 时是 1（后端那个字段这时是 100.0，量纲不一致）", () => {
-    expect(completionRate(0, 0)).toBe(1);
-    expect(completionRate(null, null)).toBe(1);
-    expect(completionRate(undefined, 3)).toBe(1);
+  /*
+   * 回归：`need === 0` 曾经返回 1（只为避免除零），界面上就成了「完成率 100%」。
+   * 一件没有任何人需要提交的任务没有完成率可言，100% 会被读成"全都交了"。
+   * 现在返回 `null` 表示"不适用"，由 `formatRate` 渲染成 `—`。
+   */
+  it("应提交为 0 时返回 null（不适用），不再假报 100%", () => {
+    expect(completionRate(0, 0)).toBeNull();
+    expect(completionRate(null, null)).toBeNull();
+    expect(completionRate(undefined, 3)).toBeNull();
+    expect(completionRate(-5, 2)).toBeNull();
   });
 
   it("脏数据不外溢：超额夹到 1，负数夹到 0", () => {
     expect(completionRate(3, 5)).toBe(1);
     expect(completionRate(3, -1)).toBe(0);
+  });
+});
+
+describe("formatRate", () => {
+  it("不适用显示 —，其余取整百分比", () => {
+    // `—` 与 `0%` 必须区分：前者是"没人需要交"，后者是"有人要交但一个都没交"
+    expect(formatRate(null)).toBe("—");
+    expect(formatRate(0)).toBe("0%");
+    expect(formatRate(8 / 12)).toBe("67%");
+    expect(formatRate(1)).toBe("100%");
   });
 });
 

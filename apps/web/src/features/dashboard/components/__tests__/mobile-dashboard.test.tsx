@@ -56,16 +56,37 @@ describe("MobileDashboard", () => {
     expect(screen.getByText("你好，朋友")).toBeInTheDocument();
   });
 
-  it("四个快捷入口都指向移动端路由", () => {
+  /*
+   * H-2：画板是**三个**快捷格子（新建笔记 / AI 对话 / 协同文档），搜索在**上方独立的
+   * 全宽伪输入框**里（M-01 图例 3）。原实现是 2×2 四格、把「搜索」也算作一格，
+   * 于是三个高频入口被挤成两行、搜索框则完全缺失。
+   */
+  it("快捷操作是三个格子，且不含搜索", () => {
     setup({});
     renderWithProviders(<MobileDashboard />);
     const quick = screen.getByRole("navigation", { name: "快捷操作" });
+    expect(within(quick).getAllByRole("link")).toHaveLength(3);
     expect(within(quick).getByRole("link", { name: "新建笔记" })).toHaveAttribute(
       "href",
       "/m/notes/new",
     );
-    expect(within(quick).getByRole("link", { name: "搜索" })).toHaveAttribute("href", "/m/search");
-    expect(within(quick).getAllByRole("link")).toHaveLength(4);
+    expect(within(quick).getByRole("link", { name: "AI 对话" })).toHaveAttribute(
+      "href",
+      "/m/ai/chat",
+    );
+    expect(within(quick).getByRole("link", { name: "协同文档" })).toHaveAttribute(
+      "href",
+      "/m/docs",
+    );
+    expect(within(quick).queryByRole("link", { name: "搜索" })).toBeNull();
+  });
+
+  it("搜索是上方独立的全宽入口，指向 /m/search", () => {
+    setup({});
+    renderWithProviders(<MobileDashboard />);
+    const search = screen.getByTestId("dashboard-search");
+    expect(search).toHaveAttribute("href", "/m/search");
+    expect(search).toHaveTextContent("搜索知识库、笔记、慕课");
   });
 
   it("最近笔记按首个知识库渲染，标题写明是哪个库", () => {
@@ -125,6 +146,65 @@ describe("MobileDashboard", () => {
     renderWithProviders(<MobileDashboard />);
 
     expect(screen.getByTestId("dashboard-task-1")).toHaveAttribute("href", "/m/notes/3/tasks");
+  });
+
+  /*
+   * H-11：待办行必须有**截止日期行**（M-01 图例 13 原文「截止 09-18 周四」）。
+   * 只有任务名与状态的话，用户看不出这件事急不急——而"待办"这一段的全部意义
+   * 就是按紧迫度扫一眼。
+   */
+  it("待办行显示截止日期与星期，缺 endTime 时不多渲染一行", () => {
+    setup({
+      tasks: {
+        ...IDLE,
+        data: {
+          rows: [
+            // 2026-09-18 是周五；用 Date 构造避免依赖字符串解析的时区行为
+            {
+              id: 1,
+              taskName: "有截止",
+              submissionStatus: 0,
+              endTime: new Date(2026, 8, 18, 23, 59).toISOString(),
+            },
+            { id: 2, taskName: "没截止", submissionStatus: 0, endTime: null },
+          ],
+        },
+      },
+    });
+    renderWithProviders(<MobileDashboard />);
+
+    const list = screen.getByTestId("dashboard-tasks");
+    expect(within(list).getByText(/^截止 09-18 /)).toBeInTheDocument();
+    // 缺 endTime 时那一行整体不渲染，而不是显示"截止 --"
+    expect(within(list).queryByText(/截止.*没截止/)).toBeNull();
+    expect(within(list).queryByText(/^截止 /)).toHaveTextContent(/^截止 09-18 /);
+  });
+
+  /*
+   * H-7：画板是「一整卡 + 内部 1px 分隔线」，不是一叠分离的小卡
+   * （分离卡片会把每行的上下留白叠起来，一屏少看一条）。
+   */
+  it("笔记与待办各是一整卡：单一容器 + 行间分隔线", () => {
+    setup({
+      notes: {
+        ...IDLE,
+        data: {
+          rows: [
+            { id: 7, title: "第一篇", updateTime: "2026-09-11T08:00:00" },
+            { id: 8, title: "第二篇", updateTime: "2026-09-11T08:00:00" },
+          ],
+        },
+      },
+    });
+    renderWithProviders(<MobileDashboard />);
+
+    const list = screen.getByTestId("dashboard-notes");
+    // 一个 <ul> 承载全部行 → 一张卡
+    expect(list.tagName).toBe("UL");
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    // 行本身不带圆角与阴影（那是"分离小卡"的特征），分隔线由 li 的底边给
+    const row = within(list).getAllByRole("link")[0] as HTMLElement;
+    expect(row.className).not.toMatch(/rounded-|shadow-/);
   });
 
   it("「待办 · 全部」指向当前库的任务 Tab，不是跨库的 /m/tasks", () => {

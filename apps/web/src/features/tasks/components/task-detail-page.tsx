@@ -27,6 +27,7 @@ import {
   completionRate,
   daysLeft,
   daysLeftText,
+  formatRate,
   formatTaskMoment,
   formatTaskWindow,
   taskPhase,
@@ -234,24 +235,33 @@ function AdminTaskDetail({ baseId, taskId }: { baseId: number; taskId: number })
         </div>
       </header>
 
-      {/* 统计卡（图例 7 / 8）：完成率现算，不用后端的 submissionProgress */}
-      <section className="grid gap-4 rounded-lg bg-surface p-5 shadow-card sm:grid-cols-3">
-        <Stat label="应提交" value={need} testId="task-need" />
-        <Stat label="已提交" value={submitted} testId="task-submitted" />
-        <div className="space-y-1.5">
+      {/*
+        统计区（图例 7 / 8）：画板是**三张独立白卡**（中间有间隙），不是一张卡里切三格。
+        原来是 `grid … rounded-lg bg-surface p-5 shadow-card sm:grid-cols-3`——
+        单卡承载三个 `space-y-1` 分组，卡间没有间隙，视觉上是一栏而不是三张卡。
+
+        「应提交 / 已提交」的单位是**人**（画板 `12 人` / `8 人`），不是抽象计数：
+        任务面向的是成员，裸数字会被读成"12 个任务"。
+        完成率卡按画板：`67%` 与 `8 / 12` **同一行**，进度条在下方通栏。
+      */}
+      <section className="grid gap-4 sm:grid-cols-3" data-testid="task-stats">
+        <Stat label="应提交" value={need} unit="人" testId="task-need" />
+        <Stat label="已提交" value={submitted} unit="人" testId="task-submitted" />
+        <div className="space-y-3 rounded-lg bg-surface p-5 shadow-card">
           <p className="text-xs text-label-secondary">完成率</p>
-          <p className="text-2xl font-semibold text-label tabular-nums" data-testid="task-rate">
-            {Math.round(rate * 100)}%
-          </p>
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-2xl font-semibold text-label tabular-nums" data-testid="task-rate">
+              {formatRate(rate)}
+            </p>
+            <p className="text-footnote text-label-tertiary tabular-nums">
+              {submitted} / {need}
+            </p>
+          </div>
           <ProgressBar
-            value={rate * 100}
+            value={rate === null ? 0 : rate * 100}
             label="提交完成率"
-            className="max-w-40"
             showValue={false}
           />
-          <p className="text-xs text-label-tertiary tabular-nums">
-            {submitted} / {need}
-          </p>
         </div>
       </section>
 
@@ -347,12 +357,24 @@ function daysLeftWarning(endTime: string | null | undefined, now: Date): boolean
   return days !== null && days <= DAYS_LEFT_WARNING;
 }
 
-function Stat({ label, value, testId }: { label: string; value: number; testId: string }) {
+/** 统计卡（D-17 图例 7 / 8）：三张独立白卡，数值带单位。 */
+function Stat({
+  label,
+  value,
+  unit,
+  testId,
+}: {
+  label: string;
+  value: number;
+  unit?: string;
+  testId: string;
+}) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 rounded-lg bg-surface p-5 shadow-card">
       <p className="text-xs text-label-secondary">{label}</p>
       <p className="text-2xl font-semibold text-label tabular-nums" data-testid={testId}>
         {value}
+        {unit ? <span className="ml-1 text-footnote font-normal text-label-secondary">{unit}</span> : null}
       </p>
     </div>
   );

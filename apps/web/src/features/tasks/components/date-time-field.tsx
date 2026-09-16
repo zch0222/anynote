@@ -39,9 +39,16 @@ function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-/** `MM-dd HH:mm`，与 `date-fns` 的 `format(value, "MM-dd HH:mm")` 同形。 */
+/**
+ * `YYYY-MM-DD HH:mm`（D-18 图例 6 / 7：画板实测 `2026-09-16 09:00`）。
+ *
+ * **含年份**：早先只显示 `09-16 09:00`，但任务的时间窗口常常跨年
+ * （"12-28 截止"到底是今年还是明年？），缺了年份只能靠猜。
+ * 与 `lib/format-time.ts` 的 `formatDateTime` 同一口径，只是这里刻意不引它——
+ * 那个模块会连带进相对时间文案，而这个组件在表单首屏（预算最紧的路由之一）。
+ */
 function formatTrigger(value: Date): string {
-  return `${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
 }
 
 /**

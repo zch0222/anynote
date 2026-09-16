@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { MobileBaseHeader } from "@/features/notes/components/mobile/base-section-tabs";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
-import { canResubmit, canSubmit, formatTaskWindow } from "@/features/tasks/lib/task-window";
+import { canResubmit, canSubmit, formatTaskWindowShort } from "@/features/tasks/lib/task-window";
 import {
   type MemberTask,
   TASK_STATUS,
@@ -191,8 +191,20 @@ function TaskRow({
             </Badge>
           ) : null}
         </span>
-        <span className="tabular truncate text-footnote text-label-tertiary">
-          {formatTaskWindow(task.startTime, task.endTime)}
+        {/*
+          H-10：画板行内是「描述（最多两行）」再「时间窗口 · 发布人」。
+          原实现只有时间窗口，**没有描述也没有发布人**——而"这个任务要我交什么"
+          正是列表上最该先看到的一句；发布人则决定了"我该去问谁"。
+          两者列表端点都已返回（`taskDescribe` / `taskCreatorNickname`），不是造数差异。
+        */}
+        {task.taskDescribe?.trim() ? (
+          <span className="line-clamp-2 text-footnote text-label-secondary">
+            {task.taskDescribe}
+          </span>
+        ) : null}
+        <span className="tabular truncate text-xs text-label-tertiary">
+          {formatTaskWindowShort(task.startTime, task.endTime)}
+          {task.taskCreatorNickname?.trim() ? ` · ${task.taskCreatorNickname}发布` : ""}
         </span>
       </Link>
 

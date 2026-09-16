@@ -18,7 +18,7 @@ import { type CollabDocTitleInput, collabDocTitleSchema } from "@/features/colla
 import { useCollabIndex } from "@/features/collab/use-collab-index";
 import { formatRelativeTime } from "@/lib/format-time";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FileText, MoreHorizontal, Plus } from "lucide-react";
+import { FileText, Info, MoreHorizontal, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -88,7 +88,19 @@ export function MobileDocLibrary() {
                   href={`/m/docs/${item.id}`}
                   className="flex min-h-16 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-fill-hover"
                 >
-                  <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
+                  {/*
+                    M-08：行图标是**蓝色圆角图标块**，不是裸的灰色 FileText。
+                    与侧栏「协同文档」入口用同一个蓝色底 + 圆角 8；裸图标在
+                    "全是文字行"的列表里几乎看不见，用户扫不到每行的起点。
+                    `rounded-[8px]` 写死而不写 `rounded-lg`：本仓库
+                    `--radius-lg` 是 14px，套在 30px 方块上视觉就是个圆。
+                  */}
+                  <span
+                    aria-hidden="true"
+                    className="grid size-[30px] shrink-0 place-items-center rounded-[8px] bg-accent-soft text-accent"
+                  >
+                    <FileText className="size-4" />
+                  </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{item.title}</span>
                     {/* M-08 图例 6：「陈可 · 2 小时前更新」，不铺全量时间戳 */}
@@ -119,6 +131,17 @@ export function MobileDocLibrary() {
           <Plus className="size-4" aria-hidden="true" />
           新建文档
         </Button>
+
+        {/*
+          M-08 图例 7：页脚提示「文档库全站共享，不按知识库划分」。
+          这句解决的是真实的误解：侧栏把「协同文档」画在知识库分组**之外**，
+          但从知识库进来的人会以为它属于当前库。放在页脚而不是顶部：
+          它是"用起来之前不需要知道"的信息，放顶部只会推走列表。
+        */}
+        <p className="flex items-start gap-1.5 text-xs text-label-tertiary">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          文档库全站共享，不按知识库划分。
+        </p>
       </div>
 
       {/* 新建表单走底部弹层而不是居中对话框：手机上对话框会被软键盘顶掉一半 */}

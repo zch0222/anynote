@@ -15,7 +15,7 @@ import {
   isMobileSearchEmpty,
 } from "@/lib/mobile/search";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Search, Sparkles, XCircle } from "lucide-react";
+import { ChevronRight, PenLine, Search, Sparkles, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -132,12 +132,18 @@ export function MobileSearchPage() {
  * 那是开发者视角的信息，对用户只是噪音（方案 §2 的「面向开发者」一条）。
  */
 function SearchRow({ item }: { item: MobileSearchItem }) {
-  /**
+  /*
    * 知识库行的色块按 id 取渐变，与「新建笔记」的库列表、工作台的库卡片同一套
    * （`cover-gradient`），用户在三个地方看到的是同一个颜色。
    * 其余分组给一个中性的图标底。
    */
   const baseId = item.group === "base" ? Number(item.href.split("/").pop()) : Number.NaN;
+  /*
+   * 「创建笔记」用**笔形**图标而不是 Sparkles（M-10 图例 5 原文：「蓝色方形图标块 +
+   * 笔形图标」）。Sparkles 在仓库里是"AI / 智能"的语义，用在"新建一篇空白笔记"
+   * 上会让用户以为点进去会生成内容。
+   */
+  const isCreateNote = item.href.startsWith("/m/notes/new");
   return (
     <Link
       href={item.href}
@@ -149,15 +155,21 @@ function SearchRow({ item }: { item: MobileSearchItem }) {
     >
       {Number.isSafeInteger(baseId) && baseId > 0 ? (
         <span
-          className={coverAvatarClassName(baseId, "size-[30px] rounded-lg")}
+          /*
+           * H-6：30px 的色块用 `rounded-lg`（本仓库 `--radius-lg` = 14px）**视觉上
+           * 就是一个正圆**——画板要求的是「30px 圆角 8 的方形」。改用显式的
+           * `rounded-[8px]`：不能换成别的 `rounded-*` 档位，因为本项目的
+           * `--radius-lg` 与 Tailwind 默认值不同，靠档位名猜圆角一定踩这个坑。
+           */
+          className={coverAvatarClassName(baseId, "size-[30px] rounded-[8px]")}
           aria-hidden="true"
         />
       ) : (
         <span
-          className="grid size-[30px] shrink-0 place-items-center rounded-lg bg-accent-soft text-accent"
+          className="grid size-[30px] shrink-0 place-items-center rounded-[8px] bg-accent-soft text-accent"
           aria-hidden="true"
         >
-          <Sparkles className="size-4" />
+          {isCreateNote ? <PenLine className="size-4" /> : <Sparkles className="size-4" />}
         </span>
       )}
       <span className="min-w-0 flex-1">

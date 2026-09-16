@@ -19,7 +19,7 @@ import {
 } from "@/features/settings/use-profile";
 import { toUserMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
-import { Check, ChevronRight, Monitor, Moon, Plug, Sun } from "lucide-react";
+import { Check, ChevronRight, Lock, Monitor, Moon, Plug, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -199,6 +199,31 @@ function MobileAccountSettings() {
   return (
     <div className="space-y-6" data-testid="settings-account">
       <SettingsGroup label="账号资料">
+        {/*
+          H-3(a)：画板卡片开头是 **40 头像 + 昵称 + 一行 `🔒 用户名 xxx · 不可修改`**，
+          分隔线之后才是昵称 / 性别 / 邮箱 / 手机号。
+          原实现直接从「昵称」行开始，没有头像块，用户名被降级成最后一行、
+          只有值没有锁图标与说明——但它是附录 A D-12 表明列的图例元素
+          （「锁图标 + 一行说明」），不是风格偏好。
+        */}
+        <li className="flex items-center gap-3 border-b border-separator px-4 py-3">
+          <span
+            aria-hidden="true"
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-accent text-body font-medium text-white"
+            data-testid="settings-avatar"
+          >
+            {(server?.nickname?.trim() || server?.username?.trim() || "用").slice(0, 1)}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-headline font-semibold text-label">
+              {server?.nickname?.trim() || server?.username?.trim() || "…"}
+            </span>
+            <span className="flex items-center gap-1 text-footnote text-label-tertiary">
+              <Lock className="size-3.5 shrink-0" aria-hidden="true" />
+              用户名 {server?.username ?? "…"} · 不可修改
+            </span>
+          </span>
+        </li>
         <SettingsInputRow
           label="昵称"
           value={form.nickname}
@@ -228,7 +253,6 @@ function MobileAccountSettings() {
           placeholder="未填写"
           testId="settings-phone"
         />
-        <SettingsRow label="用户名" value={server?.username ?? "…"} disabled />
       </SettingsGroup>
 
       <div className="space-y-2">
@@ -263,7 +287,16 @@ function MobileAccountSettings() {
             onChange={(event) => setNewPassword(event.target.value)}
             data-testid="settings-new-password"
           />
-          <ul className="space-y-1 pt-1" data-testid="settings-password-rules">
+          {/*
+            H-3(b)：画板是**一行四个 chip**（`⊘ 8–15 位 ⊘ 含大写字母 ⊘ 含小写字母 ⊘ 含数字`），
+            原实现是 `space-y-1` 的纵向四行——多占三行，把「修改密码」卡撑高一截。
+            用 flex-wrap 而不是 grid-cols-4：390 宽下这四条文案并排会挤（实测总宽
+            约 330px + 间距），折成两行仍比四行紧凑，且窄屏不会截断文字。
+          */}
+          <ul
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1"
+            data-testid="settings-password-rules"
+          >
             {PASSWORD_RULES.map((rule) => {
               const passed = rule.test(newPassword);
               return (
@@ -271,7 +304,7 @@ function MobileAccountSettings() {
                   key={rule.label}
                   data-passed={passed ? "true" : "false"}
                   className={cn(
-                    "flex items-center gap-1.5 text-xs",
+                    "flex items-center gap-1 text-xs",
                     passed ? "text-success" : "text-label-tertiary",
                   )}
                 >

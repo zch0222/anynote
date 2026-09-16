@@ -158,69 +158,80 @@ export function AppearanceSettings() {
     current === "dark" || (current !== "light" && systemPrefersDark) ? "深色" : "浅色";
 
   return (
-    <div className="max-w-2xl space-y-4" data-testid="settings-appearance">
-      <div>
-        <h2 className="text-headline text-label">外观</h2>
-        <p className="text-footnote text-label-tertiary">选择界面主题，点了立即生效。</p>
-      </div>
+    /*
+      H-13：主题选择在**一张白卡**里（画板实测内容区近白占比 38.4%，实现是 6.0%）。
+      卡内的标题是「主题」而不是「外观」，说明是「选择界面主题，跟随系统会随操作系统
+      自动切换明暗。」——画板原文如此。原实现写「外观」+「点了立即生效。」，
+      两者都没说清这个页面最需要解释的一件事：**跟随系统是什么意思**。
+      页头（`设置` + 副标题）在设置布局里，本组件只管卡片。
+    */
+    <div className="max-w-2xl" data-testid="settings-appearance">
+      <section className="rounded-lg bg-surface p-5 shadow-card">
+        <div className="space-y-1">
+          <h2 className="text-headline text-label">主题</h2>
+          <p className="text-footnote text-label-tertiary">
+            选择界面主题，跟随系统会随操作系统自动切换明暗。
+          </p>
+        </div>
 
-      <div
-        ref={groupRef}
-        role="radiogroup"
-        aria-label="主题"
-        className="grid gap-3 sm:grid-cols-3"
-        onKeyDown={handleKeyDown}
-      >
-        {THEME_OPTIONS.map(({ value, label, icon: Icon, tone }, index) => {
-          const active = current === value;
-          return (
-            <button
-              key={value}
-              type="button"
-              // biome-ignore lint/a11y/useSemanticElements: 单选卡带预览缩略，原生 input[type=radio] 画不出这种形态；语义由 role + aria-checked + 方向键补全
-              role="radio"
-              aria-checked={active}
-              // roving tabindex：整组只占一个 tab 位，组内用方向键走
-              tabIndex={active || (current === undefined && index === 0) ? 0 : -1}
-              onClick={() => setTheme(value)}
-              data-testid={`theme-option-${value}`}
-              className={cn(
-                "flex cursor-pointer flex-col gap-2 rounded-md border-2 p-2 text-left outline-none transition-colors",
-                "focus-visible:ring-2 focus-visible:ring-ring",
-                active ? "border-accent" : "border-separator hover:border-label-tertiary",
-              )}
-            >
-              {/* 图例 3：预览缩略 132 高、圆角 12——`rounded-xl` 是 14，差一档看得见 */}
-              <span className="block h-[132px] w-full overflow-hidden rounded-[12px] border border-separator">
-                <ThemedThumb tone={tone} />
-              </span>
-              <span className="flex items-center gap-2 px-1 pb-1">
-                {/* 单选圆 18：用 border + 内点画，保证两态下都是语义色 */}
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "grid size-[18px] shrink-0 place-items-center rounded-full border-2",
-                    active ? "border-accent" : "border-separator",
-                  )}
-                >
-                  {active ? <span className="size-2 rounded-full bg-accent" /> : null}
+        <div
+          ref={groupRef}
+          role="radiogroup"
+          aria-label="主题"
+          className="mt-4 grid gap-3 sm:grid-cols-3"
+          onKeyDown={handleKeyDown}
+        >
+          {THEME_OPTIONS.map(({ value, label, icon: Icon, tone }, index) => {
+            const active = current === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                // biome-ignore lint/a11y/useSemanticElements: 单选卡带预览缩略，原生 input[type=radio] 画不出这种形态；语义由 role + aria-checked + 方向键补全
+                role="radio"
+                aria-checked={active}
+                // roving tabindex：整组只占一个 tab 位，组内用方向键走
+                tabIndex={active || (current === undefined && index === 0) ? 0 : -1}
+                onClick={() => setTheme(value)}
+                data-testid={`theme-option-${value}`}
+                className={cn(
+                  "flex cursor-pointer flex-col gap-2 rounded-md border-2 p-2 text-left outline-none transition-colors",
+                  "focus-visible:ring-2 focus-visible:ring-ring",
+                  active ? "border-accent" : "border-separator hover:border-label-tertiary",
+                )}
+              >
+                {/* 图例 3：预览缩略 132 高、圆角 12——`rounded-xl` 是 14，差一档看得见 */}
+                <span className="block h-[132px] w-full overflow-hidden rounded-[12px] border border-separator">
+                  <ThemedThumb tone={tone} />
                 </span>
-                <Icon className="size-[15px] shrink-0 text-label-secondary" aria-hidden="true" />
-                <span className="text-sm text-label">{label}</span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+                <span className="flex items-center gap-2 px-1 pb-1">
+                  {/* 单选圆 18：用 border + 内点画，保证两态下都是语义色 */}
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "grid size-[18px] shrink-0 place-items-center rounded-full border-2",
+                      active ? "border-accent" : "border-separator",
+                    )}
+                  >
+                    {active ? <span className="size-2 rounded-full bg-accent" /> : null}
+                  </span>
+                  <Icon className="size-[15px] shrink-0 text-label-secondary" aria-hidden="true" />
+                  <span className="text-sm text-label">{label}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* D-13 图例 5：说清「跟随系统」此刻的结果，以及偏好不跨设备 */}
-      <p
-        className="flex items-start gap-1.5 text-footnote text-label-tertiary"
-        data-testid="appearance-effective"
-      >
-        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-        当前系统为{systemTone}，界面正在使用{effectiveTone}。偏好只保存在这台设备的浏览器里。
-      </p>
+        {/* D-13 图例 5：说清「跟随系统」此刻的结果，以及偏好不跨设备 */}
+        <p
+          className="mt-4 flex items-start gap-1.5 text-footnote text-label-tertiary"
+          data-testid="appearance-effective"
+        >
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          当前系统为{systemTone}，界面正在使用{effectiveTone}。偏好只保存在这台设备的浏览器里。
+        </p>
+      </section>
     </div>
   );
 }

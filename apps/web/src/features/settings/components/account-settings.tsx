@@ -121,206 +121,267 @@ export function AccountSettings() {
   };
 
   return (
-    <div className="max-w-2xl space-y-10">
-      <section className="space-y-4" data-testid="settings-account">
-        <div className="space-y-1">
-          <h2 className="text-headline text-label">账号资料</h2>
-          {/* D-12 图例 11：锁图标 + 一行说明；用户名不进表单，它不是可编辑字段 */}
-          <p className="flex items-center gap-1 text-footnote text-label-tertiary">
-            <Lock className="size-3.5 shrink-0" aria-hidden="true" />
-            用户名 {server?.username ?? "…"} · 不可修改
-          </p>
-        </div>
-        {profile.isPending ? (
-          <PanelSkeleton className="h-48" />
-        ) : profile.isError ? (
-          /* Q-02 给 D-12 的口径：资料加载失败：{message} + 重试（图例 28） */
-          <QueryError
-            object="资料"
-            error={profile.error}
-            onRetry={() => void profile.refetch()}
-            retrying={profile.isFetching}
-          />
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="settings-nickname">昵称</Label>
-              <Input
-                id="settings-nickname"
-                className="h-8 rounded-md"
-                value={form.nickname}
-                maxLength={NICKNAME_MAX_LENGTH}
-                onChange={(event) => {
-                  setForm((current) => ({ ...current, nickname: event.target.value }));
-                }}
-                data-testid="settings-nickname"
-              />
-              {/* D-12 图例 13：`N / 30`，让用户知道还剩多少字可写 */}
-              <p className="text-right text-xs text-label-tertiary" data-testid="nickname-count">
-                {form.nickname.length} / {NICKNAME_MAX_LENGTH}
+    <div className="max-w-2xl space-y-6">
+      {/*
+        H-13：画板把「账号资料」画成**一张白卡**（实测内容区近白占比 71.4%，
+        实现是 0.0%），卡片自带内边距与页脚。原实现是一个裸的 `space-y-4` 分区，
+        内容直接铺在 `bg-grouped` 灰底上——卡片外壳整个缺失。
+        这是 D-12 / D-13 / D-18 同一类回归（三处都是"画板有卡、实现没有"）。
+      */}
+      <section
+        className="overflow-hidden rounded-lg bg-surface shadow-card"
+        data-testid="settings-account"
+      >
+        <div className="space-y-4 p-5">
+          {/*
+            D-12 卡片头部：**40 头像 + 昵称**，其下一行 `🔒 用户名 xxx · 不可修改`。
+            原实现只有标题「账号资料」+ 一行锁图标用户名，没有头像块——
+            但这是画板明列的图例元素（附录 A D-12 表：「锁图标 + 一行说明」），
+            不是风格偏好。头像与侧栏页脚用户卡用同一套 fallback 逻辑（首字）。
+          */}
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="grid size-10 shrink-0 place-items-center rounded-full bg-accent text-body font-medium text-white"
+              data-testid="settings-avatar"
+            >
+              {(server?.nickname?.trim() || server?.username?.trim() || "用").slice(0, 1)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-headline font-semibold text-label">
+                {server?.nickname?.trim() || server?.username?.trim() || "…"}
+              </p>
+              {/* D-12 图例 11：锁图标 + 一行说明；用户名不进表单，它不是可编辑字段 */}
+              <p className="flex items-center gap-1 text-footnote text-label-tertiary">
+                <Lock className="size-3.5 shrink-0" aria-hidden="true" />
+                用户名 {server?.username ?? "…"} · 不可修改
               </p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="settings-sex">性别</Label>
-              {/*
-                用 Select 而不是原生 <select>：原生控件在深色下无法用语义 Token 上色，
-                高度与圆角也对不齐输入框（36/6 对 32/10）。`items` 让触发器直接显示
-                标签而不是裸的数值。
-              */}
-              <Select
-                items={SEX_OPTIONS}
-                value={form.sex}
-                onValueChange={(next) => {
-                  setForm((current) => ({ ...current, sex: Number(next) }));
-                }}
-              >
-                <SelectTrigger
-                  id="settings-sex"
-                  className="h-8 w-full rounded-md"
-                  data-testid="settings-sex"
-                >
-                  <SelectValue>
-                    {/*
-                      挡 null 再转数字：`Number(null)` 是 0（男），不挡的话
-                      "未设置"会被显示成「男」，而表单里存的其实是 2。
-                    */}
-                    {(value: number | null) =>
-                      value === null
-                        ? "未设置"
-                        : (SEX_OPTIONS.find((option) => option.value === value)?.label ?? "未设置")
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {SEX_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="settings-email">邮箱</Label>
-              {/* D-12 图例 15：可清空——空串就是清空，不做"空值不提交"的过滤 */}
-              <Input
-                id="settings-email"
-                type="email"
-                className="h-8 rounded-md"
-                value={form.email}
-                onChange={(event) => {
-                  setForm((current) => ({ ...current, email: event.target.value }));
-                }}
-                data-testid="settings-email"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="settings-phone">手机号</Label>
-              <Input
-                id="settings-phone"
-                type="tel"
-                className="h-8 rounded-md"
-                placeholder="用于找回账号（选填）"
-                value={form.phoneNumber}
-                onChange={(event) => {
-                  setForm((current) => ({ ...current, phoneNumber: event.target.value }));
-                }}
-                data-testid="settings-phone"
-              />
-            </div>
-            <div className="flex items-center justify-end gap-3 sm:col-span-2">
-              {/* D-12 图例 17：一致时整段隐藏，且保存按钮禁用 */}
-              {dirty ? (
-                <p className="text-footnote text-label-tertiary" data-testid="profile-dirty-hint">
-                  有未保存的修改
-                </p>
-              ) : null}
-              <Button
-                onClick={() => void handleSaveProfile()}
-                disabled={!dirty || update.isPending}
-                data-testid="settings-save-profile"
-              >
-                {update.isPending ? "保存中…" : "保存资料"}
-              </Button>
-            </div>
           </div>
-        )}
+
+          {profile.isPending ? (
+            <PanelSkeleton className="h-48" />
+          ) : profile.isError ? (
+            /* Q-02 给 D-12 的口径：资料加载失败：{message} + 重试（图例 28） */
+            <QueryError
+              object="资料"
+              error={profile.error}
+              onRetry={() => void profile.refetch()}
+              retrying={profile.isFetching}
+            />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="settings-nickname">昵称</Label>
+                {/*
+                  D-12 图例 13：`2 / 30` 在输入框**内**右侧（图例原文如此）。
+                  原来放在框下方右对齐，那一行会把昵称这一列撑高、
+                  与右侧「性别」列错开一行——两列栅格从此不再对齐。
+                */}
+                <div className="relative">
+                  <Input
+                    id="settings-nickname"
+                    className="h-8 rounded-md pr-14"
+                    value={form.nickname}
+                    maxLength={NICKNAME_MAX_LENGTH}
+                    onChange={(event) => {
+                      setForm((current) => ({ ...current, nickname: event.target.value }));
+                    }}
+                    data-testid="settings-nickname"
+                  />
+                  <span
+                    className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-label-tertiary tabular-nums"
+                    data-testid="nickname-count"
+                  >
+                    {form.nickname.length} / {NICKNAME_MAX_LENGTH}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-sex">性别</Label>
+                {/*
+                  用 Select 而不是原生 <select>：原生控件在深色下无法用语义 Token 上色，
+                  高度与圆角也对不齐输入框（36/6 对 32/10）。`items` 让触发器直接显示
+                  标签而不是裸的数值。
+                */}
+                <Select
+                  items={SEX_OPTIONS}
+                  value={form.sex}
+                  onValueChange={(next) => {
+                    setForm((current) => ({ ...current, sex: Number(next) }));
+                  }}
+                >
+                  <SelectTrigger
+                    id="settings-sex"
+                    className="h-8 w-full rounded-md"
+                    data-testid="settings-sex"
+                  >
+                    <SelectValue>
+                      {/*
+                        挡 null 再转数字：`Number(null)` 是 0（男），不挡的话
+                        "未设置"会被显示成「男」，而表单里存的其实是 2。
+                      */}
+                      {(value: number | null) =>
+                        value === null
+                          ? "未设置"
+                          : (SEX_OPTIONS.find((option) => option.value === value)?.label ??
+                            "未设置")
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEX_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-email">邮箱</Label>
+                {/* D-12 图例 15：可清空——空串就是清空，不做"空值不提交"的过滤 */}
+                <Input
+                  id="settings-email"
+                  type="email"
+                  className="h-8 rounded-md"
+                  value={form.email}
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, email: event.target.value }));
+                  }}
+                  data-testid="settings-email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="settings-phone">手机号</Label>
+                <Input
+                  id="settings-phone"
+                  type="tel"
+                  className="h-8 rounded-md"
+                  placeholder="用于找回账号（选填）"
+                  value={form.phoneNumber}
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, phoneNumber: event.target.value }));
+                  }}
+                  data-testid="settings-phone"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/*
+          D-12 图例 17：卡片**页脚**放「有未保存的修改」+「保存资料」，上方一条 1px 分隔。
+          原来这两样跟在字段网格里（`sm:col-span-2`），视觉上仍是表单的一部分，
+          与画板的"卡内页脚"形态不符。
+        */}
+        <div className="flex items-center justify-end gap-3 border-t border-separator bg-fill-footer px-5 py-3">
+          {dirty ? (
+            <p className="text-footnote text-label-tertiary" data-testid="profile-dirty-hint">
+              有未保存的修改
+            </p>
+          ) : null}
+          <Button
+            onClick={() => void handleSaveProfile()}
+            disabled={!dirty || update.isPending}
+            data-testid="settings-save-profile"
+          >
+            {update.isPending ? "保存中…" : "保存资料"}
+          </Button>
+        </div>
       </section>
 
-      <section className="space-y-4" data-testid="settings-password">
-        <div className="space-y-1">
-          <h2 className="text-headline text-label">修改密码</h2>
-          <p className="text-footnote text-label-tertiary">改完需要用新密码重新登录其它设备。</p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="settings-old-password">原密码</Label>
-            <PasswordInput
-              id="settings-old-password"
-              value={oldPassword}
-              onChange={(event) => {
-                setOldPassword(event.target.value);
-                setOldPasswordError(null);
-              }}
-              autoComplete="current-password"
-              aria-invalid={oldPasswordError !== null}
-              aria-describedby={oldPasswordError ? "settings-old-password-error" : undefined}
-            />
-            {oldPasswordError ? (
-              <p
-                id="settings-old-password-error"
-                role="alert"
-                className="text-xs text-danger"
-                data-testid="settings-old-password-error"
-              >
-                {oldPasswordError}
-              </p>
-            ) : null}
+      {/* 「修改密码」是**第二张白卡**（画板实测：两张卡各自独立、中间有间隙） */}
+      <section
+        className="overflow-hidden rounded-lg bg-surface shadow-card"
+        data-testid="settings-password"
+      >
+        <div className="space-y-4 p-5">
+          <div className="space-y-1">
+            <h2 className="text-headline text-label">修改密码</h2>
+            {/* 画板实测原文：`8–15 位，需包含大小写字母和数字。` */}
+            <p className="text-footnote text-label-tertiary">8–15 位，需包含大小写字母和数字。</p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="settings-new-password">新密码</Label>
-            <PasswordInput
-              id="settings-new-password"
-              value={newPassword}
-              onChange={(event) => {
-                setNewPassword(event.target.value);
-              }}
-              autoComplete="new-password"
-              data-testid="settings-new-password"
-            />
-          </div>
-          {/* D-12 图例 24：规则清单随输入实时打勾，取代"提交后弹 toast" */}
-          <ul className="space-y-1 sm:col-span-2" data-testid="settings-password-rules">
-            {PASSWORD_RULES.map((rule) => {
-              const passed = rule.test(newPassword);
-              return (
-                <li
-                  key={rule.label}
-                  data-passed={passed ? "true" : "false"}
-                  className={cn(
-                    "flex items-center gap-1.5 text-xs",
-                    passed ? "text-success" : "text-label-tertiary",
-                  )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="settings-old-password">原密码</Label>
+              <PasswordInput
+                id="settings-old-password"
+                value={oldPassword}
+                onChange={(event) => {
+                  setOldPassword(event.target.value);
+                  setOldPasswordError(null);
+                }}
+                autoComplete="current-password"
+                aria-invalid={oldPasswordError !== null}
+                aria-describedby={oldPasswordError ? "settings-old-password-error" : undefined}
+              />
+              {oldPasswordError ? (
+                <p
+                  id="settings-old-password-error"
+                  role="alert"
+                  className="text-xs text-danger"
+                  data-testid="settings-old-password-error"
                 >
-                  <Check
-                    className={cn("size-3.5 shrink-0", passed ? "opacity-100" : "opacity-30")}
-                    aria-hidden="true"
-                  />
-                  {rule.label}
-                </li>
-              );
-            })}
-          </ul>
-          <div className="sm:col-span-2">
-            <Button
-              variant="outline"
-              onClick={() => void handleChangePassword()}
-              disabled={resetPassword.isPending}
-              data-testid="settings-change-password"
+                  {oldPasswordError}
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="settings-new-password">新密码</Label>
+              <PasswordInput
+                id="settings-new-password"
+                value={newPassword}
+                onChange={(event) => {
+                  setNewPassword(event.target.value);
+                }}
+                autoComplete="new-password"
+                data-testid="settings-new-password"
+              />
+            </div>
+            {/*
+              D-12 图例 24：规则清单随输入实时打勾，取代"提交后弹 toast"。
+              画板是**一行四项**（`⊘ 8–15 位 ⊘ 含大写字母 ⊘ 含小写字母 ⊘ 含数字`），
+              原来是 `space-y-1` 的纵向四行——比画板高了三行，把卡片撑长。
+              用 flex-wrap 而不是 grid-cols-4：窄屏下允许折行，宽屏下四项同行。
+            */}
+            <ul
+              className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:col-span-2"
+              data-testid="settings-password-rules"
             >
-              {resetPassword.isPending ? "提交中…" : "修改密码"}
-            </Button>
+              {PASSWORD_RULES.map((rule) => {
+                const passed = rule.test(newPassword);
+                return (
+                  <li
+                    key={rule.label}
+                    data-passed={passed ? "true" : "false"}
+                    className={cn(
+                      "flex items-center gap-1.5 text-xs",
+                      passed ? "text-success" : "text-label-tertiary",
+                    )}
+                  >
+                    <Check
+                      className={cn("size-3.5 shrink-0", passed ? "opacity-100" : "opacity-30")}
+                      aria-hidden="true"
+                    />
+                    {rule.label}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
+        </div>
+
+        {/* D-12 图例：页脚右对齐，与「账号资料」卡同一形态 */}
+        <div className="flex items-center justify-end border-t border-separator bg-fill-footer px-5 py-3">
+          <Button
+            variant="outline"
+            onClick={() => void handleChangePassword()}
+            disabled={resetPassword.isPending}
+            data-testid="settings-change-password"
+          >
+            {resetPassword.isPending ? "提交中…" : "修改密码"}
+          </Button>
         </div>
       </section>
     </div>

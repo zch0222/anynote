@@ -9,7 +9,7 @@ import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { useNotesQuery } from "@/features/notes/use-notes";
 import { submissionStatusText } from "@/features/tasks/schemas";
 import { useTasksQuery } from "@/features/tasks/use-tasks";
-import { formatRelativeTime } from "@/lib/format-time";
+import { formatDueLine, formatRelativeTime } from "@/lib/format-time";
 import {
   ChevronRight,
   FileText,
@@ -22,16 +22,24 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-/** 工作台只取一屏能看完的量，多了也读不过来，还会把首屏拖慢。 */
+/**
+ * 工作台只取一屏能看完的量，多了也读不过来，还会把首屏拖慢。
+ */
 const RECENT_NOTE_COUNT = 4;
 const PENDING_TASK_COUNT = 3;
 const BASE_CARD_COUNT = 4;
 
+/**
+ * 快捷操作（M-01 图例 4–6）：**一行三格**，图标在上、文字在下。
+ *
+ * 早期是 2×2 四格、图标在左，还多出一格「搜索」——但搜索在画板里是**上方独立的
+ * 全宽伪输入框**（图例 3），不是快捷格子。把搜索挤进格子里会让它和其它三个
+ * "新建 / 打开"类动作混在一起，且占掉一格后三个高频入口变成两行。
+ */
 const QUICK_ACTIONS = [
-  { title: "新建笔记", href: "/m/notes/new", icon: PenLine },
-  { title: "AI 对话", href: "/m/ai/chat", icon: MessageSquare },
-  { title: "搜索", href: "/m/search", icon: Search },
-  { title: "协同文档", href: "/m/docs", icon: FileText },
+  { title: "新建笔记", href: "/m/notes/new", icon: PenLine, tone: "accent" },
+  { title: "AI 对话", href: "/m/ai/chat", icon: MessageSquare, tone: "accent" },
+  { title: "协同文档", href: "/m/docs", icon: FileText, tone: "accent" },
 ] as const;
 
 /**
@@ -90,14 +98,29 @@ export function MobileDashboard() {
       }
     >
       <div className="space-y-6 p-4" data-testid="mobile-dashboard">
-        <nav aria-label="快捷操作" className="grid grid-cols-2 gap-3">
+        {/*
+          M-01 图例 3：**全宽搜索伪输入框**（358×36、圆角 10、底 #E9E9EE），
+          点击去 /m/search。用一个 Link 做成"看起来像输入框"的样子而不是真 <input>：
+          真输入框会拉起键盘、用户以为要在这里打字，而实际搜索页有自己的一整页
+          交互（历史、分组、逐字过滤高亮）。
+        */}
+        <Link
+          href="/m/search"
+          data-testid="dashboard-search"
+          className="flex h-9 items-center gap-2 rounded-md bg-fill-hover px-3 text-footnote text-label-secondary outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Search className="size-4 shrink-0" aria-hidden="true" />
+          搜索知识库、笔记、慕课
+        </Link>
+
+        <nav aria-label="快捷操作" className="grid grid-cols-3 gap-3">
           {QUICK_ACTIONS.map((action) => (
             <Link
               key={action.href}
               href={action.href}
-              className="flex min-h-14 items-center gap-2.5 rounded-lg bg-surface px-3 text-footnote font-medium text-label shadow-card outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-h-[76px] flex-col items-center justify-center gap-2 rounded-lg bg-surface px-2 text-footnote font-medium text-label shadow-card outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <action.icon className="size-4 shrink-0 text-accent" aria-hidden="true" />
+              <action.icon className="size-5 shrink-0 text-accent" aria-hidden="true" />
               {action.title}
             </Link>
           ))}
@@ -142,12 +165,17 @@ export function MobileDashboard() {
               actionText="新建笔记"
             />
           ) : (
-            <ul className="space-y-2" data-testid="dashboard-notes">
+            /*
+              M-01 图例 8：**一整张卡 + 内部 1px 分隔线**，而不是一叠分离的小卡。
+              分离卡片会把每行的上下留白叠起来（间距 + 卡片内边距），
+              4 行就多吃掉近 40px；整卡也让"这是一个列表"这件事一眼可见。
+            */
+            <ul className="overflow-hidden rounded-lg bg-surface shadow-card" data-testid="dashboard-notes">
               {notes.data?.rows.map((note) => (
-                <li key={note.id}>
+                <li key={note.id} className="border-b border-separator last:border-b-0">
                   <Link
                     href={`/m/notes/${baseId}/${note.id}`}
-                    className="flex min-h-14 items-center gap-3 rounded-lg bg-surface px-3 text-footnote text-label shadow-card outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex min-h-14 items-center gap-3 px-3 text-footnote text-label outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
                     <span className="min-w-0 flex-1 truncate">
@@ -191,18 +219,29 @@ export function MobileDashboard() {
               {baseId ? "没有待提交的任务。" : "任务挂在知识库下，先创建一个知识库。"}
             </p>
           ) : (
-            <ul className="space-y-2" data-testid="dashboard-tasks">
+            // 整卡 + 分隔线，理由同「最近笔记」
+            <ul className="overflow-hidden rounded-lg bg-surface shadow-card" data-testid="dashboard-tasks">
               {pendingTasks.map((task) => (
-                <li key={task.id}>
-                  {/* M-01 图例 12：整行可点，去当前库的任务 Tab（原先行不可点） */}
+                <li key={task.id} className="border-b border-separator last:border-b-0">
+                  {/*
+                    M-01 图例 12：整行可点，去当前库的任务 Tab。
+                    M-01 图例 13：**第二行是「截止 09-18 周四」**——待办只看得到任务名
+                    与状态的话，用户无法判断"这件事急不急"。`endTime` 列表端点已经返回，
+                    不用后端补字段。
+                  */}
                   <Link
                     href={`/m/notes/${baseId}/tasks`}
                     data-testid={`dashboard-task-${task.id}`}
-                    className="flex min-h-14 items-center gap-3 rounded-lg bg-surface px-3 text-footnote text-label shadow-card outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex min-h-14 items-center gap-3 px-3 text-footnote text-label outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <ListTodo className="size-4 shrink-0 text-warning" aria-hidden="true" />
-                    <span className="min-w-0 flex-1 truncate">
-                      {task.taskName?.trim() || "未命名任务"}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{task.taskName?.trim() || "未命名任务"}</span>
+                      {formatDueLine(task.endTime) ? (
+                        <span className="tabular block truncate text-xs text-label-tertiary">
+                          {formatDueLine(task.endTime)}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="shrink-0 text-xs text-label-tertiary">
                       {submissionStatusText(task.submissionStatus)}
@@ -232,12 +271,12 @@ export function MobileDashboard() {
               还没有知识库。
             </p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="overflow-hidden rounded-lg bg-surface shadow-card">
               {bases.data?.slice(0, BASE_CARD_COUNT).map((base) => (
-                <li key={base.id}>
+                <li key={base.id} className="border-b border-separator last:border-b-0">
                   <Link
                     href={`/m/notes/${base.id}`}
-                    className="flex min-h-14 items-center gap-3 rounded-lg bg-surface px-3 text-footnote text-label shadow-card outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex min-h-14 items-center gap-3 px-3 text-footnote text-label outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span
                       className={coverAvatarClassName(base.id, "size-8 rounded-md")}

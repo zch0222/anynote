@@ -19,9 +19,11 @@ import { Label } from "@/components/ui/label";
 import { CollabPresence, CollabStatusBadge } from "@/features/collab/components/collab-status";
 import { type CollabDocTitleInput, collabDocTitleSchema } from "@/features/collab/schemas";
 import { useCollabIndex } from "@/features/collab/use-collab-index";
+import { KB_CONTENT_COLUMN } from "@/features/notes/components/knowledge-base-page-header";
 import { formatRelativeTime } from "@/lib/format-time";
+import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { FileText, Info, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -75,7 +77,12 @@ export function CollabDocLibrary() {
   }
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-8">
+    /*
+     * D-10：内容列 1000px（画板卡片 320 宽、三列）。原来用 `max-w-6xl`（1152），
+     * 实测内容列 1104px、卡片 357 宽——比画板宽了一档，三列排下来整块偏右。
+     * 与知识库内各 Tab 用同一个列宽（`KB_CONTENT_COLUMN`），全站文档流页面统一。
+     */
+    <section className={cn(KB_CONTENT_COLUMN, "space-y-8")}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-2">
           {/* D-10 图例 2：Display 34/41，与侧栏「协同文档」入口同名 */}
@@ -219,6 +226,16 @@ export function CollabDocLibrary() {
           ))}
         </ul>
       )}
+
+      {/*
+        D-10 图例 13：网格下方的范围说明。
+        侧栏把「协同文档」画在知识库分组**之外**，但从知识库进来的人容易以为
+        它属于当前库；不写清"全站共享"就会有人问"我建的文档同事怎么看不到"。
+      */}
+      <p className="flex items-start gap-1.5 text-footnote text-label-tertiary">
+        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        文档库是全站共享的：所有登录成员看到的是同一份列表，不按知识库划分。
+      </p>
 
       {/* D-10 图例 12 + ②：删除必须先确认——索引是共享状态，误删会让所有人看不到 */}
       <ConfirmDialog
