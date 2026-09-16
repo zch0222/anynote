@@ -68,10 +68,12 @@ apps/web/e2e/.output/
 apps/web/playwright-report/
 apps/web/test-results/
 # UI 还原度对比的截图产物（scripts/ui-capture.mjs 对 PDF 原稿、
-# scripts/ui-supplement-compare.mjs 对补稿画板）。每次跑都变，只作验收证据，
+# scripts/ui-supplement-compare.mjs 对补稿画板、scripts/ui-audit-capture.mjs 对
+# 补稿画板的逐屏审计）。每次跑都变，只作验收证据，
 # 结论写进 docs/changelist；**参考图**另在 apps/web/e2e/reference/（入库）。
 apps/web/e2e/.ui-capture/
 apps/web/e2e/.ui-supplement/
+apps/web/e2e/.ui-audit/
 
 # ===== Chrome / Lighthouse 临时产物 =====
 # Lighthouse 在 WSL 下会误把 Chrome 的 user-data-dir 拼成
