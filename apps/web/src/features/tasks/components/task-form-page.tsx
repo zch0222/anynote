@@ -8,6 +8,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
+import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import {
   type PresetDuration,
   defaultEndTime,
@@ -19,7 +20,7 @@ import { useAdminTaskQuery } from "@/features/tasks/use-task-detail";
 import { useCreateTaskMutation, useUpdateTaskMutation } from "@/features/tasks/use-task-mutations";
 import { toUserMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Library } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -72,11 +73,8 @@ export type TaskFormPageProps = {
  * 3. **提交中整表单只读**（图例 15）：请求飞行时改动输入，成功回跳后这次改动
  *    既没提交也没留存，用户会以为"我改了怎么没生效"。
  *
- * 已知偏差：图例 9 要求工具条为「粗体 / 斜体 / H2 / 无序 / 有序 / 链接」，
- * 而 `TiptapEditor` 的 `minimal` 预设用的是 `MINIMAL_LAYOUT`
- * （undo/redo/bold/italic/underline/strike/code/highlight/link/bulletList/orderedList/clearFormat），
- * **不含 H2**、且多了几个设计稿没画的按钮。`components/editor/**` 属其他工作流，
- * 此处按现有预设渲染，不加 `toolbar` 覆写。差异留给编辑器侧统一收口。
+ * 图例 9 的工具条（`B I H2 ≡ ⋮≡ 🔗` 六个）由 `toolbar="taskDescribe"` 给出，
+ * 见 `components/editor/core/toolbar-commands.ts` 的 `TASK_DESCRIBE_LAYOUT`。
  */
 export function TaskFormPage({ baseId, mode, taskId }: TaskFormPageProps) {
   const router = useRouter();
@@ -265,111 +263,147 @@ export function TaskFormPage({ baseId, mode, taskId }: TaskFormPageProps) {
         </p>
       </header>
 
-      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-        <div
-          className="flex h-9 items-center gap-1.5 rounded-md bg-fill-hover px-3 text-footnote"
-          data-testid="task-form-base"
-        >
-          <span className="text-label-secondary">发布到</span>
-          <Library className="size-4 text-label-secondary" aria-hidden="true" />
-          {base.isPending ? (
-            <Skeleton className="h-4 w-28" />
-          ) : (
-            <span className="text-label">{base.data?.knowledgeBaseName ?? "未命名知识库"}</span>
-          )}
-        </div>
-
-        <Field data-invalid={Boolean(errors.taskName)}>
-          <FieldLabel htmlFor={NAME_FIELD_ID}>任务名称</FieldLabel>
-          <div className="relative">
-            <Input
-              id={NAME_FIELD_ID}
-              className="h-9 pr-16"
-              autoFocus
-              required
-              maxLength={20}
-              disabled={pending}
-              placeholder="例如：本周读书笔记"
-              aria-invalid={Boolean(errors.taskName)}
-              value={values.taskName}
-              onChange={(event) => updateField("taskName", event.target.value)}
-            />
-            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-label-tertiary tabular-nums">
-              {values.taskName.length} / 20
+      {/*
+        H-13：整张表单要在**一张白卡**里（画板实测内容区近白占比 82%）。
+        原实现把字段直接铺在 `bg-grouped` 灰底上，卡片外壳整个缺失——
+        这是与 D-12 / D-13 同一类的回归（三处都是"画板有卡、实现没有"）。
+        表单的**页脚**（取消 / 发布任务）也在卡内，上方一条 1px 分隔线。
+      */}
+      <form
+        className="overflow-hidden rounded-lg bg-surface shadow-card"
+        onSubmit={handleSubmit}
+        noValidate
+        data-testid="task-form-card"
+      >
+        <div className="space-y-5 p-5">
+          {/*
+            「发布到」：D-18 要求 28 高胶囊 + **彩色库色块**。
+            原来是一个 36 高的灰底行 + 中性 Library 图标，看不出是哪个库。
+            色块与侧栏卡片、画廊封面用同一套 `coverClassName`，三处颜色一致。
+          */}
+          <div className="flex items-center gap-2" data-testid="task-form-base">
+            <span className="text-footnote text-label-secondary">发布到</span>
+            <span className="inline-flex h-7 items-center gap-2 rounded-full bg-fill-hover pr-3 pl-1 text-footnote">
+              <span
+                aria-hidden="true"
+                className={cn("size-5 shrink-0 rounded-md", coverClassName(baseId))}
+              />
+              {base.isPending ? (
+                <Skeleton className="h-4 w-28" />
+              ) : (
+                <span className="text-label">{base.data?.knowledgeBaseName ?? "未命名知识库"}</span>
+              )}
             </span>
           </div>
-          <FieldError>{errors.taskName}</FieldError>
-        </Field>
 
-        <div className="space-y-3">
-          <Field>
-            {/* 日期字段自己不接受 label 关联（触发器是 button，已带 aria-label），
-                所以这里不写 htmlFor，避免点标签触发浮层 */}
-            <FieldLabel>开始时间</FieldLabel>
-            <DateTimeField
-              id={START_FIELD_ID}
-              label="开始时间"
-              value={values.startTime}
-              disabled={pending}
-              onChange={(next) => updateField("startTime", next)}
-            />
-          </Field>
-
-          <Field data-invalid={Boolean(errors.endTime)}>
-            <FieldLabel>截止时间</FieldLabel>
-            <DateTimeField
-              id={END_FIELD_ID}
-              label="截止时间"
-              value={values.endTime}
-              disabled={pending}
-              invalid={Boolean(errors.endTime)}
-              onChange={(next) => updateField("endTime", next)}
-            />
-            <FieldError>{errors.endTime}</FieldError>
-          </Field>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {PRESETS.map((preset) => (
-              <button
-                key={preset.value}
-                type="button"
+          <Field data-invalid={Boolean(errors.taskName)}>
+            <FieldLabel htmlFor={NAME_FIELD_ID}>任务名称</FieldLabel>
+            <div className="relative">
+              <Input
+                id={NAME_FIELD_ID}
+                className="h-9 pr-16"
+                autoFocus
+                required
+                maxLength={20}
                 disabled={pending}
-                aria-pressed={activePreset === preset.value}
-                onClick={() =>
-                  updateField("endTime", presetEndTime(values.startTime, preset.value))
-                }
-                className={cn(
-                  "h-[26px] rounded-full px-3 text-xs transition-colors",
-                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                  "disabled:pointer-events-none disabled:opacity-50",
-                  activePreset === preset.value
-                    ? "bg-accent-soft text-accent"
-                    : "text-label-secondary hover:bg-fill-hover",
-                )}
-              >
-                {preset.label}
-              </button>
-            ))}
-            <span className="text-xs text-label-tertiary">成员只能在时间窗口内提交</span>
+                placeholder="例如：本周读书笔记"
+                aria-invalid={Boolean(errors.taskName)}
+                value={values.taskName}
+                onChange={(event) => updateField("taskName", event.target.value)}
+              />
+              <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-label-tertiary tabular-nums">
+                {values.taskName.length} / 20
+              </span>
+            </div>
+            <FieldError>{errors.taskName}</FieldError>
+          </Field>
+
+          {/*
+            时间窗口（D-18 图例 6 / 7）：画板是**一行**——
+            `◷ 开始 [2026-09-16 09:00] → ◷ 截止 [2026-09-23 23:59]`，字段标签在左侧。
+            原实现是两行竖排，标签在字段上方，整块比画板高一倍。
+            用 `sm:grid-cols-[auto_1fr_auto_auto_1fr]` 而不是 flex-wrap：
+            窄屏时整块折行是可接受的，但宽屏下必须严格一行，不能让两个输入框
+            在可用宽度还够的时候各自换行。
+          */}
+          <div className="space-y-3">
+            <div className="grid items-center gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_minmax(0,1fr)]">
+              <FieldLabel htmlFor={START_FIELD_ID}>开始</FieldLabel>
+              <DateTimeField
+                id={START_FIELD_ID}
+                label="开始时间"
+                value={values.startTime}
+                disabled={pending}
+                onChange={(next) => updateField("startTime", next)}
+              />
+              <span className="hidden text-label-tertiary sm:inline" aria-hidden="true">
+                →
+              </span>
+              <FieldLabel htmlFor={END_FIELD_ID}>截止</FieldLabel>
+              <DateTimeField
+                id={END_FIELD_ID}
+                label="截止时间"
+                value={values.endTime}
+                disabled={pending}
+                invalid={Boolean(errors.endTime)}
+                onChange={(next) => updateField("endTime", next)}
+              />
+            </div>
+            <FieldError>{errors.endTime}</FieldError>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  disabled={pending}
+                  aria-pressed={activePreset === preset.value}
+                  onClick={() =>
+                    updateField("endTime", presetEndTime(values.startTime, preset.value))
+                  }
+                  className={cn(
+                    "h-[26px] rounded-full px-3 text-xs transition-colors",
+                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                    "disabled:pointer-events-none disabled:opacity-50",
+                    activePreset === preset.value
+                      ? "bg-accent-soft text-accent"
+                      : "text-label-secondary hover:bg-fill-hover",
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+              <span className="text-xs text-label-tertiary">成员只能在时间窗口内提交</span>
+            </div>
           </div>
+
+          <Field>
+            {/* 描述是 contenteditable 画布，没有可关联的表单控件，
+                所以这里只是视觉标签、不写 htmlFor（写了会指向一个不存在的 id） */}
+            <FieldLabel>任务描述</FieldLabel>
+            <div className="min-h-[130px] rounded-md border border-separator px-2.5 py-2">
+              <TiptapEditor
+                preset="minimal"
+                // D-18 图例 9：任务描述只要 `B I H2 ≡ ⋮≡ 🔗` 六个按钮
+                toolbar="taskDescribe"
+                value={values.taskDescribe}
+                editable={!pending}
+                placeholder="补充任务要求、提交格式等（选填）"
+                onChange={(markdown) => updateField("taskDescribe", markdown)}
+              />
+            </div>
+          </Field>
         </div>
 
-        <Field>
-          {/* 描述是 contenteditable 画布，没有可关联的表单控件，
-              所以这里只是视觉标签、不写 htmlFor（写了会指向一个不存在的 id） */}
-          <FieldLabel>任务描述</FieldLabel>
-          <div className="min-h-[130px] rounded-md border border-separator px-2.5 py-2">
-            <TiptapEditor
-              preset="minimal"
-              value={values.taskDescribe}
-              editable={!pending}
-              placeholder="补充任务要求、提交格式等（选填）"
-              onChange={(markdown) => updateField("taskDescribe", markdown)}
-            />
-          </div>
-        </Field>
-
-        <div className="flex items-center gap-2 pt-1">
+        {/*
+          页脚（图例 13 / 14）：1px 分隔 + bg/grouped 60%，按钮**右对齐**且
+          主按钮在最右（`取消` 在左、`发布任务` 在右）。
+          原来顺序相反（主按钮在左）且左对齐，与画板、与 D-04 的对话框页脚规范都不一致。
+        */}
+        <div className="flex items-center justify-end gap-2 border-t border-separator bg-fill-footer px-5 py-3">
+          <Button type="button" variant="ghost" disabled={pending} onClick={requestLeave}>
+            取消
+          </Button>
           <Button type="submit" className="h-9" disabled={pending}>
             {pending ? (
               <>
@@ -381,9 +415,6 @@ export function TaskFormPage({ baseId, mode, taskId }: TaskFormPageProps) {
             ) : (
               "发布任务"
             )}
-          </Button>
-          <Button type="button" variant="ghost" disabled={pending} onClick={requestLeave}>
-            取消
           </Button>
         </div>
       </form>

@@ -35,10 +35,32 @@ export function AccountBadge() {
   }
 
   return (
-    <div className="rounded-lg border bg-fill-hover/60 p-3">
+    /*
+     * D-15 图例 3：**账号标签在卡片内上方**（一行 14 高的小字），下面是 40 高的
+     * 账号框（头像 + 昵称 16 SemiBold + @用户名 13）。
+     * 原实现把「将以以下账号授权」塞进那个框里当第一行，于是框内变成
+     * "标签 / 昵称 / @用户名" 三行，与画板的"标签在外、框内两行"不符。
+     */
+    <div className="space-y-1.5">
       <p className="text-xs text-label-secondary">将以以下账号授权</p>
-      <p className="mt-1 text-footnote font-medium text-label">{displayName(data)}</p>
-      {data.username ? <p className="text-xs text-label-tertiary">@{data.username}</p> : null}
+      <div className="flex items-center gap-2.5 rounded-lg border border-separator p-2.5">
+        {/*
+          头像用昵称首字兜底（与侧栏页脚、设置页同一套逻辑）：后端 avatar 可能为空，
+          而这一屏的意义就是"点授权前看清是哪个账号"，缺了头像会削弱这层确认。
+        */}
+        <span
+          aria-hidden="true"
+          className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-footnote font-medium text-white"
+        >
+          {displayName(data).slice(0, 1)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-headline font-semibold text-label">{displayName(data)}</p>
+          {data.username ? (
+            <p className="truncate text-footnote text-label-tertiary">@{data.username}</p>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

@@ -12,8 +12,23 @@ import {
 import { describe, expect, it } from "vitest";
 
 describe("移动端工具条命令分组", () => {
-  it("常驻 10 个命令——再多单行横滑就失去意义", () => {
-    expect(MOBILE_PRIMARY).toHaveLength(10);
+  /*
+   * M-09 画板实测的命令集是
+   * `B I H2 •列表 1.列表 ☑列表 🔗链接 🖼图片 ⋯`——**8 个命令 + 末位「⋯」**。
+   * 早先是 10 个且以 `image, codeBlock, undo` 结尾，390 宽下多出「<>」按钮，
+   * 把画板的「⋯」挤出右缘。所以这里断言的是精确集合，不只是长度。
+   */
+  it("常驻 8 个命令，与 M-09 画板逐个对齐", () => {
+    expect(MOBILE_PRIMARY).toEqual([
+      "bold",
+      "italic",
+      "heading2",
+      "bulletList",
+      "orderedList",
+      "taskList",
+      "link",
+      "image",
+    ]);
   });
 
   it("常驻与「更多」不重叠", () => {
@@ -30,9 +45,14 @@ describe("移动端工具条命令分组", () => {
     expect(new Set(MOBILE_OVERFLOW).size).toBe(MOBILE_OVERFLOW.length);
   });
 
-  it("高频写作命令在常驻里", () => {
-    for (const id of ["bold", "italic", "bulletList", "undo", "image"] as const) {
+  it("高频写作命令在常驻里，低频的代码块与撤销退到「更多」", () => {
+    for (const id of ["bold", "italic", "heading2", "bulletList", "image"] as const) {
       expect(MOBILE_PRIMARY).toContain(id);
+    }
+    // 这两个是画板没画、且曾经挤掉「⋯」的按钮：仍可达，但不再常驻
+    for (const id of ["codeBlock", "undo"] as const) {
+      expect(MOBILE_PRIMARY).not.toContain(id);
+      expect(MOBILE_OVERFLOW).toContain(id);
     }
   });
 

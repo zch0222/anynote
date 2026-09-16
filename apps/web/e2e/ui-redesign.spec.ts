@@ -162,16 +162,23 @@ test.describe("信息架构：知识库是唯一顶层对象", () => {
     await expect(page.getByTestId("sidebar-kb-card")).toHaveCount(0);
   });
 
-  test("顶栏在知识库内只给切换器，在知识库外退回面包屑", async ({ page }) => {
+  test("顶栏在知识库内整条不渲染，在知识库外退回面包屑", async ({ page }) => {
     await openKnowledgeBase(page, BASE_NAME);
-    await expect(page.getByTestId("kb-switcher")).toHaveAttribute("href", "/notes");
-    // 二级 Tab 已经搬进侧栏，顶栏不该再出现第二份
-    const header = page.getByTestId("app-header");
-    await expect(header.getByRole("navigation", { name: "知识库内容" })).toHaveCount(0);
+    /*
+     * 2026-09-17 拍板：补稿画板（D-01 / D-05 / D-07 / D-08 / D-09）里知识库内的页面
+     * **没有 56 高的顶栏**——页头（Display 大标题 + 副标题）直接贴窗口上沿，
+     * 搜索 / 主题落在页头右侧的动作行里。所以原来的「顶栏在库内只给切换器」
+     * （针对 PDF 原稿 p01–p16）已被推翻：库内整条顶栏都不渲染，
+     * 知识库切换器随之消失（换库走侧栏卡片或画廊页）。
+     */
+    await expect(page.getByTestId("app-header")).toHaveCount(0);
+    await expect(page.getByTestId("kb-switcher")).toHaveCount(0);
+    // 页头动作行里的搜索入口确实在（顶栏没了，命令面板不能只剩 ⌘K）
+    await expect(page.getByTestId("page-search-action")).toBeVisible();
 
     await page.goto("/ai/chat");
     await expect(page.getByRole("navigation", { name: "面包屑" })).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("kb-switcher")).toHaveCount(0);
+    await expect(page.getByTestId("app-header")).toHaveCount(1);
   });
 });
 
@@ -246,7 +253,12 @@ test.describe("知识库画廊", () => {
     await page.getByRole("button", { name: "创建", exact: true }).click();
 
     await expect(page).toHaveURL(/\/notes\/\d+$/, { timeout: 30_000 });
-    await expect(page.getByTestId("kb-switcher")).toContainText(name, { timeout: 30_000 });
+    /*
+     * 落地页是知识库内的「笔记」Tab，那里**不渲染顶栏**（2026-09-17 拍板，见
+     * `isKnowledgeBaseTabRoute`），所以知识库切换器不存在了。改用侧栏的当前库
+     * 卡片断言"确实进了新建的那个库"——它同样只在库内出现，语义一样明确。
+     */
+    await expect(page.getByTestId("sidebar-kb-card")).toContainText(name, { timeout: 30_000 });
   });
 });
 

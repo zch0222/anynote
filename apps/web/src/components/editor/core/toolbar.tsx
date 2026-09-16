@@ -7,6 +7,7 @@ import {
 import {
   FULL_LAYOUT,
   MINIMAL_LAYOUT,
+  TASK_DESCRIBE_LAYOUT,
   TOOLBAR_DIVIDER,
   type ToolbarCommandId,
   type ToolbarSlot,
@@ -46,7 +47,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
-export type ToolbarVariant = "full" | "minimal" | "mobile" | "none";
+export type ToolbarVariant = "full" | "minimal" | "taskDescribe" | "mobile" | "none";
 
 export type ToolbarProps = {
   editor: Editor | null;
@@ -468,7 +469,14 @@ export function Toolbar({ editor, variant = "full", disabledCommands }: ToolbarP
       role="toolbar"
       aria-label="编辑器工具栏"
     >
-      {renderSlots(variant === "full" ? FULL_LAYOUT : MINIMAL_LAYOUT, commands)}
+      {renderSlots(
+        variant === "full"
+          ? FULL_LAYOUT
+          : variant === "taskDescribe"
+            ? TASK_DESCRIBE_LAYOUT
+            : MINIMAL_LAYOUT,
+        commands,
+      )}
       <span className="anynote-toolbar__spacer" />
       {variant === "full" ? (
         <span className="anynote-toolbar__count" data-testid="editor-word-count">

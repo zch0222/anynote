@@ -17,7 +17,7 @@ import {
 import { toUserMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronDown, ChevronRight, FileText, Film, ListTree } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Film, ListTree } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { VideoPlayer } from "./video-player";
@@ -77,12 +77,22 @@ export function MoocDetailPage({ baseId, moocId }: { baseId: number; moocId: num
   }, [items.data, loadItems, selectItem]);
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-4" data-testid="mooc-detail">
+    <section className="mx-auto w-full max-w-[1000px] space-y-4" data-testid="mooc-detail">
       <div className="space-y-2">
-        <Button variant="ghost" size="sm" render={<Link href={`/notes/${baseId}/mooc`} />}>
-          <ArrowLeft className="size-4" aria-hidden="true" />
+        {/*
+          D-06 图例 2：返回是 accent 色的 `‹` 加粗字形，32 高。
+          原来用 `variant="ghost"` 的灰色 `←`——画板把返回键做成 accent 是因为
+          详情页的页头是"从别处进来"的唯一出口，灰色图标在浅色底上几乎看不见。
+          用字形 `‹` 而不是 `ArrowLeft` 图标：画板原文就是 `‹ 慕课`。
+        */}
+        <Link
+          href={`/notes/${baseId}/mooc`}
+          data-testid="mooc-detail-back"
+          className="-ml-1 inline-flex h-8 items-center gap-1 rounded-md px-2 text-footnote font-medium text-accent outline-none transition-colors hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span aria-hidden="true">‹</span>
           慕课
-        </Button>
+        </Link>
         {/*
           Display 字阶的课程名来自 `useMoocQuery`：详情页此前只有"返回课程列表"，
           用户看不出自己在哪门课里（D-06 图例 3）。
@@ -92,13 +102,34 @@ export function MoocDetailPage({ baseId, moocId }: { baseId: number; moocId: num
         ) : (
           <h1 className="text-display text-label">{mooc.data?.title?.trim() || "未命名课程"}</h1>
         )}
+        {/*
+          D-06：课程名下方是**简介行**。原来不渲染 `moocDescription`——
+          而这个字段在 D-05 的卡片上已经显示，说明后端确实返回了它；
+          详情页作为"这一门课的首页"缺了它，用户得退回列表才能看到课程讲什么。
+        */}
+        {mooc.data?.moocDescription?.trim() ? (
+          <p className="line-clamp-2 max-w-[640px] text-body text-label-secondary">
+            {mooc.data.moocDescription}
+          </p>
+        ) : null}
       </div>
 
       {mooc.isError ? (
         <NotFoundState object="课程" backHref={`/notes/${baseId}/mooc`} backLabel="回到慕课" />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
+          {/*
+            D-06：左栏顶部是 `课程目录` + 右侧 `6 项`（图例原文）。
+            原来左栏没有标题行、直接从章节行开始，用户不知道这一栏是什么，
+            也看不出这门课一共有几项。
+          */}
           <aside className="rounded-xl border p-2">
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+              <h2 className="text-footnote font-semibold text-label">课程目录</h2>
+              {items.data ? (
+                <span className="tabular text-xs text-label-tertiary">{items.data.length} 项</span>
+              ) : null}
+            </div>
             {items.isPending ? (
               <div className="space-y-2 p-2">
                 {[0, 1, 2, 3].map((item) => (

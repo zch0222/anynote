@@ -6,11 +6,16 @@ import { EmptyState, QueryError } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
+import {
+  KB_CONTENT_COLUMN,
+  KnowledgeBasePageHeader,
+} from "@/features/notes/components/knowledge-base-page-header";
 import { TaskTable } from "@/features/tasks/components/task-table";
 import { canResubmit, canSubmit } from "@/features/tasks/lib/task-window";
 import { type MemberTask, TASK_STATUS } from "@/features/tasks/schemas";
 import { useTasksQuery } from "@/features/tasks/use-tasks";
 import { toUserMessage } from "@/lib/api/errors";
+import { cn } from "@/lib/utils";
 import { ListTodo, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -50,30 +55,27 @@ export function TasksPage({ baseId }: { baseId: number }) {
   const visible = filter === "all" ? rows : filterRows(rows, filter);
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-5" data-testid="tasks-page">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-display text-label">任务</h1>
-          <p className="text-body text-label-secondary">
-            {tasks.isPending
-              ? "正在加载任务…"
-              : rows.length > 0
-                ? `${rows.length} 个任务 · ${todoCount} 个待你提交`
-                : isAdmin
-                  ? "发布一个任务，让本库成员在时间窗口内提交笔记。"
-                  : "任务由知识库管理员发布。"}
-          </p>
-        </div>
-        {/* 成员没有「新建任务」可点，就在按钮的位置说明任务是谁发的 */}
-        {isAdmin ? (
-          <Button render={<Link href={taskNewHref(baseId)} />} data-testid="task-create">
-            <Plus className="size-4" aria-hidden="true" />
-            新建任务
-          </Button>
-        ) : !tasks.isPending && rows.length > 0 ? (
-          <p className="text-footnote text-label-tertiary">任务由知识库管理员发布</p>
-        ) : null}
-      </header>
+    <section className={cn(KB_CONTENT_COLUMN, "space-y-5")} data-testid="tasks-page">
+      <KnowledgeBasePageHeader
+        title="任务"
+        subtitle={
+          tasks.isPending
+            ? "正在加载任务…"
+            : rows.length > 0
+              ? `${rows.length} 个任务 · ${todoCount} 个待你提交`
+              : isAdmin
+                ? "发布一个任务，让本库成员在时间窗口内提交笔记。"
+                : "任务由知识库管理员发布。"
+        }
+        actions={
+          isAdmin ? (
+            <Button render={<Link href={taskNewHref(baseId)} />} data-testid="task-create">
+              <Plus className="size-4" aria-hidden="true" />
+              新建任务
+            </Button>
+          ) : null
+        }
+      />
 
       {tasks.isPending ? (
         <ListRowsSkeleton count={3} />
@@ -92,18 +94,26 @@ export function TasksPage({ baseId }: { baseId: number }) {
         />
       ) : (
         <>
-          <Segmented
-            label="任务状态"
-            value={filter}
-            onChange={setFilter}
-            options={FILTERS.map((item) => ({
-              value: item.value,
-              label:
-                item.value === "all"
-                  ? `全部 ${rows.length}`
-                  : `${item.label} ${countOf(item.status)}`,
-            }))}
-          />
+          {/*
+            筛选行（D-07 图例 7）：分段控件在左，右端一行说明「任务由知识库管理员发布」。
+            说明**恒在**（不再只在成员视角出现）：它解释的是"这些任务从哪来"，
+            对管理员同样是有效信息——管理员看到的列表里也有别人发的任务。
+          */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Segmented
+              label="任务状态"
+              value={filter}
+              onChange={setFilter}
+              options={FILTERS.map((item) => ({
+                value: item.value,
+                label:
+                  item.value === "all"
+                    ? `全部 ${rows.length}`
+                    : `${item.label} ${countOf(item.status)}`,
+              }))}
+            />
+            <p className="text-footnote text-label-tertiary">任务由知识库管理员发布</p>
+          </div>
 
           {visible.length === 0 ? (
             <EmptyState

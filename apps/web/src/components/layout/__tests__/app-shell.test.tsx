@@ -1,6 +1,6 @@
 import { ApiError } from "@/lib/api/errors";
 import { useUIStore } from "@/stores/ui-store";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "../app-shell";
 
@@ -252,14 +252,15 @@ describe("AppShell 交互", () => {
   });
 
   /**
-   * D-02：概览页的分工是"头图卡片当页头"。
+   * 知识库内 Tab 页的分工是"页面自己当页头"（D-01 / D-05 / D-07 / D-08 / D-09，
+   * 以及 D-02 概览）。
    *
-   * 画板上搜索（图例 7）、主题（图例 8）与「新建笔记」（图例 9）都在卡片里，
-   * 屏幕顶部没有 56 高的栏。顶栏若照常渲染，同一屏就有两套同名按钮：
-   * 读屏念两遍，`getByRole("button", { name: "切换主题" })` 直接变成
-   * strict mode violation。所以这里断言的是"一个都没有"而不是"存在"。
+   * 画板上这些页屏幕顶部都没有 56 高的栏，搜索（图例 7）与主题（图例 8）落在
+   * 页头右侧的动作行里。顶栏若照常渲染，除了多一条画板没有的横栏，同一屏还会有
+   * 两套同名按钮：读屏念两遍，`getByRole("button", { name: "切换主题" })`
+   * 直接变成 strict mode violation。所以这里断言的是"一个都没有"而不是"存在"。
    */
-  it("概览页不渲染顶栏，控件不会在同一屏出现两套", () => {
+  it("知识库内 Tab 页不渲染顶栏，控件不会在同一屏出现两套", () => {
     pathname.current = "/notes/7/overview";
     render(<AppShell>内容</AppShell>);
 
@@ -273,11 +274,28 @@ describe("AppShell 交互", () => {
     expect(screen.getByRole("navigation", { name: "知识库内容" })).toBeInTheDocument();
   });
 
-  it("概览页之外仍然保留顶栏", () => {
-    pathname.current = "/notes/7/docs";
-    render(<AppShell>内容</AppShell>);
-    expect(screen.getByTestId("app-header")).toBeInTheDocument();
-    expect(screen.getByTestId("kb-switcher")).toBeInTheDocument();
+  it("库内其余 Tab 也一并不渲染顶栏", () => {
+    for (const path of [
+      "/notes/7",
+      "/notes/7/mooc",
+      "/notes/7/tasks",
+      "/notes/7/docs",
+      "/notes/7/members",
+    ]) {
+      cleanup();
+      pathname.current = path;
+      render(<AppShell>内容</AppShell>);
+      expect(screen.queryByTestId("app-header"), `${path} 不该有顶栏`).toBeNull();
+    }
+  });
+
+  it("库外页面与库内详情页仍然保留顶栏", () => {
+    for (const path of ["/ai/chat", "/settings/profile", "/notes/new"]) {
+      cleanup();
+      pathname.current = path;
+      render(<AppShell>内容</AppShell>);
+      expect(screen.getByTestId("app-header"), `${path} 应保留顶栏`).toBeInTheDocument();
+    }
   });
 
   it("Ctrl+K 搜索并执行路由跳转，关闭面板", async () => {

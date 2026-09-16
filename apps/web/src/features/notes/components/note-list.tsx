@@ -15,10 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DEFAULT_PAGE_SIZE, type NoteListItem } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
-import {
-  useKnowledgeBaseQuery,
-  useKnowledgeBasesQuery,
-} from "@/features/notes/use-knowledge-bases";
+import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { useMoveNoteMutation } from "@/features/notes/use-move-note";
 import { useNotesQuery } from "@/features/notes/use-notes";
 import { toUserMessage } from "@/lib/api/errors";
@@ -29,6 +26,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { KB_CONTENT_COLUMN, KnowledgeBasePageHeader } from "./knowledge-base-page-header";
 
 /*
  * 「新建笔记」对话框按需加载，理由同 `knowledge-base-detail.tsx`：
@@ -51,7 +49,6 @@ const CREATE_TRIGGER_CLASS =
  */
 export function NoteList({ baseId }: { baseId: number }) {
   const [page, setPage] = useState(1);
-  const base = useKnowledgeBaseQuery(baseId);
   const bases = useKnowledgeBasesQuery();
   const notes = useNotesQuery({ knowledgeBaseId: baseId, page, pageSize: DEFAULT_PAGE_SIZE });
   const totalPages = notes.data?.pages ?? 1;
@@ -59,29 +56,40 @@ export function NoteList({ baseId }: { baseId: number }) {
   // 移动目标只列**别的**库：把自己列进去点了没反应，等于给了个假选项。
   const otherBases = (bases.data ?? []).filter((item) => item.id !== baseId);
 
+  /*
+   * 副标题走画板口径（D-01 实测：`128 篇笔记 · 最近更新于 2 小时前`）：
+   * 报**真实统计**而不是一句固定文案。固定文案在空库与满库时一模一样，
+   * 用户没法从页头判断这个库到底有没有东西。
+   *
+   * "最近更新于"取列表首行的时间：列表端点已按最近操作时间倒序，
+   * 首行就是最近动过的那篇，无需再让后端补一个聚合字段。
+   */
+  const total = notes.data?.total ?? 0;
+  const latest = notes.data?.rows[0];
+  const latestTime = latest ? (latest.latestOperationTime ?? latest.updateTime) : null;
+  const subtitle = total
+    ? `${total} 篇笔记${latestTime ? ` · 最近更新于 ${formatRelativeTime(latestTime)}` : ""}`
+    : "捕捉灵感，让每一个想法都有归处。";
+
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-4" data-testid="note-list">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-title text-label">笔记</h1>
-          <p className="text-footnote text-label-secondary">
-            {notes.data?.total
-              ? `${base.data?.knowledgeBaseName?.trim() || "知识库"} · 共 ${notes.data.total} 篇`
-              : "捕捉灵感，让每一个想法都有归处。"}
-          </p>
-        </div>
-        <CreateNoteDialog
-          knowledgeBaseId={baseId}
-          triggerTestId="note-create"
-          trigger={
-            <>
-              <Plus className="size-4" aria-hidden="true" />
-              新建笔记
-            </>
-          }
-          triggerClassName={CREATE_TRIGGER_CLASS}
-        />
-      </header>
+    <div className={cn(KB_CONTENT_COLUMN, "space-y-4")} data-testid="note-list">
+      <KnowledgeBasePageHeader
+        title="笔记"
+        subtitle={subtitle}
+        actions={
+          <CreateNoteDialog
+            knowledgeBaseId={baseId}
+            triggerTestId="note-create"
+            trigger={
+              <>
+                <Plus className="size-4" aria-hidden="true" />
+                新建笔记
+              </>
+            }
+            triggerClassName={CREATE_TRIGGER_CLASS}
+          />
+        }
+      />
 
       {notes.isPending ? (
         <ListRowsSkeleton />
@@ -113,16 +121,36 @@ export function NoteList({ baseId }: { baseId: number }) {
         />
       ) : (
         <>
-          <ul
-            className="divide-y divide-separator overflow-hidden rounded-lg bg-surface shadow-card"
-            data-testid="note-list-items"
+          <div
+            className="overflow-hidden rounded-lg bg-surface shadow-card"
+            data-testid="note-list-card"
           >
-            {notes.data.rows.map((note) => (
-              <li key={note.id} className="group relative">
-                <NoteRow baseId={baseId} note={note} otherBases={otherBases} />
-              </li>
-            ))}
-          </ul>
+            {/*
+              列头（D-01 图例 18）：40 高 · 12/16 Medium · label/tertiary · 底部 1px separator。
+              画板把它画成列表卡里的第一行而不是一个独立的表头块——所以它必须
+              **在卡片内部**，否则卡片顶部会多出一条灰底缝隙。
+              用 role="row" 的语义表头而不是纯视觉文本：读屏用户需要知道
+              "最近"那一列是什么。
+            */}
+            <div
+              role="row"
+              className="flex h-10 items-center border-b border-separator px-4 text-xs font-medium text-label-tertiary"
+            >
+              <span className="min-w-0 flex-1" role="columnheader">
+                标题
+              </span>
+              <span className="shrink-0 pr-12" role="columnheader">
+                最近更新
+              </span>
+            </div>
+            <ul className="divide-y divide-separator" data-testid="note-list-items">
+              {notes.data.rows.map((note) => (
+                <li key={note.id} className="group relative">
+                  <NoteRow baseId={baseId} note={note} otherBases={otherBases} />
+                </li>
+              ))}
+            </ul>
+          </div>
           {totalPages > 1 ? (
             <nav aria-label="分页" className="flex items-center justify-center gap-3">
               <Button

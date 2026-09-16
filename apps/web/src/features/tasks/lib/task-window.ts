@@ -142,21 +142,35 @@ export function presetEndTime(start: Date, preset: PresetDuration): Date {
 }
 
 /**
- * 完成率 = 已提交 / 应提交，`need === 0` 时为 1。
+ * 完成率 = 已提交 / 应提交；**没有人需要提交时返回 `null`（不是 1）**。
  *
  * **不直接用 `AdminNoteTaskVO.submissionProgress`**：那个字段在 `need === 0` 时
  * 是 `100.0`（百分比），其余时候是 0–1 的小数（`NoteTaskServiceImpl.java:513-519`），
  * 两套量纲。直接乘 100 会让"没有人需要提交"显示成 10000%，当比例用又会让
  * 这种任务显示成 1%。这里按 `submitted / need` 现算，量纲只有一套。
+ *
+ * `need === 0` 早期**刻意返回 1 以避免除零**，但"空任务显示完成率 100%"会被
+ * 读成"全都交了"——一件没有任何人需要交的任务没有完成率可言。返回 `null`
+ * 让界面显示 `—`（见 `formatRate`），语义上"不适用"而不是"满分"。
  */
 export function completionRate(
   needSubmitCount: number | null | undefined,
   submittedCount: number | null | undefined,
-): number {
+): number | null {
   const need = needSubmitCount ?? 0;
   const submitted = submittedCount ?? 0;
-  if (need <= 0) return 1;
+  if (need <= 0) return null;
   return Math.min(1, Math.max(0, submitted / need));
+}
+
+/**
+ * 完成率文案：`null`（不适用）→ `—`，否则取整百分比。
+ *
+ * `—` 而不是 `0%`：两者都是"没交"，但原因不同——`0%` 是"有人要交、一个都没交"，
+ * `—` 是"没有人需要交"。用同一个符号会让管理员误判任务卡住了。
+ */
+export function formatRate(rate: number | null): string {
+  return rate === null ? "—" : `${Math.round(rate * 100)}%`;
 }
 
 /** `09-10 10:00` 形态；解析不出来时返回 `"—"`。 */
@@ -174,6 +188,29 @@ export function formatTaskWindow(
   endTime: string | null | undefined,
 ): string {
   return `${formatTaskMoment(startTime)} – ${formatTaskMoment(endTime)}`;
+}
+
+/**
+ * 移动端列表的时间窗口：`09-10 ~ 09-18`（M-04 图例原文）。
+ *
+ * 与 `formatTaskWindow` 的差别不只是长短：列表行里一行要放"窗口 + 发布人"，
+ * 完整时分在这个宽度下会被截断，而**日期才是判断"来不来得及"的量纲**——
+ * 23:59 截止还是 09:00 截止，在扫列表这一步不影响决策。
+ * 两端都取不到时返回 `—`（调用方直接渲染）。
+ */
+export function formatTaskWindowShort(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined,
+): string {
+  const short = (value: string | null | undefined): string => {
+    const moment = formatTaskMoment(value);
+    // formatTaskMoment 解析失败时给 `—`，这里要把它透传出去而不是切成半截
+    return moment === "—" ? moment : moment.slice(0, 5);
+  };
+  const from = short(startTime);
+  const to = short(endTime);
+  if (from === "—" && to === "—") return "—";
+  return `${from} ~ ${to}`;
 }
 
 /** 剩余天数文案；已截止返回「已截止」，不限时返回空串。 */

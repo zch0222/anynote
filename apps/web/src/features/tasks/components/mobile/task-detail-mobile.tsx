@@ -332,7 +332,7 @@ function AdminTaskDetail({ baseId, taskId }: { baseId: number; taskId: number })
               </p>
               {/* 共享 ProgressBar：label / aria-valuenow / 动态宽度都按统一口径 */}
               <ProgressBar
-                value={Math.round(rate * 100)}
+                value={rate === null ? 0 : Math.round(rate * 100)}
                 label="提交进度"
                 showValue
                 className="[&_[role=progressbar]]:h-1.5"

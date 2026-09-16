@@ -215,18 +215,32 @@ export function isFullBleedRoute(pathname: string): boolean {
 }
 
 /**
- * 概览页（D-02）：**自己没有页头**，顶栏整条不渲染。
+ * 知识库内**自带头部**的页面：这些页顶栏整条不渲染（D-01 / D-05 / D-07 / D-08 / D-09）。
  *
- * 这不是"少画了一条"：画板上搜索（图例 7）、主题（图例 8）与「新建笔记」（图例 9）
- * 三个动作都在头图卡片的动作行里，屏幕顶部没有任何 56 高的栏。若顶栏照常渲染，
- * 同一屏就会出现**两套同名控件**（两个「切换主题」按钮、两个「打开命令面板」），
- * 读屏与 `getByRole` 都会产生歧义——这正是仓库里"两处都放等于两处都不像主导航"
- * 那条结论要避免的情况。
+ * 补稿画板逐屏实测：知识库内的 Tab 页与概览页一样，屏幕顶部**没有** 56 高的顶栏。
+ * 页头（Display 大标题 + 副标题）直接贴着窗口上沿开始，搜索 / 主题两个动作落在
+ * 页头右侧的动作行里，主按钮紧随其后。若顶栏照常渲染，会出现两个后果：
  *
- * 判定用**完整段匹配**：`/notes/7/overview` 是概览，`/notes/7/overviewX` 不是。
+ * 1. **多一条画板没有的横栏**，整页内容被推下 56px，与画板垂直对不上；
+ * 2. **两套同名控件**——页头动作行与顶栏各有一个「切换主题」「打开命令面板」，
+ *    读屏与 `getByRole` 都会产生歧义。这正是仓库里"两处都放等于两处都不像主导航"
+ *    那条结论要避免的情况。
+ *
+ * 判定用**完整段匹配**并排除子路由：
+ * - `/notes/7`、`/notes/7/mooc`、`/notes/7/tasks`、`/notes/7/docs`、`/notes/7/members`、
+ *   `/notes/7/overview` → 是（这些页都有自己的页头）
+ * - `/notes/7/42`（编辑器）、`/notes/7/42/history`（历史版本）→ 不是：
+ *   编辑器是满幅路由，顶栏属于它自己，且它**不**带 Display 页头。
+ * - `/notes/new` → 不是：不在知识库下（没有数字 id）。
+ * - `/notes/7/mooc/9`、`/notes/7/tasks/new` 等更深层 → 不是：它们自己有返回键与页头。
+ *
+ * **与 `ui-redesign.spec.ts` 的关系**：那条用例对的是 PDF 原稿（p01–p16），
+ * 补稿画板对同一屏给出了不同口径。2026-09-17 拍板**以补稿画板为准**，
+ * 该用例已同步改为断言库内 Tab 页不渲染顶栏。
  */
-export function isKnowledgeBaseOverviewRoute(pathname: string): boolean {
-  return /^\/notes\/\d+\/overview$/.test(pathname);
+export function isKnowledgeBaseTabRoute(pathname: string): boolean {
+  // 库根（笔记 Tab）与六个二级 Tab，都只有「/notes/:id」或「/notes/:id/<静态段>」两段
+  return /^\/notes\/\d+$/.test(pathname) || /^\/notes\/\d+\/(overview|mooc|tasks|docs|members)$/.test(pathname);
 }
 
 export function getWorkspaceRoute(pathname: string) {

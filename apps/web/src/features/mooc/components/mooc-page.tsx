@@ -16,6 +16,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { coverClassName } from "@/features/notes/lib/cover-gradient";
+import {
+  KB_CONTENT_COLUMN,
+  KnowledgeBasePageHeader,
+} from "@/features/notes/components/knowledge-base-page-header";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { toUserMessage } from "@/lib/api/errors";
 import { formatRelativeTime } from "@/lib/format-time";
@@ -44,20 +48,32 @@ export function MoocPage({ baseId }: { baseId: number }) {
   // 可阅读（3）与无权限（4）不出现新建入口：避免点了才被后端拒绝
   const canCreate = typeof base.data?.permissions === "number" && base.data.permissions <= 2;
 
+  /*
+   * 副标题走画板口径（D-05 实测：`6 门课程 · 最近更新于 2 小时前`）：报真实统计，
+   * 而不是「整理课程与学习资料，持续积累。」这类固定文案——固定文案在零课程与
+   * 多课程时读起来一模一样，页头就不再提供任何信息。
+   */
+  const moocTotal = moocs.data?.total ?? 0;
+  const latestMooc = moocs.data?.rows[0];
+  const moocSubtitle = moocTotal
+    ? `${moocTotal} 门课程${latestMooc?.updateTime ? ` · 最近更新于 ${formatRelativeTime(latestMooc.updateTime)}` : ""}`
+    : "整理课程与学习资料，持续积累。";
+
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-title text-label">慕课</h1>
-          <p className="text-footnote text-label-secondary">整理课程与学习资料，持续积累。</p>
-        </div>
-        {canCreate ? (
-          <Button onClick={() => setCreating(true)} data-testid="mooc-create">
-            <Plus className="size-4" aria-hidden="true" />
-            新建课程
-          </Button>
-        ) : null}
-      </div>
+    <section className={cn(KB_CONTENT_COLUMN, "space-y-5")}>
+      {/* D-05 页头：H1 Display + 真实统计副标题 + 搜索/主题/新建课程动作行 */}
+      <KnowledgeBasePageHeader
+        title="慕课"
+        subtitle={moocSubtitle}
+        actions={
+          canCreate ? (
+            <Button onClick={() => setCreating(true)} data-testid="mooc-create">
+              <Plus className="size-4" aria-hidden="true" />
+              新建课程
+            </Button>
+          ) : null
+        }
+      />
 
       {moocs.isPending ? (
         <CardGridSkeleton count={3} cardClassName="h-40" />
