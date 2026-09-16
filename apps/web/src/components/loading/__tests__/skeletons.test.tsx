@@ -2,6 +2,7 @@ import {
   CardGridSkeleton,
   DocumentSkeleton,
   EditorSkeleton,
+  KnowledgeBaseOverviewSkeleton,
   ListRowsSkeleton,
   PanelSkeleton,
   TableSkeleton,
@@ -51,6 +52,7 @@ describe("骨架预设的公共契约", () => {
       ["skeleton-document", <DocumentSkeleton key="d" />],
       ["skeleton-editor", <EditorSkeleton key="e" />],
       ["skeleton-panel", <PanelSkeleton key="p" />],
+      ["skeleton-kb-overview", <KnowledgeBaseOverviewSkeleton key="o" />],
     ] as const) {
       const { unmount } = render(node);
       expectBusyRegion(slot);
@@ -151,5 +153,45 @@ describe("PanelSkeleton", () => {
   it("一整块面板：标题 + 两行正文，不拆成很多小条（那会让人以为元素很多）", () => {
     const { container } = render(<PanelSkeleton />);
     expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(3);
+  });
+});
+
+/**
+ * 概览骨架（D-02 图例 26）。
+ *
+ * 存在的理由是"加载完成时不能换结构"：这个路由原先继承 `[baseId]/loading.tsx`
+ * 的**行列表**骨架，而概览的宿主是「头图卡片 + 5 格计数 + 三块预览」——
+ * 真实浏览器实测过渡态里 18 个灰块没有一个落在头图或 5 格的位置上。
+ */
+describe("KnowledgeBaseOverviewSkeleton", () => {
+  it("给出头图卡片、5 格计数、三块预览三段结构（而不是一列行）", () => {
+    const { container } = render(<KnowledgeBaseOverviewSkeleton />);
+    const region = container.querySelector('[data-slot="skeleton-kb-overview"]');
+    expect(region).not.toBeNull();
+    // 5 格：恰好 5 个 98 高的块（与真实卡片同高，避免数据到达时页面跳一下）
+    const tiles = Array.from(region?.querySelectorAll('[data-slot="skeleton"]') ?? []).filter(
+      (block) => (block.getAttribute("class") ?? "").includes("h-[98px]"),
+    );
+    expect(tiles).toHaveLength(5);
+  });
+
+  it("封面位是 96 高（画板实测封面 976x96）", () => {
+    const { container } = render(<KnowledgeBaseOverviewSkeleton />);
+    const cover = Array.from(container.querySelectorAll('[data-slot="skeleton"]')).find((block) =>
+      (block.getAttribute("class") ?? "").includes("h-24"),
+    );
+    expect(cover, "头图封面位应存在且为 96 高（h-24）").toBeTruthy();
+  });
+
+  it("与真实版式同宽：容器上限 1000（画板实测内容列 368..1367）", () => {
+    const { container } = render(<KnowledgeBaseOverviewSkeleton />);
+    const region = container.querySelector('[data-slot="skeleton-kb-overview"]');
+    expect(region?.getAttribute("class")).toContain("max-w-[1000px]");
+  });
+
+  it("预览区用与真实栅格相同的断点（左列自适应 + 右列 380）", () => {
+    const { container } = render(<KnowledgeBaseOverviewSkeleton />);
+    const html = container.innerHTML;
+    expect(html).toContain("lg:grid-cols-[minmax(0,1fr)_380px]");
   });
 });

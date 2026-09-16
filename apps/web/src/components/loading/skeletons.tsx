@@ -19,6 +19,7 @@ import { Fragment, type ReactNode } from "react";
  * | `EditorSkeleton` | 笔记 / 协作文档（标题 + 段落） |
  * | `PanelSkeleton` | 协同工作区 / 设置面板（一整块） |
  * | `CalendarSkeleton` | 日期时间浮层（月份行 + 7 列日期格） |
+ * | `KnowledgeBaseOverviewSkeleton` | 知识库概览（头图卡片 + 5 格计数 + 三块预览） |
  *
  * 全部带 `aria-busy`：读屏用户需要知道"这块正在变"，否则只会念到一个空区域。
  * 各个 `Skeleton` 自己是 `aria-hidden` 的，不会刷屏。
@@ -220,6 +221,61 @@ export function CalendarSkeleton({ className }: { className?: string }) {
       <div className="flex items-center gap-2 border-t border-separator pt-2.5">
         <Skeleton className="h-8 w-20" />
         <Skeleton className="h-8 flex-1" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 知识库概览（D-02 图例 26：「加载骨架 · 封面 + 标题 + 两行文本 + 5 格计数，与真实版式同高」）。
+ *
+ * 为什么必须单独一个预设而不是复用 `ListRowsSkeleton`：
+ * 概览页的宿主是**头图卡片 + 5 格计数 + 三块预览**，与笔记列表完全不同形状。
+ * 复用行骨架时加载完成会整页换一次结构（实测：骨架 18 个块里没有一个落在
+ * 头图或 5 格的位置上），用户看到的是"页面加载完变成了另一页"。
+ *
+ * 尺寸逐项对齐真实版式（都是画板实测值，见 `scripts/lib/supplement-crops.mjs`）：
+ * 卡片 1000 宽、封面 96 高、标题 34 行盒、两行文本、5 格 98 高。
+ * 骨架与内容**同高**是关键：差一截就会在数据到达时把下面的内容顶下去。
+ */
+export function KnowledgeBaseOverviewSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      aria-busy="true"
+      data-slot="skeleton-kb-overview"
+      className={cn("mx-auto w-full max-w-[1000px]", className)}
+    >
+      {/* 头图卡片：卡内留白 12 + 封面 96 + 文本块 */}
+      <div className="rounded-lg bg-surface p-3 shadow-card">
+        <Skeleton className="h-24 w-full rounded-md" />
+        <div className="space-y-2 px-2 pt-4 pb-1.5">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-[640px] max-w-full" />
+          <Skeleton className="h-3 w-48" />
+        </div>
+      </div>
+      {/* 5 格计数：与内容同高（98），断点也一致 */}
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <SkeletonBlocks count={5}>
+          {() => <Skeleton className="h-[98px] rounded-md" />}
+        </SkeletonBlocks>
+      </div>
+      {/* 三块预览：左列宽、右列窄，与真实栅格同断点 */}
+      <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="space-y-2.5">
+          <Skeleton className="h-[22px] w-24" />
+          <Skeleton className="h-[260px] rounded-lg" />
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-2.5">
+            <Skeleton className="h-[22px] w-16" />
+            <Skeleton className="h-[168px] rounded-lg" />
+          </div>
+          <div className="space-y-2.5">
+            <Skeleton className="h-[22px] w-16" />
+            <Skeleton className="h-[156px] rounded-lg" />
+          </div>
+        </div>
       </div>
     </div>
   );

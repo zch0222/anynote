@@ -2,6 +2,7 @@
 
 import { ThemeSwitcher } from "@/components/layout/theme-switcher";
 import { ListRowsSkeleton } from "@/components/loading/skeletons";
+import { NotFoundState } from "@/components/shared/states";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMoocsQuery } from "@/features/mooc/use-moocs";
@@ -131,6 +132,33 @@ export function KnowledgeBaseOverview({ baseId }: { baseId: number }) {
   const noteRows = (notes.data?.rows ?? []).slice(0, OVERVIEW_NOTE_PREVIEW);
   const docRows = (docs.data?.rows ?? []).slice(0, OVERVIEW_DOC_PREVIEW);
   const memberRows = (members.data?.rows ?? []).slice(0, OVERVIEW_MEMBER_PREVIEW);
+
+  /*
+   * 库不存在 / 无权限（D-02 图例最后一组：「接口 404 / 403 → 不存在 / 无权限」）。
+   *
+   * 必须在最外层短路：后端对不存在的库返回 `{code:"A0301"}`（HTTP 200，靠 code 区分），
+   * 于是详情查询进入 `isError`，而**其余五棵查询照样"成功"返回空列表**。
+   * 修复前页面因此渲染出一屏完全正常的假数据——头图写「未命名知识库」、
+   * 5 格计数写 0、简介写「这个知识库还没有填写简介。」，用户看不出自己打开的库根本不存在。
+   * 真实浏览器实测（/notes/999999/overview）确认过这个现象。
+   *
+   * 5 个同级 Tab（笔记 / 慕课 / 资料 / 成员）在同样输入下都不会这样，
+   * 所以这里对齐它们的行为，用统一的 `NotFoundState`（文案已在 12.0.3 定稿）。
+   */
+  if (base.isError) {
+    return (
+      /*
+       * 外面这层 `div` 只是承载 `data-testid="kb-overview"`：路由级用例与 E2E
+       * 用这个 testid 判断"概览页已经渲染"，不存在态也必须是同一个锚点，
+       * 否则"点概览 Tab → 页面没反应"会被误报成路由坏了。
+       * 不给 `NotFoundState` 加 `data-testid` 参数是因为它是共用组件，
+       * 为一个调用方的测试需求去改它的 props 面不值得。
+       */
+      <div data-testid="kb-overview">
+        <NotFoundState object="知识库" backHref="/notes" backLabel="回到知识库" className="pt-10" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1000px]" data-testid="kb-overview">

@@ -336,6 +336,60 @@ describe("KnowledgeBaseOverview（D-02）预览块", () => {
   });
 });
 
+describe("KnowledgeBaseOverview（D-02）知识库不存在 / 无权限", () => {
+  /**
+   * D-02 图例最后一组：「接口 404 / 403 → 不存在 / 无权限」
+   * ——「找不到这个知识库 / 它可能已被删除，或者你还没有访问权限 / 回到知识库」。
+   *
+   * 这条是**真实浏览器实测暴露出来的缺陷**：后端对不存在的库返回
+   * `{code:"A0301", msg:"没有获取该知识库权限"}`（HTTP 200，靠 code 区分），
+   * 于是 `useKnowledgeBaseQuery` 进入 `isError`。修复前页面**照样渲染整页**：
+   * 头图显示「未命名知识库」、5 格计数显示 0、简介显示「还没有填写简介」——
+   * 一屏看起来完全正常的假数据，用户根本不知道自己打开了一个不存在的库。
+   * 5 个 Tab（笔记/慕课/资料/成员）在同样输入下都不是这个样子。
+   */
+  it("知识库详情加载失败时整页换成「找不到这个知识库」，而不是渲染空壳", () => {
+    mockAll({ base: {} });
+    useKnowledgeBaseQuery.mockReturnValue({
+      ...IDLE,
+      isError: true,
+      error: new Error("没有获取该知识库权限"),
+    });
+    renderWithProviders(<KnowledgeBaseOverview baseId={999999} />);
+
+    expect(screen.getByText("找不到这个知识库")).toBeInTheDocument();
+    expect(screen.getByText("它可能已被删除，或者你还没有访问权限。")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /回到知识库/ })).toHaveAttribute("href", "/notes");
+  });
+
+  it("不存在态下不渲染头图、5 格与三块预览（避免假数据）", () => {
+    mockAll({ base: {} });
+    useKnowledgeBaseQuery.mockReturnValue({
+      ...IDLE,
+      isError: true,
+      error: new Error("没有获取该知识库权限"),
+    });
+    renderWithProviders(<KnowledgeBaseOverview baseId={999999} />);
+
+    expect(screen.queryByTestId("kb-hero")).toBeNull();
+    expect(screen.queryByTestId("kb-stat-notes")).toBeNull();
+    expect(screen.queryByTestId("kb-preview-notes")).toBeNull();
+    // 「未命名知识库」是"确实没有名字"的回退，不该在"库不存在"时出现
+    expect(screen.queryByText("未命名知识库")).toBeNull();
+    expect(screen.queryByText("这个知识库还没有填写简介。")).toBeNull();
+  });
+
+  it("详情仍在加载时照常渲染骨架，不误判为不存在", () => {
+    mockAll({ base: {} });
+    useKnowledgeBaseQuery.mockReturnValue({ ...IDLE, isPending: true, data: undefined });
+    renderWithProviders(<KnowledgeBaseOverview baseId={5} />);
+
+    // 头图骨架在，且没有跳到不存在态——加载中与"不存在"必须分开
+    expect(screen.getByTestId("kb-hero")).toBeInTheDocument();
+    expect(screen.queryByText("找不到这个知识库")).toBeNull();
+  });
+});
+
 describe("KnowledgeBaseOverview（D-02）空态与错误态", () => {
   it("资料块加载失败时按 Q-02 文案提示「找不到这个知识库」", () => {
     mockAll({ base: { permissions: 1 } });

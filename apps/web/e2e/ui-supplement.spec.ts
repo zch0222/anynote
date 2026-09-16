@@ -215,7 +215,7 @@ test.describe("D-02 知识库概览：版式还原", () => {
     expect(Math.round((blockBox?.y ?? 0) - (tileBox?.y ?? 0))).toBe(14);
   });
 
-  test("预览块：最近笔记 5 行 x52、资料 3 行 x56、成员 3 行 x52", async ({ page }) => {
+  test("预览块：最近笔记 5 行 x51、成员 1 行 x52、左右列 600/380 间距 20", async ({ page }) => {
     await page.goto("/notes");
     await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
     const baseId = await createBase(page, unique("D-02 预览"));
@@ -241,11 +241,35 @@ test.describe("D-02 知识库概览：版式还原", () => {
 
     // 右列 380 宽（画板 x 988..1367）；左列 600 + 间距 20 + 右列 380 = 1000
     const membersCard = page.getByTestId("kb-preview-members");
-    const gap =
-      (await membersCard.boundingBox())?.x !== undefined
-        ? Math.round(((await membersCard.boundingBox())?.x ?? 0) - ((noteCardBox?.x ?? 0) + 600))
-        : null;
+    const membersBox = await membersCard.boundingBox();
+    const gap = Math.round((membersBox?.x ?? 0) - ((noteCardBox?.x ?? 0) + 600));
     expect(gap).toBe(20);
+    expect(Math.round(membersBox?.width ?? 0)).toBe(380);
+
+    /*
+     * 成员行 52 高（图例 25）。
+     *
+     * 新库里"成员"只有库主自己一条，所以这里是**确定的一行**——
+     * 不需要造数就能验证行高，这正是画板给的值：52（含 1px 分隔线）。
+     */
+    const memberRows = page.locator("[data-testid^='kb-preview-member-']");
+    await expect(memberRows).toHaveCount(1);
+    expect(Math.round((await memberRows.first().boundingBox())?.height ?? 0)).toBe(52);
+
+    /*
+     * 资料 3 行 × 56（图例 19）在真实栈上造不出数据：资料只有上传端点（要真 PDF），
+     * 没有"创建一条文档记录"的接口。所以这里只断言**空态**（新库的必然状态）：
+     * 文案按 Q-02 表 + 「去上传」直达 /ai/pdf（图例 30）。
+     * "给 4 条只显示 3 条"的截断逻辑由单测覆盖（那里能完全控制输入）。
+     */
+    await expect(page.getByTestId("kb-preview-docs")).toHaveCount(0);
+    await expect(
+      page.getByText("还没有资料。上传 PDF 后可以在「PDF 问答」里围绕它提问。"),
+    ).toBeVisible();
+    await expect(page.getByTestId("kb-overview-docs-upload")).toHaveAttribute(
+      "href",
+      `/ai/pdf?baseId=${baseId}`,
+    );
   });
 
   test("区块标题与「全部 X」链接：17/22 SemiBold + 13 accent", async ({ page }) => {
@@ -314,6 +338,38 @@ test.describe("D-02 知识库概览：版式还原", () => {
     await create.click();
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 10_000 });
     await page.keyboard.press("Escape");
+  });
+
+  test("库不存在时整页换成「找不到这个知识库」，不渲染空壳假数据", async ({ page }) => {
+    /*
+     * D-02 图例最后一组：「接口 404 / 403 → 不存在 / 无权限」。
+     *
+     * 这条是**真实浏览器实测暴露出来的缺陷**：后端对不存在的库返回
+     * `{code:"A0301"}`（HTTP 200），详情查询进入 isError，而其余五棵查询
+     * 照样"成功"返回空列表；修复前概览页因此渲染出**一屏完全正常的假数据**
+     * （头图「未命名知识库」、5 格计数 0、简介「还没有填写简介」），
+     * 用户看不出这个库根本不存在。
+     *
+     * 用一个大到不可能存在的 id：比"先建库再删"更稳（没有删除端点，且不受
+     * 前序用例残留数据影响）。
+     */
+    await page.goto("/notes/999999/overview");
+    await expect(page.getByTestId("kb-overview")).toBeVisible({ timeout: 30_000 });
+
+    await expect(page.getByText("找不到这个知识库")).toBeVisible();
+    await expect(page.getByText("它可能已被删除，或者你还没有访问权限。")).toBeVisible();
+    await expect(page.getByRole("link", { name: /回到知识库/ })).toHaveAttribute("href", "/notes");
+
+    // 假数据一个都不该出现
+    await expect(page.getByTestId("kb-hero")).toHaveCount(0);
+    await expect(page.getByTestId("kb-stat-notes")).toHaveCount(0);
+    await expect(page.getByTestId("kb-preview-notes")).toHaveCount(0);
+    await expect(page.getByText("未命名知识库")).toHaveCount(0);
+    await expect(page.getByText("这个知识库还没有填写简介。")).toHaveCount(0);
+
+    // 与同级 Tab 行为一致：/docs 与 /members 也不该给出"这个库是空的"的错觉
+    await page.goto("/notes/999999/members");
+    await expect(page.getByTestId("kb-gallery")).toHaveCount(0);
   });
 });
 
