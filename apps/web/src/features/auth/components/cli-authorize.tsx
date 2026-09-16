@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import type { CliAuthorizeParams } from "@/lib/auth/cli-authorize";
-import { Terminal } from "lucide-react";
+import { Terminal, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCliAuthorizeMutation } from "../use-cli-authorize-mutation";
@@ -58,17 +58,25 @@ export function CliAuthorize({ params }: { params: CliAuthorizeParams }) {
           回调到本机 127.0.0.1:{params.port}
         </p>
         <div className="flex gap-2">
+          {/*
+            D-15 图例 5：主按钮 42 高、全宽占满剩余宽度、**带 ShieldCheck 图标**。
+            盾牌图标不是装饰：这一屏是"把账号凭据交给一个本机进程"，
+            图标是用户扫一眼就能认出的风险提示；原来只有一个裸的「授权」。
+          */}
           <Button
             type="button"
-            className="flex-1"
+            className="h-[42px] flex-1"
             onClick={authorize}
             disabled={mutation.isPending}
           >
+            <ShieldCheck className="size-4" aria-hidden="true" />
             {mutation.isPending ? "授权中…" : "授权"}
           </Button>
+          {/* D-15 图例 6：次按钮同为 42 高，两个按钮等高才对齐 */}
           <Button
             type="button"
             variant="outline"
+            className="h-[42px]"
             onClick={() => router.push("/dashboard")}
             disabled={mutation.isPending}
           >

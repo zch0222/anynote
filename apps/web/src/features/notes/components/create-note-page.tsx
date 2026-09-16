@@ -14,6 +14,7 @@ import {
 import { useCreateNoteMutation } from "@/features/notes/use-create-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { toUserMessage } from "@/lib/api/errors";
+import { formatRelativeTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, Library, Plus } from "lucide-react";
@@ -132,7 +133,16 @@ export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | und
       ) : (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
           <fieldset className="space-y-2">
-            <legend className="text-footnote font-medium text-label">归属知识库</legend>
+            {/*
+              D-03 图例 18：「笔记必须归属一个知识库」提示在区块标题**右侧**。
+              这句不是废话——新建笔记页最容易的误解就是"能不能先写、之后再归类"，
+              而 `createNoteSchema` 里 `knowledgeBaseId` 是必填。放在标题行而不是
+              报错时才出现，用户不必先撞一次墙。
+            */}
+            <div className="flex items-baseline justify-between gap-2">
+              <legend className="text-footnote font-medium text-label">归属知识库</legend>
+              <span className="text-xs text-label-tertiary">笔记必须归属一个知识库</span>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {baseList.map((base) => (
                 <BaseOption
@@ -152,30 +162,43 @@ export function CreateNotePage({ initialBaseId }: { initialBaseId?: number | und
           </fieldset>
 
           <div className="space-y-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <Label htmlFor="note-title">标题</Label>
-              {/* 计数在输入框外侧右上：塞进输入框会与占位文案打架 */}
+            <Label htmlFor="note-title">标题</Label>
+            {/*
+              D-03 图例：计数 `8 / 15` 在输入框**内右侧**（图例原文如此）。
+              原来放在 label 行右外侧——放大镜一样的位置关系，用户要多看一眼
+              才知道那个数字属于下面这个框。
+              图标/文字用 `pointer-events-none` 免得挡住点击。
+            */}
+            <div className="relative">
+              <Input
+                id="note-title"
+                // 40 高（图例 19）：比 Input 默认的 h-8 高一档，标题是这一步唯一的输入
+                className="h-10 rounded-md pr-16"
+                // 浏览器的历史建议会在标题这种短字段上盖住整块列表，且拼错一次就长期留着
+                autoComplete="off"
+                placeholder="3-15 个字符"
+                aria-invalid={overLimit || undefined}
+                {...form.register("title")}
+              />
               <span
                 data-testid="title-counter"
                 aria-live="polite"
                 className={cn(
-                  "text-xs tabular-nums",
+                  "pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs tabular-nums",
                   overLimit ? "text-danger" : "text-label-tertiary",
                 )}
               >
                 {titleLength} / {TITLE_MAX}
               </span>
             </div>
-            <Input
-              id="note-title"
-              // 40 高（图例 19）：比 Input 默认的 h-8 高一档，标题是这一步唯一的输入
-              className="h-10 rounded-md"
-              // 浏览器的历史建议会在标题这种短字段上盖住整块列表，且拼错一次就长期留着
-              autoComplete="off"
-              placeholder="3-15 个字符"
-              aria-invalid={overLimit || undefined}
-              {...form.register("title")}
-            />
+            {/*
+              D-03：标题下方一行提示，说明这个标题会变成正文 H1。
+              没有它时用户会在正文里再写一遍标题，保存后编辑器顶部出现两个一样的标题
+              （编辑器用的是 `ensureLeadingHeading`，会把标题作为正文第一个标题）。
+            */}
+            <p className="text-xs text-label-tertiary">
+              标题会作为正文的第一个标题（H1），之后可以在编辑器里直接改。
+            </p>
             {form.formState.errors.title ? (
               <p className="text-xs text-danger">{form.formState.errors.title.message}</p>
             ) : null}
@@ -248,8 +271,19 @@ function BaseOption({
       )}
     >
       <span className={coverAvatarClassName(base.id, "size-8 rounded-md")} aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate text-footnote text-label">
-        {base.knowledgeBaseName?.trim() || "未命名知识库"}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-footnote text-label">
+          {base.knowledgeBaseName?.trim() || "未命名知识库"}
+        </span>
+        {/*
+          D-03：卡片副标题 `普通知识库 · 2 小时前更新`。
+          只有一个库名时用户没法在几个同名/近名的库之间做选择——类型与"多久没动过"
+          正是区分它们的两条信息，且都已随列表返回，不需要额外请求。
+        */}
+        <span className="block truncate text-xs text-label-tertiary">
+          {base.type === 1 ? "组织知识库" : "普通知识库"}
+          {base.updateTime ? ` · ${formatRelativeTime(base.updateTime)}更新` : ""}
+        </span>
       </span>
       <Check
         className={cn("size-4 shrink-0", selected ? "text-accent" : "text-transparent")}

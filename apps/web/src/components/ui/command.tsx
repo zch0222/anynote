@@ -63,7 +63,15 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="h-8! rounded-lg! border-separator/30 bg-fill-hover shadow-none! *:data-[slot=input-group-addon]:pl-2!">
+      {/*
+        D-04 ③18 实测规格：**50 高 · 圆角 10 · 底 `bg/grouped`**。
+        原来三项全不符：`h-8!`（32 高）、`rounded-lg!`（本仓库 `--radius-lg` = 14px）、
+        `bg-fill-hover`（悬停色，比页面底更深一档）。命令面板是"一眼扫过去打字"
+        的浮层，32 高的输入框在 512 宽的对话框里显得局促，而 50 高与对话框头部
+        的整体留白才是画板的节奏。
+        `rounded-md` = `--radius-md` = 10px，与输入框规范的圆角 10 一致。
+      */}
+      <InputGroup className="h-[50px]! rounded-md! border-separator/30 bg-grouped shadow-none! *:data-[slot=input-group-addon]:pl-2!">
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
@@ -144,7 +152,13 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "group/command-item relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none in-data-[slot=dialog-content]:rounded-lg! data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-fill-hover data-selected:text-label [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-label",
+        /*
+         * D-04 ③20 实测规格：命令项 **36 高 · 圆角 10**。
+         * 原来 `py-1.5` + `text-sm` 实测约 30 高，且 `rounded-sm`（6px）——
+         * 一项之差在单条上看不出来，但一列 8 项就是 48px 的累积差，
+         * 面板整体比画板矮一截。`h-9` 固定高度同时让"选中项"的高亮块形状稳定。
+         */
+        "group/command-item relative flex h-9 cursor-default items-center gap-2 rounded-md px-2 text-sm outline-hidden select-none in-data-[slot=dialog-content]:rounded-md! data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-fill-hover data-selected:text-label [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-label",
         className,
       )}
       {...props}

@@ -87,3 +87,24 @@ export const MINIMAL_LAYOUT: readonly ToolbarSlot[] = [
   "orderedList",
   "clearFormat",
 ];
+
+/**
+ * 任务描述专用（D-18 图例 9）：**6 个按钮**
+ * `B I H2 ≡ ⋮≡ 🔗`，没有分隔符、没有撤销重做。
+ *
+ * 为什么值一个新表而不是复用 `MINIMAL_LAYOUT`：任务描述是"写一段任务要求"，
+ * 不是写文章。`minimal` 的 13 个按钮里有撤销/重做/下划线/删除线/行内代码/高亮/
+ * 清除格式 7 个在这个场景几乎不会被用到，而画板明确要求 6 个；
+ * `minimal` 又**不含 H2**，与画板恰好相反。
+ *
+ * 与 `MINIMAL_LAYOUT` 一样按"块级命令不进"的口径收口：任务描述后端当纯文本
+ * 存进 `taskDescribe`，表格 / 图片 / 代码块这类块级结构在里面没有呈现位置。
+ */
+export const TASK_DESCRIBE_LAYOUT: readonly ToolbarSlot[] = [
+  "bold",
+  "italic",
+  "heading2",
+  "bulletList",
+  "orderedList",
+  "link",
+];

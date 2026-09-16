@@ -30,7 +30,7 @@ import { useTasksQuery } from "@/features/tasks/use-tasks";
 import { formatRelativeTime } from "@/lib/format-time";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
-import { FileText, Plus, Search } from "lucide-react";
+import { ChevronRight, FileText, Plus, Search } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -183,10 +183,21 @@ export function KnowledgeBaseOverview({ baseId }: { baseId: number }) {
                   data-testid={`kb-stat-${tile.key}`}
                   className="flex h-full flex-col rounded-md bg-surface p-3.5 shadow-card outline-none transition-shadow hover:shadow-popover focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <span
-                    aria-hidden="true"
-                    className={cn("size-7 shrink-0 rounded-[7px]", TILE_BLOCK_CLASS[tile.key])}
-                  />
+                  {/*
+                    D-02：每张计数卡右上角有一个 `›`。它不只是装饰——这一格整张可点
+                    会跳到对应 Tab，右上角的箭头与列表行尾的箭头是同一套"点进去"
+                    语言；没有它时卡片看起来只是一个数字展示块。
+                  */}
+                  <span className="flex items-start justify-between">
+                    <span
+                      aria-hidden="true"
+                      className={cn("size-7 shrink-0 rounded-[7px]", TILE_BLOCK_CLASS[tile.key])}
+                    />
+                    <ChevronRight
+                      className="size-4 shrink-0 text-label-tertiary"
+                      aria-hidden="true"
+                    />
+                  </span>
                   <span className="mt-3 flex items-baseline gap-2">
                     {count === null ? (
                       // 数据未到时给骨架而不是 0：先显示一圈「0 篇笔记」等于告诉用户"这个库是空的"
