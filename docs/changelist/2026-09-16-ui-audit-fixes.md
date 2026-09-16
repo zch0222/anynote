@@ -13,19 +13,32 @@
 
 | 类别 | 文件数 | 增 / 删行 |
 |------|--------|-----------|
-| 文档与审计脚本（含报告本体） | 3 | +1122 / −0 |
+| 文档（`UI检查报告.md`） | 1 | +660 / −0 |
+| 审计脚本 | 2 | +462 / −0 |
 | 前端源码 | 36 | +1598 / −653 |
 | 前端单元测试 | 7 | +309 / −54 |
 | E2E 用例 | 3 | +49 / −14 |
+| `CLAUDE.md` 口径同步 | 1 | +2 / −2 |
 | `.gitignore` | 1 | +3 / −1 |
-| **合计** | **50** | **+3081 / −722** |
+| **小计** | **51** | **+3083 / −724** |
+| 本清单自身 | 1 | 见文件行数 |
+| **合计** | **52** | **小计 + 本清单行数** |
 
-其中新增文件 5 个：`docs/ui/UI检查报告.md`、`apps/web/scripts/ui-audit-capture.mjs`、
-`apps/web/scripts/ui-audit-zoom.mjs`、`apps/web/src/components/layout/page-search-action.tsx`、
+新增文件 6 个：`docs/ui/UI检查报告.md`、`docs/changelist/2026-09-16-ui-audit-fixes.md`、
+`apps/web/scripts/ui-audit-capture.mjs`、`apps/web/scripts/ui-audit-zoom.mjs`、
+`apps/web/src/components/layout/page-search-action.tsx`、
 `apps/web/src/features/notes/components/knowledge-base-page-header.tsx`。
 
-数字口径：`git diff --stat 63a52fa...HEAD`（已跟踪文件）+ `git ls-files --others --exclude-standard`
-（新增文件）。分 6 个 commit 提交。
+数字口径（上方表格逐类相加，可用同样命令复核）：
+
+```bash
+git diff --numstat 63a52fa..HEAD                       # 逐文件 增/删
+git ls-files --others --exclude-standard               # 新增未跟踪文件（本次为空，都已提交）
+```
+
+本清单自身的行数不进"小计"——它每改一次总数就变一次，写进去必然对不上；
+所以小计口径是**除本文件外的全部改动**，合计再把它算回来。分 7 个 commit 提交，
+随后 `--no-ff` 合并回 `dev`。
 
 ### 验证结果
 
