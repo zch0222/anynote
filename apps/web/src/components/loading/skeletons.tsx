@@ -245,13 +245,25 @@ export function KnowledgeBaseOverviewSkeleton({ className }: { className?: strin
       data-slot="skeleton-kb-overview"
       className={cn("mx-auto w-full max-w-[1000px]", className)}
     >
-      {/* 头图卡片：卡内留白 12 + 封面 96 + 文本块 */}
+      {/*
+        头图卡片：卡内留白 12 + 封面 96 + 文本块 + 卡内留白 12。
+
+        文本块的三行**必须按真实行盒给高**，不能用 `space-y-2` + 近似值凑：
+        真实是 pt-4(16) + 标题 41 + 6 + 简介 24 + 6 + 元信息 18 + pb-1.5(6) = 117，
+        卡片合计 12+96+117+12 = **237**。
+        最初写成 `h-8 / h-4 / h-3` + `space-y-2` 只得到 98，整卡 218——
+        比真实矮 19px，数据到达时下面的 5 格会整体下移 19px。
+        这正是图例 26 强调「与真实版式同高」要防的那种跳。
+      */}
       <div className="rounded-lg bg-surface p-3 shadow-card">
         <Skeleton className="h-24 w-full rounded-md" />
-        <div className="space-y-2 px-2 pt-4 pb-1.5">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-[640px] max-w-full" />
-          <Skeleton className="h-3 w-48" />
+        <div className="px-2 pt-4 pb-1.5">
+          {/* Display 34 / 行高 41 */}
+          <Skeleton className="h-[41px] w-64" />
+          {/* Body 15 / 行高 24 */}
+          <Skeleton className="mt-1.5 h-6 w-[640px] max-w-full" />
+          {/* Footnote 13 / 行高 18 */}
+          <Skeleton className="mt-1.5 h-[18px] w-48" />
         </div>
       </div>
       {/* 5 格计数：与内容同高（98），断点也一致 */}

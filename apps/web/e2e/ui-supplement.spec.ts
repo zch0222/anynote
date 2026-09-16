@@ -85,8 +85,9 @@ test.describe("D-02 知识库概览：版式还原", () => {
      * 用真实数据而不是空库：空库下预览块是虚线空态，几何与画板对不上——
      * 那属于空态分支，另有用例覆盖。这里要对的是**有内容时**的版式。
      */
+    // 造数只用到同源 fetch，不需要等画廊渲染完——等它反而把用例
+    // 绑在画廊的加载耗时上（实测这一等偶发吃掉 30s 超时）。
     await page.goto("/notes");
-    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
     const baseId = await createBase(page, unique("D-02 头图"));
     for (const title of ["设计原则速查", "组件命名约定", "评审检查清单"]) {
       await createNote(page, baseId, `${title} ${Math.random().toString(36).slice(2, 6)}`);
@@ -127,8 +128,9 @@ test.describe("D-02 知识库概览：版式还原", () => {
   });
 
   test("概览页不渲染顶栏，搜索/主题/新建笔记都在头图卡片里", async ({ page }) => {
+    // 造数只用到同源 fetch，不需要等画廊渲染完——等它反而把用例
+    // 绑在画廊的加载耗时上（实测这一等偶发吃掉 30s 超时）。
     await page.goto("/notes");
-    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
     const baseId = await createBase(page, unique("D-02 动作行"));
 
     await page.goto(`/notes/${baseId}/overview`);
@@ -157,8 +159,9 @@ test.describe("D-02 知识库概览：版式还原", () => {
   });
 
   test("5 格计数与侧栏二级导航一一对应，卡片 190x98、色块 28x28", async ({ page }) => {
+    // 造数只用到同源 fetch，不需要等画廊渲染完——等它反而把用例
+    // 绑在画廊的加载耗时上（实测这一等偶发吃掉 30s 超时）。
     await page.goto("/notes");
-    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
     const baseId = await createBase(page, unique("D-02 计数"));
 
     await page.goto(`/notes/${baseId}/overview`);
@@ -216,8 +219,9 @@ test.describe("D-02 知识库概览：版式还原", () => {
   });
 
   test("预览块：最近笔记 5 行 x51、成员 1 行 x52、左右列 600/380 间距 20", async ({ page }) => {
+    // 造数只用到同源 fetch，不需要等画廊渲染完——等它反而把用例
+    // 绑在画廊的加载耗时上（实测这一等偶发吃掉 30s 超时）。
     await page.goto("/notes");
-    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
     const baseId = await createBase(page, unique("D-02 预览"));
     // 造 6 篇：验证「只取前 5 篇」（图例 18）
     for (let i = 0; i < 6; i += 1) {
@@ -273,8 +277,9 @@ test.describe("D-02 知识库概览：版式还原", () => {
   });
 
   test("区块标题与「全部 X」链接：17/22 SemiBold + 13 accent", async ({ page }) => {
+    // 造数只用到同源 fetch，不需要等画廊渲染完——等它反而把用例
+    // 绑在画廊的加载耗时上（实测这一等偶发吃掉 30s 超时）。
     await page.goto("/notes");
-    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
     const baseId = await createBase(page, unique("D-02 标题"));
 
     await page.goto(`/notes/${baseId}/overview`);
@@ -320,8 +325,9 @@ test.describe("D-02 知识库概览：版式还原", () => {
      * 所以这条**只断言可编辑时的正向**，权限分支由单测覆盖
      * （`knowledge-base-overview.test.tsx` 的 permissions 1/2/3/4/undefined 五种）。
      */
+    // 造数只用到同源 fetch，不需要等画廊渲染完——等它反而把用例
+    // 绑在画廊的加载耗时上（实测这一等偶发吃掉 30s 超时）。
     await page.goto("/notes");
-    await expect(page.getByTestId("kb-gallery")).toBeVisible({ timeout: 30_000 });
     const baseId = await createBase(page, unique("D-02 权限"));
 
     await page.goto(`/notes/${baseId}/overview`);

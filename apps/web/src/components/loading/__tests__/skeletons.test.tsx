@@ -194,4 +194,30 @@ describe("KnowledgeBaseOverviewSkeleton", () => {
     const html = container.innerHTML;
     expect(html).toContain("lg:grid-cols-[minmax(0,1fr)_380px]");
   });
+
+  /**
+   * 图例 26 的原文是「封面 + 标题 + 两行文本 + 5 格计数，**与真实版式同高**」。
+   *
+   * 这条是本实现**自己踩过的坑**：最初文本块写成 `h-8 / h-4 / h-3` + `space-y-2`，
+   * 三行加起来只有 98，整卡 218；而真实卡片是 237（12+96+117+12）。
+   * 差 19px 意味着数据到达时下面的 5 格会整体下移 19px——正是骨架要防的那种跳。
+   *
+   * 按**行盒**给高就不会错：标题 41（Display 34/41）、简介 24（Body 15/24）、
+   * 元信息 18（Footnote 13/18），间距 6 = 真实值。
+   * 这里锁住三个行盒的具体值，改小任何一个都会红。
+   */
+  it("头图文本块按真实行盒给高（41 / 24 / 18），不是近似值", () => {
+    const { container } = render(<KnowledgeBaseOverviewSkeleton />);
+    const classes = Array.from(container.querySelectorAll('[data-slot="skeleton"]')).map(
+      (block) => block.getAttribute("class") ?? "",
+    );
+
+    expect(classes.some((c) => c.includes("h-[41px]"))).toBe(true); // Display 34/41
+    expect(classes.some((c) => c.includes("h-6"))).toBe(true); // Body 15/24
+    expect(classes.some((c) => c.includes("h-[18px]"))).toBe(true); // Footnote 13/18
+
+    // 反面：不该再用先前那套凑数的矮行盒
+    expect(classes.some((c) => c.includes("h-8 "))).toBe(false);
+    expect(classes.some((c) => c.includes("h-4 "))).toBe(false);
+  });
 });
