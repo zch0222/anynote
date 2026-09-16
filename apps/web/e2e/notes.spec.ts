@@ -1,5 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
-import { ensureKnowledgeBase } from "./support/account";
+import { ensureKnowledgeBase, openKnowledgeBase } from "./support/account";
 import { setTheme } from "./support/theme";
 
 const BASE_NAME = "E2E 知识库";
@@ -68,6 +68,46 @@ test.describe("关键路径 2/3：创建笔记与编辑保存", () => {
       .click();
     await expect(page).toHaveURL(/\/notes\/\d+$/, { timeout: 30_000 });
     await expect(page.getByText(NOTE_TITLE).first()).toBeVisible({ timeout: 30_000 });
+  });
+});
+
+/**
+ * 「新建完就在库里」的回归（2026-09-16 用户报障）。
+ *
+ * 上面那组用例**掩盖过这个 bug**：它建完笔记先进编辑器敲了字，而输入会把笔记
+ * 操作日志写出来，于是列表查询（当时走 `GET /notes`，FROM `n_note_operation_log`）
+ * 又能看到这篇笔记了。所以这条用例刻意放在**独立 describe** 里、且创建后
+ * **一个字都不输入**——新建完立刻回列表找它，这才是用户报障的那条路径。
+ */
+test.describe("新建笔记：未编辑也必须在库里可见", () => {
+  test("新建后不做任何编辑，返回列表即可见", async ({ page }) => {
+    const baseName = `E2E 新建可见 ${Date.now().toString().slice(-6)}`;
+    const title = `未编辑笔记 ${Date.now().toString().slice(-6)}`;
+    await ensureKnowledgeBase(page, baseName);
+
+    // 从知识库内的「新建笔记」进创建页（带 baseId），创建后回到这个库
+    await openKnowledgeBase(page, baseName);
+    const baseUrl = page.url();
+    await page.getByTestId("note-create").click();
+    await page.getByLabel("标题").fill(title);
+    await page.getByRole("button", { name: "创建", exact: true }).click();
+    await expect(page).toHaveURL(/\/notes\/\d+\/\d+/, { timeout: 30_000 });
+    const noteUrl = page.url();
+
+    /*
+     * 直接回列表页，不碰编辑器。
+     *
+     * 断言用 `note-row-<id>` 这个 testid 而不是文案：库名里也含时间戳，
+     * 按文本匹配会同时命中页头与侧栏，分不清是"笔记行出来了"还是"库名撞上了"。
+     */
+    const noteId = Number(noteUrl.split("/").pop());
+    await page.goto(baseUrl);
+    await expect(page.getByTestId(`note-row-${noteId}`)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId(`note-row-${noteId}`)).toContainText(title);
+
+    // 刷新后仍在：排除"只是乐观更新把行塞进了缓存"
+    await page.reload();
+    await expect(page.getByTestId(`note-row-${noteId}`)).toBeVisible({ timeout: 30_000 });
   });
 });
 

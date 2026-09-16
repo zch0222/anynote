@@ -19,7 +19,15 @@ trailer<</Root 1 0 R>>
 async function selectKnowledgeBase(page: Page) {
   await page.goto("/ai/pdf");
   await expect(page.getByTestId("pdf-chat-page")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: /选择知识库|E2E 知识库/ }).click();
+  /*
+   * 触发按钮用 testid 定位，不按可访问名匹配。
+   *
+   * 页面的按钮文案是**当前选中的库名**，而它默认自动选中的是"最近更新"的那个库
+   * （`/bases` 按 `update_time desc` 排序）。其它用例每建一个新库就会插到最前，
+   * 于是 `/选择知识库|E2E 知识库/` 这种按名字匹配的定位会随执行顺序失效——
+   * 之前只有本文件单独跑才通过，和 notes.spec.ts 一起跑就挂。
+   */
+  await page.getByTestId("pdf-base-select").click();
   await page
     .getByRole("menuitem", { name: new RegExp(BASE_NAME) })
     .first()

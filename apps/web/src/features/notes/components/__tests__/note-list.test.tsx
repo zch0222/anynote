@@ -46,14 +46,6 @@ const BASES = [
 
 /** 按 URL 分发，避免用调用顺序耦合用例（hook 的请求顺序会随实现变动）。 */
 function routeGet(url: string) {
-  if (url === "/notes") {
-    return envelope({
-      current: 1,
-      pages: 1,
-      total: 1,
-      rows: [{ id: 42, title: "重构方案", updateTime: "2026-09-15T00:00:00.000Z" }],
-    });
-  }
   if (url === "/bases") {
     return envelope({ rows: BASES });
   }
@@ -61,6 +53,23 @@ function routeGet(url: string) {
     return envelope(BASES[0]);
   }
   throw new Error(`未打桩的 GET ${url}`);
+}
+
+/**
+ * 知识库内的笔记列表走 `POST /notes/bases/{baseId}` 而不是 `GET /notes`：
+ * `GET /notes` 的数据源是笔记操作日志，新建但没编辑过的笔记不会出现。
+ * 端点选择本身由 `use-notes.test.tsx` 锁死，这里只负责把数据喂进去。
+ */
+function routePost(url: string) {
+  if (url === "/notes/bases/{baseId}") {
+    return envelope({
+      current: 1,
+      pages: 1,
+      total: 1,
+      rows: [{ id: 42, title: "重构方案", updateTime: "2026-09-15T00:00:00.000Z" }],
+    });
+  }
+  throw new Error(`未打桩的 POST ${url}`);
 }
 
 beforeEach(() => {
@@ -71,6 +80,7 @@ beforeEach(() => {
   toastSuccess.mockReset();
   toastError.mockReset();
   get.mockImplementation((url: string) => Promise.resolve(routeGet(url)));
+  post.mockImplementation((url: string) => Promise.resolve(routePost(url)));
   patch.mockResolvedValue(envelope({ id: 42, version: "1000" }));
   remove.mockResolvedValue(envelope(null));
 });
@@ -127,9 +137,11 @@ describe("NoteList（D-01）", () => {
   });
 
   it("空态的新建笔记按钮打开与页头相同的对话框", async () => {
-    get.mockImplementation((url: string) =>
+    post.mockImplementation((url: string) =>
       Promise.resolve(
-        url === "/notes" ? envelope({ current: 1, pages: 1, total: 0, rows: [] }) : routeGet(url),
+        url === "/notes/bases/{baseId}"
+          ? envelope({ current: 1, pages: 1, total: 0, rows: [] })
+          : routePost(url),
       ),
     );
     renderWithProviders(<NoteList baseId={7} />);
@@ -144,15 +156,17 @@ describe("NoteList（D-01）", () => {
   });
 
   it("加载失败显示 QueryError，点重试重新请求", async () => {
-    get.mockImplementation((url: string) =>
-      url === "/notes" ? Promise.resolve(envelope(null, "B0400")) : Promise.resolve(routeGet(url)),
+    post.mockImplementation((url: string) =>
+      url === "/notes/bases/{baseId}"
+        ? Promise.resolve(envelope(null, "B0400"))
+        : Promise.resolve(routePost(url)),
     );
     renderWithProviders(<NoteList baseId={7} />);
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("笔记加载失败：");
 
-    get.mockImplementation((url: string) => Promise.resolve(routeGet(url)));
+    post.mockImplementation((url: string) => Promise.resolve(routePost(url)));
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
 
     await waitFor(() => expect(screen.getByText("重构方案")).toBeInTheDocument());

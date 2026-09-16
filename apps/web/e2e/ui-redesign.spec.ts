@@ -294,14 +294,16 @@ test.describe("笔记列表与编辑器版式", () => {
     ).toBe(true);
 
     /*
-     * 写一行正文再回列表。
+     * 写一行正文再回列表（对应真实用法"建完就写"）。
      *
-     * 这一笔不是"为了过测试"——它对应真实用法（建完就写），而且**当前后端只有
-     * 写过内容才会让笔记出现在列表里**：`GET /notes` 的 `selectNoteList`
-     * 是 `FROM n_note_operation_log LEFT JOIN n_note`，而 `n_note_operation_log`
-     * 只由 RocketMQ 消费者在**内容 diff 非空**时写入（见 `NoteMessageListener`）。
-     * 所以一篇"建完没动过"的空笔记查询结果里没有它。这是既有的后端缺陷，
-     * 与本次前端重设计无关（`NoteMapper.xml` 未改动），已记录待单独修复。
+     * 注意这里**不再需要**靠输入来让笔记出现在列表里了。2026-09-16 之前本注释写的是
+     * "后端只有写过内容才会让笔记出现在列表里，是既有后端缺陷"——**那个归因是错的**：
+     * 后端 `GET /notes`（`selectNoteList`，`FROM n_note_operation_log`）的行为与它自己的
+     * 语义一致，是前端列表查错了端点；改用 `POST /notes/bases/{baseId}` 后，
+     * "建完没编辑过"的笔记也直接可见。详见 `docs/changelist/2026-09-16-note-list-endpoint.md`。
+     *
+     * 保留这一次输入，是因为它贴合真实用法，也能顺带覆盖"保存后列表可见"这条链路；
+     * 但"新建未编辑即可见"由 `notes.spec.ts` 的独立用例专门守着，不依赖本用例。
      */
     const surface = page.locator(EDITOR_SURFACE);
     await expect(surface).toBeVisible({ timeout: 30_000 });

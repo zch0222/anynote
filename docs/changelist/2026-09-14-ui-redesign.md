@@ -60,7 +60,13 @@
 | 6 | `note-image-upload` 用例按 `getByRole("button", { name: /图片/ })` 找工具栏按钮 | 左侧笔记目录每行都是 `role="button"`（dnd-kit 注入），标题含「图片」时**先命中目录行**，filechooser 永不出现 | 限定在 `getByRole("toolbar")` 内查找 |
 | 7 | `/notes/new` 的 `CreateNotePage` 仍是旧版式且不接受 `?baseId=` | 与重设计不一致；移动端「+」带过来的 `baseId` 被忽略 | 按设计稿重做（卡片式选库）+ 路由透传 `initialBaseId` |
 
-### 发现的既有后端缺陷（本批不修，单独跟）
+### 发现的既有缺陷（本批不修，单独跟）——**归因已于 2026-09-16 更正**
+
+> ⚠️ **本节结论已被推翻，阅读时请以 2026-09-16 的更正为准。**
+> 这**不是后端缺陷**，而是**新前端选错了列表端点**；「后端修复另开工单」也没有真正建立，
+> 问题因此在 `dev` 上留了两天，直到 2026-09-16 用户报障才修。
+> 完整分析见 **`docs/changelist/2026-09-16-note-list-endpoint.md`**。
+> 下方原文保留，作为「跨端问题被误判为后端缺陷」的审计留痕。
 
 **新建的空笔记不会出现在自己的列表里。**
 
@@ -81,12 +87,20 @@ SELECT COUNT(*) FROM n_note n WHERE n.is_delete=0 AND NOT EXISTS
   (SELECT 1 FROM n_note_operation_log l WHERE l.note_id=n.id); → 86  # 全库 86 篇同样情况
 ```
 
-**与本批前端改动无关**：`services/note/**` 在本批中零改动（`git diff --stat HEAD -- services/note/` 为空），
-旧前端用的是同一个 `useNotesQuery`。旧 E2E 之所以没暴露它，是因为用例总是先输入正文再回列表——
-输入产生了 diff，也就产生了操作日志。
+**观察本身是准确的**（现象、SQL、数据都对），**错的只有归因**：
+
+| 本节当时的判断 | 更正后的事实（2026-09-16 核实） |
+|---|---|
+| 「旧前端用的是同一个 `useNotesQuery`」 | **不成立**。legacy `useNoteList` 用的是 `POST /notes/bases/{baseId}`（`getNoteInfoList`，`FROM n_note`），它**没有**这个问题；`GET /notes` 在 legacy 里只用于首页小部件（`useNoteListV2` / `DashboardHomeButtons`）。CLI 同样早就分成 `note list --base` 与 `note recent` 两条命令 |
+| 「既有后端缺陷」 | 后端无缺陷。`GET /notes` 的行为与它自己的语义（「我最近操作过的笔记」）一致，是**新前端把两种语义合并成了一条查询** |
+| 「后端修复另开工单」 | 工单从未建立。修法在前端：改回 `POST /notes/bases/{baseId}` |
+
+旧 E2E 之所以没暴露它，是因为用例总是先输入正文再回列表——输入产生了 diff，
+也就产生了操作日志。**这一点当时的判断是对的**，2026-09-16 的修复沿用了它：
+新回归用例刻意不输入，并把该用例放进独立 `describe` 以切断与前序用例的耦合。
 
 本批的处理：`ui-redesign.spec.ts` 里如实写入正文（对应真实用法"建完就写"）并在断言旁
-注明原因，**不掩盖也不绕过**；后端修复另开工单。
+注明原因，**不掩盖也不绕过**。这条「不绕过」的做法本身没问题，保留。
 
 ---
 

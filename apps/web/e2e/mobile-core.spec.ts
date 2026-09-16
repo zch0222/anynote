@@ -215,16 +215,18 @@ test.describe("移动端笔记三级导航与编辑", () => {
    * 笔记是**分隔线隔开的行列表**而不是卡片堆——卡片会把每行的上下留白叠起来，
    * 一屏少看两条。
    *
-   * 放在"输入自动保存"之后，并且这里再补一篇：列表查询走 `selectNoteList`
-   * （`FROM n_note_operation_log LEFT JOIN n_note`），只有**写过正文**的笔记才会出现，
-   * 所以到这一步为止列表里只有上一篇。分隔线要有两行才验得出来。
-   * （该查询口径是既有的后端缺陷，与本版式无关。）
+   * 这里再补一篇是为了凑够两行——分隔线要有两行才验得出来。
+   *
+   * 注：2026-09-16 之前本注释写着"列表走 `selectNoteList`，只有写过正文的笔记
+   * 才会出现，是既有后端缺陷"。**该归因已被推翻**：那是前端选错了列表端点，
+   * 修好后新建即可见（见 `docs/changelist/2026-09-16-note-list-endpoint.md`）。
+   * 补的这篇仍写正文，只是为了让列表里有真实可读的内容。
    */
   test("知识库详情：单行库头 + 行列表（不是卡片堆）", async ({ page }) => {
     expect(noteUrl, "上一条用例未能创建笔记").not.toBe("");
     const baseUrl = noteUrl.replace(/\/\d+$/, "");
 
-    // 补第二篇：同样要写正文，否则它不会进列表
+    // 补第二篇：凑够两行才验得出分隔线（写正文是为了下面断言内容可读）
     await page.goto(baseUrl);
     await page.getByTestId("mobile-note-create").click();
     await expect(page).toHaveURL(/\/m\/notes\/new\?baseId=\d+/, { timeout: 30_000 });

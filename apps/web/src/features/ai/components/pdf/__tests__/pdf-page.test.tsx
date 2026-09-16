@@ -143,4 +143,19 @@ describe("PdfChatPage 地址参数", () => {
 
     expect(vi.mocked(useDocsQuery)).toHaveBeenCalledWith(12);
   });
+
+  /*
+   * 知识库选择器的触发按钮必须有稳定的 testid。
+   *
+   * 它的可访问名是**当前选中库的名字**，而"当前选中"默认是 `/bases` 里
+   * 最近更新（`update_time desc`）的那个库——用例建一个新库就会改变它。
+   * E2E 曾按 `/选择知识库|E2E 知识库/` 匹配这个按钮，于是 pdf-upload 用例
+   * 只有单独跑才通过，跟别的用例同跑就失效。锁住 testid 防止再退回按名匹配。
+   */
+  it("知识库选择器有稳定的 testid，不依赖当前选中的库名", () => {
+    mockDocs([]);
+    renderWithProviders(<PdfChatPage />);
+
+    expect(screen.getByTestId("pdf-base-select")).toBeInTheDocument();
+  });
 });

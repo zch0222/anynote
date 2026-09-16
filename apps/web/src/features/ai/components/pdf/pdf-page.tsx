@@ -215,6 +215,7 @@ function PdfChatPane() {
       >
         <DropdownMenu>
           <DropdownMenuTrigger
+            data-testid="pdf-base-select"
             render={<Button variant="outline" className="w-full justify-between" />}
           >
             <span className="truncate">{currentBase?.knowledgeBaseName ?? "选择知识库"}</span>
