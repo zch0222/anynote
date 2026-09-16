@@ -5,6 +5,14 @@ import { Spinner } from "@/components/loading/spinner";
 import { EmptyState, QueryError } from "@/components/shared/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useDocIndexStatus, useIndexDocMutation } from "@/features/ai/use-docs";
 import { noteQueryKeys } from "@/features/notes/query-keys";
 import { DOC_INDEXED, type DocListItem } from "@/features/notes/schemas";
@@ -17,8 +25,8 @@ import { ChevronLeft, ChevronRight, FileText, Library, Upload } from "lucide-rea
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { KB_CONTENT_COLUMN, KnowledgeBasePageHeader } from "./knowledge-base-page-header";
 import { KnowledgeBaseMembers } from "./knowledge-base-members";
+import { KB_CONTENT_COLUMN, KnowledgeBasePageHeader } from "./knowledge-base-page-header";
 
 // 「成员」Tab 从本文件拆出（12.2.6），但路由页仍从 `knowledge-base-detail` 取，
 // 保持 import 路径稳定、避免同一轮里再改一次 page.tsx。
@@ -37,7 +45,9 @@ export function KnowledgeBaseDocs({ baseId }: { baseId: number }) {
    * 在列表里只有每行一个小徽标，页头给个总数才看得出"这个库现在能不能问"。
    */
   const indexed = rows.filter((doc) => doc.indexStatus === DOC_INDEXED).length;
-  const subtitle = rows.length ? `${rows.length} 份资料 · ${indexed} 份已索引` : "这个知识库下的 PDF 文档。已索引的文档才能被 AI 问答检索到。";
+  const subtitle = rows.length
+    ? `${rows.length} 份资料 · ${indexed} 份已索引`
+    : "这个知识库下的 PDF 文档。已索引的文档才能被 AI 问答检索到。";
 
   return (
     <div className={cn(KB_CONTENT_COLUMN, "space-y-4")} data-testid="kb-docs">
@@ -104,119 +114,122 @@ function DocList({
     );
   }
 
-  return (
-    <div className="overflow-hidden rounded-lg bg-surface shadow-card">
-      {/*
-        表头行（D-08）：文件名 / 上传者 / 上传时间 / AI 索引 四列。
-        概览页的资料预览块（`limit` 有值）**不画表头**——那里只是一个 3 行的
-        小预览，加表头会喧宾夺主，且画板 D-02 的预览块确实没有表头。
-
-        列宽用固定网格而不是 flex：四列的相对宽度是画板量出来的
-        （文件名吃掉剩余、后三列各自定宽），用 flex-1 + 定宽混排在三列内容
-        长短变化时会让「上传时间」左右抖动。
-      */}
-      {limit ? null : (
-        <div
-          role="row"
-          className="grid h-10 grid-cols-[minmax(0,1fr)_120px_120px_100px_40px] items-center border-b border-separator px-4 text-xs font-medium text-label-tertiary"
-        >
-          <span role="columnheader">文件名</span>
-          <span role="columnheader">上传者</span>
-          <span role="columnheader">上传时间</span>
-          <span role="columnheader">AI 索引</span>
-          {/* 第五格是行尾 chevron 的位置，没有表头文字 */}
-          <span aria-hidden="true" />
-        </div>
-      )}
-      <ul className="divide-y divide-separator">
+  /*
+   * 两种形态分别是两种语义，所以分两条渲染路径而不是一套网格复用到底：
+   * - **资料 Tab**（`limit` 为空）是一张**真表**：四列各有列头，用 `<table>` 表达；
+   * - **概览预览块**（`limit` 有值）只是一个 3 行的列表，没有列头，
+   *   给 `<div>` 挂 `role="row"` / `role="columnheader"` 是**无效 ARIA**
+   *   （脱离 table 祖先的 row 角色不被读屏接受，Biome 也会直接报错）。
+   */
+  if (limit) {
+    return (
+      <ul className="overflow-hidden rounded-lg bg-surface shadow-card">
         {visible.map((doc) => (
-          <li key={doc.id} className="group relative">
+          <li key={doc.id} className="group relative border-b border-separator last:border-b-0">
             {/*
-              整行可点（D-08 图例 8）：`Link` 铺满行高，索引按钮在它**外面**——
-              `<a>` 里嵌 `<button>` 是非法嵌套，浏览器会把按钮提出来，
-              结果就是"点建立索引反而打开了 PDF"。
-              「AI 索引」那一格因此在 `Link` 里留空，由下面的绝对定位块填上；
-              它的 `right` 偏移按同一套网格列宽算出来，与列头严格对齐。
+              整行可点（D-08 图例 8）。`<a>` 里嵌 `<button>` 是非法嵌套，所以
+              索引按钮浮在 `Link` 外面（`group` 在 `li` 上，悬停仍然联动）。
             */}
             <Link
               href={`/ai/pdf?baseId=${baseId}&docId=${doc.id}`}
               data-testid={`kb-doc-row-${doc.id}`}
               className={cn(
-                "grid min-h-14 items-center py-1 pl-4 outline-none transition-colors",
-                // 概览预览块没有表头，用两列（内容 + 索引状态）；资料 Tab 用表头的五列
-                limit
-                  ? "grid-cols-[minmax(0,1fr)_100px] pr-4"
-                  : "grid-cols-[minmax(0,1fr)_120px_120px_100px_40px] pr-4",
+                "flex min-h-14 items-center gap-3 py-2 pr-28 pl-4 outline-none transition-colors",
                 "hover:bg-fill-hover focus-visible:bg-fill-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
               )}
             >
-              <span className="flex min-w-0 items-center gap-3">
-                <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-footnote text-label">
-                    {doc.docName?.trim() || "未命名文档"}
-                  </span>
-                  {/*
-                    概览预览块没有表头，所以「上传者 · 时间」仍折在标题下方；
-                    资料 Tab 有自己的两列，不再重复渲染这行小字。
-                  */}
-                  {limit ? (
-                    <span className="block truncate text-xs text-label-tertiary">
-                      {doc.creatorNickname?.trim() || doc.creatorUsername?.trim() || "未知作者"}
-                      {doc.createTime ? ` · ${formatRelativeTime(doc.createTime)}` : ""}
-                    </span>
-                  ) : null}
+              <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-footnote text-label">
+                  {doc.docName?.trim() || "未命名文档"}
+                </span>
+                {/* 预览块没有列头，所以「上传者 · 时间」折在标题下方 */}
+                <span className="block truncate text-xs text-label-tertiary">
+                  {doc.creatorNickname?.trim() || doc.creatorUsername?.trim() || "未知作者"}
+                  {doc.createTime ? ` · ${formatRelativeTime(doc.createTime)}` : ""}
                 </span>
               </span>
-              {limit ? (
-                /*
-                  概览预览块：索引状态直接占第二列（无表头，不需要与列对齐）。
-                */
-                <span className="flex items-center justify-end">
-                  <DocIndexCell baseId={baseId} doc={doc} />
-                </span>
-              ) : (
-                <>
-                  <span className="truncate text-footnote text-label-secondary">
-                    {doc.creatorNickname?.trim() || doc.creatorUsername?.trim() || "未知作者"}
-                  </span>
-                  <span className="truncate text-footnote text-label-tertiary">
-                    {doc.createTime ? formatRelativeTime(doc.createTime) : "—"}
-                  </span>
-                  {/*
-                    「AI 索引」格留空：状态徽标 / 按钮由下面的绝对定位块渲染，
-                    因为 `<a>` 里不能嵌 `<button>`。留白宽度与表头列宽一致。
-                  */}
-                  <span aria-hidden="true" />
-                  <span className="grid place-items-center text-label-tertiary" aria-hidden="true">
-                    <ChevronRight className="size-4" />
-                  </span>
-                </>
-              )}
             </Link>
-            {/*
-              索引状态浮在「AI 索引」列上。`right` 偏移 = 行尾 chevron 列（40）
-              + 行右内边距（16）= 56，与表头第四列的落点一致。
-              `DocIndexCell` 自己处理三种互斥形态（已索引 / 索引中 / 未索引 + 悬停换按钮）。
-            */}
-            {limit ? (
-              <span className="absolute top-1/2 right-4 flex -translate-y-1/2 items-center">
-                <DocIndexCell baseId={baseId} doc={doc} />
-              </span>
-            ) : (
-              <span className="absolute top-1/2 right-14 flex w-[100px] -translate-y-1/2 items-center">
-                <DocIndexCell baseId={baseId} doc={doc} />
-              </span>
-            )}
+            <div className="absolute top-1/2 right-4 flex -translate-y-1/2 items-center">
+              <DocIndexCell baseId={baseId} doc={doc} />
+            </div>
           </li>
         ))}
-        {limit && docs.length > limit ? (
+        {docs.length > limit ? (
           <li className="px-4 py-2 text-xs text-label-tertiary">
             还有 {docs.length - limit} 份资料，进入「资料」查看全部
           </li>
         ) : null}
         <span className="sr-only">知识库 {baseId}</span>
       </ul>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg bg-surface shadow-card">
+      <Table>
+        {/*
+          表头行（D-08）：文件名 / 上传者 / 上传时间 / AI 索引。
+          列宽按画板量出的比例给定值，文件名列吃掉剩余宽度。
+        */}
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="h-10 pl-4 text-xs font-medium text-label-tertiary">
+              文件名
+            </TableHead>
+            <TableHead className="h-10 w-[120px] text-xs font-medium text-label-tertiary">
+              上传者
+            </TableHead>
+            <TableHead className="h-10 w-[120px] text-xs font-medium text-label-tertiary">
+              上传时间
+            </TableHead>
+            <TableHead className="h-10 w-[100px] text-xs font-medium text-label-tertiary">
+              AI 索引
+            </TableHead>
+            {/* 行尾 chevron，没有表头文字 */}
+            <TableHead className="h-10 w-12" />
+          </TableRow>
+        </TableHeader>
+        <TableBody data-testid="kb-doc-rows">
+          {visible.map((doc) => (
+            <TableRow
+              key={doc.id}
+              className="group relative border-b border-separator last:border-b-0 hover:bg-fill-hover"
+            >
+              <TableCell className="py-0 pl-4 whitespace-normal">
+                <Link
+                  href={`/ai/pdf?baseId=${baseId}&docId=${doc.id}`}
+                  data-testid={`kb-doc-row-${doc.id}`}
+                  className="flex min-h-14 items-center gap-3 outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
+                >
+                  <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate text-footnote text-label">
+                    {doc.docName?.trim() || "未命名文档"}
+                  </span>
+                </Link>
+              </TableCell>
+              <TableCell className="py-0 text-footnote text-label-secondary">
+                {doc.creatorNickname?.trim() || doc.creatorUsername?.trim() || "未知作者"}
+              </TableCell>
+              <TableCell className="py-0 text-footnote text-label-tertiary">
+                {doc.createTime ? formatRelativeTime(doc.createTime) : "—"}
+              </TableCell>
+              {/*
+                「AI 索引」格：放徽标本身，不再绝对定位——有列头之后，
+                绝对定位的徽标会与列头对不齐。未索引态下悬停出现的是
+                `<button>`，而它在 `<a>` **之外**（本格不在链接里），嵌套合法。
+              */}
+              <TableCell className="relative py-0">
+                <DocIndexCell baseId={baseId} doc={doc} />
+              </TableCell>
+              <TableCell className="py-0 text-label-tertiary">
+                <ChevronRight className="size-4" aria-hidden="true" />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <span className="sr-only">知识库 {baseId}</span>
     </div>
   );
 }

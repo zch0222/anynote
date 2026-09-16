@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { coverClassName } from "@/features/notes/lib/cover-gradient";
+import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import {
   type PresetDuration,
   defaultEndTime,

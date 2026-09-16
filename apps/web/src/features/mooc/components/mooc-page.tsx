@@ -15,11 +15,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import {
   KB_CONTENT_COLUMN,
   KnowledgeBasePageHeader,
 } from "@/features/notes/components/knowledge-base-page-header";
+import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { toUserMessage } from "@/lib/api/errors";
 import { formatRelativeTime } from "@/lib/format-time";

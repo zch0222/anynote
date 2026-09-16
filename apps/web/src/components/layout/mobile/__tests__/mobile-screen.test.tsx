@@ -8,7 +8,11 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/m/notes/3/7",
 }));
 
-import { MobileScreen, hasInAppHistory, resolveTitleVariant } from "@/components/layout/mobile/mobile-screen";
+import {
+  MobileScreen,
+  hasInAppHistory,
+  resolveTitleVariant,
+} from "@/components/layout/mobile/mobile-screen";
 import { renderWithProviders } from "@/test/render";
 
 /** 直接改写 `history.state`，模拟"直接打开"与"站内导航进来"两种进入方式。 */

@@ -48,17 +48,25 @@ git ls-files --others --exclude-standard               # 新增未跟踪文件�
 | `npx vitest run`（apps/web） | **151 文件 / 1773 用例全部通过**（改前 151 / 1761；本批新增 12 条） |
 | `npx playwright test`（全量，含移动端） | **126 / 126 通过**。跑 3 轮：2 轮出现偶发（`cli-authorize` 1 条、`collab` 1 条），**单跑均全过**（`collab.spec.ts cli-authorize.spec.ts` 合跑 7/7、8.7s），第 3 轮 126/126 全绿 |
 | `pnpm --filter web bundle:budget` | 单条路由首屏 **302.8 KB / 预算 310 PASS**；编辑器 chunk 14.1 / 250 PASS；移动端 `/m/notes/[baseId]/[noteId]` **250.9 / 250 FAIL —— 既有问题，非本批引入**（用 `git stash` 回退到改前源码重建，产物同为 250.9 KB，逐字节相同） |
-| `pnpm --filter web lighthouse:budget`（桌面） | **5 / 5 PASS**：login 100 · `/dashboard`→`/notes` 99 · `/notes` 99 · `/docs` 99 · `/ai/chat` 99，无障碍均 96（门槛 90 / 95） |
-| `pnpm --filter web lighthouse:budget:mobile` | **5 / 5 PASS**：login 95 · `/m/dashboard` 89 · `/m/notes` 87 · `/m/docs` 85 · `/m/ai/chat` 89，无障碍均 96（门槛 85 / 95） |
+| `pnpm --filter web lighthouse:budget`（桌面） | **5 / 5 PASS**：login 100 · `/dashboard`→`/notes` 99 · `/notes` 99 · `/docs` 98–99 · `/ai/chat` 99，无障碍均 96（门槛 90 / 95） |
+| `pnpm --filter web lighthouse:budget:mobile` | **5 / 5 PASS**：login 93–95 · `/m/dashboard` 88–89 · `/m/notes` 87 · `/m/docs` 85 · `/m/ai/chat` 89，无障碍均 96（门槛 85 / 95） |
 | 真实浏览器逐屏比对 | `node apps/web/scripts/ui-audit-capture.mjs` 复拍 30 场景 × 浅深 2 主题 = 60 张，与画板同几何并排；本批改动的 13 屏逐屏目视确认 |
-| `pnpm check`（Biome） | 通过 |
+| `pnpm check`（Biome） | 通过（`.pnpm-store/**` 的 14 条"文件超过 1 MiB"是工具自身缓存目录的既有噪音，与代码无关） |
 
-> **关于 Lighthouse 的一个真实陷阱（本轮实测）**：`/docs` 与 `/m/docs` 起初分别量到
-> **75 / 83**（门槛 90 / 85），根因是**协同文档索引里累积了 74 份历次 E2E 建的文档**——
-> 页面高度被撑到 3739px，CLS 0.731。清空 `collab` 容器的 `/data/*.ydoc` 后两者分别回到
-> **99 / 85**。这不是代码问题，而是"共享索引 + 反复跑 E2E"的数据污染；
-> 本轮用**同一 74 份数据下只回退列宽改动**的对照实验排除了自己改动的嫌疑（CLS 同为 0.731）。
-> 后续跑 `/docs` 的 Lighthouse 前需先清索引，否则会稳定假红。
+> **关于 Lighthouse 的一个真实陷阱（本轮实测，建议做成脚本前置步骤）**：`/docs` 起初量到
+> **75**（门槛 90），且与代码无关——根因是**协同文档索引里累积了历次 E2E 建的文档**。
+> 三次实测呈单调关系，可以确定是数据量而非代码：
+>
+> | 索引里的文档数 | `/docs` Performance | 页面高度 | CLS |
+> |---|---|---|---|
+> | 74 | 75 | 3739px | 0.731 |
+> | 20 | 80 | — | — |
+> | 0（清空后） | **98–99** | 正常 | 正常 |
+>
+> 排除自己改动的对照实验：在**同一 74 份数据**下只把 D-10 的列宽改动退回 `max-w-6xl`，
+> CLS 仍是 0.731、Performance 仍是 75 —— 与本批改动无关。
+> 清空 `collab` 容器的 `/data/*.ydoc` 后 `lighthouse:budget` 与 `lighthouse:budget:mobile`
+> 各 5/5 全绿。**跑 `/docs` 的 Lighthouse 前必须先清索引**，否则会稳定假红。
 
 ## 一、审计工具与报告（`docs/ui/`、`apps/web/scripts/`）
 
@@ -93,8 +101,8 @@ git ls-files --others --exclude-standard               # 新增未跟踪文件�
 
 | 文件 | 状态 | 作用与原因 |
 |------|------|------------|
-| `features/notes/components/note-list.tsx` | 修改 | **H-16** 补 40 高列头「标题 / 最近更新」（图例 18 原文规格：12/16 Medium、label/tertiary、底部 1px separator）——原来完全没列头，`thead th` 为空、全仓搜不到「最近更新」；**H-7** 列表并入一张卡（列头必须在卡**内部**，否则卡片顶部会多一条灰底缝隙）；副标题改为画板口径的真实统计（`128 篇笔记 · 最近更新于 2 小时前`），原来那句固定文案在空库与满库时一模一样 |
-| `features/notes/components/knowledge-base-detail.tsx` | 修改 | **D-08** 补「文件名 / 上传者 / 上传时间 / AI 索引」表头行与四列网格，行尾补 chevron；概览预览块**不画表头**（那里只有一个 3 行小预览）。索引状态由绝对定位改为按列落点，`right-14` 的偏移按同一套网格算出来以与列头对齐——`<a>` 里不能嵌 `<button>` 的约束仍然保留（索引按钮在 `Link` 外面） |
+| `features/notes/components/note-list.tsx` | 修改 | **H-16** 补 40 高列头「标题 / 最近更新」（图例 18 原文规格：12/16 Medium、label/tertiary、底部 1px separator）——原来完全没列头，`thead th` 为空、全仓搜不到「最近更新」；**H-7** 列表并入一张卡（列头必须在卡**内部**，否则卡片顶部会多一条灰底缝隙）；副标题改为画板口径的真实统计（`128 篇笔记 · 最近更新于 2 小时前`），原来那句固定文案在空库与满库时一模一样。**列头用真正的 `<table>` 而不是给 `<div>` 挂 `role="row"`**（见「审计要点」第 8 条） |
+| `features/notes/components/knowledge-base-detail.tsx` | 修改 | **D-08** 补「文件名 / 上传者 / 上传时间 / AI 索引」表头行与四列（同样用真 `<table>`），行尾补 chevron；行点击改「名称单元格里的 Link + `after:inset-0`」手法（与 `task-table.tsx` 一致），索引按钮落在自己的单元格里。**概览预览块走另一条渲染路径**——它只是 3 行无列头的列表，给 `<div>` 挂 `role="row"` 是无效 ARIA |
 | `features/notes/components/knowledge-base-members.tsx` | 修改 | **D-09** 副标题改为 `12 位成员 · 我的权限：管理员`（"我的权限"是进这一页最想确认的事）；搜索行右侧补「共 N 位」计数 |
 | `features/mooc/components/mooc-page.tsx` | 修改 | **D-05** 副标题改为 `6 门课程 · 最近更新于 2 小时前`；接入统一页头（H1 字阶 + 列宽 + 动作行） |
 | `features/tasks/components/tasks-page.tsx` | 修改 | **D-07** 接入统一页头；筛选行把「任务由知识库管理员发布」改为**恒在**并移到右端（它解释的是"这些任务从哪来"，对管理员同样有效——管理员看到的列表里也有别人发的任务） |
@@ -210,7 +218,16 @@ git ls-files --others --exclude-standard               # 新增未跟踪文件�
    重新派生 6 份类型后完全干净。Docker 构建不受影响（镜像内每次重新生成）。
    另外 `pnpm openapi:generate` 在本机跑不通（走 bash 且要连运行中的 Gateway 校验响应），
    本地修复方式是直接用锁定的生成器读入库 spec，见 `Dockerfile.web` L24-28。
-7. **跑 `/docs` 的 Lighthouse 前必须清协同索引**。共享索引会被历次 E2E 累积到几十份，
-   页面高度撑长后 CLS 飙升，`/docs` 与 `/m/docs` 会稳定假红（75 / 83）。
-   清空容器 `/data/*.ydoc` 后回到 99 / 85。这条已写进上面的验证结果表，建议后续
-   把它做成 Lighthouse 脚本的前置步骤，而不是每次靠人判断"是不是又脏了"。
+7. **跑 `/docs` 的 Lighthouse 前必须清协同索引**。共享索引会被历次 E2E 累积到几十份
+   （本轮实测 20 份 → 80、74 份 → 75、0 份 → 98–99），页面被撑长后 CLS 飙升，
+   `lighthouse:budget` 会稳定假红。清空容器 `/data/*.ydoc` 后桌面与移动各 5/5 全绿。
+   建议后续把它做成 Lighthouse 脚本的前置步骤，而不是每次靠人判断"是不是又脏了"。
+8. **补列头时一度给 `<div>` 挂了 `role="row"` / `role="columnheader"`，那是无效 ARIA**。
+   这是 `pnpm check` 抓出来的（`lint/a11y/useFocusableInteractive` +
+   `useSemanticElements`）：脱离 `<table>` 祖先的 `row` 角色不被读屏接受，
+   Biome 要求用真元素。既然画板本来画的就是表（D-01 两列、D-08 四列），
+   最终改用仓库已有的 `components/ui/table.tsx` 原语——`task-table.tsx` 是同一套用法。
+   **这次是"先写实现、后跑 lint"的顺序问题**：a11y 规则本来就该在写完列头时立刻跑一遍，
+   而不是等全量门禁。单元格布局换成 `<td>` 后行点击改成
+   「名称单元格里的 `Link` + `after:inset-0`」，同时把行内「⋯」按钮改成 `relative`
+   抬到命中区之上——否则点它会跳进笔记而不是打开菜单。

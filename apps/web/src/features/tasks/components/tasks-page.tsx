@@ -5,11 +5,11 @@ import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { EmptyState, QueryError } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
-import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import {
   KB_CONTENT_COLUMN,
   KnowledgeBasePageHeader,
 } from "@/features/notes/components/knowledge-base-page-header";
+import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { TaskTable } from "@/features/tasks/components/task-table";
 import { canResubmit, canSubmit } from "@/features/tasks/lib/task-window";
 import { type MemberTask, TASK_STATUS } from "@/features/tasks/schemas";

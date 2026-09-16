@@ -34,7 +34,13 @@ const sharp = (await import(`file:///${SHARP.replace(/\\/g, "/")}`)).default;
 
 // 参考图：优先用补齐的补充参考图，没有就从画板现裁
 async function referenceBuffer(name, theme) {
-  const pre = join(APP_ROOT, "e2e", "reference", "supplement", `${name}${theme === "dark" ? "-dark" : ""}.png`);
+  const pre = join(
+    APP_ROOT,
+    "e2e",
+    "reference",
+    "supplement",
+    `${name}${theme === "dark" ? "-dark" : ""}.png`,
+  );
   if (existsSync(pre)) return readFileSync(pre);
 
   const board = join(BOARDS_DIR, `${boardName(name)}${theme === "dark" ? "-dark" : ""}.png`);
@@ -42,7 +48,12 @@ async function referenceBuffer(name, theme) {
   const { dedupeCrops, detectScreenCrops } = await import("./lib/supplement-crops.mjs");
   const { data, info } = await sharp(board).raw().toBuffer({ resolveWithObject: true });
   const crops = dedupeCrops(
-    detectScreenCrops({ pixels: data, width: info.width, height: info.height, channels: info.channels }),
+    detectScreenCrops({
+      pixels: data,
+      width: info.width,
+      height: info.height,
+      channels: info.channels,
+    }),
   );
   const c = crops[0];
   if (!c) throw new Error(`量不出屏幕内区：${board}`);
@@ -100,8 +111,14 @@ if (!existsSync(shotPath)) throw new Error(`找不到截图：${shotPath}`);
 const shot = await sharp(shotPath).resize({ width: W, height: H, fit: "cover" }).toBuffer();
 
 const band = { left: 0, top: y0, width: W, height: Math.min(y1, H) - y0 };
-const refBand = await sharp(ref).extract(band).resize({ width: W * zoom }).toBuffer();
-const shotBand = await sharp(shot).extract(band).resize({ width: W * zoom }).toBuffer();
+const refBand = await sharp(ref)
+  .extract(band)
+  .resize({ width: W * zoom })
+  .toBuffer();
+const shotBand = await sharp(shot)
+  .extract(band)
+  .resize({ width: W * zoom })
+  .toBuffer();
 const meta = await sharp(refBand).metadata();
 const gap = 8;
 

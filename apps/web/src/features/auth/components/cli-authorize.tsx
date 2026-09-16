@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import type { CliAuthorizeParams } from "@/lib/auth/cli-authorize";
-import { Terminal, ShieldCheck } from "lucide-react";
+import { ShieldCheck, Terminal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCliAuthorizeMutation } from "../use-cli-authorize-mutation";

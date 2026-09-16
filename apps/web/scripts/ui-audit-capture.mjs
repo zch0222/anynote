@@ -40,36 +40,269 @@ const VIEWPORTS = {
  * `ready` 是「页面画完了」的等待选择器——等不到就说明这一屏根本没渲染出来。
  */
 const SCENES = [
-  { name: "d01-kb-notes", title: "D-01 知识库详情 · 笔记 Tab", board: "D-01-kb-notes", view: "desktop", path: "/notes/{baseId}", seed: true, ready: '[data-testid="note-list"]' },
-  { name: "d02-kb-overview", title: "D-02 知识库详情 · 概览 Tab", board: "D-02-kb-overview", view: "desktop", path: "/notes/{baseId}/overview", seed: true, ready: '[data-testid="kb-overview"], h1' },
-  { name: "d03-note-new", title: "D-03 新建笔记 · 选择知识库", board: "D-03-note-new", view: "desktop", path: "/notes/new", seed: true, ready: '[data-testid="create-note-page"], h1' },
-  { name: "d05-kb-mooc", title: "D-05 知识库详情 · 慕课 Tab", board: "D-05-kb-mooc", view: "desktop", path: "/notes/{baseId}/mooc", seed: true, ready: "h1" },
-  { name: "d06-kb-mooc-detail", title: "D-06 慕课详情 · 目录与播放", board: "D-06-kb-mooc-detail", view: "desktop", path: "/notes/{baseId}/mooc/{moocId}", seed: true, ready: "h1" },
-  { name: "d07-kb-tasks", title: "D-07 知识库详情 · 任务 Tab", board: "D-07-kb-tasks", view: "desktop", path: "/notes/{baseId}/tasks", seed: true, ready: "h1", hooks: "table" },
-  { name: "d08-kb-docs", title: "D-08 知识库详情 · 资料 Tab", board: "D-08-kb-docs", view: "desktop", path: "/notes/{baseId}/docs", seed: true, ready: "h1" },
-  { name: "d09-kb-members", title: "D-09 知识库详情 · 成员 Tab", board: "D-09-kb-members", view: "desktop", path: "/notes/{baseId}/members", seed: true, ready: "h1" },
-  { name: "d10-collab-library", title: "D-10 协同文档库", board: "D-10-collab-library", view: "desktop", path: "/docs", ready: "h1" },
-  { name: "d11-collab-workspace", title: "D-11 协同文档工作区", board: "D-11-collab-workspace", view: "desktop", path: "/docs", ready: "h1", act: "create-doc" },
-  { name: "d12-settings-account", title: "D-12 设置 · 账号", board: "D-12-settings-account", view: "desktop", path: "/settings/profile", ready: "h1" },
-  { name: "d13-settings-appearance", title: "D-13 设置 · 外观", board: "D-13-settings-appearance", view: "desktop", path: "/settings/appearance", ready: "h1" },
-  { name: "d14-auth-login", title: "D-14 登录", board: "D-14-auth-login", view: "desktop", path: "/login", anonymous: true, ready: '[data-slot="card"]' },
-  { name: "d15-auth-cli", title: "D-15 CLI 授权", board: "D-15-auth-cli", view: "desktop", path: "/cli/authorize?port=53817&state=audit&challenge=audit", ready: "h1" },
-  { name: "d16-note-history", title: "D-16 笔记历史版本", board: "D-16-note-history", view: "desktop", path: "/notes/{baseId}/{noteId}/history", seed: true, ready: '[data-testid="note-history-page"]' },
-  { name: "d17-task-detail", title: "D-17 任务详情", board: "D-17-task-detail", view: "desktop", path: "/notes/{baseId}/tasks/{taskId}", seed: true, ready: "h1" },
-  { name: "d18-task-form", title: "D-18 任务新建", board: "D-18-task-form", view: "desktop", path: "/notes/{baseId}/tasks/new", seed: true, ready: "h1" },
-  { name: "m01-dashboard", title: "M-01 工作台", board: "M-01-dashboard", view: "mobile", path: "/m/dashboard", seed: true, ready: '[data-testid="mobile-dashboard"], h1' },
-  { name: "m02-me", title: "M-02 我的", board: "M-02-me", view: "mobile", path: "/m/me", ready: '[data-testid="mobile-me"], h1' },
-  { name: "m03-kb-mooc", title: "M-03 知识库详情 · 慕课 Tab", board: "M-03-kb-mooc", view: "mobile", path: "/m/notes/{baseId}/mooc", seed: true, ready: "h1" },
-  { name: "m04-kb-tasks", title: "M-04 知识库详情 · 任务 Tab", board: "M-04-kb-tasks", view: "mobile", path: "/m/notes/{baseId}/tasks", seed: true, ready: "h1" },
-  { name: "m05-kb-docs", title: "M-05 知识库详情 · 资料 Tab", board: "M-05-kb-docs", view: "mobile", path: "/m/notes/{baseId}/docs", seed: true, ready: "h1" },
-  { name: "m06-mooc-detail", title: "M-06 慕课详情 · 目录与内容", board: "M-06-mooc-detail", view: "mobile", path: "/m/notes/{baseId}/mooc/{moocId}", seed: true, ready: "h1" },
-  { name: "m07-note-new", title: "M-07 新建笔记", board: "M-07-note-new", view: "mobile", path: "/m/notes/new", seed: true, ready: "h1" },
-  { name: "m08-doc-library", title: "M-08 协同文档库", board: "M-08-doc-library", view: "mobile", path: "/m/docs", ready: "h1" },
-  { name: "m09-doc-workspace", title: "M-09 协同文档", board: "M-09-doc-workspace", view: "mobile", path: "/m/docs", ready: "h1", act: "create-doc" },
-  { name: "m10-search", title: "M-10 搜索", board: "M-10-search", view: "mobile", path: "/m/search", ready: "h1" },
-  { name: "m11-settings", title: "M-11 设置分节 · 账号", board: "M-11-settings", view: "mobile", path: "/m/settings/profile", ready: "h1" },
-  { name: "m12-task-detail", title: "M-12 任务详情", board: "M-12-task-detail", view: "mobile", path: "/m/notes/{baseId}/tasks/{taskId}", seed: true, ready: "h1" },
-  { name: "m13-note-history", title: "M-13 笔记历史版本", board: "M-13-note-history", view: "mobile", path: "/m/notes/{baseId}/{noteId}/history", seed: true, ready: "h1" },
+  {
+    name: "d01-kb-notes",
+    title: "D-01 知识库详情 · 笔记 Tab",
+    board: "D-01-kb-notes",
+    view: "desktop",
+    path: "/notes/{baseId}",
+    seed: true,
+    ready: '[data-testid="note-list"]',
+  },
+  {
+    name: "d02-kb-overview",
+    title: "D-02 知识库详情 · 概览 Tab",
+    board: "D-02-kb-overview",
+    view: "desktop",
+    path: "/notes/{baseId}/overview",
+    seed: true,
+    ready: '[data-testid="kb-overview"], h1',
+  },
+  {
+    name: "d03-note-new",
+    title: "D-03 新建笔记 · 选择知识库",
+    board: "D-03-note-new",
+    view: "desktop",
+    path: "/notes/new",
+    seed: true,
+    ready: '[data-testid="create-note-page"], h1',
+  },
+  {
+    name: "d05-kb-mooc",
+    title: "D-05 知识库详情 · 慕课 Tab",
+    board: "D-05-kb-mooc",
+    view: "desktop",
+    path: "/notes/{baseId}/mooc",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "d06-kb-mooc-detail",
+    title: "D-06 慕课详情 · 目录与播放",
+    board: "D-06-kb-mooc-detail",
+    view: "desktop",
+    path: "/notes/{baseId}/mooc/{moocId}",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "d07-kb-tasks",
+    title: "D-07 知识库详情 · 任务 Tab",
+    board: "D-07-kb-tasks",
+    view: "desktop",
+    path: "/notes/{baseId}/tasks",
+    seed: true,
+    ready: "h1",
+    hooks: "table",
+  },
+  {
+    name: "d08-kb-docs",
+    title: "D-08 知识库详情 · 资料 Tab",
+    board: "D-08-kb-docs",
+    view: "desktop",
+    path: "/notes/{baseId}/docs",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "d09-kb-members",
+    title: "D-09 知识库详情 · 成员 Tab",
+    board: "D-09-kb-members",
+    view: "desktop",
+    path: "/notes/{baseId}/members",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "d10-collab-library",
+    title: "D-10 协同文档库",
+    board: "D-10-collab-library",
+    view: "desktop",
+    path: "/docs",
+    ready: "h1",
+  },
+  {
+    name: "d11-collab-workspace",
+    title: "D-11 协同文档工作区",
+    board: "D-11-collab-workspace",
+    view: "desktop",
+    path: "/docs",
+    ready: "h1",
+    act: "create-doc",
+  },
+  {
+    name: "d12-settings-account",
+    title: "D-12 设置 · 账号",
+    board: "D-12-settings-account",
+    view: "desktop",
+    path: "/settings/profile",
+    ready: "h1",
+  },
+  {
+    name: "d13-settings-appearance",
+    title: "D-13 设置 · 外观",
+    board: "D-13-settings-appearance",
+    view: "desktop",
+    path: "/settings/appearance",
+    ready: "h1",
+  },
+  {
+    name: "d14-auth-login",
+    title: "D-14 登录",
+    board: "D-14-auth-login",
+    view: "desktop",
+    path: "/login",
+    anonymous: true,
+    ready: '[data-slot="card"]',
+  },
+  {
+    name: "d15-auth-cli",
+    title: "D-15 CLI 授权",
+    board: "D-15-auth-cli",
+    view: "desktop",
+    path: "/cli/authorize?port=53817&state=audit&challenge=audit",
+    ready: "h1",
+  },
+  {
+    name: "d16-note-history",
+    title: "D-16 笔记历史版本",
+    board: "D-16-note-history",
+    view: "desktop",
+    path: "/notes/{baseId}/{noteId}/history",
+    seed: true,
+    ready: '[data-testid="note-history-page"]',
+  },
+  {
+    name: "d17-task-detail",
+    title: "D-17 任务详情",
+    board: "D-17-task-detail",
+    view: "desktop",
+    path: "/notes/{baseId}/tasks/{taskId}",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "d18-task-form",
+    title: "D-18 任务新建",
+    board: "D-18-task-form",
+    view: "desktop",
+    path: "/notes/{baseId}/tasks/new",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "m01-dashboard",
+    title: "M-01 工作台",
+    board: "M-01-dashboard",
+    view: "mobile",
+    path: "/m/dashboard",
+    seed: true,
+    ready: '[data-testid="mobile-dashboard"], h1',
+  },
+  {
+    name: "m02-me",
+    title: "M-02 我的",
+    board: "M-02-me",
+    view: "mobile",
+    path: "/m/me",
+    ready: '[data-testid="mobile-me"], h1',
+  },
+  {
+    name: "m03-kb-mooc",
+    title: "M-03 知识库详情 · 慕课 Tab",
+    board: "M-03-kb-mooc",
+    view: "mobile",
+    path: "/m/notes/{baseId}/mooc",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "m04-kb-tasks",
+    title: "M-04 知识库详情 · 任务 Tab",
+    board: "M-04-kb-tasks",
+    view: "mobile",
+    path: "/m/notes/{baseId}/tasks",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "m05-kb-docs",
+    title: "M-05 知识库详情 · 资料 Tab",
+    board: "M-05-kb-docs",
+    view: "mobile",
+    path: "/m/notes/{baseId}/docs",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "m06-mooc-detail",
+    title: "M-06 慕课详情 · 目录与内容",
+    board: "M-06-mooc-detail",
+    view: "mobile",
+    path: "/m/notes/{baseId}/mooc/{moocId}",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "m07-note-new",
+    title: "M-07 新建笔记",
+    board: "M-07-note-new",
+    view: "mobile",
+    path: "/m/notes/new",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "m08-doc-library",
+    title: "M-08 协同文档库",
+    board: "M-08-doc-library",
+    view: "mobile",
+    path: "/m/docs",
+    ready: "h1",
+  },
+  {
+    name: "m09-doc-workspace",
+    title: "M-09 协同文档",
+    board: "M-09-doc-workspace",
+    view: "mobile",
+    path: "/m/docs",
+    ready: "h1",
+    act: "create-doc",
+  },
+  {
+    name: "m10-search",
+    title: "M-10 搜索",
+    board: "M-10-search",
+    view: "mobile",
+    path: "/m/search",
+    ready: "h1",
+  },
+  {
+    name: "m11-settings",
+    title: "M-11 设置分节 · 账号",
+    board: "M-11-settings",
+    view: "mobile",
+    path: "/m/settings/profile",
+    ready: "h1",
+  },
+  {
+    name: "m12-task-detail",
+    title: "M-12 任务详情",
+    board: "M-12-task-detail",
+    view: "mobile",
+    path: "/m/notes/{baseId}/tasks/{taskId}",
+    seed: true,
+    ready: "h1",
+  },
+  {
+    name: "m13-note-history",
+    title: "M-13 笔记历史版本",
+    board: "M-13-note-history",
+    view: "mobile",
+    path: "/m/notes/{baseId}/{noteId}/history",
+    seed: true,
+    ready: "h1",
+  },
 ];
 
 /** 造数：1 个库 + 3 篇笔记 + 1 门课 + 1 个任务，返回真实 id。 */
@@ -86,8 +319,7 @@ async function seedData(page) {
       if (!json || json.code !== "00000") throw new Error(`${path}: ${json?.msg ?? res.status}`);
       return json.data;
     };
-    const cover =
-      "https://anynote.obs.cn-east-3.myhuaweicloud.com/images/knowledge_base_cover.png";
+    const cover = "https://anynote.obs.cn-east-3.myhuaweicloud.com/images/knowledge_base_cover.png";
     const created = await post("bases", {
       name: baseName,
       detail: "UI 审计造数",
@@ -98,7 +330,11 @@ async function seedData(page) {
 
     const noteIds = [];
     for (const title of ["设计原则速查", "组件命名约定", "评审检查清单"]) {
-      const id = await post("notes", { title, knowledgeBaseId: baseId, content: `# ${title}\n\n正文占位。` });
+      const id = await post("notes", {
+        title,
+        knowledgeBaseId: baseId,
+        content: `# ${title}\n\n正文占位。`,
+      });
       noteIds.push(Number(id?.id ?? id));
     }
     // 历史版本要真的有版本：改一次正文就会生成一条
@@ -163,7 +399,12 @@ async function cropBoard(sharp, file) {
   if (!existsSync(full)) return null;
   const { data, info } = await sharp(full).raw().toBuffer({ resolveWithObject: true });
   const crops = dedupeCrops(
-    detectScreenCrops({ pixels: data, width: info.width, height: info.height, channels: info.channels }),
+    detectScreenCrops({
+      pixels: data,
+      width: info.width,
+      height: info.height,
+      channels: info.channels,
+    }),
   );
   const first = crops[0];
   if (!first) return null;
@@ -256,7 +497,9 @@ async function main() {
         await page.getByRole("button", { name: "新建文档" }).first().click();
         const dialog = page.getByRole("dialog");
         await dialog.waitFor({ timeout: 20_000 });
-        await dialog.locator("#collab-doc-title").fill(`审计文档 ${Date.now().toString(36).slice(-5)}`);
+        await dialog
+          .locator("#collab-doc-title")
+          .fill(`审计文档 ${Date.now().toString(36).slice(-5)}`);
         await dialog.getByRole("button", { name: "创建" }).click();
         await page.waitForURL(/\/docs\/.+/, { timeout: 30_000 });
         await page.waitForLoadState("networkidle").catch(() => {});
@@ -307,7 +550,9 @@ async function main() {
     await context.close();
     report.push(row);
     const ok = row.shots.every((s) => s.ready) ? "✓" : "✗";
-    console.log(`${ok} ${scene.name.padEnd(24)} ${row.shots.map((s) => `${s.theme}${s.darkClass ? "(dark)" : "(light)"}`).join(" ")}`);
+    console.log(
+      `${ok} ${scene.name.padEnd(24)} ${row.shots.map((s) => `${s.theme}${s.darkClass ? "(dark)" : "(light)"}`).join(" ")}`,
+    );
   }
 
   await browser.close();

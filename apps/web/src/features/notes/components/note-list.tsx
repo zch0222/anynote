@@ -13,6 +13,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { DEFAULT_PAGE_SIZE, type NoteListItem } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
@@ -126,30 +134,35 @@ export function NoteList({ baseId }: { baseId: number }) {
             data-testid="note-list-card"
           >
             {/*
-              列头（D-01 图例 18）：40 高 · 12/16 Medium · label/tertiary · 底部 1px separator。
-              画板把它画成列表卡里的第一行而不是一个独立的表头块——所以它必须
-              **在卡片内部**，否则卡片顶部会多出一条灰底缝隙。
-              用 role="row" 的语义表头而不是纯视觉文本：读屏用户需要知道
-              "最近"那一列是什么。
+              D-01 图例 18：40 高列头「标题 / 最近更新」，12/16 Medium、
+              label/tertiary、底部 1px separator。画板把它画成列表卡里的第一行
+              而不是独立的表头块——所以它在**卡片内部**，否则卡片顶部会多一条灰底缝隙。
+
+              用真正的 `<table>` 而不是给 `<div>` 挂 `role="row"` / `role="columnheader"`：
+              脱离 `<table>` 祖先的 `role="row"` 是**无效 ARIA**（Biome 的
+              `useFocusableInteractive` / `useSemanticElements` 会直接报错），
+              读屏软件也不会把两个 span 当成列头念出来。既然画板本来画的就是
+              一张两列的表，用真表最省事也最正确——`task-table.tsx` 是同一套用法。
             */}
-            <div
-              role="row"
-              className="flex h-10 items-center border-b border-separator px-4 text-xs font-medium text-label-tertiary"
-            >
-              <span className="min-w-0 flex-1" role="columnheader">
-                标题
-              </span>
-              <span className="shrink-0 pr-12" role="columnheader">
-                最近更新
-              </span>
-            </div>
-            <ul className="divide-y divide-separator" data-testid="note-list-items">
-              {notes.data.rows.map((note) => (
-                <li key={note.id} className="group relative">
-                  <NoteRow baseId={baseId} note={note} otherBases={otherBases} />
-                </li>
-              ))}
-            </ul>
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="h-10 text-xs font-medium text-label-tertiary">
+                    标题
+                  </TableHead>
+                  <TableHead className="h-10 w-[120px] text-xs font-medium text-label-tertiary">
+                    最近更新
+                  </TableHead>
+                  {/* 第三列放行操作「⋯」，没有表头文字 */}
+                  <TableHead className="h-10 w-12" />
+                </TableRow>
+              </TableHeader>
+              <TableBody data-testid="note-list-items">
+                {notes.data.rows.map((note) => (
+                  <NoteRow key={note.id} baseId={baseId} note={note} otherBases={otherBases} />
+                ))}
+              </TableBody>
+            </Table>
           </div>
           {totalPages > 1 ? (
             <nav aria-label="分页" className="flex items-center justify-center gap-3">
@@ -195,23 +208,29 @@ function NoteRow({
   const touched = note.latestOperationTime ?? note.updateTime;
   const title = note.title?.trim() || "未命名笔记";
   return (
-    <>
-      <Link
-        href={`/notes/${baseId}/${note.id}`}
-        data-testid={`note-row-${note.id}`}
-        className={cn(
-          "flex min-h-14 items-center gap-3 py-2.5 pr-12 pl-4 outline-none transition-colors",
-          "hover:bg-fill-hover focus-visible:bg-fill-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-        )}
-      >
-        <NotebookPen className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
-        <span className="min-w-0 flex-1 truncate text-body text-label">{title}</span>
-        <span className="tabular shrink-0 text-xs text-label-tertiary">
-          {formatRelativeTime(touched)}
-        </span>
-      </Link>
-      <NoteRowMenu noteId={note.id} title={title} otherBases={otherBases} />
-    </>
+    /*
+     * 整行可点靠「名称单元格里的 Link + `after:inset-0`」实现（与 `task-table.tsx` 同一手法），
+     * 而不是把 `onClick` 挂在 `<tr>` 上——后者键盘与读屏都到不了。
+     * 「⋯」菜单必须留在 `after` 命中区**之上**（`relative`），否则点它会跳进笔记。
+     */
+    <TableRow className="group relative border-b border-separator last:border-b-0 hover:bg-fill-hover">
+      <TableCell className="py-0 whitespace-normal">
+        <Link
+          href={`/notes/${baseId}/${note.id}`}
+          data-testid={`note-row-${note.id}`}
+          className="flex min-h-14 items-center gap-3 py-2.5 pl-4 outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
+        >
+          <NotebookPen className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-body text-label">{title}</span>
+        </Link>
+      </TableCell>
+      <TableCell className="tabular py-0 text-xs text-label-tertiary">
+        {formatRelativeTime(touched)}
+      </TableCell>
+      <TableCell className="relative py-0 pr-2 text-right">
+        <NoteRowMenu noteId={note.id} title={title} otherBases={otherBases} />
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -268,7 +287,9 @@ function NoteRowMenu({
               variant="ghost"
               size="icon-xs"
               className={cn(
-                "absolute top-1/2 right-2 -translate-y-1/2 text-label-secondary transition-opacity",
+                // `relative` 把它抬到整行命中区（`after:inset-0`）之上，
+                // 否则点「⋯」会被行链接接走、直接打开笔记
+                "relative text-label-secondary transition-opacity",
                 "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
                 open && "opacity-100",
               )}

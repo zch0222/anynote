@@ -374,7 +374,9 @@ function Stat({
       <p className="text-xs text-label-secondary">{label}</p>
       <p className="text-2xl font-semibold text-label tabular-nums" data-testid={testId}>
         {value}
-        {unit ? <span className="ml-1 text-footnote font-normal text-label-secondary">{unit}</span> : null}
+        {unit ? (
+          <span className="ml-1 text-footnote font-normal text-label-secondary">{unit}</span>
+        ) : null}
       </p>
     </div>
   );

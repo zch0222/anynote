@@ -240,7 +240,10 @@ export function isFullBleedRoute(pathname: string): boolean {
  */
 export function isKnowledgeBaseTabRoute(pathname: string): boolean {
   // 库根（笔记 Tab）与六个二级 Tab，都只有「/notes/:id」或「/notes/:id/<静态段>」两段
-  return /^\/notes\/\d+$/.test(pathname) || /^\/notes\/\d+\/(overview|mooc|tasks|docs|members)$/.test(pathname);
+  return (
+    /^\/notes\/\d+$/.test(pathname) ||
+    /^\/notes\/\d+\/(overview|mooc|tasks|docs|members)$/.test(pathname)
+  );
 }
 
 export function getWorkspaceRoute(pathname: string) {

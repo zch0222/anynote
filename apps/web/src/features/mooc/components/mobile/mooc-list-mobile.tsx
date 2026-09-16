@@ -4,8 +4,8 @@ import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { EmptyState, QueryError } from "@/components/shared/states";
 import { useMoocsQuery } from "@/features/mooc/use-moocs";
-import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import { MobileBaseHeader } from "@/features/notes/components/mobile/base-section-tabs";
+import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { toUserMessage } from "@/lib/api/errors";
 import { formatRelativeTime } from "@/lib/format-time";
@@ -87,7 +87,10 @@ export function MobileMoocList({ baseId }: { baseId: number }) {
                         </span>
                       ) : null}
                     </span>
-                    <ChevronRight className="size-4 shrink-0 text-label-tertiary" aria-hidden="true" />
+                    <ChevronRight
+                      className="size-4 shrink-0 text-label-tertiary"
+                      aria-hidden="true"
+                    />
                   </Link>
                 </li>
               ))}

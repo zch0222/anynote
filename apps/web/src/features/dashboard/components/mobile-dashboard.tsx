@@ -170,7 +170,10 @@ export function MobileDashboard() {
               分离卡片会把每行的上下留白叠起来（间距 + 卡片内边距），
               4 行就多吃掉近 40px；整卡也让"这是一个列表"这件事一眼可见。
             */
-            <ul className="overflow-hidden rounded-lg bg-surface shadow-card" data-testid="dashboard-notes">
+            <ul
+              className="overflow-hidden rounded-lg bg-surface shadow-card"
+              data-testid="dashboard-notes"
+            >
               {notes.data?.rows.map((note) => (
                 <li key={note.id} className="border-b border-separator last:border-b-0">
                   <Link
@@ -220,7 +223,10 @@ export function MobileDashboard() {
             </p>
           ) : (
             // 整卡 + 分隔线，理由同「最近笔记」
-            <ul className="overflow-hidden rounded-lg bg-surface shadow-card" data-testid="dashboard-tasks">
+            <ul
+              className="overflow-hidden rounded-lg bg-surface shadow-card"
+              data-testid="dashboard-tasks"
+            >
               {pendingTasks.map((task) => (
                 <li key={task.id} className="border-b border-separator last:border-b-0">
                   {/*
@@ -236,7 +242,9 @@ export function MobileDashboard() {
                   >
                     <ListTodo className="size-4 shrink-0 text-warning" aria-hidden="true" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate">{task.taskName?.trim() || "未命名任务"}</span>
+                      <span className="block truncate">
+                        {task.taskName?.trim() || "未命名任务"}
+                      </span>
                       {formatDueLine(task.endTime) ? (
                         <span className="tabular block truncate text-xs text-label-tertiary">
                           {formatDueLine(task.endTime)}
