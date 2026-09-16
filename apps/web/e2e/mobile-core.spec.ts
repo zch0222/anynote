@@ -291,14 +291,35 @@ test.describe("移动端笔记三级导航与编辑", () => {
     const toolbar = page.getByRole("toolbar", { name: "编辑器工具栏" });
     await expect(toolbar).toHaveAttribute("data-variant", "mobile");
 
-    // 不换行：工具条自己横向可滚，但不把页面顶出横向滚动条
-    const metrics = await toolbar.evaluate((element) => ({
-      scrollWidth: element.scrollWidth,
-      clientWidth: element.clientWidth,
-      wrap: getComputedStyle(element).flexWrap,
-    }));
+    /*
+     * 不换行 + 横向可滚的容器（工具条自己滚，但不把页面顶出横向滚动条）。
+     *
+     * **不再断言 `scrollWidth > clientWidth`**：那条断言在常驻 10 个命令时成立，
+     * 但 M-09 画板的命令集是 8 个（`B I H2 •列表 1.列表 ☑列表 🔗 🖼 ⋯`）——
+     * 收到 8 个之后 9 个按钮在 390 宽下**正好放得下**，`scrollWidth === clientWidth`。
+     * 「内容装得下所以不滚」是更好的结果，不该判失败。
+     *
+     * 真正要守的是 H-8 那条：**画板末位的「⋯」不能被挤出右缘**。下面按几何逐个
+     * 按钮核对右边界，等价于"每个按钮都真的在可视区内"，比看 scrollWidth 更直接。
+     */
+    const metrics = await toolbar.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const buttons = [...element.querySelectorAll("button")];
+      return {
+        wrap: getComputedStyle(element).flexWrap,
+        overflowX: getComputedStyle(element).overflowX,
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        buttonCount: buttons.length,
+        // 每个按钮右边界相对工具条左边界的位置
+        rights: buttons.map((button) => button.getBoundingClientRect().right - box.left),
+      };
+    });
     expect(metrics.wrap).toBe("nowrap");
-    expect(metrics.scrollWidth).toBeGreaterThan(metrics.clientWidth);
+    expect(metrics.overflowX).toBe("auto");
+    for (const right of metrics.rights) {
+      expect(right).toBeLessThanOrEqual(metrics.clientWidth + 1);
+    }
     await expectNoHorizontalScroll(page);
 
     const boldBox = await page.getByRole("button", { name: "加粗" }).boundingBox();
