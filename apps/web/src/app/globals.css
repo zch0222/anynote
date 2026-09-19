@@ -52,6 +52,28 @@
    */
   --color-indigo: var(--state-indigo);
 
+  /* —— 官网落地页（D-19 / M-14）——
+   * 两块恒色区块（AI 专区纯黑、转化区品牌蓝渐变）不随主题翻，
+   * 所以它们在深浅两态都是同一个类名，只让页面底、卡片与强调色跟着主题走。 */
+  --color-landing-surface: var(--landing-surface);
+  --color-landing-card: var(--landing-card);
+  --color-landing-accent: var(--landing-accent);
+  --color-landing-accent-tint: var(--landing-accent-tint);
+  --color-landing-badge-ink: var(--landing-badge-ink);
+  --color-landing-on-white: var(--landing-on-white);
+  /* 渐变两端用 Tailwind 的 arbitrary value（`from-[var(--landing-cta-from)]`），
+   * 不需要 `--color-*` 映射——映射了反而多一层无用别名。 */
+  /* AI 专区：区块底、卡面、卡内浮层、答案气泡四层，深浅两态同值 */
+  --color-ink: #000000;
+  --color-ink-card: #1c1c1e;
+  --color-ink-elevated: #2c2c2e;
+  --color-ink-answer: #0a2540;
+  --color-on-ink: #f5f5f7;
+  --color-on-ink-secondary: #98989d;
+  /* AI 卡图标块与 AI 徽标文字那支蓝：深浅两态**都是** #0A84FF（画板实测两版取样一致），
+   * 与首屏徽标那支 #0071E3 不是同一个值，所以是两个 Token。 */
+  --color-ink-accent: #0a84ff;
+
   /* —— 加载体系（设计稿 P12-16）——
    * 骨架块必须比宿主底色**高一档**：旧的 `bg-grouped` 在浅色分组底（#F2F2F7）上
    * 等于隐形，卡片骨架整片看不见。所以单独立一个 base，不借用任何页面底色。 */
@@ -343,6 +365,40 @@
   /* 资料维度：设计稿图例 14 的靛蓝，深浅两态同值（深色底上依然够亮）。 */
   --state-indigo: #5856d6;
 
+  /*
+   * 官网落地页（D-19 / M-14）专用 Token。
+   *
+   * 为什么不复用页面底色：落地页有**两块与主题无关**的区块——AI 专区恒为纯黑、
+   * 结尾转化区恒为品牌蓝渐变（画板深浅两版逐像素相同，实测该区块色值一致）。
+   * 用语义色会让深色版把黑底翻成 `#1C1C1E`、把蓝底翻成另一个蓝，与画板对不上。
+   *
+   * `--landing-accent` 单独立一条而不用站内深色那支：站内深色把强调色翻成
+   * `#0A84FF`，而画板**深色版的落地页按钮也确实是 `#0A84FF`**（实测），
+   * 但转化区那个白底按钮上的文字仍是浅色那支 `#0071E3` —— 同一个页面里两支蓝并存，
+   * 所以是两个 Token 而不是一个。
+   */
+  --landing-surface: #ffffff;
+  --landing-accent: #0071e3;
+  --landing-accent-tint: #e8f1fd;
+  /*
+   * 首屏徽标「全新网页版 · 现已上线」的文字色。
+   *
+   * 与 `--landing-accent` 分开是因为它**跟着主题翻**：浅色 `#0071E3`、
+   * 深色 `#64D2FF`（实测两版取样）。
+   */
+  --landing-badge-ink: #0071e3;
+  /* 转化区那个白底按钮上的文字：深浅两态都是这支（实测两版取样一致） */
+  --landing-on-white: #0071e3;
+  /* 主视觉：浅深两版各一张，用 `background-image` 而不是两个 <img> 切换——
+   * `display:none` 的 <img> 浏览器照样会把 src 下载下来（两张都会发），
+   * 而 `display:none` 元素上的 background-image 是**不会**被请求的。 */
+  --landing-hero: url("/landing/landing-hero-light.webp");
+  /* 结尾转化区的品牌蓝渐变两端。画板实测左上 #2191EC → 右下 #59C7FA，
+   * 两条对角线的取样一致，所以是一条 135° 线性渐变而不是径向或多段叠加。
+   * 深浅两版该区块逐像素相同，因此只在 :root 定义、.dark 不覆盖。 */
+  --landing-cta-from: #2191ec;
+  --landing-cta-to: #59c7fa;
+
   color-scheme: light;
 }
 
@@ -388,6 +444,22 @@
   --state-organization: #bf5af2;
   --state-info: #64d2ff;
   --state-indigo: #5856d6;
+
+  /*
+   * 落地页深色版（画板 D-19-dark / M-14-dark 实测）：
+   * 页面底与站点其它页一样翻成纯黑 `#000000`（深色版导航 / 首屏 / 页脚都取样到纯黑，
+   * 而卡片是 `#1C1C1E`——两层靠这一档拉开），白底按钮上的字仍是浅色那支蓝。
+   */
+  --landing-surface: #000000;
+  --landing-card: #1c1c1e;
+  --landing-accent: #0a84ff;
+  --landing-accent-tint: #092540;
+  --landing-badge-ink: #64d2ff;
+  /* 转化区那个白底按钮上的文字：深浅两态都是浅色那支 #0071E3（实测），
+   * 不跟着 `--landing-accent` 翻。 */
+  --landing-on-white: #0071e3;
+  --landing-badge-ink: #64d2ff;
+  --landing-hero: url("/landing/landing-hero-dark.webp");
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 16px rgb(0 0 0 / 0.4);
   --shadow-popover: 0 8px 32px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.4);
