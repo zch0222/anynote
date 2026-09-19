@@ -5,6 +5,46 @@ import { describe, expect, it } from "vitest";
 import { config, middleware } from "./middleware";
 
 describe("页面路由保护", () => {
+  /**
+   * `/` 是官网首页（D-19 / M-14），**对未登录访客放行**。
+   * 它仍然要经过中间件（手机 UA 分流在这里做），所以 matcher 不排除它，
+   * 放行发生在函数体内。这条用例与下面那组「其它页面跳登录」是一对：
+   * 少任何一条，都会让首页要么被登录墙挡住、要么连版式分流一起丢掉。
+   */
+  it("未登录访问官网首页放行，不跳登录页", () => {
+    const response = middleware(new NextRequest("https://notes.example.com/"));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("未登录访问首页时仍处理版式逃生口，把选择记下来", () => {
+    // 访客在首页点过「切换到手机版」，注册登录后那个选择应当生效
+    const response = middleware(new NextRequest("https://notes.example.com/?mobile=1"));
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("set-cookie")).toContain("anynote_view=mobile");
+  });
+
+  /**
+   * 手机 UA 的访客**不该**被推到 `/m/dashboard`：那是受保护页面，
+   * 推过去的实际结果是登录页——等于公开页白做。分流只对已登录生效。
+   */
+  it("未登录的手机 UA 访客仍然看到首页，不被分流到受保护的移动端", () => {
+    const response = middleware(
+      new NextRequest("https://notes.example.com/", { headers: { "user-agent": IPHONE_UA } }),
+    );
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("只有根路径放行；其它未登录页面照常跳登录", () => {
+    for (const path of ["/dashboard", "/notes", "/notes/1", "/settings/profile"]) {
+      const response = middleware(new NextRequest(`https://notes.example.com${path}`));
+      expect(response.headers.get("location"), `${path} 应当跳登录`).toBe(
+        "https://notes.example.com/login",
+      );
+    }
+  });
+
   it.each([undefined, "at=", "rt=refresh-only", "sid=legacy-session"])(
     "缺少非空 at 时跳转登录页（Cookie: %s）",
     (cookie) => {
@@ -150,9 +190,22 @@ describe("移动端入口分流（M10.1）", () => {
     expect(response.headers.get("location")).toBe("https://notes.example.com/m/dashboard");
   });
 
-  it("未登录时先跳登录页，不做版式分流", () => {
-    const response = middleware(request("https://notes.example.com/", { "user-agent": IPHONE_UA }));
+  /**
+   * M12（官网首页）后这条的语义变了：**根路径**对未登录访客放行（见文件开头那组
+   * 用例），所以"未登录不分流"要在一个**受保护**的入口路径上验，`/dashboard` 正是
+   * 另一个入口路径。原来断言 `/` 跳登录的写法已随首页上线作废。
+   */
+  it("未登录时不跳登录只对公开页成立；受保护的入口路径照常跳登录，且不做版式分流", () => {
+    const response = middleware(
+      request("https://notes.example.com/dashboard", { "user-agent": IPHONE_UA }),
+    );
     expect(response.headers.get("location")).toBe("https://notes.example.com/login");
+  });
+
+  it("未登录的手机 UA 访客在根路径上拿到首页而不是登录页", () => {
+    const response = middleware(request("https://notes.example.com/", { "user-agent": IPHONE_UA }));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("location")).toBeNull();
   });
 
   it("http 下不加 Secure，https 下加（本地开发也能记住偏好）", () => {
