@@ -1,0 +1,27 @@
+https://note.zch.one/m/settings/integrations
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "集成" [level=1]
+- main:
+  - heading "集成" [level=2]
+  - list:
+    - paragraph: 暂无可用的集成
+    - paragraph: 文件存储与 AI 服务由管理员在后台配置，这里暂时没有需要你连接的服务。
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert

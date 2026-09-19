@@ -1,0 +1,71 @@
+https://note.zch.one/m/dashboard
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - heading "你好，称霸幼儿园" [level=1]
+  - link "个人设置":
+    - /url: /m/settings/profile
+    - generic: 称
+- main:
+  - link "搜索知识库、笔记、慕课":
+    - /url: /m/search
+    - text: 搜索知识库、笔记、慕课
+  - navigation "快捷操作":
+    - link "新建笔记":
+      - /url: /m/notes/new
+      - text: 新建笔记
+    - link "AI 对话":
+      - /url: /m/ai/chat
+      - text: AI 对话
+    - link "协同文档":
+      - /url: /m/docs
+      - text: 协同文档
+  - heading "「Test」最近笔记" [level=2]
+  - link "全部":
+    - /url: /m/notes/56
+    - text: 全部
+  - list:
+    - link "1addd 7 小时前":
+      - /url: /m/notes/56/2564
+      - generic: 1addd
+      - generic: 7 小时前
+    - link "Test 昨天":
+      - /url: /m/notes/56/2567
+      - generic: Test
+      - generic: 昨天
+    - link "笔 4 天前":
+      - /url: /m/notes/56/2565
+      - generic: 笔
+      - generic: 4 天前
+  - heading "待办" [level=2]
+  - link "全部":
+    - /url: /m/notes/56/tasks
+    - text: 全部
+  - paragraph: 没有待提交的任务。
+  - heading "我的知识库" [level=2]
+  - link "全部":
+    - /url: /m/notes
+    - text: 全部
+  - list:
+    - link "Test":
+      - /url: /m/notes/56
+      - generic: Test
+  - link "查看全部知识库":
+    - /url: /m/notes
+    - text: 查看全部知识库
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert

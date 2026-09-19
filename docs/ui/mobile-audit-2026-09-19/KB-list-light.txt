@@ -1,0 +1,35 @@
+https://note.zch.one/m/notes
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - heading "知识库" [level=1]
+  - button "新建知识库":
+- main:
+  - generic: 搜索知识库
+  - searchbox "搜索知识库"
+  - radiogroup "知识库范围":
+    - radio "全部" [checked]
+    - radio "我的"
+    - radio "组织"
+  - paragraph: 最近访问
+  - list:
+    - link "Test 3 个月前更新":
+      - /url: /m/notes/56
+      - generic: Test
+      - generic: 3 个月前更新
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert

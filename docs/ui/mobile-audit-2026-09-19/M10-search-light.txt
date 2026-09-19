@@ -1,0 +1,45 @@
+https://note.zch.one/m/search
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "搜索" [level=1]
+- main [active]:
+  - searchbox "搜索页面、知识库或操作"
+  - heading "快捷操作" [level=2]
+  - list:
+    - link "创建笔记":
+      - /url: /m/notes/new
+      - generic: 创建笔记
+  - heading "知识库" [level=2]
+  - list:
+    - link "Test":
+      - /url: /m/notes/56
+      - generic: Test
+  - heading "页面" [level=2]
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI 对话 入口保留":
+      - /url: /m/ai/chat
+      - generic: AI 对话
+      - generic: 入口保留
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+    - link "PDF 问答 入口保留":
+      - /url: /m/ai/pdf
+      - generic: PDF 问答
+      - generic: 入口保留
+    - link "协同文档":
+      - /url: /m/docs
+      - generic: 协同文档
+    - link "设置":
+      - /url: /m/settings/profile
+      - generic: 设置
+- region "Notifications alt+T"
+- alert

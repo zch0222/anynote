@@ -1,0 +1,32 @@
+https://note.zch.one/m/settings/appearance
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "外观" [level=1]
+- main [active]:
+  - heading "主题" [level=2]
+  - list:
+    - radio "浅色":
+      - generic: 浅色
+    - radio "深色":
+      - generic: 深色
+    - radio "跟随系统" [checked]:
+      - generic: 跟随系统
+  - paragraph: 主题立即生效，无需保存；偏好只保存在这台设备的浏览器里。
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert

@@ -1,0 +1,336 @@
+{
+  "body": {
+    "bg": "rgb(0, 0, 0)",
+    "font": "15px",
+    "line": "24px",
+    "minHeight": "0px",
+    "radius": "0px",
+    "rect": {
+      "bottom": 1232,
+      "height": 1232,
+      "left": 0,
+      "right": 374.6666870117187,
+      "top": 0,
+      "width": 374.6666870117187,
+      "x": 0,
+      "y": 0
+    },
+    "text": "((a,b,c,d,e,f,g,h)=>{let i=document.documentElement,j=[\"ligh"
+  },
+  "headings": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "22px",
+      "line": "28px",
+      "minHeight": "auto",
+      "radius": "0px",
+      "rect": {
+        "bottom": 41.666666984558105,
+        "height": 28,
+        "left": 12,
+        "right": 314.66668701171875,
+        "top": 13.666666984558104,
+        "width": 302.66668701171875,
+        "x": 12,
+        "y": 13.666666984558104
+      },
+      "text": "你好，称霸幼儿园"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "auto",
+      "radius": "0px",
+      "rect": {
+        "bottom": 257,
+        "height": 18,
+        "left": 16,
+        "right": 118.34375,
+        "top": 239,
+        "width": 102.34375,
+        "x": 16,
+        "y": 239
+      },
+      "text": "「Test」最近笔记"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "auto",
+      "radius": "0px",
+      "rect": {
+        "bottom": 601,
+        "height": 18,
+        "left": 16,
+        "right": 41.75,
+        "top": 583,
+        "width": 25.75,
+        "x": 16,
+        "y": 583
+      },
+      "text": "待办"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "auto",
+      "radius": "0px",
+      "rect": {
+        "bottom": 885,
+        "height": 18,
+        "left": 16,
+        "right": 80.35417175292969,
+        "top": 867,
+        "width": 64.35417175292969,
+        "x": 16,
+        "y": 867
+      },
+      "text": "我的知识库"
+    }
+  ],
+  "nav": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "radius": "0px",
+      "rect": {
+        "bottom": 208,
+        "height": 76,
+        "left": 16,
+        "right": 358.66668701171875,
+        "top": 132,
+        "width": 342.66668701171875,
+        "x": 16,
+        "y": 132
+      },
+      "text": "新建笔记AI 对话协同文档"
+    },
+    {
+      "bg": "rgb(28, 28, 30)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "76px",
+      "radius": "14px",
+      "rect": {
+        "bottom": 208,
+        "height": 76,
+        "left": 16,
+        "right": 122.21875,
+        "top": 132,
+        "width": 106.21875,
+        "x": 16,
+        "y": 132
+      },
+      "text": "新建笔记"
+    },
+    {
+      "bg": "rgb(28, 28, 30)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "76px",
+      "radius": "14px",
+      "rect": {
+        "bottom": 208,
+        "height": 76,
+        "left": 134.21875,
+        "right": 240.4375,
+        "top": 132,
+        "width": 106.21875,
+        "x": 134.21875,
+        "y": 132
+      },
+      "text": "AI 对话"
+    },
+    {
+      "bg": "rgb(28, 28, 30)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "76px",
+      "radius": "14px",
+      "rect": {
+        "bottom": 208,
+        "height": 76,
+        "left": 252.4375,
+        "right": 358.65625,
+        "top": 132,
+        "width": 106.21875,
+        "x": 252.4375,
+        "y": 132
+      },
+      "text": "协同文档"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "radius": "0px",
+      "rect": {
+        "bottom": 844,
+        "height": 64,
+        "left": 0,
+        "right": 374.6666870117187,
+        "top": 780,
+        "width": 374.6666870117187,
+        "x": 0,
+        "y": 780
+      },
+      "text": "工作台知识库AI我的"
+    },
+    {
+      "bg": "rgb(28, 28, 30)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "radius": "20px",
+      "rect": {
+        "bottom": 836,
+        "height": 56,
+        "left": 12,
+        "right": 362.6666870117187,
+        "top": 780,
+        "width": 350.66668701171875,
+        "x": 12,
+        "y": 780
+      },
+      "text": "工作台知识库AI我的"
+    },
+    {
+      "bg": "rgb(10, 132, 255)",
+      "font": "11px",
+      "line": "24px",
+      "minHeight": "48px",
+      "radius": "14px",
+      "rect": {
+        "bottom": 832,
+        "height": 48,
+        "left": 16,
+        "right": 98.66667175292967,
+        "top": 784,
+        "width": 82.66667175292969,
+        "x": 16,
+        "y": 784
+      },
+      "text": "工作台"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "11px",
+      "line": "24px",
+      "minHeight": "48px",
+      "radius": "14px",
+      "rect": {
+        "bottom": 832,
+        "height": 48,
+        "left": 102.66667175292967,
+        "right": 185.33334350585935,
+        "top": 784,
+        "width": 82.66667175292969,
+        "x": 102.66667175292967,
+        "y": 784
+      },
+      "text": "知识库"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "11px",
+      "line": "24px",
+      "minHeight": "48px",
+      "radius": "14px",
+      "rect": {
+        "bottom": 832,
+        "height": 48,
+        "left": 189.33334350585935,
+        "right": 272.00001525878906,
+        "top": 784,
+        "width": 82.66667175292969,
+        "x": 189.33334350585935,
+        "y": 784
+      },
+      "text": "AI"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "11px",
+      "line": "24px",
+      "minHeight": "48px",
+      "radius": "14px",
+      "rect": {
+        "bottom": 832,
+        "height": 48,
+        "left": 276,
+        "right": 358.6666717529297,
+        "top": 784,
+        "width": 82.66667175292969,
+        "x": 276,
+        "y": 784
+      },
+      "text": "我的"
+    }
+  ],
+  "sections": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "radius": "0px",
+      "rect": {
+        "bottom": 552,
+        "height": 320,
+        "left": 16,
+        "right": 358.66668701171875,
+        "top": 232,
+        "width": 342.66668701171875,
+        "x": 16,
+        "y": 232
+      },
+      "text": "「Test」最近笔记全部1addd7 小时前Test昨天笔4 天前"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "radius": "0px",
+      "rect": {
+        "bottom": 836,
+        "height": 260,
+        "left": 16,
+        "right": 358.66668701171875,
+        "top": 576,
+        "width": 342.66668701171875,
+        "x": 16,
+        "y": 576
+      },
+      "text": "待办全部没有待提交的任务。"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "radius": "0px",
+      "rect": {
+        "bottom": 1092,
+        "height": 232,
+        "left": 16,
+        "right": 358.66668701171875,
+        "top": 860,
+        "width": 342.66668701171875,
+        "x": 16,
+        "y": 860
+      },
+      "text": "我的知识库全部Test"
+    }
+  ],
+  "viewport": [
+    390,
+    844
+  ]
+}

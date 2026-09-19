@@ -1,0 +1,28 @@
+https://note.zch.one/m/notes/56/mooc/10
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "test" [level=1]
+- main:
+  - radiogroup "课程视图":
+    - radio "目录"
+    - radio "内容" [checked] [active]
+  - paragraph: 还没有选择内容
+  - paragraph: 先从「目录」里选一个章节、视频或文档。
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert

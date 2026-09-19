@@ -1,0 +1,55 @@
+https://note.zch.one/m/docs
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "协同文档" [level=1]
+  - status:
+    - text: 已连接
+- main:
+  - list:
+    - link "Test 称霸幼儿园 · 1 分钟前更新":
+      - /url: /m/docs/4efe96f6-918a-4e3e-a6d0-e0ee8d019fc7
+      - generic: Test
+      - generic: 称霸幼儿园 · 1 分钟前更新
+    - button "Test 的操作":
+    - link "核对文档 4pkjy 移动端核对 · 43 分钟前更新":
+      - /url: /m/docs/b1f0914b-6dfb-47ea-993d-68fc47e3f397
+      - generic: 核对文档 4pkjy
+      - generic: 移动端核对 · 43 分钟前更新
+    - button "核对文档 4pkjy 的操作":
+    - link "核对文档 4pg0o 移动端核对 · 44 分钟前更新":
+      - /url: /m/docs/4da232eb-b8bc-4f84-9541-f6fbe89ebb2d
+      - generic: 核对文档 4pg0o
+      - generic: 移动端核对 · 44 分钟前更新
+    - button "核对文档 4pg0o 的操作":
+    - link "核对文档 4azhg 移动端核对 · 55 分钟前更新":
+      - /url: /m/docs/ae6b528c-a59d-4f76-ad74-864dc248e498
+      - generic: 核对文档 4azhg
+      - generic: 移动端核对 · 55 分钟前更新
+    - button "核对文档 4azhg 的操作":
+    - link "核对文档 4auur 移动端核对 · 55 分钟前更新":
+      - /url: /m/docs/4f3c6d84-aa5b-4116-b31e-867d6f3fc1a0
+      - generic: 核对文档 4auur
+      - generic: 移动端核对 · 55 分钟前更新
+    - button "核对文档 4auur 的操作":
+  - button "新建文档":
+    - text: 新建文档
+  - paragraph:
+    - text: 文档库全站共享，不按知识库划分。
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert

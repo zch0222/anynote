@@ -1,0 +1,16 @@
+https://note.zch.one/m/search
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "搜索" [level=1]
+- main:
+  - searchbox "搜索页面、知识库或操作" [active]: Test
+  - button "清除":
+  - heading "知识库" [level=2]
+  - list:
+    - link "Test":
+      - /url: /m/notes/56
+      - generic: Test
+- region "Notifications alt+T"
+- alert

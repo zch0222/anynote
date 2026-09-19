@@ -1,0 +1,36 @@
+https://note.zch.one/m/notes/new?title=%E5%91%A8%E6%8A%A5%E6%A8%A1%E6%9D%BF
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "新建笔记" [level=1]
+- main:
+  - group "归属知识库":
+    - generic: 归属知识库
+    - list:
+      - button "Test" [pressed]:
+        - generic: Test
+      - button "新建知识库":
+        - text: 新建知识库
+  - text: 标题
+  - textbox "标题":
+    - /placeholder: 3-15 个字符
+    - text: 周报模板
+  - generic: 4 / 15
+  - button "创建笔记"
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert: Anynote

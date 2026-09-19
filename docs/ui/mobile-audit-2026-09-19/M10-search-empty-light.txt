@@ -1,0 +1,16 @@
+https://note.zch.one/m/search
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "搜索" [level=1]
+- main:
+  - searchbox "搜索页面、知识库或操作" [active]: 周报模板
+  - button "清除":
+  - paragraph: 没有找到「周报模板」
+  - paragraph: 搜索只覆盖页面与知识库名称，笔记正文暂不支持。
+  - link "用「周报模板」新建笔记":
+    - /url: /m/notes/new?title=%E5%91%A8%E6%8A%A5%E6%A8%A1%E6%9D%BF
+    - text: 用「周报模板」新建笔记
+- region "Notifications alt+T"
+- alert

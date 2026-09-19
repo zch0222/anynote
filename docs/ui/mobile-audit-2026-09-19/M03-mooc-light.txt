@@ -1,0 +1,39 @@
+https://note.zch.one/m/notes/56/mooc
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "Test" [level=1]
+- main [active]:
+  - generic: 普通知识库 · 1 门课程
+  - navigation "知识库内容":
+    - link "笔记":
+      - /url: /m/notes/56
+    - link "慕课":
+      - /url: /m/notes/56/mooc
+    - link "任务":
+      - /url: /m/notes/56/tasks
+    - link "资料":
+      - /url: /m/notes/56/docs
+  - list:
+    - link "test 更新于 6 天前":
+      - /url: /m/notes/56/mooc/10
+      - generic: test
+      - generic: 更新于 6 天前
+    - listitem: 新建课程请使用桌面版
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert

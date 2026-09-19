@@ -1,0 +1,64 @@
+https://note.zch.one/m/docs
+- link:
+  - /url: "#mobile-content"
+  - text: 跳转到内容
+- banner:
+  - button:
+  - heading [level=1]: 协同文档
+  - status:
+    - text: 已连接
+- main:
+  - list:
+    - link:
+      - /url: /m/docs/b1f0914b-6dfb-47ea-993d-68fc47e3f397
+      - generic: 核对文档 4pkjy
+      - generic: 移动端核对 · 42 分钟前更新
+    - button:
+    - link:
+      - /url: /m/docs/4da232eb-b8bc-4f84-9541-f6fbe89ebb2d
+      - generic: 核对文档 4pg0o
+      - generic: 移动端核对 · 42 分钟前更新
+    - button:
+    - link:
+      - /url: /m/docs/ae6b528c-a59d-4f76-ad74-864dc248e498
+      - generic: 核对文档 4azhg
+      - generic: 移动端核对 · 53 分钟前更新
+    - button:
+    - link:
+      - /url: /m/docs/4f3c6d84-aa5b-4116-b31e-867d6f3fc1a0
+      - generic: 核对文档 4auur
+      - generic: 移动端核对 · 53 分钟前更新
+    - button:
+    - link:
+      - /url: /m/docs/4efe96f6-918a-4e3e-a6d0-e0ee8d019fc7
+      - generic: Test
+      - generic: 称霸幼儿园 · 2 天前更新
+    - button:
+  - button:
+    - text: 新建文档
+  - paragraph:
+    - text: 文档库全站共享，不按知识库划分。
+- navigation:
+  - list:
+    - link:
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link:
+      - /url: /m/notes
+      - generic: 知识库
+    - link:
+      - /url: /m/ai/chat
+      - generic: AI
+    - link:
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert
+- dialog "新建协同文档":
+  - heading "新建协同文档" [level=2]
+  - paragraph: 创建后把链接发给同伴，你们就能同时编辑同一篇文档。
+  - generic: 标题
+  - textbox "标题" [active]
+  - button "创建"
+  - button "Close":
+    - generic: Close

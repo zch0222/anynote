@@ -1,0 +1,32 @@
+https://note.zch.one/m/docs/4efe96f6-918a-4e3e-a6d0-e0ee8d019fc7
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading [level=1]:
+    - status:
+      - text: 已连接
+  - list "在线成员 1 人":
+    - generic "称霸幼儿园（你）":
+      - generic: 称霸幼儿园（你）
+      - generic: 称
+- main:
+  - textbox "文档标题":
+    - /placeholder: 未命名文档
+    - text: Test
+  - paragraph
+  - paragraph
+  - paragraph: ddddd adada
+  - toolbar "编辑器工具栏":
+    - button "加粗":
+    - button "斜体":
+    - button "二级标题":
+      - generic: H2
+    - button "无序列表":
+    - button "有序列表":
+    - button "任务列表":
+    - button "链接":
+    - button "图片" [disabled]:
+    - button "更多格式":
+- region "Notifications alt+T"
+- alert

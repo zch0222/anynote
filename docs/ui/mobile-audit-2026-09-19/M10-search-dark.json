@@ -1,0 +1,243 @@
+{
+  "body": {
+    "bg": "rgb(0, 0, 0)",
+    "border": "0px solid rgb(58, 58, 60)",
+    "color": "rgb(245, 245, 247)",
+    "font": "15px",
+    "line": "24px",
+    "minHeight": "0px",
+    "position": "static",
+    "radius": "0px",
+    "rect": {
+      "bottom": 844,
+      "height": 844,
+      "left": 0,
+      "right": 390,
+      "top": 0,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "tag": "BODY",
+    "text": "((a,b,c,d,e,f,g,h)=>{let i=document.documentE",
+    "weight": "400"
+  },
+  "buttons": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "14px",
+      "rect": {
+        "bottom": 47.666666984558105,
+        "height": 40,
+        "left": 4,
+        "right": 44,
+        "top": 7.6666669845581055,
+        "width": 40,
+        "x": 4,
+        "y": 7.6666669845581055
+      },
+      "tag": "BUTTON",
+      "text": "返回",
+      "weight": "400"
+    },
+    {
+      "bg": "oklab(0.349194 0.000973552 -0.00328502 / 0.4)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "16px",
+      "line": "24px",
+      "minHeight": "0px",
+      "position": "static",
+      "radius": "10px",
+      "rect": {
+        "bottom": 116,
+        "height": 44,
+        "left": 16,
+        "right": 374,
+        "top": 72,
+        "width": 358,
+        "x": 16,
+        "y": 72
+      },
+      "tag": "INPUT",
+      "text": "搜索页面、知识库或操作",
+      "weight": "400"
+    }
+  ],
+  "headings": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "17px",
+      "line": "22px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 38.66666793823242,
+        "height": 22,
+        "left": 52,
+        "right": 330,
+        "top": 16.666667938232422,
+        "width": 278,
+        "x": 52,
+        "y": 16.666667938232422
+      },
+      "tag": "H1",
+      "text": "搜索",
+      "weight": "600"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "0px",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 150,
+        "height": 18,
+        "left": 16,
+        "right": 374,
+        "top": 132,
+        "width": 358,
+        "x": 16,
+        "y": 132
+      },
+      "tag": "H2",
+      "text": "快捷操作",
+      "weight": "600"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "0px",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 244,
+        "height": 18,
+        "left": 16,
+        "right": 374,
+        "top": 226,
+        "width": 358,
+        "x": 16,
+        "y": 226
+      },
+      "tag": "H2",
+      "text": "知识库",
+      "weight": "600"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "0px",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 338,
+        "height": 18,
+        "left": 16,
+        "right": 374,
+        "top": 320,
+        "width": 358,
+        "x": 16,
+        "y": 320
+      },
+      "tag": "H2",
+      "text": "页面",
+      "weight": "600"
+    }
+  ],
+  "navigation": [],
+  "sections": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 210,
+        "height": 78,
+        "left": 16,
+        "right": 374,
+        "top": 132,
+        "width": 358,
+        "x": 16,
+        "y": 132
+      },
+      "tag": "SECTION",
+      "text": "快捷操作创建笔记",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 304,
+        "height": 78,
+        "left": 16,
+        "right": 374,
+        "top": 226,
+        "width": 358,
+        "x": 16,
+        "y": 226
+      },
+      "tag": "SECTION",
+      "text": "知识库Test",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 722,
+        "height": 402,
+        "left": 16,
+        "right": 374,
+        "top": 320,
+        "width": 358,
+        "x": 16,
+        "y": 320
+      },
+      "tag": "SECTION",
+      "text": "页面工作台知识库AI 对话入口保留我的PDF 问答入口保留协同文档设置",
+      "weight": "400"
+    }
+  ],
+  "viewport": [
+    390,
+    844
+  ]
+}

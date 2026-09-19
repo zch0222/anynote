@@ -1,0 +1,72 @@
+https://note.zch.one/m/docs/4efe96f6-918a-4e3e-a6d0-e0ee8d019fc7
+- link:
+  - /url: "#mobile-content"
+  - text: 跳转到内容
+- banner:
+  - button:
+  - heading [level=1]:
+    - status:
+      - text: 已连接
+  - list:
+    - generic: 称霸幼儿园（你）
+    - generic: 称
+- main:
+  - textbox:
+    - /placeholder: 未命名文档
+    - text: Test
+  - paragraph
+  - paragraph
+  - paragraph: ddddd adada
+  - toolbar:
+    - button:
+    - button:
+    - button:
+      - generic: H2
+    - button:
+    - button:
+    - button:
+    - button:
+    - button [disabled]:
+    - button [expanded]:
+- region "Notifications alt+T"
+- alert
+- dialog "更多格式":
+  - heading "更多格式" [level=2]
+  - heading "标题" [level=3]
+  - button "H1 一级标题" [active]:
+    - generic: H1
+    - text: 一级标题
+  - button "H3 三级标题":
+    - generic: H3
+    - text: 三级标题
+  - heading "文本样式" [level=3]
+  - button "下划线":
+    - text: 下划线
+  - button "删除线":
+    - text: 删除线
+  - button "行内代码":
+    - text: 行内代码
+  - button "高亮":
+    - text: 高亮
+  - button "清除格式":
+    - text: 清除格式
+  - heading "块" [level=3]
+  - button "引用":
+    - text: 引用
+  - button "提示块":
+    - text: 提示块
+  - button "代码块":
+    - text: 代码块
+  - button "表格":
+    - text: 表格
+  - button "行内公式":
+    - text: 行内公式
+  - button "分割线":
+    - text: 分割线
+  - heading "编辑" [level=3]
+  - button "撤销" [disabled]:
+    - text: 撤销
+  - button "重做" [disabled]:
+    - text: 重做
+  - button "Close":
+    - generic: Close

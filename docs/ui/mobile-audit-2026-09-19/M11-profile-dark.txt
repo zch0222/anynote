@@ -1,0 +1,53 @@
+https://note.zch.one/m/settings/profile
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "账号" [level=1]
+- main:
+  - heading "账号资料" [level=2]
+  - list:
+    - generic: 称
+    - generic: 称霸幼儿园
+    - text: 用户名 yxlmzch · 不可修改
+    - generic: 昵称
+    - textbox "昵称": 称霸幼儿园
+    - button "性别 男":
+      - generic: 性别
+      - generic: 男
+    - generic: 邮箱
+    - textbox "邮箱":
+      - /placeholder: 未填写
+    - generic: 手机号
+    - textbox "手机号":
+      - /placeholder: 未填写
+  - paragraph: 资料与服务器一致
+  - button "保存资料" [disabled]
+  - heading "修改密码" [level=2]
+  - list:
+    - textbox "原密码"
+    - button "显示密码":
+    - textbox "新密码"
+    - button "显示密码":
+    - list:
+      - text: 8–15 位
+      - text: 含大写字母
+      - text: 含小写字母
+      - text: 含数字
+    - button "修改密码"
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert

@@ -1,0 +1,27 @@
+https://note.zch.one/m/notes/56/2564/history?v=90289
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - heading "09-15 周二 16:14" [level=1]
+  - button "返回版本列表":
+- main:
+  - radiogroup "阅读方式":
+    - radio "正文"
+    - radio "本次改动" [checked] [active]
+  - paragraph:
+    - text: 称霸幼儿园 于 09-15 周二 16:14 保存
+  - paragraph: 相比上一个版本，新增 1 行，删除 1 行。
+  - list:
+    - generic: −
+    - generic: "# 1adddddd"
+    - generic: +
+    - generic: "# 1addd"
+    - generic: h哈哈哈哈哈
+    - generic: a==22222 aaa==
+    - generic: "---"
+    - generic: ddd
+    - generic: "![BlackHole2_8k_67566.jpg](/api/proxy/file/objects/303/redirect)\\---"
+    - generic: "![image.png](/api/proxy/file/objects/300/redirect)![image.png](/api/proxy/file/objects/301/redirect)![image.png](/api/proxy/file/objects/302/redirect)"
+  - button "恢复此版本"
+- region "Notifications alt+T"
+- alert

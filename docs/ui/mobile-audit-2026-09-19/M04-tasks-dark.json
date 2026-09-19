@@ -1,0 +1,335 @@
+{
+  "body": {
+    "bg": "rgb(0, 0, 0)",
+    "border": "0px solid rgb(58, 58, 60)",
+    "color": "rgb(245, 245, 247)",
+    "font": "15px",
+    "line": "24px",
+    "minHeight": "0px",
+    "position": "static",
+    "radius": "0px",
+    "rect": {
+      "bottom": 844,
+      "height": 844,
+      "left": 0,
+      "right": 390,
+      "top": 0,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "tag": "BODY",
+    "text": "((a,b,c,d,e,f,g,h)=>{let i=document.documentE",
+    "weight": "400"
+  },
+  "buttons": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "14px",
+      "rect": {
+        "bottom": 47.666666984558105,
+        "height": 40,
+        "left": 4,
+        "right": 44,
+        "top": 7.6666669845581055,
+        "width": 40,
+        "x": 4,
+        "y": 7.6666669845581055
+      },
+      "tag": "BUTTON",
+      "text": "返回",
+      "weight": "400"
+    },
+    {
+      "bg": "rgb(72, 72, 74)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "28px",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 222,
+        "height": 28,
+        "left": 18,
+        "right": 105,
+        "top": 194,
+        "width": 87,
+        "x": 18,
+        "y": 194
+      },
+      "tag": "BUTTON",
+      "text": "全部 0",
+      "weight": "500"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "28px",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 222,
+        "height": 28,
+        "left": 107,
+        "right": 194,
+        "top": 194,
+        "width": 87,
+        "x": 107,
+        "y": 194
+      },
+      "tag": "BUTTON",
+      "text": "未提交 0",
+      "weight": "500"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "28px",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 222,
+        "height": 28,
+        "left": 196,
+        "right": 283,
+        "top": 194,
+        "width": 87,
+        "x": 196,
+        "y": 194
+      },
+      "tag": "BUTTON",
+      "text": "已退回 0",
+      "weight": "500"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "13px",
+      "line": "18px",
+      "minHeight": "28px",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 222,
+        "height": 28,
+        "left": 285,
+        "right": 372,
+        "top": 194,
+        "width": 87,
+        "x": 285,
+        "y": 194
+      },
+      "tag": "BUTTON",
+      "text": "已提交 0",
+      "weight": "500"
+    }
+  ],
+  "headings": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "17px",
+      "line": "22px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 38.66666793823242,
+        "height": 22,
+        "left": 52,
+        "right": 330,
+        "top": 16.666667938232422,
+        "width": 278,
+        "x": 52,
+        "y": 16.666667938232422
+      },
+      "tag": "H1",
+      "text": "Test",
+      "weight": "600"
+    }
+  ],
+  "navigation": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 176,
+        "height": 40,
+        "left": 0,
+        "right": 390,
+        "top": 136,
+        "width": 390,
+        "x": 0,
+        "y": 136
+      },
+      "tag": "NAV",
+      "text": "知识库内容",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "position": "fixed",
+      "radius": "0px",
+      "rect": {
+        "bottom": 844,
+        "height": 64,
+        "left": 0,
+        "right": 390,
+        "top": 780,
+        "width": 390,
+        "x": 0,
+        "y": 780
+      },
+      "tag": "NAV",
+      "text": "主导航",
+      "weight": "400"
+    },
+    {
+      "bg": "rgb(28, 28, 30)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "0px",
+      "position": "static",
+      "radius": "20px",
+      "rect": {
+        "bottom": 836,
+        "height": 56,
+        "left": 12,
+        "right": 378,
+        "top": 780,
+        "width": 366,
+        "x": 12,
+        "y": 780
+      },
+      "tag": "UL",
+      "text": "工作台知识库AI我的",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "11px",
+      "line": "24px",
+      "minHeight": "48px",
+      "position": "static",
+      "radius": "14px",
+      "rect": {
+        "bottom": 832,
+        "height": 48,
+        "left": 16,
+        "right": 102.5,
+        "top": 784,
+        "width": 86.5,
+        "x": 16,
+        "y": 784
+      },
+      "tag": "A",
+      "text": "工作台",
+      "weight": "400"
+    },
+    {
+      "bg": "rgb(10, 132, 255)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(255, 255, 255)",
+      "font": "11px",
+      "line": "24px",
+      "minHeight": "48px",
+      "position": "static",
+      "radius": "14px",
+      "rect": {
+        "bottom": 832,
+        "height": 48,
+        "left": 106.5,
+        "right": 193,
+        "top": 784,
+        "width": 86.5,
+        "x": 106.5,
+        "y": 784
+      },
+      "tag": "A",
+      "text": "知识库",
+      "weight": "500"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "11px",
+      "line": "24px",
+      "minHeight": "48px",
+      "position": "static",
+      "radius": "14px",
+      "rect": {
+        "bottom": 832,
+        "height": 48,
+        "left": 197,
+        "right": 283.5,
+        "top": 784,
+        "width": 86.5,
+        "x": 197,
+        "y": 784
+      },
+      "tag": "A",
+      "text": "AI",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "11px",
+      "line": "24px",
+      "minHeight": "48px",
+      "position": "static",
+      "radius": "14px",
+      "rect": {
+        "bottom": 832,
+        "height": 48,
+        "left": 287.5,
+        "right": 374,
+        "top": 784,
+        "width": 86.5,
+        "x": 287.5,
+        "y": 784
+      },
+      "tag": "A",
+      "text": "我的",
+      "weight": "400"
+    }
+  ],
+  "sections": [],
+  "viewport": [
+    390,
+    844
+  ]
+}

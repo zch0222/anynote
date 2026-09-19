@@ -1,0 +1,62 @@
+https://note.zch.one/m/me
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - heading "我的" [level=1]
+- main [active]:
+  - link "称 称霸幼儿园 @yxlmzch":
+    - /url: /m/settings/profile
+    - generic: 称
+    - paragraph: 称霸幼儿园
+    - paragraph: "@yxlmzch"
+  - heading "设置" [level=2]
+  - list:
+    - link "账号":
+      - /url: /m/settings/profile
+      - generic: 账号
+    - link "外观":
+      - /url: /m/settings/appearance
+      - generic: 外观
+    - link "AI":
+      - /url: /m/settings/ai
+      - generic: AI
+    - link "集成":
+      - /url: /m/settings/integrations
+      - generic: 集成
+  - heading "更多" [level=2]
+  - list:
+    - link "协同文档 多人实时协作的文档库。":
+      - /url: /m/docs
+      - generic: 协同文档
+      - generic: 多人实时协作的文档库。
+    - link "PDF 问答 围绕 PDF 文档提问。":
+      - /url: /m/ai/pdf
+      - generic: PDF 问答
+      - generic: 围绕 PDF 文档提问。
+  - heading "仅桌面版" [level=2]
+  - list:
+    - link "AI 工作流 画布需要拖拽与大屏，请在桌面版使用。":
+      - /url: /ai/workflow?desktop=1
+      - generic: AI 工作流
+      - generic: 画布需要拖拽与大屏，请在桌面版使用。
+  - link "切换到桌面版":
+    - /url: /settings/profile?desktop=1
+    - text: 切换到桌面版
+  - button "退出登录":
+    - text: 退出登录
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert

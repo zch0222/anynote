@@ -1,0 +1,311 @@
+{
+  "body": {
+    "bg": "rgb(0, 0, 0)",
+    "border": "0px solid rgb(58, 58, 60)",
+    "color": "rgb(245, 245, 247)",
+    "font": "15px",
+    "line": "24px",
+    "minHeight": "0px",
+    "position": "static",
+    "radius": "0px",
+    "rect": {
+      "bottom": 844,
+      "height": 844,
+      "left": 0,
+      "right": 390,
+      "top": 0,
+      "width": 390,
+      "x": 0,
+      "y": 0
+    },
+    "tag": "BODY",
+    "text": "((a,b,c,d,e,f,g,h)=>{let i=document.documentE",
+    "weight": "400"
+  },
+  "buttons": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "14px",
+      "rect": {
+        "bottom": 47.666666984558105,
+        "height": 40,
+        "left": 4,
+        "right": 44,
+        "top": 7.6666669845581055,
+        "width": 40,
+        "x": 4,
+        "y": 7.6666669845581055
+      },
+      "tag": "BUTTON",
+      "text": "返回",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "",
+      "color": "rgb(245, 245, 247)",
+      "font": "20px",
+      "line": "28px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 108.66666793823242,
+        "height": 52.66666793823242,
+        "left": 0,
+        "right": 390,
+        "top": 56,
+        "width": 390,
+        "x": 0,
+        "y": 56
+      },
+      "tag": "INPUT",
+      "text": "文档标题",
+      "weight": "600"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px none rgb(152, 152, 157)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 844,
+        "height": 40,
+        "left": 8,
+        "right": 48,
+        "top": 804,
+        "width": 40,
+        "x": 8,
+        "y": 804
+      },
+      "tag": "BUTTON",
+      "text": "加粗",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px none rgb(152, 152, 157)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 844,
+        "height": 40,
+        "left": 50,
+        "right": 90,
+        "top": 804,
+        "width": 40,
+        "x": 50,
+        "y": 804
+      },
+      "tag": "BUTTON",
+      "text": "斜体",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px none rgb(152, 152, 157)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 844,
+        "height": 40,
+        "left": 92,
+        "right": 132,
+        "top": 804,
+        "width": 40,
+        "x": 92,
+        "y": 804
+      },
+      "tag": "BUTTON",
+      "text": "二级标题",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px none rgb(152, 152, 157)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 844,
+        "height": 40,
+        "left": 134,
+        "right": 174,
+        "top": 804,
+        "width": 40,
+        "x": 134,
+        "y": 804
+      },
+      "tag": "BUTTON",
+      "text": "无序列表",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px none rgb(152, 152, 157)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 844,
+        "height": 40,
+        "left": 176,
+        "right": 216,
+        "top": 804,
+        "width": 40,
+        "x": 176,
+        "y": 804
+      },
+      "tag": "BUTTON",
+      "text": "有序列表",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px none rgb(152, 152, 157)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 844,
+        "height": 40,
+        "left": 218,
+        "right": 258,
+        "top": 804,
+        "width": 40,
+        "x": 218,
+        "y": 804
+      },
+      "tag": "BUTTON",
+      "text": "任务列表",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px none rgb(152, 152, 157)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 844,
+        "height": 40,
+        "left": 260,
+        "right": 300,
+        "top": 804,
+        "width": 40,
+        "x": 260,
+        "y": 804
+      },
+      "tag": "BUTTON",
+      "text": "链接",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px none rgb(152, 152, 157)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 844,
+        "height": 40,
+        "left": 302,
+        "right": 342,
+        "top": 804,
+        "width": 40,
+        "x": 302,
+        "y": 804
+      },
+      "tag": "BUTTON",
+      "text": "图片",
+      "weight": "400"
+    },
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px none rgb(152, 152, 157)",
+      "color": "rgb(152, 152, 157)",
+      "font": "15px",
+      "line": "24px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "6px",
+      "rect": {
+        "bottom": 844,
+        "height": 40,
+        "left": 344,
+        "right": 384,
+        "top": 804,
+        "width": 40,
+        "x": 344,
+        "y": 804
+      },
+      "tag": "BUTTON",
+      "text": "更多格式",
+      "weight": "400"
+    }
+  ],
+  "headings": [
+    {
+      "bg": "rgba(0, 0, 0, 0)",
+      "border": "0px solid rgb(58, 58, 60)",
+      "color": "rgb(245, 245, 247)",
+      "font": "17px",
+      "line": "22px",
+      "minHeight": "auto",
+      "position": "static",
+      "radius": "0px",
+      "rect": {
+        "bottom": 40.33333396911621,
+        "height": 25.33333396911621,
+        "left": 52,
+        "right": 342,
+        "top": 15,
+        "width": 290,
+        "x": 52,
+        "y": 15
+      },
+      "tag": "H1",
+      "text": "已连接",
+      "weight": "600"
+    }
+  ],
+  "navigation": [],
+  "sections": [],
+  "viewport": [
+    390,
+    844
+  ]
+}

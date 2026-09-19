@@ -1,0 +1,40 @@
+https://note.zch.one/m/notes/56/tasks
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "Test" [level=1]
+- main:
+  - generic: 普通知识库
+  - navigation "知识库内容":
+    - link "笔记":
+      - /url: /m/notes/56
+    - link "慕课":
+      - /url: /m/notes/56/mooc
+    - link "任务":
+      - /url: /m/notes/56/tasks
+    - link "资料":
+      - /url: /m/notes/56/docs
+  - radiogroup "按状态筛选":
+    - radio "全部 0"
+    - radio "未提交 0"
+    - radio "已退回 0" [checked] [active]
+    - radio "已提交 0"
+  - paragraph: 这个知识库下还没有任务
+  - paragraph: 任务由知识库管理员发布。
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert

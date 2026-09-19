@@ -1,0 +1,29 @@
+https://note.zch.one/m/notes/56/2564/history?v=90289
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - heading "09-15 周二 16:14" [level=1]
+  - button "返回版本列表":
+- main:
+  - radiogroup "阅读方式":
+    - radio "正文" [checked]
+    - radio "本次改动"
+  - paragraph:
+    - text: 称霸幼儿园 于 09-15 周二 16:14 保存
+  - article:
+    - heading "1addd" [level=2]
+    - heading "1addd" [level=1]
+    - paragraph: h哈哈哈哈哈
+    - paragraph:
+      - text: a
+      - mark: 22222 aaa
+    - separator
+    - paragraph: ddd
+    - img "BlackHole2_8k_67566.jpg"
+    - paragraph: "---"
+    - img "image.png"
+    - img "image.png"
+    - img "image.png"
+  - button "恢复此版本"
+- region "Notifications alt+T"
+- alert

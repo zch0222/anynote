@@ -1,0 +1,48 @@
+https://note.zch.one/m/notes/56
+- link "跳转到内容":
+  - /url: "#mobile-content"
+- banner:
+  - button "返回":
+  - heading "Test" [level=1]
+  - link "新建笔记":
+    - /url: /m/notes/new?baseId=56
+- main:
+  - generic: 普通知识库 · 3 篇笔记
+  - navigation "知识库内容":
+    - link "笔记":
+      - /url: /m/notes/56
+    - link "慕课":
+      - /url: /m/notes/56/mooc
+    - link "任务":
+      - /url: /m/notes/56/tasks
+    - link "资料":
+      - /url: /m/notes/56/docs
+  - list:
+    - link "1addd 6 小时前更新":
+      - /url: /m/notes/56/2564
+      - generic: 1addd
+      - generic: 6 小时前更新
+    - link "Test 昨天更新":
+      - /url: /m/notes/56/2567
+      - generic: Test
+      - generic: 昨天更新
+    - link "笔 4 天前更新":
+      - /url: /m/notes/56/2565
+      - generic: 笔
+      - generic: 4 天前更新
+- navigation "主导航":
+  - list:
+    - link "工作台":
+      - /url: /m/dashboard
+      - generic: 工作台
+    - link "知识库":
+      - /url: /m/notes
+      - generic: 知识库
+    - link "AI":
+      - /url: /m/ai/chat
+      - generic: AI
+    - link "我的":
+      - /url: /m/me
+      - generic: 我的
+- region "Notifications alt+T"
+- alert
