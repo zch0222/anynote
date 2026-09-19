@@ -4,6 +4,7 @@
 > 依据：[`Anynote 新前端 UI 重设计.pdf`](Anynote%20新前端%20UI%20重设计.pdf)（原设计稿：设计系统、已有 5 屏、加载体系）· `apps/web/src/app/globals.css`（Token 单一来源）
 > 落地：[`UI补稿落地改造方案.md`](UI补稿落地改造方案.md)（前后端改造方案，逐项引用本文锚点）
 > 图片目录：[`ui-supplement/`](ui-supplement/)，2 倍分辨率 PNG；屏幕类画板（D-xx / M-xx）另附深色版
+> 补充（2026-09-19）：官网首页 [D-19](#d-19) / [M-14](#m-14) 来自设计画布「Anynote 官网首页设计」，浅色 / 深色各一版，按本图集同一套编号、索引与版式规格并入
 
 ---
 
@@ -15,8 +16,8 @@
 |------|------|------|
 | `00` | 总览：画板索引、图例读法、补稿计划、拍板结果与发现的问题 | 1 |
 | `F-xx` | 跳转流程：F-01 / F-02 是桌面与移动的路由地图，F-03–F-06 是每轮关键任务的分镜 | 6 |
-| `D-xx` | 桌面端屏幕画板（含浮层与状态缩略） | 18 |
-| `M-xx` | 移动端屏幕画板（390×844 手机框） | 13 |
+| `D-xx` | 桌面端屏幕画板（含浮层与状态缩略） | 19 |
+| `M-xx` | 移动端屏幕画板（390×844 手机框） | 14 |
 | `Q-xx` | 规范核对：深色逐屏核对、空态与错误态汇总 | 2 |
 
 ### 0.2 屏幕画板上的标记
@@ -93,6 +94,7 @@
 | [D-13](#d-13) | 设置 · 外观 / 集成 / AI 入口 | 桌面端 · 设置 | [D-13-settings-appearance.png](ui-supplement/D-13-settings-appearance.png) | [D-13-settings-appearance-dark.png](ui-supplement/D-13-settings-appearance-dark.png) |
 | [D-14](#d-14) | 登录与注册 | 桌面端 · 登录、注册与 CLI 授权 | [D-14-auth-login.png](ui-supplement/D-14-auth-login.png) | [D-14-auth-login-dark.png](ui-supplement/D-14-auth-login-dark.png) |
 | [D-15](#d-15) | CLI 授权 | 桌面端 · 登录、注册与 CLI 授权 | [D-15-auth-cli.png](ui-supplement/D-15-auth-cli.png) | [D-15-auth-cli-dark.png](ui-supplement/D-15-auth-cli-dark.png) |
+| [D-19](#d-19) | 官网首页 · 落地页 | 官网 · 对访客的入口页 | [D-19-landing-pc.png](ui-supplement/D-19-landing-pc.png) | [D-19-landing-pc-dark.png](ui-supplement/D-19-landing-pc-dark.png) |
 | [M-01](#m-01) | 工作台 | 移动端 · 工作台与我的 | [M-01-dashboard.png](ui-supplement/M-01-dashboard.png) | [M-01-dashboard-dark.png](ui-supplement/M-01-dashboard-dark.png) |
 | [M-02](#m-02) | 我的 | 移动端 · 工作台与我的 | [M-02-me.png](ui-supplement/M-02-me.png) | [M-02-me-dark.png](ui-supplement/M-02-me-dark.png) |
 | [M-03](#m-03) | 知识库详情 · 慕课 Tab | 移动端 · 知识库内 Tab | [M-03-kb-mooc.png](ui-supplement/M-03-kb-mooc.png) | [M-03-kb-mooc-dark.png](ui-supplement/M-03-kb-mooc-dark.png) |
@@ -106,6 +108,7 @@
 | [M-09](#m-09) | 协同文档 | 移动端 · 协同文档 | [M-09-doc-workspace.png](ui-supplement/M-09-doc-workspace.png) | [M-09-doc-workspace-dark.png](ui-supplement/M-09-doc-workspace-dark.png) |
 | [M-10](#m-10) | 搜索 | 移动端 · 搜索与设置 | [M-10-search.png](ui-supplement/M-10-search.png) | [M-10-search-dark.png](ui-supplement/M-10-search-dark.png) |
 | [M-11](#m-11) | 设置分节 | 移动端 · 搜索与设置 | [M-11-settings.png](ui-supplement/M-11-settings.png) | [M-11-settings-dark.png](ui-supplement/M-11-settings-dark.png) |
+| [M-14](#m-14) | 官网首页 · 落地页 | 官网 · 对访客的入口页 | [M-14-landing-mobile.png](ui-supplement/M-14-landing-mobile.png) | [M-14-landing-mobile-dark.png](ui-supplement/M-14-landing-mobile-dark.png) |
 | [Q-01](#q-01) | 深色逐屏核对 | 规范核对 · 深色模式与状态 | [Q-01-dark-review.png](ui-supplement/Q-01-dark-review.png) | — |
 | [Q-02](#q-02) | 空态与错误态汇总 | 规范核对 · 深色模式与状态 | [Q-02-states-catalog.png](ui-supplement/Q-02-states-catalog.png) | — |
 
@@ -517,6 +520,26 @@ P0 流程里用到的四个浮层。统一规格：宽 384（命令面板 512）
 
 深色版：[D-15-auth-cli-dark.png](ui-supplement/D-15-auth-cli-dark.png)
 
+### 3.10 官网
+
+<a id="d-19"></a>
+
+#### D-19 官网首页 · 落地页
+
+- **路由**：`/`（未登录访客的公开页；已登录 → `/dashboard`）
+- **图例**：无（面向访客的营销页，不做实现标注）
+- **标注**：2026-09-19 新增 / 浅色 + 深色两版
+- **实现**：2026-09-19 已落地 —— `apps/web/src/features/landing/`，四态截图与画板区块分界逐像素一致；逐文件清单见 [`docs/changelist/2026-09-19-landing-page.md`](../changelist/2026-09-19-landing-page.md)
+- **尺寸**：1440×3677（导出 2880×7354）
+
+访客打开站点的第一屏。落地前 `/` 直接 301 到 `/dashboard`，未登录的人撞上的是登录页，没人回答「这是什么、能干什么、怎么开始」。本页按落地页的惯性顺序把这三件事讲完：导航（功能 / AI 能力 / 下载 / 文档 + 登录 / 免费开始）→ 首屏（徽标 + 主标题「把知识，安顿在一个安静的地方」+ 一句副文 + 双 CTA + 信任行 + 主视觉）→ 核心功能区（Bento 五卡：知识库 / 笔记 / 慕课 / 任务 / 协同文档，一屏看清产品全貌）→ AI 专区（深底，AI 问答与 PDF 问答）→ 结尾转化区（品牌渐变底 + 双按钮）→ 页脚（品牌 + 产品 / 资源 / 关于三列链接 + 版权行）。
+
+视觉沿用 `globals.css`：字阶、圆角、卡片阴影、状态色与热力色阶都对齐现有实现。落地时**仍新增了少量 Token**（`--landing-*` 与恒色的 `--color-ink-*`），原因是本页有两块**不随主题翻转**的区块（AI 专区恒为纯黑、转化区恒为品牌蓝渐变，画板深浅两版逐像素相同），以及同一个页面里并存的两支蓝（导航按钮深色下翻 `#0A84FF`，而转化区白底按钮上的字恒为 `#0071E3`）。主视觉是一张「安静的工作台」场景图，示意产品气质——不贴界面截图，免得版本一改就过期。深色版按 `.dark` 的语义 Token 整屏映射，与该文件的取值逐条对应。
+
+![D-19 官网首页 · 落地页](ui-supplement/D-19-landing-pc.png)
+
+深色版：[D-19-landing-pc-dark.png](ui-supplement/D-19-landing-pc-dark.png)
+
 ## 4. 移动端
 
 ### 4.1 工作台与我的
@@ -745,6 +768,26 @@ P0 流程里用到的四个浮层。统一规格：宽 384（命令面板 512）
 
 深色版：[M-11-settings-dark.png](ui-supplement/M-11-settings-dark.png)
 
+### 4.7 官网
+
+<a id="m-14"></a>
+
+#### M-14 官网首页 · 落地页
+
+- **路由**：`/`（与桌面同一路由、同一版式，390 宽）
+- **图例**：无（同 D-19）
+- **标注**：2026-09-19 新增 / 浅色 + 深色两版
+- **实现**：2026-09-19 已落地 —— 与 D-19 同一组组件，两态各写一套字阶与栅格；逐文件清单见 [`docs/changelist/2026-09-19-landing-page.md`](../changelist/2026-09-19-landing-page.md)
+- **尺寸**：390×4246（导出 780×8492）
+
+桌面 D-19 的同构收缩：同一套 Token、同一张主视觉，不另起内容。导航收成 logo + 「免费开始」；首屏标题降到 32/39、两个 CTA 改成全宽纵向排列；核心功能区的 Bento 网格拆成单列五卡，知识库的 5 格计数改成两列换行；AI 专区与结尾转化区结构不变；页脚三列链接等宽平铺、底行左右分置。
+
+> **落地时核对到的两点偏差（以画板为准）**：下文说"文案与桌面逐字一致"，但画板上 M-14 有两处**真的不同**，实现按画板走：(1) 首屏副文只有前半句（去掉「少一处切换，多一点专注。」），否则在 390 宽下会折成三行、把 CTA 挤出首屏；(2) 页脚每列只有 3 项，且**少的那一项位置不固定**——产品列去末项「更新日志」，关于列去中间的「联系方式」。所以移动端不是"只做版式收缩"，字阶（H1 32/39、区块标题 26/35、正文 15）、卡间距（38）与五张卡的高度也都是**另一套设计值**。
+
+![M-14 官网首页 · 落地页](ui-supplement/M-14-landing-mobile.png)
+
+深色版：[M-14-landing-mobile-dark.png](ui-supplement/M-14-landing-mobile-dark.png)
+
 ## 5. 规范核对
 
 ### 5.1 深色模式与状态
@@ -758,6 +801,8 @@ P0 流程里用到的四个浮层。统一规格：宽 384（命令面板 512）
 - **尺寸**：2600×2100（导出 5200×4200）
 
 每个屏幕画板都用同一套语义 Token 渲染深色，这里把它们缩成一张表逐屏过一遍：先按 6 条口径看，再把发现的问题归成 5 类，写明影响哪些画板、现实现是否同样存在、怎么改。前两类在 apps/web 里同样存在，是实现侧也要改的。缩略图就是画板本身的深色渲染，点进各画板把 theme 切到「深色」可看原尺寸。
+
+> 页面范围为本页定稿时的 31 块屏幕画板。2026-09-19 新增的 [D-19](#d-19) / [M-14](#m-14)（官网首页）来自独立画布，浅色与深色两版随稿一并交付，未纳入本页的逐屏核对。
 
 ![Q-01 深色逐屏核对](ui-supplement/Q-01-dark-review.png)
 
