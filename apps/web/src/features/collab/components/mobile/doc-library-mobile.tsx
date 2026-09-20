@@ -81,7 +81,7 @@ export function MobileDocLibrary() {
             </p>
           </div>
         ) : (
-          <ul className="divide-y overflow-hidden rounded-xl border bg-surface">
+          <ul className="divide-y divide-separator overflow-hidden rounded-[14px] bg-surface shadow-card">
             {docs.map((item) => (
               <li key={item.id} className="flex items-center">
                 <Link
@@ -97,7 +97,7 @@ export function MobileDocLibrary() {
                   */}
                   <span
                     aria-hidden="true"
-                    className="grid size-[30px] shrink-0 place-items-center rounded-[8px] bg-accent-soft text-accent"
+                    className="grid size-9 shrink-0 place-items-center rounded-[9px] bg-accent-soft text-accent"
                   >
                     <FileText className="size-4" />
                   </span>
@@ -122,8 +122,20 @@ export function MobileDocLibrary() {
           </ul>
         )}
 
+        {/*
+          M-08 图例 7：范围说明「文档库全站共享，不按知识库划分」排在**新建按钮上方**
+          （2026-09-19 核对 V21：原先放在按钮下面，与画板顺序相反）。
+          这句解决的是真实的误解：侧栏把「协同文档」画在知识库分组**之外**，
+          但从知识库进来的人会以为它属于当前库。
+        */}
+        <p className="flex items-start gap-1.5 text-xs text-label-tertiary">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          文档库全站共享，不按知识库划分。
+        </p>
+
         <Button
-          className="min-h-11 w-full"
+          /* 画板 M-08：44 高、圆角 12 的业务主按钮 */
+          className="min-h-11 w-full rounded-[12px]"
           disabled={status !== "connected"}
           onClick={() => setCreating(true)}
           data-testid="mobile-doc-create"
@@ -131,17 +143,6 @@ export function MobileDocLibrary() {
           <Plus className="size-4" aria-hidden="true" />
           新建文档
         </Button>
-
-        {/*
-          M-08 图例 7：页脚提示「文档库全站共享，不按知识库划分」。
-          这句解决的是真实的误解：侧栏把「协同文档」画在知识库分组**之外**，
-          但从知识库进来的人会以为它属于当前库。放在页脚而不是顶部：
-          它是"用起来之前不需要知道"的信息，放顶部只会推走列表。
-        */}
-        <p className="flex items-start gap-1.5 text-xs text-label-tertiary">
-          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          文档库全站共享，不按知识库划分。
-        </p>
       </div>
 
       {/* 新建表单走底部弹层而不是居中对话框：手机上对话框会被软键盘顶掉一半 */}
@@ -163,16 +164,27 @@ export function MobileDocLibrary() {
           </SheetHeader>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3 px-4 pb-4">
             <Label htmlFor="collab-doc-title">标题</Label>
-            <Input
-              id="collab-doc-title"
-              autoComplete="off"
-              className="min-h-11"
-              {...form.register("title")}
-            />
+            {/* V13（2026-09-19 核对）：标题框内右侧给 N/60 实时计数，与 M-07 同一种语言 */}
+            <div className="relative">
+              <Input
+                id="collab-doc-title"
+                autoComplete="off"
+                maxLength={60}
+                className="min-h-11 pr-16"
+                data-testid="mobile-doc-title"
+                {...form.register("title")}
+              />
+              <span
+                className="tabular pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-xs text-label-tertiary"
+                data-testid="mobile-doc-title-count"
+              >
+                {(form.watch("title") ?? "").length} / 60
+              </span>
+            </div>
             {form.formState.errors.title ? (
               <p className="text-xs text-danger">{form.formState.errors.title.message}</p>
             ) : null}
-            <Button type="submit" className="min-h-11 w-full">
+            <Button type="submit" className="min-h-11 w-full rounded-[12px]">
               创建
             </Button>
           </form>

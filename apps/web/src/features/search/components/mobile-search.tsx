@@ -13,13 +13,45 @@ import {
   createNoteFromQueryHref,
   filterMobileSearchItems,
   isMobileSearchEmpty,
+  splitTitleMatch,
 } from "@/lib/mobile/search";
 import { cn } from "@/lib/utils";
-import { ChevronRight, PenLine, Search, Sparkles, XCircle } from "lucide-react";
+import {
+  Bot,
+  ChevronRight,
+  CircleUser,
+  FileText,
+  LayoutDashboard,
+  Library,
+  type LucideIcon,
+  MessageSquare,
+  PenLine,
+  Search,
+  Settings,
+  Sparkles,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 const GROUP_ORDER: readonly MobileSearchGroupKey[] = ["action", "base", "page"];
+
+/**
+ * 页面入口的语义图标块（2026-09-19 核对 V17）。
+ *
+ * 原先所有页面行共用同一个蓝色 Sparkles 块，六行排下来分不清谁是谁；
+ * 画板 M-10 图例 8 给每个入口自己的图标与色块，这里按地址映射。
+ */
+const PAGE_ROW_ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
+  "/m/dashboard": { icon: LayoutDashboard, tone: "bg-[#0a84ff]" },
+  "/m/notes": { icon: Library, tone: "bg-[#30d158]" },
+  "/m/ai/chat": { icon: MessageSquare, tone: "bg-[#ff9f0a]" },
+  "/m/ai/pdf": { icon: Bot, tone: "bg-[#bf5af2]" },
+  "/m/docs": { icon: FileText, tone: "bg-[#5ac8fa]" },
+  "/m/me": { icon: CircleUser, tone: "bg-[#5e5ce6]" },
+  // 搜索候选里设置的地址是分节页 /m/settings/profile，不是 /m/settings（它只是个别名）
+  "/m/settings/profile": { icon: Settings, tone: "bg-[#8e8e93]" },
+};
 
 /**
  * `/m/search`：⌘K 命令面板的移动端替代（M-10）。
@@ -81,8 +113,24 @@ export function MobileSearchPage() {
           ) : null}
         </div>
 
+        {/*
+          V17：空查询时也要解释搜索范围（画板 M-10 默认清单下的说明行），
+          否则用户以为能搜笔记正文。
+        */}
+        {query.trim() === "" && !empty ? (
+          <p className="text-footnote text-label-tertiary" data-testid="mobile-search-scope">
+            搜索覆盖页面与知识库名称，笔记正文暂不支持。
+          </p>
+        ) : null}
+
         {empty ? (
           <div className="space-y-3 py-6 text-center" data-testid="mobile-search-empty">
+            {/* V17：无结果态补搜索图标，与空查询的说明形成同一套语言 */}
+            <Search
+              className="mx-auto size-8 text-label-tertiary"
+              aria-hidden="true"
+              data-testid="mobile-search-empty-icon"
+            />
             <p className="text-headline font-semibold text-label">没有找到「{trimmed}」</p>
             <p className="text-footnote text-label-secondary">
               搜索只覆盖页面与知识库名称，笔记正文暂不支持。
@@ -111,7 +159,7 @@ export function MobileSearchPage() {
                   <ul className="overflow-hidden rounded-lg bg-surface">
                     {items.map((item) => (
                       <li key={item.href} className="border-b border-separator last:border-b-0">
-                        <SearchRow item={item} />
+                        <SearchRow item={item} query={query} />
                       </li>
                     ))}
                   </ul>
@@ -131,11 +179,11 @@ export function MobileSearchPage() {
  * 右侧**只有 ›**：旧实现把 `/m/notes/new` 这类路径直接显示出来，
  * 那是开发者视角的信息，对用户只是噪音（方案 §2 的「面向开发者」一条）。
  */
-function SearchRow({ item }: { item: MobileSearchItem }) {
+function SearchRow({ item, query }: { item: MobileSearchItem; query: string }) {
   /*
    * 知识库行的色块按 id 取渐变，与「新建笔记」的库列表、工作台的库卡片同一套
    * （`cover-gradient`），用户在三个地方看到的是同一个颜色。
-   * 其余分组给一个中性的图标底。
+   * 页面行按地址取语义图标块（V17）；「创建笔记」保留笔形。
    */
   const baseId = item.group === "base" ? Number(item.href.split("/").pop()) : Number.NaN;
   /*
@@ -144,6 +192,8 @@ function SearchRow({ item }: { item: MobileSearchItem }) {
    * 上会让用户以为点进去会生成内容。
    */
   const isCreateNote = item.href.startsWith("/m/notes/new");
+  const pageIcon = PAGE_ROW_ICONS[item.href];
+  const parts = splitTitleMatch(item.title, query);
   return (
     <Link
       href={item.href}
@@ -164,6 +214,13 @@ function SearchRow({ item }: { item: MobileSearchItem }) {
           className={coverAvatarClassName(baseId, "size-[30px] rounded-[8px]")}
           aria-hidden="true"
         />
+      ) : pageIcon ? (
+        <span
+          className={`grid size-[30px] shrink-0 place-items-center rounded-[8px] ${pageIcon.tone} text-white`}
+          aria-hidden="true"
+        >
+          <pageIcon.icon className="size-4" />
+        </span>
       ) : (
         <span
           className="grid size-[30px] shrink-0 place-items-center rounded-[8px] bg-accent-soft text-accent"
@@ -173,7 +230,23 @@ function SearchRow({ item }: { item: MobileSearchItem }) {
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-base text-label">{item.title}</span>
+        <span className="block truncate text-base text-label">
+          {/* V16：命中的片段高亮，让用户看见"搜到了哪几个字" */}
+          {parts ? (
+            <>
+              {parts.before}
+              <mark
+                className="rounded-[3px] bg-accent-soft px-0.5 text-accent"
+                data-testid="search-match"
+              >
+                {parts.match}
+              </mark>
+              {parts.after}
+            </>
+          ) : (
+            item.title
+          )}
+        </span>
         {item.hint ? (
           <span className="block truncate text-xs text-label-tertiary">{item.hint}</span>
         ) : null}

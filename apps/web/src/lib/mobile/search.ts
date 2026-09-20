@@ -193,3 +193,25 @@ export function canCreateNoteFromQuery(query: string): boolean {
 export function createNoteFromQueryHref(query: string): string {
   return `/m/notes/new?title=${encodeURIComponent(query.trim())}`;
 }
+
+/**
+ * 标题里命中片段的切分（M-10 图例：命中要**高亮**，2026-09-19 核对 V16）。
+ *
+ * 返回 null 表示没有命中（空查询 / 只命中关键词没命中标题），调用方原样渲染标题。
+ * 大小写不敏感，与 `rank` 的匹配口径一致——两处不一致就会出现
+ * "搜得到但看不到亮在哪"。
+ */
+export function splitTitleMatch(
+  title: string,
+  query: string,
+): { before: string; match: string; after: string } | null {
+  const keyword = query.trim().toLowerCase();
+  if (!keyword) return null;
+  const index = title.toLowerCase().indexOf(keyword);
+  if (index < 0) return null;
+  return {
+    before: title.slice(0, index),
+    match: title.slice(index, index + keyword.length),
+    after: title.slice(index + keyword.length),
+  };
+}

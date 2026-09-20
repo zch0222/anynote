@@ -44,6 +44,18 @@ describe("MobileBaseDocs（M-05）", () => {
     expect(screen.getByText("已索引")).toBeInTheDocument();
   });
 
+  it("资料行行首有 36 的文件图标块，列表尾有索引能力说明（V10）", () => {
+    mockDocs([{ id: 7, docName: "设计规范.pdf", indexStatus: 1 }]);
+    const { container } = renderWithProviders(<MobileBaseDocs baseId={3} />);
+
+    // 图标块是行首第一个子元素（36×36 圆角 9 的 accent-soft 底），没有它资料行就是纯文字
+    const icon = container.querySelector("[data-testid='mobile-doc-7'] > span.grid");
+    expect(icon).not.toBeNull();
+    expect(icon?.className).toMatch(/size-9/);
+    // 徽标的意义要解释清楚，不然「已索引 / 未索引」只是两个看不懂的标签
+    expect(screen.getByText("只有已索引的资料才能被 AI 问答检索到。")).toBeInTheDocument();
+  });
+
   it("未索引的行给「未索引」徽标", () => {
     mockDocs([{ id: 7, docName: "草稿.pdf", indexStatus: 0 }]);
     renderWithProviders(<MobileBaseDocs baseId={3} />);

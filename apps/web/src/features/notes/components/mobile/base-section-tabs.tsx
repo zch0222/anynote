@@ -3,6 +3,7 @@
 import { knowledgeBaseSections } from "@/components/layout/navigation";
 import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
+import { useNotesQuery } from "@/features/notes/use-notes";
 import { mobileBaseSectionHref } from "@/lib/mobile/hrefs";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -26,25 +27,30 @@ export type MobileBaseSection = (typeof MOBILE_BASE_SECTIONS)[number];
 export function MobileBaseHeader({
   baseId,
   current,
-  /** 库头右侧的一行元信息，缺省只显示库类型。 */
-  meta,
-}: {
-  baseId: number;
-  current: MobileBaseSection;
-  meta?: string | undefined;
-}) {
+}: { baseId: number; current: MobileBaseSection }) {
   const base = useKnowledgeBaseQuery(baseId);
+  /*
+   * 库头副标题统一报**笔记数**（画板 M-03 库头「普通知识库 · 128 篇笔记」）：
+   * 2026-09-19 还原度核对 V08 指出三个子 Tab 各自报课程数 / 资料数 / 不报，
+   * 来回切 Tab 时同一行字会变，库头不再"统一"。笔记数与当前 Tab 无关，
+   * 取 pageSize=1 只为拿 total，不拉整页数据。
+   */
+  const notes = useNotesQuery({ knowledgeBaseId: baseId, page: 1, pageSize: 1 });
   const typeText = base.data?.type === 1 ? "组织知识库" : "普通知识库";
+  const meta = notes.data ? `${notes.data.total} 篇笔记` : undefined;
 
   return (
     <>
       {/*
-        库头（设计稿 p08）：渐变块 + 一行「类型 · 元信息」。
+        库头（设计稿 p08 / 画板 M-03 图例 3）：36 的渐变块（圆角 9）+ 一行「类型 · 元信息」。
         不展示 `detail`：设计稿那里只有一行，而简介可能很长，塞进来会把
         Tab 条挤到首屏之外——移动端的列表才是主角。
       */}
       <header className="flex items-center gap-3 px-4 pt-4" data-testid="mobile-base-header">
-        <span className={`${coverClassName(baseId)} size-12 rounded-lg`} aria-hidden="true" />
+        <span
+          className={`${coverClassName(baseId)} size-9 shrink-0 rounded-[9px]`}
+          aria-hidden="true"
+        />
         <span className="min-w-0 flex-1 truncate text-footnote text-label-secondary">
           {meta ? `${typeText} · ${meta}` : typeText}
         </span>

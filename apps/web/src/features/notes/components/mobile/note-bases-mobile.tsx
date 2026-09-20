@@ -118,6 +118,7 @@ export function MobileNoteBases({
 
         <Segmented
           label="知识库范围"
+          shape="pill"
           options={baseScopeOptions}
           value={scope}
           onChange={setScope}

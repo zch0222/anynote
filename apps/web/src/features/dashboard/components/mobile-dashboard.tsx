@@ -10,15 +10,7 @@ import { useNotesQuery } from "@/features/notes/use-notes";
 import { submissionStatusText } from "@/features/tasks/schemas";
 import { useTasksQuery } from "@/features/tasks/use-tasks";
 import { formatDueLine, formatRelativeTime } from "@/lib/format-time";
-import {
-  ChevronRight,
-  FileText,
-  Library,
-  ListTodo,
-  MessageSquare,
-  PenLine,
-  Search,
-} from "lucide-react";
+import { ChevronRight, FileText, ListTodo, MessageSquare, PenLine, Search } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -135,8 +127,14 @@ export function MobileDashboard() {
           title={baseId ? `「${baseName}」最近笔记` : "最近笔记"}
           moreHref={baseId ? `/m/notes/${baseId}` : undefined}
           moreLabel="全部"
-          // 理由同「待办」：内容 0–4 条，高度由数据决定，固定最小高度吸收骨架差
-          minHeightClass="min-h-[17.5rem]"
+          /*
+           * 最小高度只在**加载期**兜底（吸收骨架与内容的高度差、避免 CLS）；
+           * 加载完成就按内容收缩——2026-09-19 还原度核对 V03：完成态继续占着
+           * 280px 的空档，少量内容也被推到首屏以下。
+           */
+          minHeightClass={
+            bases.isPending || (baseId > 0 && notes.isPending) ? "min-h-[17.5rem]" : undefined
+          }
         >
           {bases.isPending || (baseId > 0 && notes.isPending) ? (
             /*
@@ -201,10 +199,12 @@ export function MobileDashboard() {
           moreLabel="全部"
           /*
            * 这一段的内容高度**随数据变**（0 条 → 一行空态 64px；1–3 条 → 每条约 62px），
-           * 所以骨架给几行都会在加载完成时对上或错开。给它一个固定的最小高度，
-           * 让"从骨架到内容"这一步只在自己的框里发生，不把下面的内容顶走。
+           * 所以骨架给几行都会在加载完成时对上或错开。加载期给固定最小高度，
+           * 让"从骨架到内容"这一步只在自己的框里发生；完成态按内容收缩（V03）。
            */
-          minHeightClass="min-h-[13.75rem]"
+          minHeightClass={
+            bases.isPending || (baseId > 0 && tasks.isPending) ? "min-h-[13.75rem]" : undefined
+          }
         >
           {/*
             `bases.isPending` 也要算进来：知识库还没回来时 `baseId` 是 0，
@@ -269,7 +269,7 @@ export function MobileDashboard() {
           title="我的知识库"
           moreHref="/m/notes"
           moreLabel="全部"
-          minHeightClass="min-h-[12rem]"
+          minHeightClass={bases.isPending ? "min-h-[12rem]" : undefined}
         >
           {bases.isPending ? (
             // 骨架行数照内容上限给（`BASE_CARD_COUNT`），给少了加载完成时会往下长
@@ -305,22 +305,10 @@ export function MobileDashboard() {
         </DashboardSection>
 
         {/*
-          这个入口的显隐条件是「有没有知识库」，而它在知识库加载完成前一直不渲染：
-          出现的那一刻把整页内容往下推 48px（实测 CLS 0.06）。
-          占位而不是延迟渲染——用等高的空链接撑住，位置就不动。
-          `invisible` 保留布局但不可见/不可点，读屏也不会念到。
+          「查看全部知识库」整块入口已删除（2026-09-19 还原度核对 V21）：
+          画板 M-01 图例 14 只保留「我的知识库」段头的「全部 ›」，页尾再放一个
+          同目标的大按钮是重复入口，画板上没有它。
         */}
-        <Link
-          href="/m/notes"
-          aria-hidden={bases.data?.length ? undefined : true}
-          tabIndex={bases.data?.length ? undefined : -1}
-          className={`flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-separator text-footnote text-label-secondary outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-            bases.data?.length ? "" : "invisible"
-          }`}
-        >
-          <Library className="size-4" aria-hidden="true" />
-          查看全部知识库
-        </Link>
       </div>
     </MobileScreen>
   );

@@ -10,7 +10,7 @@ import { DOC_INDEXED } from "@/features/notes/schemas";
 import { useKnowledgeBaseDocsQuery } from "@/features/notes/use-docs";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { formatRelativeTime } from "@/lib/format-time";
-import { ChevronRight, FolderOpen } from "lucide-react";
+import { ChevronRight, FileText, FolderOpen, Info } from "lucide-react";
 import Link from "next/link";
 
 /**
@@ -28,13 +28,13 @@ export function MobileBaseDocs({ baseId }: { baseId: number }) {
   const rows = docs.data?.rows ?? [];
 
   return (
-    <MobileScreen title={base.data?.knowledgeBaseName?.trim() || "资料"} back="/m/notes">
+    <MobileScreen
+      title={base.data?.knowledgeBaseName?.trim() || "资料"}
+      back="/m/notes"
+      tone="paper"
+    >
       <div className="space-y-4 pb-4" data-testid="mobile-base-docs">
-        <MobileBaseHeader
-          baseId={baseId}
-          current="docs"
-          meta={rows.length ? `${rows.length} 份资料` : undefined}
-        />
+        <MobileBaseHeader baseId={baseId} current="docs" />
 
         <div className="space-y-3 px-4">
           {docs.isPending ? (
@@ -72,6 +72,16 @@ export function MobileBaseDocs({ baseId }: { baseId: number }) {
                       data-testid={`mobile-doc-${doc.id}`}
                       className="flex min-h-[68px] items-center gap-3 px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >
+                      {/*
+                        V10（2026-09-19 核对）：行首补 36 的文件图标块（画板 M-05 图例 4），
+                        否则资料行与纯文字行无异，和笔记列表也分不出来。
+                      */}
+                      <span
+                        className="grid size-9 shrink-0 place-items-center rounded-[9px] bg-accent-soft text-accent"
+                        aria-hidden="true"
+                      >
+                        <FileText className="size-4" />
+                      </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-headline text-label">
                           {doc.docName?.trim() || "未命名文档"}
@@ -92,6 +102,11 @@ export function MobileBaseDocs({ baseId }: { baseId: number }) {
                   </li>
                 ))}
               </ul>
+              {/* V10：画板 M-05 图例 2 的索引能力说明，解释徽标的意义 */}
+              <p className="flex items-center gap-1.5 px-1 text-footnote text-label-tertiary">
+                <Info className="size-3.5 shrink-0" aria-hidden="true" />
+                只有已索引的资料才能被 AI 问答检索到。
+              </p>
               <Link
                 href="/m/ai/pdf"
                 data-testid="mobile-doc-upload-link"

@@ -80,4 +80,26 @@ describe("MobileActionSheet", () => {
     fireEvent.click(screen.getByRole("button", { name: "打开操作" }));
     expect(screen.getByRole("button", { name: "重命名" })).toBeInTheDocument();
   });
+
+  /*
+   * V14（2026-09-19 核对）：底部面板必须有**看得见的取消**。
+   * Escape 能关只证明桌面键盘退得出，触摸端没有这个键。
+   */
+  it("永远渲染可见的取消按钮，点它只关闭不执行动作", () => {
+    const onSelect = vi.fn();
+    const onOpenChange = vi.fn();
+    renderWithProviders(
+      <MobileActionSheet
+        open
+        onOpenChange={onOpenChange}
+        title="操作"
+        actions={[{ label: "重命名", onSelect }]}
+      />,
+    );
+    const cancel = screen.getByTestId("mobile-action-sheet-cancel");
+    expect(cancel).toBeInTheDocument();
+    fireEvent.click(cancel);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });

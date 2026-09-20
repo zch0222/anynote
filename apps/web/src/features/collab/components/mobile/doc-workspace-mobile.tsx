@@ -103,6 +103,7 @@ export function MobileDocWorkspace({ docId }: { docId: string }) {
       title={<CollabStatusBadge status={content.status} />}
       back="/m/docs"
       actions={<CollabPresence peers={content.peers} />}
+      tone="paper"
       fill
       contentClassName="min-h-0"
     >
@@ -130,7 +131,13 @@ export function MobileDocWorkspace({ docId }: { docId: string }) {
             placeholder="未命名文档"
             onChange={(event) => setTitle(event.target.value)}
             onBlur={commitTitle}
-            className="h-auto shrink-0 rounded-none border-0 border-b px-4 py-3 !text-xl font-semibold shadow-none focus-visible:ring-0"
+            className={
+              /*
+                V15（2026-09-19 核对）：画板 M-09 的标题是 22/28、整行 60 高；
+                原先 20px + py-3 量出来 52.7，字阶与行高都差一档。
+              */
+              "h-auto min-h-[60px] shrink-0 rounded-none border-0 border-b px-4 py-4 !text-[1.375rem] !leading-[1.75rem] font-semibold shadow-none focus-visible:ring-0"
+            }
           />
           <TiptapEditor
             preset="collaborative"

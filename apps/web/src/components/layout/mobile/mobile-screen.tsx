@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { ChevronLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export type MobileScreenProps = {
   /** 顶栏标题。 */
@@ -15,6 +15,12 @@ export type MobileScreenProps = {
    * - 字符串：作为兜底地址，没有站内历史时跳过去（直接打开分享链接的情形）
    */
   back?: boolean | string;
+  /**
+   * 覆盖返回键的点击行为（缺省按 `back` 的语义走）。
+   * 版本页这类"返回是同一路由的另一态"的页面用它：既保留左侧 44×44 的
+   * 返回键形态（画板统一），又不套用浏览器历史语义。
+   */
+  onBack?: () => void;
   /** 顶栏右侧动作区。 */
   actions?: ReactNode;
   /** 顶栏下方的附加区域（筛选条、面包屑等），跟着顶栏一起 sticky。 */
@@ -30,14 +36,28 @@ export type MobileScreenProps = {
    *
    * - `"center"`：17/22 SemiBold **居中截断**（详情页，画板 M-03/M-05/M-06/M-08/
    *   M-09/M-11/M-12/M-13 的顶栏都是这个形态）
-   * - `"large"`：左侧大标题（tab 根页面 M-01 工作台 / M-02 我的）
+   * - `"large"`：左侧大标题 34/41 Bold（tab 根页面 M-01 工作台 / M-02 我的），
+   *   顶栏随之加高到 88，且不带分隔线（画板 M-01/M-02 的标题直接坐在页面底色上）
    */
   titleVariant?: MobileTitleVariant;
+  /**
+   * 页面底色语义（2026-09-20 还原度修复 V01）：
+   * - `"grouped"`：分组底 `bg-grouped` + 白色卡片（工作台 / 我的 / 搜索 / 设置 /
+   *   新建笔记 / 协同文档库 / 历史版本）
+   * - `"paper"`：整页纸面 `bg-surface`（知识库内各 Tab、慕课详情、编辑器、协同工作区）
+   * 画板两种底色都有，之前外壳统一 `bg-surface` 把分组层次抹平了。
+   */
+  tone?: MobilePageTone;
   contentClassName?: string;
   children: ReactNode;
 };
 
 export type MobileTitleVariant = "center" | "large";
+
+export type MobilePageTone = "grouped" | "paper";
+
+/** 大标题态顶栏高度：34/41 的标题 + 上下留白，画板量得 88。 */
+const LARGE_HEADER_H = "5.5rem";
 
 /**
  * 标题排版：**有返回键就是详情页**，标题居中；没有返回键就是 tab 根页面，左侧大标题。
@@ -84,14 +104,19 @@ export function hasInAppHistory(state: unknown): boolean {
  *
  * 标题与返回键由页面自己给，而不是由 shell 从路由猜——详情页的标题是数据
  * （笔记名 / 会话名），只有页面自己知道。tab bar 不在这里，它属于 MobileShell。
+ *
+ * 页面底色与底部 tab bar 的让位也在这里：外壳只给兜底底色，真正"这一屏是分组底
+ * 还是纸面"由页面声明（`tone`），顶栏才能与它同色、sticky 时不露馅。
  */
 export function MobileScreen({
   title,
   back,
+  onBack,
   actions,
   toolbar,
   fill = false,
   titleVariant,
+  tone = "grouped",
   contentClassName,
   children,
 }: MobileScreenProps) {
@@ -99,13 +124,17 @@ export function MobileScreen({
   const variant = resolveTitleVariant(back, titleVariant);
   /*
    * 居中态需要**左右等宽**，否则标题会偏向窄的那一侧：
-   * 返回键是 `size-10`（40），右侧动作区可能一个都没有，也可能有 1–2 个按钮。
-   * 所以两种形态各配一个 `size-10` 的占位（`aria-hidden`），把标题挤在正中。
+   * 返回键是 `size-11`（44 命中区），右侧动作区可能一个都没有，也可能有 1–2 个按钮。
+   * 所以两种形态各配一个 `size-11` 的占位（`aria-hidden`），把标题挤在正中。
    * 大标题态不需要平衡——它本来就靠左。
    */
   const hasBack = Boolean(back);
 
   const goBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
     if (typeof back === "string" && !hasInAppHistory(window.history.state)) {
       // 直接打开的（分享链接 / 新标签页 / E2E 的 goto）：没有站内上一页，
       // back() 会退出站点，改用兜底地址
@@ -116,20 +145,39 @@ export function MobileScreen({
   };
 
   return (
-    <>
-      <header className="mobile-title-bar sticky top-0 z-20 flex items-center gap-2 border-b bg-surface">
+    <div
+      data-testid="mobile-screen"
+      data-tone={tone}
+      className={cn(
+        "flex min-h-[var(--mobile-viewport-h)] flex-col pb-[var(--mobile-tabbar-h)]",
+        tone === "paper" ? "bg-surface" : "bg-grouped",
+      )}
+      style={
+        variant === "large" ? ({ "--mobile-header-h": LARGE_HEADER_H } as CSSProperties) : undefined
+      }
+    >
+      <header
+        data-variant={variant}
+        className={cn(
+          "mobile-title-bar sticky top-0 z-20 flex items-center gap-2",
+          // 两种底色的顶栏都**不带分隔线**：画板 M-01/M-03/M-08/M-13 的标题都直接
+          // 坐在页面底色上，sticky 滚动时靠同色底挡住内容即可。
+          tone === "paper" ? "bg-surface" : "bg-grouped",
+        )}
+      >
         {hasBack ? (
           <button
             type="button"
             onClick={goBack}
             aria-label="返回"
             data-testid="mobile-back"
-            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-fill-hover focus-visible:ring-2 focus-visible:ring-ring"
+            className="-ml-2 flex size-11 shrink-0 items-center justify-center rounded-lg text-accent outline-none hover:bg-fill-hover focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <ChevronLeft className="size-5" aria-hidden="true" />
+            {/* 画板 M-03 图例 1：44×44 命中区、Chevron 26 accent */}
+            <ChevronLeft className="size-[1.625rem]" aria-hidden="true" />
           </button>
         ) : variant === "center" ? (
-          <span className="size-10 shrink-0" aria-hidden="true" />
+          <span className="size-11 shrink-0" aria-hidden="true" />
         ) : null}
         <h1
           data-title-variant={variant}
@@ -138,7 +186,8 @@ export function MobileScreen({
             variant === "center"
               ? // 画板原文「17/22 SemiBold 居中截断」：17px 在 Tailwind 里没有档位
                 "flex-1 text-center text-[1.0625rem] leading-[1.375rem] font-semibold"
-              : "flex-1 text-title font-semibold",
+              : // 画板 M-01 图例 1 / M-02：34/41 Bold 大标题
+                "flex-1 text-display font-bold",
           )}
         >
           {title}
@@ -147,11 +196,11 @@ export function MobileScreen({
           <div className="flex shrink-0 items-center gap-1">{actions}</div>
         ) : variant === "center" ? (
           // 右侧没有动作也要占位，否则标题不是屏幕正中（见上）
-          <span className="size-10 shrink-0" aria-hidden="true" />
+          <span className="size-11 shrink-0" aria-hidden="true" />
         ) : null}
       </header>
       {toolbar ? (
-        <div className="sticky top-[var(--mobile-header-h)] z-10 border-b bg-surface px-3 py-2">
+        <div className="sticky top-[var(--mobile-header-h)] z-10 border-b bg-inherit px-3 py-2">
           {toolbar}
         </div>
       ) : null}
@@ -160,10 +209,10 @@ export function MobileScreen({
         tabIndex={-1}
         data-fill={fill ? "true" : undefined}
         data-testid="mobile-content"
-        className={cn("mobile-content flex flex-col outline-none", contentClassName)}
+        className={cn("mobile-content flex flex-1 flex-col outline-none", contentClassName)}
       >
         {children}
       </main>
-    </>
+    </div>
   );
 }
