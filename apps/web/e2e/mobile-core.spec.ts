@@ -162,6 +162,33 @@ test.describe("移动端外壳与导航", () => {
     expect(backgrounds[1]).toBe("rgba(0, 0, 0, 0)");
   });
 
+  test("tab 图标与标签的行高节奏自带，不继承 body 的 24px 行盒", async ({ page }) => {
+    // 「底栏图标不居中、padding 不对」的回归守护：任意值字号 text-[0.6875rem] 不配
+    // 行高，标签一旦漏掉显式行盒就会继承 body 的 24px——11px 的字悬在行盒中部，
+    // 图标被顶到胶囊上沿、文字视觉下坠（设计稿 M-01 底栏：图标 22、行盒 13、间距 5）
+    await page.goto("/m/notes");
+    const active = page.getByTestId("mobile-tab-bar").getByRole("link", { name: "知识库" });
+
+    const rhythm = await active.evaluate((element) => {
+      const icon = element.querySelector("svg");
+      const label = element.querySelector("span");
+      const link = element.getBoundingClientRect();
+      const box = icon.getBoundingClientRect();
+      const text = label.getBoundingClientRect();
+      return {
+        iconSize: box.width,
+        labelLineHeight: getComputedStyle(label).lineHeight,
+        iconTopGap: box.top - link.top,
+        textBottomGap: link.bottom - text.bottom,
+      };
+    });
+
+    expect(rhythm.iconSize).toBe(22);
+    expect(rhythm.labelLineHeight).toBe("13px");
+    // 上下留白基本对称（±1px 容差），不再出现「图标贴顶 1px、文字距底 7px」
+    expect(Math.abs(rhythm.iconTopGap - rhythm.textBottomGap)).toBeLessThanOrEqual(1);
+  });
+
   test("触摸目标不小于 40px", async ({ page }) => {
     await page.goto("/m/me");
     const targets = [

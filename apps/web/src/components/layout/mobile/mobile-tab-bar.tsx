@@ -38,16 +38,20 @@ export function MobileTabBar() {
                 aria-current={isActive ? "page" : undefined}
                 data-active={isActive ? "true" : "false"}
                 className={cn(
-                  // h-12：48 高的选中胶囊要装下图标 + 文字两行，也够 44 的触摸下限
-                  "flex h-12 flex-col items-center justify-center gap-0.5 rounded-full text-[0.6875rem] outline-none transition-colors",
+                  // h-12：48 高的选中胶囊要装下图标 + 文字两行，也够 44 的触摸下限。
+                  // 行高节奏必须自带：`text-[0.6875rem]` 是任意值字号、不配行高，标签会
+                  // 继承 body 的 24px 行盒——11px 的字悬在行盒中部，图标被顶到胶囊上沿、
+                  // 文字视觉下坠，整格上下失衡（设计稿 M-01 底栏：图标 22、行盒 13、
+                  // 图标-文字 5，48 高内上下各 ≈4）。
+                  "flex h-12 flex-col items-center justify-center gap-[5px] rounded-full text-[0.6875rem] outline-none transition-colors",
                   "focus-visible:ring-2 focus-visible:ring-ring",
                   isActive
                     ? "bg-accent font-medium text-white"
                     : "text-label-secondary hover:bg-fill-hover",
                 )}
               >
-                <Icon className="size-5" aria-hidden="true" />
-                <span>{tab.title}</span>
+                <Icon className="size-[22px]" aria-hidden="true" />
+                <span className="leading-[13px]">{tab.title}</span>
               </Link>
             </li>
           );
