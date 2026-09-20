@@ -56,3 +56,4 @@
 
 - 排障过程中发现宿主机残留一个上次会话的 `next start`（PID 56752，占 `0.0.0.0:3000` + `[::]:3000`）与 Docker 的 `127.0.0.1:3000` 形成端口分脑：浏览器/Node 走 IPv6 时命中宿主机旧进程，其 `/api/*` 全部挂起。已终止该进程并停掉 web 容器跑 e2e（README「跑之前确认没有旧的 next start 占着 3000 端口」即此坑）。
 - `apps/web/.next` 的宿主机构建需 `NEXT_DISABLE_STANDALONE=1`（Windows 无符号链接权限，EPERM symlink），该开关此前已入库于 `next.config.ts`。
+- **web 镜像重建绕行**：本机网络下 `auth.docker.io` 被解析到失效地址，buildkit 在 `# syntax=docker/dockerfile:1` 与基础镜像 `node:22.23.2-bookworm-slim` 两步都拿不到授权 token。绕行：`docker pull docker.m.daocloud.io/library/node:22.23.2-bookworm-slim`、`docker pull docker.m.daocloud.io/docker/dockerfile:1` 后各自 `docker tag` 回原名，构建即可离线完成。新镜像 `373f1194206e` 已重建并恢复容器，容器内验收：`rt` 单独携带 → `/m/dashboard`、`/dashboard` 200，`/` 307 `/dashboard`；无 Cookie → 307 `/login`（登录墙完好）；浏览器整页进入 `/m/dashboard` 登录态保持。
