@@ -35,8 +35,11 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   // `cookies()` 让这条路由转为动态渲染：已登录访客的跳转结果不能被静态化后发给所有访客
+  //
+  // 判据是 `at` **或** `rt`，与 middleware 同口径：`at` 过期被浏览器删除、`rt` 仍有效时
+  // （正等着页面加载后由 `/api/auth/me` 续期），刷新首页不该被当成访客留在官网。
   const store = await cookies();
-  if (store.get("at")?.value) redirect("/dashboard");
+  if (store.get("at")?.value || store.get("rt")?.value) redirect("/dashboard");
 
   return <LandingPage />;
 }

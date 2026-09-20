@@ -45,8 +45,8 @@ describe("页面路由保护", () => {
     }
   });
 
-  it.each([undefined, "at=", "rt=refresh-only", "sid=legacy-session"])(
-    "缺少非空 at 时跳转登录页（Cookie: %s）",
+  it.each([undefined, "at=", "sid=legacy-session"])(
+    "at 与 rt 都缺失时跳转登录页（Cookie: %s）",
     (cookie) => {
       const request = new NextRequest("https://notes.example.com/notes?base=1", {
         headers: cookie ? { cookie } : {},
@@ -67,6 +67,55 @@ describe("页面路由保护", () => {
     expect(response.headers.get("x-middleware-next")).toBe("1");
     expect(response.headers.get("location")).toBeNull();
     expect(response.headers.get("set-cookie")).toBeNull();
+  });
+});
+
+describe("整页刷新只剩 rt 时不丢会话（at 过期被浏览器删除）", () => {
+  /**
+   * 复现「移动端刷新之后登录状态丢了」：`at` 是带 `expires` 的 Cookie，过期后浏览器
+   * 直接删掉它；而 `rt` 还有 2 倍寿命。中间件若只认 `at`，会把仅剩 `rt` 的整页请求
+   * 307 到 `/login`——可 BFF 的 `/api/auth/me` 本来就支持仅凭 `rt` 换新 `at` 再拉资料
+   * （见 `lib/auth/profile.ts` 的 `loadSessionProfile`）。移动端整页加载频繁（切后台
+   * 回来、标签页被杀重开），最先撞上；桌面 SPA 少整页刷新所以不易察觉。
+   */
+  it("仅剩 rt 的受保护页面请求放行，让页面的 /api/auth/me 用 rt 续期", () => {
+    const response = middleware(
+      new NextRequest("https://notes.example.com/m/dashboard", {
+        headers: { cookie: "rt=refresh-token" },
+      }),
+    );
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("仅剩 rt 的桌面受保护页面同样放行", () => {
+    const response = middleware(
+      new NextRequest("https://notes.example.com/notes", {
+        headers: { cookie: "at=; rt=refresh-token" },
+      }),
+    );
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("仅剩 rt 的手机 UA 入口请求仍做移动端分流，而不是踢去登录页", () => {
+    const response = middleware(
+      new NextRequest("https://notes.example.com/dashboard", {
+        headers: { cookie: "rt=refresh-token", "user-agent": IPHONE_UA },
+      }),
+    );
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://notes.example.com/m/dashboard");
+  });
+
+  it("仅剩 rt 的深层移动路由放行不跳转（分享语义不变）", () => {
+    const response = middleware(
+      new NextRequest("https://notes.example.com/m/notes/3/7", {
+        headers: { cookie: "rt=refresh-token" },
+      }),
+    );
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("location")).toBeNull();
   });
 });
 
