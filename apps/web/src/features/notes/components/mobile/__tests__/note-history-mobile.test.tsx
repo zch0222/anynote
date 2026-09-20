@@ -154,7 +154,7 @@ describe("MobileNoteHistory · 版本页（?v=）", () => {
     mockDetail({ title: "t", content: "c", historyTime: "2026-09-16T09:00:00" });
     renderWithProviders(<MobileNoteHistory baseId={3} noteId={7} />);
 
-    fireEvent.click(screen.getByTestId("mobile-history-back"));
+    fireEvent.click(screen.getByTestId("mobile-back"));
     expect(router.push).toHaveBeenCalledWith("/m/notes/3/7/history");
   });
 

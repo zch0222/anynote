@@ -18,6 +18,9 @@ import type { CSSProperties, ReactNode } from "react";
  * - 沉浸式路由（编辑器 / 对话 / 阅读 / 搜索）隐藏 tab bar，判定是纯函数，可单测
  *
  * 会话引导复用桌面的 `WorkspaceSession`：加载骨架与 401 跳登录两条逻辑不重写。
+ *
+ * 底色只给**兜底**的分组底：真正"这一屏是分组底还是纸面"由 `MobileScreen` 的
+ * `tone` 声明（画板 M-01/M-08 是分组底、M-03/M-09 是纸面），shell 猜不出来。
  */
 export function MobileShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -27,7 +30,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className="mobile-shell bg-surface"
+      className="mobile-shell bg-grouped"
       data-testid="mobile-shell"
       data-immersive={immersive ? "true" : undefined}
       style={

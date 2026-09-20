@@ -82,8 +82,8 @@ describe("MobileScreen", () => {
     const title = screen.getByRole("heading", { name: "我的" });
     expect(title).toHaveAttribute("data-title-variant", "large");
     expect(title.className).not.toMatch(/text-center/);
-    // 大标题用 text-title（22/28），不是 16 号
-    expect(title.className).toMatch(/text-title/);
+    // 大标题用 text-display（34/41，画板 M-01 图例 1），不是 22 号
+    expect(title.className).toMatch(/text-display/);
   });
 
   it("显式 titleVariant 覆盖推导结果", () => {
@@ -101,8 +101,8 @@ describe("MobileScreen", () => {
         <p>正文</p>
       </MobileScreen>,
     );
-    // 左侧是返回键（size-10），右侧是无动作时的占位
-    const spacers = container.querySelectorAll("header > span.size-10");
+    // 左侧是返回键（size-11 = 44 命中区），右侧是无动作时的占位
+    const spacers = container.querySelectorAll("header > span.size-11");
     expect(spacers).toHaveLength(1);
     expect(spacers[0]).toHaveAttribute("aria-hidden", "true");
   });
@@ -175,5 +175,37 @@ describe("MobileScreen", () => {
       </MobileScreen>,
     );
     expect(screen.getByTestId("mobile-content")).not.toHaveAttribute("data-fill");
+  });
+
+  /*
+   * V01（2026-09-19 核对）：页面底色分两种语义——分组底（白卡坐在灰底上）
+   * 与纸面（整页白）。外壳原先统一白底，把分组层次抹平了。
+   */
+  it("默认分组底，tone=paper 时整页纸面", () => {
+    const { unmount } = renderWithProviders(
+      <MobileScreen title="工作台">
+        <p>正文</p>
+      </MobileScreen>,
+    );
+    expect(screen.getByTestId("mobile-screen")).toHaveAttribute("data-tone", "grouped");
+    unmount();
+    renderWithProviders(
+      <MobileScreen title="课程" tone="paper">
+        <p>正文</p>
+      </MobileScreen>,
+    );
+    expect(screen.getByTestId("mobile-screen")).toHaveAttribute("data-tone", "paper");
+  });
+
+  it("onBack 覆盖返回键行为（版本页回同路由列表态）", () => {
+    const onBack = vi.fn();
+    renderWithProviders(
+      <MobileScreen title="今天 11:05" back onBack={onBack}>
+        <p>正文</p>
+      </MobileScreen>,
+    );
+    fireEvent.click(screen.getByTestId("mobile-back"));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(router.back).not.toHaveBeenCalled();
   });
 });

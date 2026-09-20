@@ -6,9 +6,9 @@
  */
 
 .mobile-shell {
-  /* 顶栏 56px；底栏 52px 再垫一层 home 条高度（无刘海设备上 env() 取 0） */
+  /* 顶栏 56px；底栏浮岛 64 + 底部让位 8，再垫一层 home 条高度（无刘海设备上 env() 取 0） */
   --mobile-header-h: 3.5rem;
-  --mobile-tabbar-h: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  --mobile-tabbar-h: calc(4rem + max(0.5rem, env(safe-area-inset-bottom, 0px)));
   /*
    * 可视视口高度。默认 100svh；MobileShell 拿到 visualViewport.height 后会用内联样式
    * 覆盖它——软键盘弹出时这是唯一可靠的"用户真能看到多高"（见 hooks/use-visual-viewport.ts）。
@@ -22,8 +22,6 @@
   );
 
   min-height: var(--mobile-viewport-h);
-  /* tab bar 是 fixed 的，内容底部要留出等高的空档，否则最后一行被挡住 */
-  padding-bottom: var(--mobile-tabbar-h);
 }
 
 /* 沉浸式路由（编辑器 / 对话 / 阅读）不显示 tab bar，可用高度随之变大 */
@@ -90,4 +88,14 @@
 .anynote-toolbar__sheet-icon svg {
   width: 20px;
   height: 20px;
+}
+
+/*
+ * 大标题态顶栏（M-01 / M-02）：88 高、左右 16、不带分隔线。
+ * 高度变量由 MobileScreen 在 wrapper 上覆盖，这里只补边距与去线。
+ */
+.mobile-title-bar[data-variant="large"] {
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  border-bottom-color: transparent;
 }

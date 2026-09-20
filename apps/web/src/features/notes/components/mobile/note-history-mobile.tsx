@@ -16,7 +16,7 @@ import {
   useRestoreNoteVersionMutation,
 } from "@/features/notes/use-note-history";
 import { toUserMessage } from "@/lib/api/errors";
-import { ChevronLeft, Clock, History as HistoryIcon } from "lucide-react";
+import { ChevronRight, Clock, History as HistoryIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -188,7 +188,10 @@ function HistoryList({
         groups.map((group) => (
           <section key={group.label} className="space-y-2">
             <h2 className="text-footnote font-semibold text-label-secondary">{group.label}</h2>
-            <ul className="overflow-hidden rounded-lg bg-surface" data-testid="history-list">
+            <ul
+              className="overflow-hidden rounded-lg bg-surface shadow-card"
+              data-testid="history-list"
+            >
               {group.items.map((item) => {
                 /* 每篇第一条 = 当前版本：它就是"现在的样子"，没有可恢复的意义 */
                 const isCurrent = rows[0]?.operationLogId === item.operationLogId;
@@ -205,7 +208,7 @@ function HistoryList({
                         aria-disabled="true"
                         className="flex min-h-[60px] items-center gap-3 px-4 py-2.5"
                       >
-                        <VersionAvatar initial={name} tone="accent" />
+                        <VersionAvatar initial={name} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-headline text-label">{name}</span>
                           <span className="tabular block text-footnote text-label-tertiary">
@@ -230,6 +233,11 @@ function HistoryList({
                             {time}
                           </span>
                         </span>
+                        {/* V20：可进入的版本行行尾要有 ›，与「当前版本」徽标区分 */}
+                        <ChevronRight
+                          className="size-4 shrink-0 text-label-tertiary"
+                          aria-hidden="true"
+                        />
                       </button>
                     )}
                   </li>
@@ -258,21 +266,31 @@ function HistoryList({
   );
 }
 
-function VersionAvatar({
-  initial,
-  tone = "muted",
-}: {
-  initial: string;
-  tone?: "muted" | "accent";
-}) {
+/**
+ * 头像底色按人名取系统色板（画板 M-13：陈可紫 / 林一橙 / 王思远青）。
+ * 原先所有人都是灰底，列表里"谁存的"完全读不出来；用名字哈希而不是 id，
+ * 同一个人在列表与版本页颜色一致。
+ */
+const AVATAR_TONES = [
+  "bg-[#5e5ce6]",
+  "bg-[#ff9f0a]",
+  "bg-[#30d158]",
+  "bg-[#5ac8fa]",
+  "bg-[#bf5af2]",
+  "bg-[#ff375f]",
+] as const;
+
+function avatarTone(name: string): string {
+  let hash = 0;
+  for (const char of name) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % 997;
+  return AVATAR_TONES[hash % AVATAR_TONES.length] ?? "bg-[#5e5ce6]";
+}
+
+function VersionAvatar({ initial }: { initial: string }) {
   return (
     <span
       aria-hidden="true"
-      className={
-        tone === "accent"
-          ? "grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-medium text-accent"
-          : "grid size-8 shrink-0 place-items-center rounded-full bg-fill-hover text-xs font-medium text-label-secondary"
-      }
+      className={`grid size-8 shrink-0 place-items-center rounded-full ${avatarTone(initial)} text-xs font-medium text-white`}
     >
       {initial.slice(0, 1)}
     </span>
@@ -341,23 +359,15 @@ function VersionDetail({
   }, [baseId, detail.data, noteId, restore, router, title]);
 
   return (
-    <MobileScreen
-      title={title}
-      actions={
-        <button
-          type="button"
-          onClick={onBack}
-          data-testid="mobile-history-back"
-          aria-label="返回版本列表"
-          className="-mr-2 flex size-10 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-fill-hover focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ChevronLeft className="size-5" aria-hidden="true" />
-        </button>
-      }
-    >
+    /*
+      V04（2026-09-19 核对）：返回键回到**左侧**统一的 44×44 形态，顶栏标题居中——
+      原先返回键挂在右侧动作区，与全站其它详情页方向相反。
+    */
+    <MobileScreen title={title} back onBack={onBack}>
       <div className="space-y-4 p-4" data-testid="mobile-note-history-version">
         <Segmented
           label="阅读方式"
+          shape="pill"
           options={MODE_OPTIONS}
           value={mode}
           onChange={setMode}
@@ -387,9 +397,14 @@ function VersionDetail({
           长文页面里的 fixed 底栏会盖住最后一段，用户得先把内容滚上去才读得到，
           而"读完再决定要不要恢复"正是这一页的自然顺序。
         */}
-        <div className="pt-2">
+        {/*
+          V04：「恢复此版本」**贴底固定**（画板 M-13 图例 11：44 高全宽贴底）。
+          原先随内容流走，长正文时按钮在首屏之外、滚到末尾才见得到；
+          sticky bottom 让它在整个滚动过程里都够得着，正文区自己留出让位。
+        */}
+        <div className="sticky bottom-0 -mx-4 mt-auto border-t border-separator bg-grouped px-4 pb-4 pt-3">
           <Button
-            className="min-h-11 w-full"
+            className="min-h-11 w-full rounded-[12px]"
             disabled={!detail.data || restore.isPending || isCurrent || index < 0}
             onClick={() => setConfirming(true)}
             data-testid="history-restore"
@@ -500,11 +515,14 @@ function VersionBody({
     );
   }
   return (
-    <article className="rounded-md bg-surface p-4" data-testid="history-version-content">
-      <h2 className="text-title font-bold text-label" data-testid="history-version-title">
-        {detail.data?.title?.trim() || "未命名笔记"}
-      </h2>
-      {/* 与桌面同一份只读渲染：标题是正文首节点 H1，老笔记要先补齐才看得见 */}
+    /*
+      V20：标题只出现一次。`ensureLeadingHeading` 会把标题作为正文首节点 H1 渲染，
+      外面再套一个 h2 就会像核对报告里那样「1addd 连续出现两次」。
+    */
+    <article
+      className="rounded-md bg-surface p-4 shadow-card"
+      data-testid="history-version-content"
+    >
       <TiptapEditor
         preset="readonly"
         value={ensureLeadingHeading(detail.data?.content ?? "", detail.data?.title)}

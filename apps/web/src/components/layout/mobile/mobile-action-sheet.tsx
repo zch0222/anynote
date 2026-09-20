@@ -9,7 +9,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import type { LucideIcon } from "lucide-react";
+import { Check, type LucideIcon } from "lucide-react";
 import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 
 export type MobileAction = {
@@ -23,6 +23,8 @@ export type MobileAction = {
    */
   confirm?: string;
   disabled?: boolean;
+  /** 单选类动作表（性别等）：当前值行尾打勾，勾在**最右**而不是文字旁边。 */
+  checked?: boolean;
   onSelect: () => void;
 };
 
@@ -41,6 +43,9 @@ export type MobileActionSheetProps = {
  *
  * 下拉菜单在手机上是反模式——锚点在手指底下、命中区只有 28px。
  * 这里用已有的 `ui/sheet` 的 `side="bottom"`，每项 48px 高。
+ *
+ * 画板形态（M-02 ② / M-13 ② 等）：顶部一个抓手，动作列表之下**永远有一张独立的
+ * 「取消」卡**——Escape 能关只证明桌面键盘退得出，手机上必须有看得见的取消。
  */
 export function MobileActionSheet({
   trigger,
@@ -82,6 +87,10 @@ export function MobileActionSheet({
         className="max-h-[80svh] overflow-y-auto rounded-t-2xl pb-[env(safe-area-inset-bottom,0px)]"
         data-testid="mobile-action-sheet"
       >
+        {/* 抓手：画板每个底部面板顶部都有一条 36×5 的圆角条 */}
+        <div className="-mt-2 flex justify-center pt-3" aria-hidden="true">
+          <span className="h-[5px] w-9 rounded-full bg-separator" />
+        </div>
         <SheetHeader>
           <SheetTitle>{title}</SheetTitle>
           {description ? <SheetDescription>{description}</SheetDescription> : null}
@@ -106,11 +115,24 @@ export function MobileActionSheet({
                   <span className="min-w-0 flex-1 truncate">
                     {pending ? action.confirm : action.label}
                   </span>
+                  {action.checked ? (
+                    <Check className="size-4 shrink-0 text-accent" aria-hidden="true" />
+                  ) : null}
                 </button>
               </li>
             );
           })}
         </ul>
+        <div className="px-2 pb-2">
+          <button
+            type="button"
+            data-testid="mobile-action-sheet-cancel"
+            onClick={() => setOpen(false)}
+            className="flex min-h-12 w-full items-center justify-center rounded-lg bg-fill-hover text-sm font-medium text-label outline-none transition-colors hover:bg-fill-hover/70 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            取消
+          </button>
+        </div>
       </SheetContent>
     </Sheet>
   );

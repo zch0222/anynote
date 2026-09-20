@@ -112,10 +112,15 @@ export function MobileMoocDetail({ baseId, moocId }: { baseId: number; moocId: n
   }, [loadItems, selectedId]);
 
   return (
-    <MobileScreen title={mooc.data?.title?.trim() || "课程"} back={`/m/notes/${baseId}/mooc`}>
+    <MobileScreen
+      title={mooc.data?.title?.trim() || "课程"}
+      back={`/m/notes/${baseId}/mooc`}
+      tone="paper"
+    >
       <div className="space-y-3 p-4" data-testid="mobile-mooc-detail">
         <Segmented
           label="课程视图"
+          shape="pill"
           options={MODE_OPTIONS}
           value={mode}
           onChange={setMode}

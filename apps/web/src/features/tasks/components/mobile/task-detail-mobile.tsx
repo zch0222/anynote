@@ -341,6 +341,7 @@ function AdminTaskDetail({ baseId, taskId }: { baseId: number; taskId: number })
 
             <Segmented
               label="提交记录筛选"
+              shape="pill"
               value={tab}
               onChange={(next) => {
                 setTab(next);

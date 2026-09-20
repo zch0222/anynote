@@ -6,6 +6,7 @@ import {
   createNoteFromQueryHref,
   filterMobileSearchItems,
   isMobileSearchEmpty,
+  splitTitleMatch,
 } from "@/lib/mobile/search";
 import { describe, expect, it } from "vitest";
 
@@ -119,5 +120,36 @@ describe("canCreateNoteFromQuery / createNoteFromQueryHref", () => {
       `/m/notes/new?title=${encodeURIComponent("周报模板")}`,
     );
     expect(createNoteFromQueryHref("a b")).toBe("/m/notes/new?title=a%20b");
+  });
+});
+
+describe("splitTitleMatch（V16 命中高亮）", () => {
+  it("切出命中前的 before / 命中段 / 命中后的 after，拼接回原串", () => {
+    const parts = splitTitleMatch("产品设计文档", "设计");
+    expect(parts).toEqual({ before: "产品", match: "设计", after: "文档" });
+    expect([parts?.before, parts?.match, parts?.after].join("")).toBe("产品设计文档");
+  });
+
+  it("大小写不敏感，与 filterMobileSearchItems 的匹配口径一致", () => {
+    // title 里保留原大小写：高亮的是用户看到的那几个字，不是查询词本身
+    expect(splitTitleMatch("AI 对话", "ai")).toEqual({ before: "", match: "AI", after: " 对话" });
+  });
+
+  it("命中在开头 / 结尾时 before / after 为空串", () => {
+    expect(splitTitleMatch("周报模板", "周报")).toEqual({
+      before: "",
+      match: "周报",
+      after: "模板",
+    });
+    expect(splitTitleMatch("周报模板", "模板")).toEqual({
+      before: "周报",
+      match: "模板",
+      after: "",
+    });
+  });
+
+  it("空查询与未命中返回 null（调用方原样渲染标题）", () => {
+    expect(splitTitleMatch("任何标题", "  ")).toBeNull();
+    expect(splitTitleMatch("周报模板", "不存在")).toBeNull();
   });
 });

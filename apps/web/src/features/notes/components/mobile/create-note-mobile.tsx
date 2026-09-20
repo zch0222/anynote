@@ -159,7 +159,7 @@ export function MobileCreateNote() {
                         onClick={() => setSelectedBaseId(base.id)}
                         data-testid={`create-note-base-${base.id}`}
                         className={cn(
-                          "flex min-h-14 w-full items-center gap-3 px-4 text-left text-footnote outline-none transition-colors",
+                          "flex min-h-14 w-full items-center gap-3 px-4 text-left text-base outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                           selected ? "font-medium text-accent" : "text-label",
                         )}
@@ -185,7 +185,7 @@ export function MobileCreateNote() {
                     type="button"
                     onClick={() => setCreatingBase(true)}
                     data-testid="create-note-new-base"
-                    className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-footnote font-medium text-accent outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-base font-medium text-accent outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
                     <span className="grid size-7 shrink-0 place-items-center rounded-[7px] bg-accent-soft">
                       <Plus className="size-4" aria-hidden="true" />
@@ -207,37 +207,49 @@ export function MobileCreateNote() {
                 h-12（48）+ rounded-md（10）+ text-base（16）：16 号字以下 iOS Safari
                 会在聚焦时自动放大整页，用户得手动缩回去。
               */}
-              <Input
-                id="note-title"
-                autoComplete="off"
-                placeholder="3-15 个字符"
-                maxLength={TITLE_MAX}
-                className="h-12 rounded-md text-base"
-                data-testid="create-note-title"
-                value={title}
-                aria-invalid={titleError ? true : undefined}
-                onChange={(event) => {
-                  setTitle(event.target.value);
-                  setTitleTouched(true);
-                }}
-              />
-              <div className="flex items-start justify-between gap-2">
-                {titleError ? (
-                  <p role="alert" className="text-xs text-danger">
-                    {titleError}
-                  </p>
-                ) : (
-                  <span />
-                )}
-                <span className="tabular shrink-0 text-xs text-label-tertiary">
+              {/*
+                V11（2026-09-19 核对）：计数放进输入框**内**右侧（画板 M-07 图例 9 的
+                「8 / 15」就在框里），框下是 H1 说明行；出错时说明行换成错误文案、
+                计数转 danger。
+              */}
+              <div className="relative">
+                <Input
+                  id="note-title"
+                  autoComplete="off"
+                  placeholder="3-15 个字符"
+                  maxLength={TITLE_MAX}
+                  className="h-12 rounded-[10px] pr-16 text-base"
+                  data-testid="create-note-title"
+                  value={title}
+                  aria-invalid={titleError ? true : undefined}
+                  onChange={(event) => {
+                    setTitle(event.target.value);
+                    setTitleTouched(true);
+                  }}
+                />
+                <span
+                  className={cn(
+                    "tabular pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-xs",
+                    titleError ? "text-danger" : "text-label-tertiary",
+                  )}
+                  data-testid="create-note-title-count"
+                >
                   {title.trim().length} / {TITLE_MAX}
                 </span>
               </div>
+              {titleError ? (
+                <p role="alert" className="text-xs text-danger">
+                  {titleError}
+                </p>
+              ) : (
+                <p className="text-xs text-label-tertiary">标题会作为正文的第一个标题（H1）。</p>
+              )}
             </div>
 
             <Button
               type="submit"
-              className="min-h-11 w-full"
+              /* 画板 M-07：44 高、圆角 12 的业务主按钮（不是登录页的胶囊） */
+              className="min-h-11 w-full rounded-[12px]"
               disabled={submitting || effectiveBaseId === null}
             >
               {submitting ? "创建中…" : "创建笔记"}
@@ -297,7 +309,7 @@ export function MobileCreateNote() {
               />
             </div>
             <Button
-              className="min-h-11 w-full"
+              className="min-h-11 w-full rounded-[12px]"
               disabled={createBase.isPending}
               onClick={() => void handleCreateBase()}
               data-testid="create-note-base-submit"

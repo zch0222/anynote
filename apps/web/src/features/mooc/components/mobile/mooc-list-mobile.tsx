@@ -28,13 +28,13 @@ export function MobileMoocList({ baseId }: { baseId: number }) {
   const rows = moocs.data?.rows ?? [];
 
   return (
-    <MobileScreen title={base.data?.knowledgeBaseName?.trim() || "慕课"} back="/m/notes">
+    <MobileScreen
+      title={base.data?.knowledgeBaseName?.trim() || "慕课"}
+      back="/m/notes"
+      tone="paper"
+    >
       <div className="space-y-4 pb-4" data-testid="mobile-mooc-list">
-        <MobileBaseHeader
-          baseId={baseId}
-          current="mooc"
-          meta={moocs.data?.total ? `${moocs.data.total} 门课程` : undefined}
-        />
+        <MobileBaseHeader baseId={baseId} current="mooc" />
 
         <div className="px-4">
           {moocs.isPending ? (
@@ -70,17 +70,26 @@ export function MobileMoocList({ baseId }: { baseId: number }) {
                     */}
                     <span
                       aria-hidden="true"
-                      className={cn(coverClassName(mooc.id), "size-12 shrink-0 rounded-md")}
+                      className={cn(coverClassName(mooc.id), "size-12 shrink-0 rounded-[12px]")}
                     />
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="truncate text-headline font-semibold text-label">
                         {mooc.title?.trim() || "未命名课程"}
                       </span>
-                      {mooc.moocDescription?.trim() ? (
-                        <span className="line-clamp-2 text-footnote text-label-secondary">
-                          {mooc.moocDescription}
-                        </span>
-                      ) : null}
+                      {/*
+                        V09（2026-09-19 核对）：没有简介也要保留这一行——画板 M-03 图例 9
+                        的占位文案是「还没有填写简介」，省略整行会让行高随数据跳。
+                      */}
+                      <span
+                        className={cn(
+                          "line-clamp-2 text-footnote",
+                          mooc.moocDescription?.trim()
+                            ? "text-label-secondary"
+                            : "text-label-tertiary",
+                        )}
+                      >
+                        {mooc.moocDescription?.trim() || "还没有填写简介"}
+                      </span>
                       {mooc.updateTime ? (
                         <span className="tabular text-xs text-label-tertiary">
                           更新于 {formatRelativeTime(mooc.updateTime)}

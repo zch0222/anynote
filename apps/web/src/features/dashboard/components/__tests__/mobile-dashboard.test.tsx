@@ -295,21 +295,45 @@ describe("MobileDashboard", () => {
    * 断言"每个 section 的内容容器都带 min-h-*"，防止后来人重构时把这个
    * 不显眼的 class 丢掉——丢了页面照样能跑，只有性能门禁会红。
    */
-  it("三段内容区都有固定最小高度（吸收骨架与内容的高度差）", () => {
+  /*
+   * 回归：三段内容区在**加载期**要有固定最小高度。
+   *
+   * 它们的内容高度由数据决定（0 条是空态 64px、4 条是 4 行 300px），
+   * 骨架给几行都会与实际差一截，加载完成时把下面的内容整体顶走。
+   * M-01 画板早已标注本页 Lighthouse 未达标，CLS 就是主因
+   *（实测修前 0.286 → 修后 0.024，/m/dashboard 分数 74 → 89）。
+   *
+   * 2026-09-19 还原度核对 V03 又补了另一半：完成态**不能**继续占着这个高度，
+   * 否则少量内容也被推到首屏以下。所以断言分两态：pending 有 min-h、loaded 没有。
+   */
+  it("加载期三段内容区有固定最小高度，完成态按内容收缩", () => {
     setup({
-      bases: { ...IDLE, data: [{ id: 3, knowledgeBaseName: "库" }] },
-      notes: { ...IDLE, data: { rows: [{ id: 1, title: "笔记" }] } },
-      tasks: { ...IDLE, data: { rows: [{ id: 1, taskName: "任务", submissionStatus: 0 }] } },
+      bases: { isPending: true, isError: false },
+      notes: { isPending: true, isError: false },
+      tasks: { isPending: true, isError: false },
     });
-    const { container } = renderWithProviders(<MobileDashboard />);
-    const sections = Array.from(container.querySelectorAll("section.space-y-2"));
-    expect(sections.length).toBeGreaterThanOrEqual(3);
-    for (const section of sections) {
+    const { container, unmount } = renderWithProviders(<MobileDashboard />);
+    const pendingSections = Array.from(container.querySelectorAll("section.space-y-2"));
+    expect(pendingSections.length).toBeGreaterThanOrEqual(3);
+    for (const section of pendingSections) {
       const holder = section.lastElementChild;
       expect(
         holder?.className ?? "",
-        `内容区缺少 min-h-*，加载完成时会引发布局位移：${section.textContent?.slice(0, 20)}`,
+        `加载期内容区缺少 min-h-*，骨架换内容时会引发布局位移：${section.textContent?.slice(0, 20)}`,
       ).toMatch(/min-h-\[/);
+    }
+    unmount();
+
+    setup({
+      bases: { ...IDLE, data: [{ id: 3, knowledgeBaseName: "库" }] },
+      notes: { ...IDLE, data: { rows: [{ id: 1, title: "笔记" }] } },
+      tasks: { ...IDLE, data: { rows: [] } },
+    });
+    const loaded = renderWithProviders(<MobileDashboard />);
+    const loadedSections = Array.from(loaded.container.querySelectorAll("section.space-y-2"));
+    expect(loadedSections.length).toBeGreaterThanOrEqual(3);
+    for (const section of loadedSections) {
+      expect(section.lastElementChild?.className ?? "").not.toMatch(/min-h-\[/);
     }
   });
 

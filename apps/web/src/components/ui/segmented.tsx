@@ -17,6 +17,12 @@ export type SegmentedProps<T extends string> = {
   /** 分组名称，读屏时能听出这几格在切换什么。 */
   label: string;
   size?: "md" | "sm";
+  /**
+   * 形状变体（2026-09-20 移动端还原度核对 M-04/M-06 的画板口径）：
+   * - `"default"`：小圆角（桌面端沿用，早期桌面审计按此通过）
+   * - `"pill"`：轨道与选中格全圆胶囊（移动端画板统一是这个语言）
+   */
+  shape?: "default" | "pill";
   className?: string;
 };
 
@@ -35,6 +41,7 @@ export function Segmented<T extends string>({
   onChange,
   label,
   size = "md",
+  shape = "default",
   className,
 }: SegmentedProps<T>) {
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -61,7 +68,8 @@ export function Segmented<T extends string>({
       onKeyDown={onKeyDown}
       data-slot="segmented"
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-md bg-segmented-track p-0.5",
+        "inline-flex items-center gap-0.5 bg-segmented-track p-0.5",
+        shape === "pill" ? "rounded-full" : "rounded-md",
         size === "sm" ? "text-footnote" : "text-footnote",
         className,
       )}
@@ -81,7 +89,8 @@ export function Segmented<T extends string>({
             data-active={active ? "true" : "false"}
             onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex min-h-7 items-center justify-center rounded-xs px-3 font-medium outline-none transition-colors",
+              "inline-flex min-h-7 items-center justify-center px-3 font-medium outline-none transition-colors",
+              shape === "pill" ? "rounded-full" : "rounded-xs",
               "focus-visible:ring-2 focus-visible:ring-ring",
               active
                 ? "bg-segmented-thumb text-label shadow-card"

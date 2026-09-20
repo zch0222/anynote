@@ -166,6 +166,7 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
     <MobileScreen
       title={<SaveStatusBadge status={status} lastSavedAt={lastSavedAt} />}
       back={`/m/notes/${baseId}`}
+      tone="paper"
       actions={
         <MobileActionSheet
           open={actionsOpen}

@@ -70,18 +70,19 @@ export function MobileTaskCards({ baseId }: { baseId: number }) {
     value === null ? rows.length : rows.filter((task) => task.submissionStatus === value).length;
 
   return (
-    <MobileScreen title={base.data?.knowledgeBaseName?.trim() || "任务"} back="/m/notes">
+    <MobileScreen
+      title={base.data?.knowledgeBaseName?.trim() || "任务"}
+      back="/m/notes"
+      tone="paper"
+    >
       <div className="space-y-4 pb-4" data-testid="mobile-tasks">
         {/* 只有全部/未提交/已退回/已提交四格，计数取全量、不随筛选变 */}
-        <MobileBaseHeader
-          baseId={baseId}
-          current="tasks"
-          meta={rows.length ? `${rows.length} 个任务` : undefined}
-        />
+        <MobileBaseHeader baseId={baseId} current="tasks" />
 
         <div className="space-y-3 px-4">
           <Segmented
             label="按状态筛选"
+            shape="pill"
             value={filter}
             onChange={setFilter}
             options={STATUS_FILTERS.map((item) => ({

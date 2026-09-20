@@ -102,11 +102,16 @@ describe("MobileNoteList", () => {
 
     expect(screen.getByRole("button", { name: "上一页" })).toBeDisabled();
     fireEvent.click(screen.getByTestId("mobile-note-next"));
-    // 换页后 useNotesQuery 会带新的 page 再取一次
-    expect(vi.mocked(useNotesQuery).mock.lastCall?.[0]).toMatchObject({
-      knowledgeBaseId: 3,
-      page: 2,
-    });
+    /*
+     * 换页后 useNotesQuery 会带新的 page 再取一次。
+     * 不能用 `mock.lastCall`：库头（MobileBaseHeader）也取一次 pageSize=1 的
+     * 笔记总数，它的调用排在列表之后，lastCall 永远是库头那次。
+     */
+    expect(
+      vi
+        .mocked(useNotesQuery)
+        .mock.calls.some(([arg]) => arg?.knowledgeBaseId === 3 && arg?.page === 2),
+    ).toBe(true);
   });
 
   it("空态文案区分有没有新建入口", () => {

@@ -79,6 +79,20 @@ describe("MobileMoocList", () => {
     expect(screen.queryByRole("button", { name: /选择知识库/ })).toBeNull();
   });
 
+  it("无简介的课程保留占位行「还没有填写简介」（V09：省略整行会让行高随数据跳）", () => {
+    vi.mocked(useMoocsQuery).mockReturnValue({
+      ...IDLE,
+      data: {
+        rows: [{ id: 9, title: "数据结构", moocDescription: "   ", updateTime: null }],
+        total: 1,
+      },
+    } as never);
+
+    renderWithProviders(<MobileMoocList baseId={3} />);
+
+    expect(screen.getByText("还没有填写简介")).toBeInTheDocument();
+  });
+
   it("带上知识库内的公共头部，当前 Tab 是「慕课」", () => {
     vi.mocked(useMoocsQuery).mockReturnValue({ ...IDLE, data: { rows: [], total: 0 } } as never);
     renderWithProviders(<MobileMoocList baseId={3} />);

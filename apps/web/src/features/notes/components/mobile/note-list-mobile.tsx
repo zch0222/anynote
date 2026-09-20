@@ -46,6 +46,7 @@ export function MobileNoteList({ baseId, showCreate = true }: MobileNoteListProp
     <MobileScreen
       title={title}
       back="/m/notes"
+      tone="paper"
       actions={
         showCreate ? (
           <Link
@@ -60,11 +61,7 @@ export function MobileNoteList({ baseId, showCreate = true }: MobileNoteListProp
       }
     >
       <div className="space-y-4 pb-4" data-testid="mobile-note-list">
-        <MobileBaseHeader
-          baseId={baseId}
-          current="notes"
-          meta={notes.data?.total ? `${notes.data.total} 篇笔记` : undefined}
-        />
+        <MobileBaseHeader baseId={baseId} current="notes" />
 
         <div className="px-4">
           {notes.isPending ? (

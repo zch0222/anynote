@@ -3,7 +3,6 @@
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { ListRowsSkeleton } from "@/components/loading/skeletons";
-import { PasswordInput } from "@/components/shared/password-input";
 import { QueryError } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +18,7 @@ import {
 } from "@/features/settings/use-profile";
 import { toUserMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
-import { Check, ChevronRight, Lock, Monitor, Moon, Plug, Sun } from "lucide-react";
+import { Check, ChevronRight, Eye, EyeOff, Lock, Monitor, Moon, Plug, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -195,6 +194,8 @@ function MobileAccountSettings() {
   }
 
   const sexLabel = SEX_OPTIONS.find((option) => option.value === form.sex)?.label ?? "未设置";
+  /** V18：新密码四条规则全过才允许点「修改密码」。 */
+  const passwordRulesPassed = PASSWORD_RULES.every((rule) => rule.test(newPassword));
 
   return (
     <div className="space-y-6" data-testid="settings-account">
@@ -260,7 +261,8 @@ function MobileAccountSettings() {
           {dirty ? "有未保存的修改" : "资料与服务器一致"}
         </p>
         <Button
-          className="min-h-11 w-full"
+          /* 画板 M-11：业务主按钮圆角 12，不是登录页的胶囊 */
+          className="min-h-11 w-full rounded-[12px]"
           disabled={!dirty || update.isPending}
           onClick={() => void handleSave()}
           data-testid="settings-save-profile"
@@ -270,23 +272,24 @@ function MobileAccountSettings() {
       </div>
 
       <SettingsGroup label="修改密码">
-        <div className="space-y-2 px-4 py-3">
-          <PasswordInput
-            aria-label="原密码"
-            placeholder="原密码"
-            className="rounded-md"
-            value={oldPassword}
-            onChange={(event) => setOldPassword(event.target.value)}
-            data-testid="settings-old-password"
-          />
-          <PasswordInput
-            aria-label="新密码"
-            placeholder="新密码"
-            className="rounded-md"
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            data-testid="settings-new-password"
-          />
+        {/*
+          V18（2026-09-19 核对）：密码区还原成**左标签右输入**的两行（与昵称 / 邮箱
+          同一种行表单），不再是两个独立占位输入框堆在卡里；规则不满足时
+          「修改密码」按钮禁用，避免点一次才知道不合法。
+        */}
+        <SettingsPasswordRow
+          label="原密码"
+          value={oldPassword}
+          onChange={setOldPassword}
+          testId="settings-old-password"
+        />
+        <SettingsPasswordRow
+          label="新密码"
+          value={newPassword}
+          onChange={setNewPassword}
+          testId="settings-new-password"
+        />
+        <div className="px-4 py-3">
           {/*
             H-3(b)：画板是**一行四个 chip**（`⊘ 8–15 位 ⊘ 含大写字母 ⊘ 含小写字母 ⊘ 含数字`），
             原实现是 `space-y-1` 的纵向四行——多占三行，把「修改密码」卡撑高一截。
@@ -319,8 +322,8 @@ function MobileAccountSettings() {
           </ul>
           <Button
             variant="outline"
-            className="min-h-11 w-full"
-            disabled={resetPassword.isPending}
+            className="min-h-11 w-full rounded-[12px]"
+            disabled={!oldPassword || !passwordRulesPassed || resetPassword.isPending}
             onClick={() => void handleChangePassword()}
             data-testid="settings-change-password"
           >
@@ -335,7 +338,8 @@ function MobileAccountSettings() {
           onOpenChange={setSexSheetOpen}
           title="性别"
           actions={SEX_OPTIONS.map((option) => ({
-            label: option.value === form.sex ? `${option.label} ✓` : option.label,
+            label: option.label,
+            checked: option.value === form.sex,
             onSelect: () => setForm((current) => ({ ...current, sex: option.value })),
           }))}
         />
@@ -349,12 +353,12 @@ function MobileAccountSettings() {
  * ------------------------------------------------------------------ */
 
 function MobileAppearanceSettings() {
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
 
   return (
     <div className="space-y-3" data-testid="settings-appearance">
       <SettingsGroup label="主题">
-        {THEME_OPTIONS.map(({ value, label, swatch }) => {
+        {THEME_OPTIONS.map(({ value, label, icon: Icon, swatch }) => {
           const active = theme === value;
           return (
             <li key={value}>
@@ -367,12 +371,31 @@ function MobileAppearanceSettings() {
                 data-testid={`theme-option-${value}`}
                 className="flex min-h-13 w-full items-center gap-3 px-4 py-2 text-left text-base text-label outline-none transition-colors focus-visible:bg-fill-hover"
               >
-                {/* 图例 16：色块 28，浅 / 深 / 渐变三态一眼分得出来 */}
+                {/*
+                  V19（2026-09-19 核对）：色块 28 里要坐落太阳 / 月亮 / 显示器图标，
+                  纯色球分不清三态；跟随系统用半浅半深的渐变底 + 显示器图标。
+                */}
                 <span
                   aria-hidden="true"
-                  className={cn("size-7 shrink-0 rounded-lg border border-separator", swatch)}
-                />
-                <span className="min-w-0 flex-1 truncate">{label}</span>
+                  className={cn(
+                    "grid size-7 shrink-0 place-items-center rounded-[7px] border border-separator",
+                    swatch,
+                  )}
+                >
+                  <Icon className={cn("size-4", value === "light" ? "text-label" : "text-white")} />
+                </span>
+                <span className="min-w-0 flex-1 truncate">
+                  {label}
+                  {/* V19：选中行写明"当前正在使用"，跟随系统时补实际解析出的主题 */}
+                  {active ? (
+                    <span className="ml-2 text-footnote text-label-tertiary">
+                      当前正在使用
+                      {value === "system" && resolvedTheme
+                        ? `（${resolvedTheme === "dark" ? "深色" : "浅色"}）`
+                        : ""}
+                    </span>
+                  ) : null}
+                </span>
                 {active ? (
                   <Check className="size-4 shrink-0 text-accent" aria-hidden="true" />
                 ) : null}
@@ -416,7 +439,11 @@ function MobileAiSettings() {
 function MobileIntegrationsSettings() {
   return (
     <div className="space-y-3" data-testid="settings-integrations">
-      <SettingsGroup label="集成">
+      {/*
+        V22（2026-09-19 核对）：顶栏标题已经是「集成」，分组再写一遍「集成」是重复；
+        空态按画板恢复**虚线外框**，与全站其它空态同一种语言。
+      */}
+      <ul className="overflow-hidden rounded-lg border border-dashed border-separator bg-surface">
         <li className="px-4 py-6 text-center">
           <Plug className="mx-auto size-7 text-label-tertiary" aria-hidden="true" />
           <p className="mt-3 text-[0.9375rem] font-semibold text-label">暂无可用的集成</p>
@@ -424,7 +451,7 @@ function MobileIntegrationsSettings() {
             文件存储与 AI 服务由管理员在后台配置，这里暂时没有需要你连接的服务。
           </p>
         </li>
-      </SettingsGroup>
+      </ul>
     </div>
   );
 }
@@ -481,6 +508,45 @@ function SettingsInputRow({
         onChange={(event) => onChange(event.target.value)}
         className="min-w-0 flex-1 bg-transparent text-right text-base text-label outline-none placeholder:text-label-tertiary"
       />
+    </li>
+  );
+}
+
+/**
+ * 密码行（V18）：与输入行同一种"标签左、值右"的行表单，右侧带显隐切换（44 命中区）。
+ */
+function SettingsPasswordRow({
+  label,
+  value,
+  onChange,
+  testId,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  testId?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <li className="flex min-h-13 items-center gap-3 px-4 py-2">
+      <span className="w-16 shrink-0 text-base text-label">{label}</span>
+      <input
+        type={visible ? "text" : "password"}
+        value={value}
+        placeholder="未填写"
+        aria-label={label}
+        data-testid={testId}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-w-0 flex-1 bg-transparent text-right text-base text-label outline-none placeholder:text-label-tertiary"
+      />
+      <button
+        type="button"
+        aria-label={visible ? `隐藏${label}` : `显示${label}`}
+        onClick={() => setVisible((current) => !current)}
+        className="-mr-2 grid size-11 shrink-0 place-items-center rounded-lg text-label-secondary outline-none hover:bg-fill-hover focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {visible ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
+      </button>
     </li>
   );
 }

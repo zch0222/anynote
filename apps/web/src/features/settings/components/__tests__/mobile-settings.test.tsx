@@ -169,11 +169,13 @@ describe("账号分节（M-11 行表单）", () => {
     const input = screen.getByTestId("settings-new-password");
     expect(input).toHaveAttribute("type", "password");
 
-    // 原密码与新密码各有一个显隐按钮，这里点第二个（新密码那一行）
-    const toggles = screen.getAllByRole("button", { name: "显示密码" });
-    expect(toggles).toHaveLength(2);
-    fireEvent.click(toggles[1] as HTMLElement);
+    // 原密码与新密码各有一个显隐按钮（V18：行表单右侧 44 命中区）
+    expect(screen.getByRole("button", { name: "显示原密码" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "显示新密码" }));
     expect(screen.getByTestId("settings-new-password")).toHaveAttribute("type", "text");
+
+    // V18：规则没全过之前「修改密码」禁用
+    expect(screen.getByTestId("settings-change-password")).toBeDisabled();
 
     // 规则清单四项，初始全不通过
     const rules = within(screen.getByTestId("settings-password-rules")).getAllByRole("listitem");
@@ -183,6 +185,13 @@ describe("账号分节（M-11 行表单）", () => {
     fireEvent.change(input, { target: { value: "Abcd1234" } });
     const passed = within(screen.getByTestId("settings-password-rules")).getAllByRole("listitem");
     expect(passed.every((node) => node.getAttribute("data-passed") === "true")).toBe(true);
+
+    // 新密码合法但原密码还空着：仍然禁用；补齐原密码后才可点
+    expect(screen.getByTestId("settings-change-password")).toBeDisabled();
+    fireEvent.change(screen.getByTestId("settings-old-password"), {
+      target: { value: "OldPass1" },
+    });
+    expect(screen.getByTestId("settings-change-password")).toBeEnabled();
   });
 
   it("资料加载失败走 QueryError 并可重试", () => {
