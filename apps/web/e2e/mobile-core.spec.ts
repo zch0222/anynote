@@ -1,4 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
+import { establishFreshSession } from "./support/session";
 
 /**
  * 移动端关键路径（M10.5）。
@@ -87,6 +88,40 @@ test.describe("移动端入口分流", () => {
 
     // 清掉偏好，别影响后面的用例
     await page.context().clearCookies({ name: "anynote_view" });
+  });
+});
+
+test.describe("移动端会话保活", () => {
+  /**
+   * 复现「移动端刷新之后登录状态丢了」：`at` 是带 `expires` 的 httpOnly Cookie，
+   * 过期后浏览器直接删掉它，而寿命两倍的 `rt` 还在。整页刷新（切后台回来、标签页
+   * 被杀重开都算）必须仍能进工作台——由页面加载时的 `/api/auth/me` 用 `rt` 换新
+   * `at`，而不是被中间件 307 踢回登录页。
+   */
+  test("at 过期（仅剩 rt）时整页刷新仍保持登录，并换回新 at", async ({ page }) => {
+    // refresh 会吊销旧 rt，共享 storageState 里的凭据只能用一次；
+    // 这里现场登录换一对新 Cookie 再模拟「浏览器已删除过期 at」
+    await establishFreshSession(page);
+    await page.context().clearCookies({ name: "at" });
+
+    await page.goto("/m/dashboard");
+    await expect(page).toHaveURL(/\/m\/dashboard$/, { timeout: 30_000 });
+    await expect(page.getByTestId("mobile-dashboard")).toBeVisible({ timeout: 30_000 });
+
+    // /api/auth/me 已用 rt 续期并写回新的 at Cookie（httpOnly，只能从上下文读）
+    const at = (await page.context().cookies()).find((cookie) => cookie.name === "at");
+    expect(at, "at 应已随续期重新写入").toBeDefined();
+    expect((at?.expires ?? 0) * 1000).toBeGreaterThan(Date.now());
+  });
+
+  test("仅剩无效 rt 时整页刷新最终仍回到登录页", async ({ page }) => {
+    // 中间件对「有 rt」放行是信任 BFF 会验真伪；这里证明验伪后仍会被送回登录页
+    const baseURL = test.info().project.use.baseURL ?? "http://localhost:3000";
+    await page.context().clearCookies();
+    await page.context().addCookies([{ name: "rt", value: "not-a-valid-jwt", url: baseURL }]);
+
+    await page.goto("/m/dashboard");
+    await expect(page).toHaveURL(/\/login/, { timeout: 30_000 });
   });
 });
 

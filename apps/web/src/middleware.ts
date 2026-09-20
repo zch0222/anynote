@@ -38,7 +38,14 @@ function applyViewCookie(
 
 export function middleware(request: NextRequest) {
   // 页面层只检查 Cookie 是否存在，真实身份验证由 BFF 与 Gateway 完成。
-  const authed = Boolean(request.cookies.get("at")?.value);
+  //
+  // 判据是 `at` **或** `rt`：`at` 是带 `expires` 的 Cookie，过期后浏览器会直接删掉它，
+  // 而寿命两倍于 `at` 的 `rt` 还在。只认 `at` 的话，「at 过期 + 整页刷新」会被这里
+  // 307 到 /login，登录态凭空丢失——移动端整页加载频繁（切后台回来、标签页被杀重开）
+  // 最先撞上。仅剩 `rt` 的请求放行到页面后，`/api/auth/me` 会用 `rt` 换新 `at`（见
+  // `lib/auth/profile.ts`）；`rt` 也失效时由该端点返回 401，页面自己跳登录页兜底。
+  // 注意用 `||` 而不是 `??`：`at=`（空值 Cookie）必须视为「没有 at」落到 rt 上。
+  const authed = Boolean(request.cookies.get("at")?.value || request.cookies.get("rt")?.value);
 
   if (!authed) {
     /*
