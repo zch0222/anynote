@@ -285,6 +285,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `docs/changelist/` — 各批改动的逐文件审计清单；`README.md` 是编写规范与命名规则（`YYYY-MM-DD-<slug>.md`）
 - `apps/cli/README.md` — CLI 的构建、环境变量、凭据安全与测试命令
 - `.claude/skills/anynote-*` — 给 Claude Code 的 CLI / 笔记配方 / 仓库操作手册（`anynote-cli` 的 `reference/commands.md` 是生成物）
+- `docs/collab/notes-collab-merge-plan.md` — 笔记协同合并方案（**v2.0 简化稿，2026-09-21，待评审**，取代 v1.0 草案）：把 `/docs` 协同文档并入知识库笔记——房间改 `note:<noteId>`、令牌绑定房间与只读、真相源收敛回 MySQL、note 房间不落盘、**每个客户端各自保存（不选 leader，A0409 走覆盖式重发）**、灰度用环境变量而非数据库列、`/docs` 直接退役；里程碑 M13.0-M13.5。§1.4 记了一个开工前必修的既有缺陷（`getNotePermissions` 只读成员分支），§13 记了 v1.0 被砍掉的设计与理由（type 5 选举、`.ver` 仲裁、服务端权威写回、迁移向导）
 - `docs/refactor/REFACTOR_PLAN.md` / `FRONTEND_REFACTOR_PLAN.md` / `FRONTEND_MILESTONES.md` — 重构决策与执行计划
 - `docs/refactor/TASKS.md` — Phase 级进度与未完成项
 - `docs/backend-security-inventory.md` — 后端安全配置清单
