@@ -20,7 +20,6 @@ import {
   Bot,
   ChevronRight,
   CircleUser,
-  FileText,
   LayoutDashboard,
   Library,
   type LucideIcon,
@@ -47,7 +46,8 @@ const PAGE_ROW_ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
   "/m/notes": { icon: Library, tone: "bg-[#30d158]" },
   "/m/ai/chat": { icon: MessageSquare, tone: "bg-[#ff9f0a]" },
   "/m/ai/pdf": { icon: Bot, tone: "bg-[#bf5af2]" },
-  "/m/docs": { icon: FileText, tone: "bg-[#5ac8fa]" },
+  // `/m/docs` 的条目随 /docs 体系退役（M13.5）删除：候选集已无这条路由，
+  // 留着是一份永不命中的陈旧映射（旧书签也已被中间件挡回笔记列表）。
   "/m/me": { icon: CircleUser, tone: "bg-[#5e5ce6]" },
   // 搜索候选里设置的地址是分节页 /m/settings/profile，不是 /m/settings（它只是个别名）
   "/m/settings/profile": { icon: Settings, tone: "bg-[#8e8e93]" },

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { ensureKnowledgeBase } from "./support/account";
 import { replaceLastParagraph, replaceLeadingHeading } from "./support/editor";
+import { expectNoteSaved } from "./support/save-status";
 
 /**
  * 笔记**没有独立的标题输入行**：标题就是正文的第一个一级标题
@@ -27,7 +28,8 @@ test("顶部一级标题即笔记标题，同步目录、刷新后与正文一�
   const treeLink = page.locator(`a[href="${notePath}"]`);
   // 目录行是「标题 + 更新于…」两行，所以断言收敛到标题那一行而不是整个链接
   await expect(treeLink.getByText("同步后的标题", { exact: true })).toBeVisible();
-  await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible();
+  // 判据走 `data-status`：协同模式下徽标文案是「已同步」，写死「已保存」会假红
+  await expectNoteSaved(page);
   await page.reload();
   await expect(surface.locator("h1")).toHaveText("同步后的标题");
   await expect(surface).toContainText("正文保持独立");
@@ -35,7 +37,7 @@ test("顶部一级标题即笔记标题，同步目录、刷新后与正文一�
   // 修改已有 H1；标题与正文必须由同一份草稿保存。
   await replaceLeadingHeading(page, "再次修改标题");
   await expect(treeLink.getByText("再次修改标题", { exact: true })).toBeVisible();
-  await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible();
+  await expectNoteSaved(page);
   await page.reload();
   await expect(surface.locator("h1")).toHaveText("再次修改标题");
 

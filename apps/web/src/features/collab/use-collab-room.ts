@@ -1,6 +1,6 @@
 "use client";
 
-import { type CollabSession, type CollabUser, openCollabRoom } from "@/lib/collab/session";
+import type { CollabSession, CollabUser } from "@/lib/collab/session";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WebsocketProvider } from "y-websocket";
 import type * as Y from "yjs";
@@ -99,7 +99,10 @@ export function useCollabRoom(room: string | null): CollabRoomState {
     let active: CollabSession | null = null;
     const controller = new AbortController();
 
-    openCollabRoom(room, { signal: controller.signal })
+    // 动态加载 session：它牵出 yjs / y-websocket（重依赖），静态引入会把这两者
+    // 并进笔记路由的首屏图，把 `/notes/[baseId]/[noteId]` 顶出预算（仓库禁止清单）。
+    import("@/lib/collab/session")
+      .then(({ openCollabRoom }) => openCollabRoom(room, { signal: controller.signal }))
       .then((next) => {
         // 组件在换令牌期间就卸载了：直接把刚建好的会话拆掉，别留下悬空连接。
         if (disposed) {

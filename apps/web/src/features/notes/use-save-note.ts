@@ -18,6 +18,13 @@ import {
 export const VERSION_CONFLICT_CODE = RES_CODE.VERSION_CONFLICT;
 
 export const AUTOSAVE_DEBOUNCE_MS = 1500;
+/**
+ * 协同模式的防抖时长（方案 Q2 / §7.3）。
+ *
+ * 单人模式是"停手后一拍"（1.5s），协同模式下在场每个人各跑一份保存，
+ * 收紧到 1.5s 会让写放大与 A0409 概率都上去；放宽到 3s 仍是"停手后一拍"的体感。
+ */
+export const COLLAB_AUTOSAVE_DEBOUNCE_MS = 3000;
 /** 保存失败后的重试间隔；只重试网络/服务端故障，冲突不重试。 */
 export const RETRY_DELAY_MS = 5000;
 
@@ -87,9 +94,34 @@ function isOffline(): boolean {
 export function useSaveNote(options: {
   noteId: number;
   initialVersion: string | null;
-  debounceMs?: number;
+  debounceMs?: number | undefined;
+  /**
+   * 版本冲突的处理策略（方案 §7.3.2）。
+   *
+   * - `prompt`（默认）：现状——回读比对，内容一致则换号重发，真被别人改过才弹冲突对话框。
+   * - `overwrite`：协同模式——本地 CRDT 状态按构造已包含房间里所有人的编辑，服务端那份
+   *   只可能是它的旧投影，因此 A0409 一律换号重发，不弹冲突框。
+   */
+  conflictPolicy?: "prompt" | "overwrite" | undefined;
+  /**
+   * 最近一次成功落库的版本令牌（协同模式来自共享 `meta.savedVersion`）。
+   *
+   * 别人刚存过、我接着编辑时，这个值会把我手里的过期版本号顶成最新的，
+   * 让常态下的 A0409 归零；只在真的同时落库时才回落到换号重发。
+   * 传 null / undefined 时是空操作，单人链路完全不受影响。
+   */
+  sharedVersion?: string | null | undefined;
+  /** 保存成功后的回调。协同模式据此把新版本号写回共享 meta。 */
+  onSaved?: ((version: string | null) => void) | undefined;
 }) {
-  const { noteId, initialVersion, debounceMs = AUTOSAVE_DEBOUNCE_MS } = options;
+  const {
+    noteId,
+    initialVersion,
+    debounceMs = AUTOSAVE_DEBOUNCE_MS,
+    conflictPolicy = "prompt",
+    sharedVersion = null,
+    onSaved,
+  } = options;
   const queryClient = useQueryClient();
   const detailKey = useMemo(() => noteQueryKeys.detail(noteId), [noteId]);
 
@@ -120,6 +152,22 @@ export function useSaveNote(options: {
   const blocked = useRef(false);
   // 事件回调与定时器要拿到最新的 save，但 save 本身依赖它们，用 ref 打破循环
   const saveRef = useRef<() => Promise<void>>(async () => undefined);
+  /** `onSaved` 只在保存成功那一刻调用一次，用 ref 保持稳定、不参与依赖数组。 */
+  const onSavedRef = useRef<((version: string | null) => void) | undefined>(undefined);
+  onSavedRef.current = onSaved;
+
+  /**
+   * 协同模式：把共享的 `meta.savedVersion` 同步进本地版本号。
+   *
+   * **只在没有飞行中的请求时对齐**：`runSave` 已经拿着 `versionRef` 在发请求，
+   * 此刻改它会让请求体与实际发出的版本号脱节；保存成功后 `onSaved` 会再广播一次，
+   * 所以跳过一拍不会漏掉任何版本号。
+   */
+  useEffect(() => {
+    if (!sharedVersion) return;
+    if (inFlight.current) return;
+    versionRef.current = sharedVersion;
+  }, [sharedVersion]);
 
   /**
    * 只在这篇笔记第一次拿到服务端时间戳时 seed 一次版本号与基线内容。
@@ -152,6 +200,19 @@ export function useSaveNote(options: {
   const runSave = useCallback(async (): Promise<SaveOutcome> => {
     const draft = pendingRef.current;
     if (!draft) return "done";
+    /*
+     * 内容没变就不发（方案 §7.3.2 第 2 条）。
+     *
+     * 这是协同模式防乒乓的关键：换号重发之后 `baseRef` 已等于服务端内容，
+     * 手里没有更新内容的客户端就此打住。对单人模式也是净优化——
+     * 卸载补发、resync 重发都可能送来与基线完全相同的重复内容。
+     */
+    const baseline = baseRef.current;
+    if (baseline && baseline.title === draft.title && baseline.content === draft.content) {
+      pendingRef.current = null;
+      setStatus("saved");
+      return "done";
+    }
     pendingRef.current = null;
     // 记下"正在送什么"，供页面在响应回来之前被关掉时补发（见 `flushOnUnload`）
     inFlightDraft.current = draft;
@@ -189,6 +250,8 @@ export function useSaveNote(options: {
       // 标题与更新时间会改变列表排序，列表整体失效由各页面自己重取
       void queryClient.invalidateQueries({ queryKey: noteQueryKeys.lists });
       setLastSavedAt(new Date());
+      // 协同模式：把新版本号经共享 meta 广播给在场各端，把常态 A0409 降到 0
+      onSavedRef.current?.(result.version ?? toVersion(result.updateTime));
       if (pendingRef.current) {
         // 请求进行中到期的 debounce 会被 inFlight 挡掉，这里补排一次，
         // 否则这批改动要等用户下次敲键盘才有人管
@@ -206,6 +269,25 @@ export function useSaveNote(options: {
       pendingRef.current = local;
 
       if (error instanceof ApiError && error.code === VERSION_CONFLICT_CODE) {
+        /*
+         * 覆盖式冲突策略（方案 §7.3.2 第 1 条）：协同模式下版本冲突不是「冲突」。
+         * 本地 CRDT 状态按构造已包含房间里所有人的编辑，服务端那份只可能是它的旧投影，
+         * 因此直接对齐服务端版本号后原样重发，跳过 baseRef 比对与冲突对话框。
+         */
+        if (conflictPolicy === "overwrite") {
+          const fresh = await fetchNote(noteId).catch(() => null);
+          const freshVersion = toVersion(fresh?.updateTime);
+          if (freshVersion === null) {
+            // 回读失败时不能编一个版本号硬冲，停在错误态等固定间隔重试
+            setStatus("error");
+            return "done";
+          }
+          versionRef.current = freshVersion;
+          baseRef.current = { title: fresh?.title ?? "", content: fresh?.content ?? "" };
+          pendingRef.current = local;
+          return "resync";
+        }
+
         const server = await fetchNote(noteId).catch(() => null);
         const serverDraft = { title: server?.title ?? "", content: server?.content ?? "" };
         const serverVersion = toVersion(server?.updateTime);
@@ -238,7 +320,7 @@ export function useSaveNote(options: {
       setStatus(isOffline() ? "offline" : "error");
       return "done";
     }
-  }, [armDebounce, detailKey, noteId, queryClient]);
+  }, [armDebounce, conflictPolicy, detailKey, noteId, queryClient]);
 
   const save = useCallback(async (): Promise<void> => {
     if (inFlight.current || blocked.current || !pendingRef.current) return;
@@ -250,8 +332,15 @@ export function useSaveNote(options: {
     inFlight.current = true;
     let outcome: SaveOutcome = "done";
     try {
-      // 最多两拍：第一拍撞上版本令牌漂移时换号再发一次，之后不再自动重试，避免死循环
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      /*
+       * 换号重发的拍数（方案 §7.3.2 第 3 条）。
+       *
+       * 默认两拍：第一拍撞上版本令牌漂移时换号再发一次，之后不再自动重试，避免死循环。
+       * 协同模式放宽到 4 拍：读版本号与写回之间可能又插进一个人，两拍不够会停在
+       * error 态闪徽标。重试本身幂等（内容相同会被服务端的空 diff 吞掉）。
+       */
+      const maxAttempts = conflictPolicy === "overwrite" ? 4 : 2;
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         if (!pendingRef.current) break;
         outcome = await runSave();
         if (outcome === "done") break;
@@ -263,7 +352,7 @@ export function useSaveNote(options: {
       // 换过版本号仍被判过期：交给固定间隔重试，不能停在 saving 态让状态徽标假死
       setStatus("error");
     }
-  }, [runSave]);
+  }, [conflictPolicy, runSave]);
 
   saveRef.current = save;
 

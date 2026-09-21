@@ -1,4 +1,4 @@
-import { MobileNoteEditor } from "@/features/notes/components/mobile/note-editor-mobile";
+import { MobileNoteEditor } from "@/features/notes/components/mobile/note-editor-mobile-loader";
 import { notFound } from "next/navigation";
 
 export default async function Page({

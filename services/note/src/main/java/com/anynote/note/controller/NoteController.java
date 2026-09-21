@@ -24,6 +24,7 @@ import com.anynote.note.model.bo.*;
 import com.anynote.note.model.dto.*;
 import com.anynote.note.model.vo.NoteHistoryListItemVO;
 import com.anynote.note.model.vo.NoteHistoryVO;
+import com.anynote.note.model.vo.CollabGrantVO;
 import com.anynote.note.model.vo.NoteListVO;
 import com.anynote.note.model.vo.NoteSaveResultVO;
 import com.anynote.note.service.NoteHistoryService;
@@ -113,6 +114,17 @@ public class NoteController {
                 .id(noteId)
                 .build();
         return ResUtil.success(noteService.getNoteById(queryParam));
+    }
+
+    @Operation(summary = "获取笔记协同准入",
+            description = "返回当前登录用户对该笔记的协同权限、版本令牌与标题，供 BFF 决定是否签发协同令牌。"
+                    + "普通 Bearer 认证（语义是「我对此笔记的协同准入」，非内部调用，不加 @InnerAuth）；"
+                    + "无权限时 perm 为 NONE 而不抛 401，便于前端区分「没权限」与「没登录」；"
+                    + "笔记不存在返回 A0404")
+    @GetMapping("{noteId}/collab-grant")
+    public ResData<CollabGrantVO> getCollabGrant(@NotNull(message = "笔记id不能为空")
+                                                 @PathVariable Long noteId) {
+        return ResUtil.success(noteService.getCollabGrant(noteId));
     }
 
     @Operation(summary = "删除笔记", description = "逻辑删除笔记及其正文，需要笔记的管理权限")

@@ -11,6 +11,15 @@ export type CollabIdentity = {
   color: string;
 };
 
+/** 校验通过的令牌凭据：身份 + 绑定的房间 + 只读标志。 */
+export type CollabTokenClaims = {
+  identity: CollabIdentity;
+  /** 令牌声明的房间名，必须与握手房间逐字相等。 */
+  room: string;
+  /** 权限低于 EDIT 的连接为 true，服务端据此丢弃写方向消息。 */
+  ro: boolean;
+};
+
 export class CollabAuthError extends Error {
   constructor(message: string) {
     super(message);
@@ -33,14 +42,25 @@ function readIdentity(payload: JWTPayload): CollabIdentity {
   };
 }
 
-export async function verifyCollabToken(token: string, secret: string): Promise<CollabIdentity> {
+/**
+ * 校验协同令牌并解出完整凭据。
+ *
+ * `room` 缺失一律视为非法令牌（**拒绝而非放行**）：灰度期旧版本前端签的令牌不带
+ * `room`，放行等于让它们绕过房间绑定、继续写任意房间——那正是本次要修的越权面。
+ */
+export async function verifyCollabToken(token: string, secret: string): Promise<CollabTokenClaims> {
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), {
       issuer: COLLAB_TOKEN_ISSUER,
       audience: COLLAB_TOKEN_AUDIENCE,
       algorithms: ["HS256"],
     });
-    return readIdentity(payload);
+    const identity = readIdentity(payload);
+    const { room, ro } = payload as JWTPayload & { room?: unknown; ro?: unknown };
+    if (typeof room !== "string" || room === "") {
+      throw new CollabAuthError("协同令牌缺少房间声明");
+    }
+    return { identity, room, ro: ro === true };
   } catch (error) {
     if (error instanceof CollabAuthError) throw error;
     throw new CollabAuthError(error instanceof Error ? error.message : "协同令牌校验失败");

@@ -2,7 +2,6 @@ import {
   BookOpen,
   Bot,
   CheckSquare,
-  FileText,
   FolderOpen,
   LayoutDashboard,
   MessageSquare,
@@ -21,11 +20,13 @@ import {
  * 全部通过 `knowledge_base_id` 归属其下。导航层级必须复刻这个结构，
  * 而不是把四类子资源平铺成同级入口——那会让人看不出从属关系。
  *
- * 因此一级导航只有三类：
+ * 因此一级导航只有两类：
  *   1. 知识库（动态列表，来自 `useKnowledgeBasesQuery`）
  *   2. AI 助手（跨知识库能力）
- *   3. 协作（跨知识库能力：协同文档库）
  * 设置不进一级导航，它在侧栏页脚的用户卡里。
+ *
+ * 「协作」一级入口随 `/docs` 退役一并删除（M13.5）：协同不再是独立的文档库，
+ * 而是「笔记的一种编辑模式」，入口就是笔记本身。
  * ------------------------------------------------------------------ */
 
 export type NavItem = {
@@ -139,17 +140,6 @@ export const toolGroups = [
         href: "/ai/pdf",
         icon: Bot,
         description: "围绕文档提问，更快理解关键信息。",
-      },
-    ],
-  },
-  {
-    label: "协作",
-    items: [
-      {
-        title: "协同文档",
-        href: "/docs",
-        icon: FileText,
-        description: "多人实时协作的文档库。",
       },
     ],
   },
@@ -299,7 +289,6 @@ export type MobileTab = (typeof mobileTabs)[number];
 const MOBILE_ROUTE_PREFIXES = [
   "/dashboard",
   "/notes",
-  "/docs",
   "/tasks",
   "/mooc",
   "/ai/chat",
@@ -365,7 +354,6 @@ const IMMERSIVE_PATTERNS = [
   /^\/m\/notes\/\d+\/\d+$/,
   // 笔记历史版本：/m/notes/:baseId/:noteId/history
   /^\/m\/notes\/\d+\/\d+\/history$/,
-  /^\/m\/docs\/[^/]+$/,
   /^\/m\/ai\/chat\/[^/]+$/,
   /^\/m\/ai\/pdf\/[^/]+$/,
   /^\/m\/search$/,
@@ -382,7 +370,6 @@ export function isImmersiveMobileRoute(pathname: string): boolean {
  * 从「我的」进去会看不到"在哪个库"，与本库 Tab 里的同一份数据变成两条不同路径。
  */
 export const mobileMoreRoutes = [
-  { title: "协同文档", href: "/m/docs", icon: FileText, description: "多人实时协作的文档库。" },
   { title: "PDF 问答", href: "/m/ai/pdf", icon: Bot, description: "围绕 PDF 文档提问。" },
 ] as const;
 

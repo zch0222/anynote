@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { ensureKnowledgeBase } from "./support/account";
+import { expectNoteSaved } from "./support/save-status";
 
 /**
  * 关键路径：笔记正文图片上传（MINIO_PLAN M11.2 / M11.3）。
@@ -127,10 +128,9 @@ test.describe("笔记图片：分片直传到 MinIO 并渲染", () => {
       })
       .toBeGreaterThan(0);
 
-    // 等正文落盘，避免刷新时草稿还没保存
-    await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible({
-      timeout: 30_000,
-    });
+    // 等正文落盘，避免刷新时草稿还没保存。
+    // 判据走 `data-status`：协同模式下徽标文案是「已同步」，写死「已保存」会假红
+    await expectNoteSaved(page);
     await page.reload();
 
     const reloaded = insertedImage(page).first();

@@ -18,6 +18,7 @@ vi.mock("@/lib/env", () => ({
 const origin = "https://notes.example.com";
 const secret = new TextEncoder().encode("a-very-long-dev-secret");
 const now = new Date("2026-09-11T00:00:00Z");
+const NOTE_ID = 42;
 
 function jwt(exp: number) {
   return `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ exp })).toString("base64url")}.signature`;
@@ -26,13 +27,19 @@ const access = jwt(Math.floor(now.getTime() / 1000) + 1800);
 const rotatedAccess = jwt(Math.floor(now.getTime() / 1000) + 3600);
 const rotatedRefresh = jwt(Math.floor(now.getTime() / 1000) + 604800);
 
-function request(cookie?: string, headers: Record<string, string> = { origin }) {
+function request(
+  cookie?: string,
+  headers: Record<string, string> = { origin },
+  body: unknown = { noteId: NOTE_ID },
+) {
   return new NextRequest(`${origin}/api/auth/collab-token`, {
     method: "POST",
     headers: {
       ...headers,
       ...(cookie ? { cookie } : {}),
+      "content-type": "application/json",
     },
+    body: JSON.stringify(body),
   });
 }
 
@@ -55,6 +62,31 @@ function mine(overrides: Record<string, unknown> = {}) {
   });
 }
 
+function grant(overrides: Record<string, unknown> = {}) {
+  return upstream({
+    code: "00000",
+    msg: "操作成功",
+    data: {
+      noteId: NOTE_ID,
+      perm: "EDIT",
+      version: "1758297600000",
+      title: "会议纪要",
+      ...overrides,
+    },
+  });
+}
+
+/**
+ * 路由里 `loadSessionProfile` 与 `loadCollabGrant` 复用同一个 `GET`（都是 openapi-fetch 的 GET），
+ * 因此用路径分流：`/user/mine` 走资料，`/notes/{noteId}/collab-grant` 走准入。
+ */
+function routeGets(profile: unknown, grantResult: unknown) {
+  get.mockImplementation((path: string) => {
+    if (path === "/notes/{noteId}/collab-grant") return Promise.resolve(grantResult);
+    return Promise.resolve(profile);
+  });
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(now);
@@ -64,8 +96,8 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("POST /api/auth/collab-token", () => {
-  it("签发可被协同服务验签的短期令牌", async () => {
-    get.mockResolvedValue(mine());
+  it("签发绑定房间、可被协同服务验签的短期令牌", async () => {
+    routeGets(mine(), grant());
     const response = await collabToken(request(`at=${access}; rt=refresh`));
 
     expect(response.status).toBe(200);
@@ -81,11 +113,91 @@ describe("POST /api/auth/collab-token", () => {
     });
     expect(payload.sub).toBe("7");
     expect(payload.name).toBe("测试用户");
+    expect(payload.room).toBe(`note:${NOTE_ID}`);
+    expect(payload.ro).toBe(false);
     expect(payload.exp).toBe(Math.floor(now.getTime() / 1000) + 300);
   });
 
+  it("按准入用 noteId 调 collab-grant，并以会话身份带 Bearer", async () => {
+    routeGets(mine(), grant());
+    await collabToken(request(`at=${access}; rt=refresh`));
+
+    expect(get).toHaveBeenCalledWith(
+      "/notes/{noteId}/collab-grant",
+      expect.objectContaining({
+        params: { path: { noteId: NOTE_ID } },
+        headers: { Authorization: `Bearer ${access}` },
+      }),
+    );
+  });
+
+  it("只读权限（READ）令牌带 ro=true", async () => {
+    routeGets(mine(), grant({ perm: "READ" }));
+    const body = await (await collabToken(request(`at=${access}; rt=refresh`))).json();
+    const { payload } = await jwtVerify(body.data.token, secret);
+    expect(payload.ro).toBe(true);
+    expect(payload.room).toBe(`note:${NOTE_ID}`);
+  });
+
+  it("MANAGE / EDIT 都按可写签发", async () => {
+    for (const perm of ["MANAGE", "EDIT"]) {
+      routeGets(mine(), grant({ perm }));
+      const body = await (await collabToken(request(`at=${access}; rt=refresh`))).json();
+      const { payload } = await jwtVerify(body.data.token, secret);
+      expect(payload.ro).toBe(false);
+    }
+  });
+
+  it("perm=NONE 时 403 且不签令牌", async () => {
+    routeGets(mine(), grant({ perm: "NONE" }));
+    const response = await collabToken(request(`at=${access}; rt=refresh`));
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.code).toBe("A0301");
+    expect(body.data).toBeNull();
+  });
+
+  it("collab-grant 上游不可用时透传 502，不签令牌", async () => {
+    routeGets(mine(), upstream({ code: "B0400", msg: "系统异常" }, 500));
+    const response = await collabToken(request(`at=${access}; rt=refresh`));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ code: "B0400" });
+  });
+
+  it("笔记不存在（A0404）时原样返回上游业务错误", async () => {
+    routeGets(mine(), upstream({ code: "A0404", msg: "笔记不存在" }, 200));
+    const response = await collabToken(request(`at=${access}; rt=refresh`));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ code: "A0404", data: null });
+  });
+
+  it("noteId 非正整数时 400，且不打任何上游", async () => {
+    for (const body of [
+      {},
+      { noteId: 0 },
+      { noteId: -1 },
+      { noteId: 1.5 },
+      { noteId: "42" },
+      { noteId: null },
+    ]) {
+      const response = await collabToken(request(`at=${access}`, { origin }, body));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ code: "A0160" });
+    }
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("请求体不是合法 JSON 时 400", async () => {
+    const bad = new NextRequest(`${origin}/api/auth/collab-token`, {
+      method: "POST",
+      headers: { origin, cookie: `at=${access}`, "content-type": "application/json" },
+      body: "{not json",
+    });
+    expect((await collabToken(bad)).status).toBe(400);
+  });
+
   it("令牌与响应都不含 accessToken 或任何后端敏感字段", async () => {
-    get.mockResolvedValue(mine());
+    routeGets(mine(), grant());
     const body = await (await collabToken(request(`at=${access}; rt=refresh`))).json();
 
     const serialized = JSON.stringify(body);
@@ -96,7 +208,7 @@ describe("POST /api/auth/collab-token", () => {
   });
 
   it("昵称缺失时回落到用户名", async () => {
-    get.mockResolvedValue(mine({ nickname: null }));
+    routeGets(mine({ nickname: null }), grant());
     const body = await (await collabToken(request(`at=${access}; rt=refresh`))).json();
     expect(body.data.user.name).toBe("tester01");
   });
@@ -115,7 +227,7 @@ describe("POST /api/auth/collab-token", () => {
     expect(response.headers.getSetCookie().join(";")).toContain("at=;");
   });
 
-  it("at 缺失但 rt 还在时先刷新再签发，并把新 Cookie 带回", async () => {
+  it("at 缺失但 rt 还在时先刷新再签发，准入与签发都用刷新后的 accessToken", async () => {
     post.mockResolvedValue(
       upstream({
         code: "00000",
@@ -123,13 +235,17 @@ describe("POST /api/auth/collab-token", () => {
         data: { accessToken: rotatedAccess, refreshToken: rotatedRefresh },
       }),
     );
-    get.mockResolvedValue(mine());
+    routeGets(mine(), grant());
 
     const response = await collabToken(request("rt=refresh"));
 
     expect(post).toHaveBeenCalledWith(
       "/refresh",
       expect.objectContaining({ body: { refreshToken: "refresh" } }),
+    );
+    expect(get).toHaveBeenCalledWith(
+      "/notes/{noteId}/collab-grant",
+      expect.objectContaining({ headers: { Authorization: `Bearer ${rotatedAccess}` } }),
     );
     expect(response.status).toBe(200);
     const cookies = response.headers.getSetCookie().join(";");
@@ -145,14 +261,14 @@ describe("POST /api/auth/collab-token", () => {
   });
 
   it("账号缺少用户主键时拒发，而不是编一个身份", async () => {
-    get.mockResolvedValue(mine({ id: null }));
+    routeGets(mine({ id: null }), grant());
     const response = await collabToken(request(`at=${access}`));
     expect(response.status).toBe(502);
     expect(await response.json()).toMatchObject({ code: "B0400" });
   });
 
   it("上游不可用时返回 502", async () => {
-    get.mockResolvedValue(upstream({ code: "B0400", msg: "系统异常" }, 500));
+    routeGets(upstream({ code: "B0400", msg: "系统异常" }, 500), grant());
     const response = await collabToken(request(`at=${access}`));
     expect(response.status).toBe(502);
   });

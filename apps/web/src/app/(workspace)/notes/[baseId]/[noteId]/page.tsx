@@ -1,4 +1,4 @@
-import { NoteEditor } from "@/features/notes/components/note-editor";
+import { NoteEditor } from "@/features/notes/components/note-editor-loader";
 import { notFound } from "next/navigation";
 
 export default async function Page({

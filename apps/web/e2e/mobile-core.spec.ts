@@ -1,4 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
+import { expectNoteSaved } from "./support/save-status";
 import { establishFreshSession } from "./support/session";
 
 /**
@@ -14,12 +15,17 @@ import { establishFreshSession } from "./support/session";
 const BASE_NAME = "E2E 移动端知识库";
 const EDITOR_SURFACE = ".anynote-editor__content";
 
-/** 所有非详情页的移动端路由——详情页要先有数据，放在各自用例里断言。 */
+/**
+ * 所有非详情页的移动端路由——详情页要先有数据，放在各自用例里断言。
+ *
+ * `/m/docs` 已随 `/docs` 退役（M13.5）从列表移除：协同不再是独立文档库，
+ * 而是笔记的编辑模式，旧地址 404。知识库的「资料」Tab 不是这一条，
+ * 它在 `/m/notes/<baseId>/docs` 下，属于详情页。
+ */
 const MOBILE_ROUTES = [
   "/m/dashboard",
   "/m/notes",
   "/m/notes/new",
-  "/m/docs",
   "/m/ai/chat",
   "/m/ai/pdf",
   "/m/search",
@@ -172,6 +178,7 @@ test.describe("移动端外壳与导航", () => {
     const rhythm = await active.evaluate((element) => {
       const icon = element.querySelector("svg");
       const label = element.querySelector("span");
+      if (!icon || !label) throw new Error("底栏 tab 缺少图标或标签");
       const link = element.getBoundingClientRect();
       const box = icon.getBoundingClientRect();
       const text = label.getBoundingClientRect();
@@ -261,9 +268,7 @@ test.describe("移动端笔记三级导航与编辑", () => {
     await surface.click();
     await page.keyboard.type(marker);
 
-    await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectNoteSaved(page);
 
     await page.getByTestId("mobile-back").click();
     await expect(page).toHaveURL(/\/m\/notes\/\d+$/, { timeout: 30_000 });
@@ -300,9 +305,7 @@ test.describe("移动端笔记三级导航与编辑", () => {
     await expect(surface).toBeVisible({ timeout: 30_000 });
     await surface.click();
     await page.keyboard.type("第二篇正文");
-    await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectNoteSaved(page);
 
     await page.goto(baseUrl);
     const header = page.getByTestId("mobile-base-header");

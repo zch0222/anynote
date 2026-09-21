@@ -46,12 +46,9 @@ describe("MobileMePage", () => {
     );
   });
 
-  it("「更多」只剩协同文档与 PDF 问答（任务、慕课已随 12.0.4 移除）", () => {
+  it("「更多」只剩 PDF 问答（任务、慕课已随 12.0.4 移除，协同文档随 /docs 退役）", () => {
     renderWithProviders(<MobileMePage />);
-    for (const [title, href] of [
-      ["协同文档", "/m/docs"],
-      ["PDF 问答", "/m/ai/pdf"],
-    ] as const) {
+    for (const [title, href] of [["PDF 问答", "/m/ai/pdf"]] as const) {
       expect(screen.getByRole("link", { name: new RegExp(title) })).toHaveAttribute("href", href);
     }
     // 2026-09-15 拍板：任务与慕课只属于知识库，移动端不再有跨库入口

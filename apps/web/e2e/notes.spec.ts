@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { ensureKnowledgeBase, openKnowledgeBase } from "./support/account";
+import { expectNoteSaved } from "./support/save-status";
 import { setTheme } from "./support/theme";
 
 const BASE_NAME = "E2E 知识库";
@@ -20,10 +21,9 @@ async function focusEditor(page: Page) {
   return surface;
 }
 
+/** 等保存落到终态；文案在协同模式下是「已同步」，所以判据走 `data-status`。 */
 async function expectSaved(page: Page) {
-  await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expectNoteSaved(page);
 }
 
 test.describe.configure({ mode: "serial" });

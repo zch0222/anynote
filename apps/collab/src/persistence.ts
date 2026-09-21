@@ -24,7 +24,7 @@ export const memoryOnlyPersistence: CollabPersistence = {
 export function roomFileName(room: string): string {
   const parsed = parseRoom(room);
   if (!parsed) throw new Error(`非法房间名：${room}`);
-  return parsed.kind === "index" ? "index.ydoc" : `doc-${parsed.docId}.ydoc`;
+  return `note-${parsed.noteId}.ydoc`;
 }
 
 export function createFilePersistence(dir: string): CollabPersistence {

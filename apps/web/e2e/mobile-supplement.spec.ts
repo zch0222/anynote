@@ -7,6 +7,10 @@ import { type Page, expect, test } from "@playwright/test";
  * 是 `playwright.config.ts` 的分工规则。命名与 `mobile-core.spec.ts` 区分：
  * 那个覆盖 M10.x 的通用导航与版式，这个覆盖 M12 补稿的**新增屏幕与改动点**。
  *
+ * 其中 **M-08（协同文档库）整块退役**：`/m/docs` 已删除（M13.5，方案 §7.6 / §8），
+ * 协同改为「笔记的一种编辑模式」，移动端入口就是笔记编辑器本身，其用例随之整体删除。
+ * 对应画板只存在于设计存档里，`reference/supplement/m08-doc-library*.png` 仍留档备查。
+ *
  * 断言口径与桌面版一致：把画板图例里可断言的规格写成计算样式检查，
  * 人眼看的并排对比图由 `scripts/ui-supplement-compare.mjs` 产出。
  */
@@ -219,10 +223,26 @@ test.describe("UI 补稿 · 移动端", () => {
     // 资料卡整卡可点
     await expect(page.getByRole("link", { name: /个人资料|账号/ }).first()).toBeVisible();
 
-    // 「更多」只剩协同文档与 PDF 问答
-    const body = await page.locator("body").innerText();
-    expect(body).toContain("协同文档");
-    expect(body).not.toMatch(/^任务$|^慕课$/m);
+    /*
+     * 「更多」只剩 PDF 问答：任务、慕课已按 2026-09-15 拍板移除（两者只属于知识库，
+     * 从「我的」进去会看不到"在哪个库"），协同文档随 `/docs` 退役（M13.5）。
+     * 来源是 `navigation.ts` 的 `mobileMoreRoutes`（当前只有一条）。
+     *
+     * 只断言「更多」这一组内的链接，而不是整页 body 文本：
+     * 页面下方还有「仅桌面版」组，那里的 AI 工作流文案也提到"桌面版"，用整页文本
+     * 判断会把两组混在一起。
+     *
+     * 定位用 section + 组标题而不是 `getByRole("navigation")`：
+     * `mobile-me.tsx` 里这些分组是 `<section>` 包一个 `<h2>`，不是 landmark。
+     */
+    const more = page
+      .getByTestId("mobile-me")
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "更多", exact: true }) });
+    await expect(more.getByRole("link", { name: /PDF 问答/ })).toBeVisible();
+    await expect(more.getByRole("link", { name: /协同文档/ })).toHaveCount(0);
+    await expect(more.getByRole("link", { name: /^任务/ })).toHaveCount(0);
+    await expect(more.getByRole("link", { name: /^慕课/ })).toHaveCount(0);
 
     await page.getByRole("button", { name: /退出登录/ }).click();
     /*
@@ -235,20 +255,12 @@ test.describe("UI 补稿 · 移动端", () => {
     await expect(page).toHaveURL(/\/m\/me$/);
   });
 
-  /** M-08：协同文档库的返回键与「⋯」二次确认移除。 */
-  test("M-08 协同文档库：返回键、说明文案、二级浅色主题一致", async ({ page }) => {
-    await page.goto("/m/docs");
-    await expect(page.getByRole("heading", { name: "协同文档", level: 1 })).toBeVisible({
-      timeout: 30_000,
-    });
-    // 本页不是 tab 根页，必须给返回键
-    await expect(page.getByRole("button", { name: /返回/ })).toBeVisible();
-    await expectNoHorizontalScroll(page);
-
-    // 行元信息是「创建者 · 相对时间更新」，不是 toLocaleString 的全量时间
-    const body = await page.locator("body").innerText();
-    expect(body).toMatch(/更新$/m);
-  });
+  /*
+   * M-08（协同文档库）整块退役：`/m/docs` 路由已删除（方案 §7.6 / §8），
+   * 协同改为笔记的一种编辑模式，移动端入口就是笔记编辑器本身。
+   * 「返回键 + 行元信息」这条前提随之消失，用例整体删除而不是改成空跑——
+   * 对应的 `m08-doc-library*` 参考图仍留档在 `reference/supplement/` 下备查。
+   */
 
   /** 12.1.2 + F-02：旧移动地址重定向到知识库列表。 */
   test("F-02 旧地址重定向：/m/tasks、/m/mooc 落到 /m/notes", async ({ page }) => {
@@ -283,8 +295,9 @@ test.describe("UI 补稿 · 移动端", () => {
   /**
    * 深色下的填充 Token 复查（Q-01 #1–#3 的移动端口径）。
    *
-   * 单独立一条而不是塞进 M-08：主题是会跨用例残留的全局状态，
+   * 单独立一条而不是塞进路由用例：主题是会跨用例残留的全局状态，
    * 混在路由用例里会让后者随时因为"上一轮留了深色"而失败。
+   * （原文写的是"M-08"，那条协同文档库用例已随 `/docs` 退役删除。）
    */
   test("深色下移动端各页不横向溢出，且填充 Token 生效", async ({ page }) => {
     await page.goto("/m/settings/appearance");
@@ -323,7 +336,11 @@ test.describe("UI 补稿 · 移动端", () => {
       expect(alpha ?? 1).toBeLessThan(0.5);
     }
 
-    for (const path of ["/m/me", "/m/notes", "/m/docs"]) {
+    /*
+     * `/m/docs` 已随 `/docs` 退役（M13.5），从这一组里移除——它的「深色不溢出」
+     * 前提随之消失。留 `/m/me` 与 `/m/notes` 两条覆盖分组列表与卡片网格两种版式。
+     */
+    for (const path of ["/m/me", "/m/notes"]) {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
       await expectNoHorizontalScroll(page);

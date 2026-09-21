@@ -36,8 +36,12 @@ FROM source AS build
 # NEXT_PUBLIC_* 被 Next 在构建时内联；部署域名变化必须重新 build。
 ARG NEXT_PUBLIC_APP_URL=http://localhost:3000
 ARG NEXT_PUBLIC_COLLAB_WS_URL=ws://localhost:1234
+# 笔记协同总开关（方案 D7）。NEXT_PUBLIC_* 会被 Next 在构建时内联，所以要作为 build arg
+# 传进来而不是运行时环境变量；默认关闭，开启即完全启用笔记协同。
+ARG NEXT_PUBLIC_COLLAB_NOTES=
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_COLLAB_WS_URL=$NEXT_PUBLIC_COLLAB_WS_URL
+ENV NEXT_PUBLIC_COLLAB_NOTES=$NEXT_PUBLIC_COLLAB_NOTES
 RUN pnpm --filter web build
 RUN node -e 'require("node:fs").writeFileSync("web-build-config.json",JSON.stringify({NEXT_PUBLIC_APP_URL:process.env.NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_COLLAB_WS_URL:process.env.NEXT_PUBLIC_COLLAB_WS_URL}))'
 

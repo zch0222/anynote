@@ -11,7 +11,7 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 - `services/` — Java 21 · Spring Boot 3.3.4 · Spring Cloud 2023.0.3（9 个微服务 + Feign API 模块 + common 共享库 + BOM）
 - `apps/web/` — Next.js 15 · React 19（**Phase 5 重写，M0-M8 已实现并验收；M8 于 2026-09-11 完成，发版待定**）。桌面版在 `app/(workspace)/**`，移动端在 `app/(mobile)/m/**`（M10.x，见 `docs/mobile/`）
 - `apps/web-legacy/` — Next.js 13.5（**旧前端，仍是当前用户访问的版本**，删除条件见下方 Phase 5 表）
-- `apps/collab/` — Node · yjs 13 · ws（协同编辑 WebSocket 服务，:1234；M8.1 自建，后端无此端点）
+- `apps/collab/` — Node · yjs 13 · ws（协同编辑 WebSocket 服务，:1234；M8.1 自建，后端无此端点）。**房间契约 `note:<noteId>`**（M13.2 起）：令牌绑定房间与只读标志，`note` 房间不落盘，`index` / `doc:<uuid>` 已退役
 - `apps/desktop/` — Tauri 2 桌面壳（M8.2 骨架；构建需 Rust + MSVC 工具链，尚未编译验证）
 - `apps/cli/` — TypeScript CLI 前端 `@anynote/cli`（供人与 agent 操作知识库/笔记；直连 Gateway，配套 `.claude/skills/anynote-*`，方案见 `docs/cli/`）
 - `ai-service/` — Python 3 · FastAPI · LangChain 0.3 · Pydantic v2
@@ -95,7 +95,7 @@ pnpm format              # Biome format only
 ### 端到端与性能门禁（需生产构建 + 真实后端栈）
 
 ```bash
-pnpm --filter web test:e2e          # Playwright 136 条用例：桌面 95（chromium）+ 移动端 41（mobile）
+pnpm --filter web test:e2e          # Playwright 141 条用例：桌面 99（chromium）+ 移动端 42（mobile）
 pnpm --filter web bundle:budget     # 首屏 JS ≤ 310KB、/m/* ≤ 250KB、编辑器 ≤ 250KB（gzip）
 pnpm --filter web lighthouse:budget # 桌面 Performance ≥ 90、Accessibility ≥ 95
 pnpm --filter web lighthouse:budget:mobile  # 移动口径 Performance ≥ 85、Accessibility ≥ 95
@@ -285,7 +285,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `docs/changelist/` — 各批改动的逐文件审计清单；`README.md` 是编写规范与命名规则（`YYYY-MM-DD-<slug>.md`）
 - `apps/cli/README.md` — CLI 的构建、环境变量、凭据安全与测试命令
 - `.claude/skills/anynote-*` — 给 Claude Code 的 CLI / 笔记配方 / 仓库操作手册（`anynote-cli` 的 `reference/commands.md` 是生成物）
-- `docs/collab/notes-collab-merge-plan.md` — 笔记协同合并方案（**v2.0 简化稿，2026-09-21，待评审**，取代 v1.0 草案）：把 `/docs` 协同文档并入知识库笔记——房间改 `note:<noteId>`、令牌绑定房间与只读、真相源收敛回 MySQL、note 房间不落盘、**每个客户端各自保存（不选 leader，A0409 走覆盖式重发）**、灰度用环境变量而非数据库列、`/docs` 直接退役；里程碑 M13.0-M13.5。§1.4 记了一个开工前必修的既有缺陷（`getNotePermissions` 只读成员分支），§13 记了 v1.0 被砍掉的设计与理由（type 5 选举、`.ver` 仲裁、服务端权威写回、迁移向导）
+- `docs/collab/notes-collab-merge-plan.md` — 笔记协同合并方案（**v2.0 简化稿，2026-09-21，M13.0–M13.5 已实现并 `--no-ff` 合并 `dev`**（分支 `feat/notes-collab-merge`），取代 v1.0 草案）：把 `/docs` 协同文档并入知识库笔记——房间改 `note:<noteId>`、令牌绑定房间与只读、真相源收敛回 MySQL、note 房间不落盘、**每个客户端各自保存（不选 leader，A0409 走覆盖式重发）**、灰度用环境变量而非数据库列、`/docs` 直接退役；里程碑 M13.0-M13.5，逐文件清单见 `docs/changelist/2026-09-21-notes-collab-merge.md`。§1.4 记了一个开工前必修的既有缺陷（`getNotePermissions` 只读成员分支），§13 记了 v1.0 被砍掉的设计与理由（type 5 选举、`.ver` 仲裁、服务端权威写回、迁移向导）。实施期间另发现并修掉三个方案未覆盖的缺陷（**协同模式下编辑器正文恒为空**、移动端协同态不可见、移动工作台第三格死链），见该清单「审计要点」6–7
 - `docs/refactor/REFACTOR_PLAN.md` / `FRONTEND_REFACTOR_PLAN.md` / `FRONTEND_MILESTONES.md` — 重构决策与执行计划
 - `docs/refactor/TASKS.md` — Phase 级进度与未完成项
 - `docs/backend-security-inventory.md` — 后端安全配置清单

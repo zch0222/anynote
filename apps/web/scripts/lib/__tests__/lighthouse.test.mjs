@@ -115,6 +115,24 @@ describe("evaluateScores", () => {
     expect(DEFAULT_ROUTES).toContain("/dashboard");
     expect(DEFAULT_ROUTES.length).toBeGreaterThanOrEqual(2);
   });
+
+  /**
+   * 回归：默认路由曾包含 `/docs`（协同文档库）。该路由随 M13.5 退役后返回 404，
+   * 而 Lighthouse 对 404 仍会给分（量的是错误页），门禁于是**假绿**——
+   * 既测不到真实页面，也永远不会因为"页面没了"而失败。
+   * 这条断言把"审计路由必须都是存在且已登录可达的页面"钉住。
+   */
+  it("审计路由不含任何已退役路由（/docs、/m/docs 等 404 页）", () => {
+    for (const route of [...DEFAULT_ROUTES, ...MOBILE_ROUTES]) {
+      expect(route, `${route} 已随 /docs 体系退役`).not.toMatch(/^\/m?\/?docs/);
+    }
+  });
+
+  it("移动端审计路由全部落在 /m/* 下（公开页除外）", () => {
+    const authed = MOBILE_ROUTES.filter((route) => route !== "/login");
+    expect(authed.length).toBeGreaterThanOrEqual(4);
+    for (const route of authed) expect(route.startsWith("/m/")).toBe(true);
+  });
 });
 
 describe("formatScore", () => {
@@ -161,6 +179,7 @@ describe("--mobile 与 selectProfile（M10.0）", () => {
     expect(MOBILE_ROUTES[0]).toBe("/login");
     expect(MOBILE_ROUTES.slice(1).every((route) => route.startsWith("/m/"))).toBe(true);
     expect(MOBILE_ROUTES).toContain("/m/dashboard");
+    expect(MOBILE_ROUTES).toContain("/m/notes/new");
   });
 
   it("按移动阈值判分：0.86 过 Performance，0.84 不过", () => {

@@ -64,11 +64,11 @@ describe("useCollabRoom", () => {
     const fake = createSession({ connected: true });
     openCollabRoom.mockResolvedValue(fake.session);
 
-    const { result } = renderHook(() => useCollabRoom("index"));
+    const { result } = renderHook(() => useCollabRoom("note:1"));
 
     await waitFor(() => expect(result.current.status).toBe("connected"));
     expect(openCollabRoom).toHaveBeenCalledWith(
-      "index",
+      "note:1",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result.current.doc).toBe(fake.doc);
@@ -78,7 +78,7 @@ describe("useCollabRoom", () => {
   it("跟随 provider 的 status 事件在连接中/已连接之间切换", async () => {
     const fake = createSession();
     openCollabRoom.mockResolvedValue(fake.session);
-    const { result } = renderHook(() => useCollabRoom("index"));
+    const { result } = renderHook(() => useCollabRoom("note:1"));
 
     await waitFor(() => expect(result.current.doc).not.toBeNull());
     expect(result.current.status).toBe("connecting");
@@ -92,7 +92,7 @@ describe("useCollabRoom", () => {
 
   it("换令牌失败时进入 error 状态并带出原因", async () => {
     openCollabRoom.mockRejectedValue(new Error("登录状态已过期"));
-    const { result } = renderHook(() => useCollabRoom("index"));
+    const { result } = renderHook(() => useCollabRoom("note:1"));
 
     await waitFor(() => expect(result.current.status).toBe("error"));
     expect(result.current.error?.message).toBe("登录状态已过期");
@@ -102,7 +102,7 @@ describe("useCollabRoom", () => {
   it("awareness 变化时刷新成员列表，自己排最前", async () => {
     const fake = createSession({ connected: true });
     openCollabRoom.mockResolvedValue(fake.session);
-    const { result } = renderHook(() => useCollabRoom("index"));
+    const { result } = renderHook(() => useCollabRoom("note:1"));
     await waitFor(() => expect(result.current.status).toBe("connected"));
 
     act(() => {
@@ -119,7 +119,7 @@ describe("useCollabRoom", () => {
   it("没有 user 字段的 awareness 条目被忽略（别人还没写入身份）", async () => {
     const fake = createSession({ connected: true });
     openCollabRoom.mockResolvedValue(fake.session);
-    const { result } = renderHook(() => useCollabRoom("index"));
+    const { result } = renderHook(() => useCollabRoom("note:1"));
     await waitFor(() => expect(result.current.status).toBe("connected"));
 
     act(() => {
@@ -133,7 +133,7 @@ describe("useCollabRoom", () => {
   it("卸载时销毁会话，不留悬空连接", async () => {
     const fake = createSession({ connected: true });
     openCollabRoom.mockResolvedValue(fake.session);
-    const { result, unmount } = renderHook(() => useCollabRoom("index"));
+    const { result, unmount } = renderHook(() => useCollabRoom("note:1"));
     await waitFor(() => expect(result.current.status).toBe("connected"));
 
     unmount();
@@ -150,7 +150,7 @@ describe("useCollabRoom", () => {
       }),
     );
 
-    const { unmount } = renderHook(() => useCollabRoom("index"));
+    const { unmount } = renderHook(() => useCollabRoom("note:1"));
     unmount();
     await act(async () => {
       resolveOpen?.(fake.session);
@@ -165,11 +165,11 @@ describe("useCollabRoom", () => {
     openCollabRoom.mockResolvedValueOnce(first.session).mockResolvedValueOnce(second.session);
 
     const { result, rerender } = renderHook(({ room }) => useCollabRoom(room), {
-      initialProps: { room: "index" },
+      initialProps: { room: "note:1" },
     });
     await waitFor(() => expect(result.current.doc).toBe(first.doc));
 
-    rerender({ room: "doc:abcdefgh" });
+    rerender({ room: "note:2" });
 
     await waitFor(() => expect(result.current.doc).toBe(second.doc));
     expect(first.session.destroy).toHaveBeenCalledTimes(1);
@@ -179,7 +179,7 @@ describe("useCollabRoom", () => {
     it("建立会话时 provider 已完成同步就直接为真", async () => {
       const fake = createSession({ connected: true, synced: true });
       openCollabRoom.mockResolvedValue(fake.session);
-      const { result } = renderHook(() => useCollabRoom("index"));
+      const { result } = renderHook(() => useCollabRoom("note:1"));
 
       await waitFor(() => expect(result.current.synced).toBe(true));
     });
@@ -187,7 +187,7 @@ describe("useCollabRoom", () => {
     it("只握手成功、还没收到快照时为假（否则会把正常文档读成已移除）", async () => {
       const fake = createSession({ connected: true });
       openCollabRoom.mockResolvedValue(fake.session);
-      const { result } = renderHook(() => useCollabRoom("index"));
+      const { result } = renderHook(() => useCollabRoom("note:1"));
 
       await waitFor(() => expect(result.current.status).toBe("connected"));
       expect(result.current.synced).toBe(false);
@@ -196,7 +196,7 @@ describe("useCollabRoom", () => {
     it("跟随 provider 的 sync 事件翻转", async () => {
       const fake = createSession({ connected: true });
       openCollabRoom.mockResolvedValue(fake.session);
-      const { result } = renderHook(() => useCollabRoom("index"));
+      const { result } = renderHook(() => useCollabRoom("note:1"));
       await waitFor(() => expect(result.current.status).toBe("connected"));
 
       act(() => fake.emit("sync", true));
@@ -213,11 +213,11 @@ describe("useCollabRoom", () => {
       openCollabRoom.mockResolvedValueOnce(first.session).mockResolvedValueOnce(second.session);
 
       const { result, rerender } = renderHook(({ room }) => useCollabRoom(room), {
-        initialProps: { room: "index" },
+        initialProps: { room: "note:1" },
       });
       await waitFor(() => expect(result.current.synced).toBe(true));
 
-      rerender({ room: "doc:abcdefgh" });
+      rerender({ room: "note:2" });
 
       await waitFor(() => expect(result.current.doc).toBe(second.doc));
       expect(result.current.synced).toBe(false);
@@ -228,7 +228,7 @@ describe("useCollabRoom", () => {
     it("先 disconnect 再 connect，同一个 provider，不重建会话", async () => {
       const fake = createSession({ connected: true });
       openCollabRoom.mockResolvedValue(fake.session);
-      const { result } = renderHook(() => useCollabRoom("index"));
+      const { result } = renderHook(() => useCollabRoom("note:1"));
       await waitFor(() => expect(result.current.status).toBe("connected"));
 
       const provider = fake.session.provider as unknown as {
@@ -253,7 +253,7 @@ describe("useCollabRoom", () => {
     it("重连期间状态回到「连接中」，连接恢复后跟着 provider 变回已连接", async () => {
       const fake = createSession({ connected: true });
       openCollabRoom.mockResolvedValue(fake.session);
-      const { result } = renderHook(() => useCollabRoom("index"));
+      const { result } = renderHook(() => useCollabRoom("note:1"));
       await waitFor(() => expect(result.current.status).toBe("connected"));
 
       act(() => result.current.reconnect());
@@ -268,7 +268,7 @@ describe("useCollabRoom", () => {
       const fake = createSession({ connected: true });
       openCollabRoom.mockResolvedValueOnce(fake.session);
 
-      const { result } = renderHook(() => useCollabRoom("index"));
+      const { result } = renderHook(() => useCollabRoom("note:1"));
       await waitFor(() => expect(result.current.status).toBe("error"));
 
       act(() => result.current.reconnect());

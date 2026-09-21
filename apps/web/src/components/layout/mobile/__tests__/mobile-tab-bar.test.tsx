@@ -19,8 +19,8 @@ describe("MobileTabBar", () => {
     const links = screen.getAllByRole("link");
     expect(links.map((a) => a.textContent)).toEqual(mobileTabs.map((t) => `${t.title}`));
     expect(links.map((a) => a.getAttribute("href"))).toEqual(mobileTabs.map((t) => t.href));
-    expect(links[1].getAttribute("aria-current")).toBe("page");
-    expect(links[0].getAttribute("aria-current")).toBeNull();
+    expect(links[1]?.getAttribute("aria-current")).toBe("page");
+    expect(links[0]?.getAttribute("aria-current")).toBeNull();
   });
 
   /**

@@ -7,6 +7,10 @@ import { setTheme } from "./support/theme";
  * 与 `ui-redesign.spec.ts` 的分工：那个对的是 PDF 原设计稿（p01–p16）；
  * 这个对的是补稿画板 D-01 – D-18 / M-01 – M-13。
  *
+ * 其中 **D-10（协同文档库）整块退役**：`/docs` 独立文档库已删除（M13.5，方案 §7.6 / §8），
+ * 协同改为「笔记的一种编辑模式」，其用例随之整体删除（D-11 协同工作区同理）。
+ * 对应画板只存在于设计存档里，`reference/supplement/d10-collab-library*.png` 仍留档备查。
+ *
  * 为什么断言**计算样式**而不是截图比对：像素比对对"字体渲染差异"和"整块位置错位"
  * 给的分几乎一样，反而掩盖真正要看的东西。而图例里那些规格（圆角 10、
  * 分段控件轨道色、热力色阶、页脚底色）本来就有确定的计算值——
@@ -299,7 +303,15 @@ test.describe("D-02 知识库概览：版式还原", () => {
       expect(style.lineHeight).toBe("22px");
     }
 
-    // 「全部笔记 / 全部资料 / 全部成员」直达对应 Tab（图例 17 / 20 / 24）
+    /*
+     * 「全部笔记 / 全部资料 / 全部成员」直达对应 Tab（图例 17 / 20 / 24）。
+     *
+     * `/docs` 这个段名在这里**不是**已退役的一级协同文档库：它是知识库内的
+     * 「资料」Tab（`/notes/<baseId>/docs`，RAG PDF，`n_doc` 表），两者同名但无关。
+     * 来源是 `knowledge-base-overview.tsx` 里「资料」区块的 `PreviewHeading`
+     * （`href={`/notes/${baseId}/docs`}`），仍是当前实现。同名使这条断言一度被
+     * 误判为「引用了已退役路由」，故特别注明。
+     */
     for (const [label, segment] of [
       ["全部笔记", ""],
       ["全部资料", "/docs"],
@@ -617,53 +629,12 @@ test.describe("UI 补稿还原度", () => {
     expect(await search.evaluate((el) => getComputedStyle(el).borderRadius)).toBe("10px");
   });
 
-  /** 12.5.1：删除协同文档必须先确认（此前点了立即删）。 */
-  test("D-10 协同文档库：删除走确认、标题与侧栏入口同名", async ({ page }) => {
-    await page.goto("/docs");
-    await expect(page.getByRole("heading", { name: "协同文档", level: 1 })).toBeVisible({
-      timeout: 30_000,
-    });
-
-    // 先验证对话框本身（页脚必须有「取消」，图例 24）
-    await page.getByRole("button", { name: "新建文档" }).first().click();
-    const createDialog = page.getByRole("dialog");
-    await expect(createDialog).toBeVisible();
-    await expect(createDialog.getByRole("button", { name: "取消" })).toBeVisible();
-    await createDialog.getByRole("button", { name: "取消" }).click();
-    await expect(createDialog).toBeHidden();
-
-    /*
-     * 建一篇并留在列表里。
-     *
-     * 创建成功会 `router.push` 进工作区（那是正常的产品行为），所以建完要回列表。
-     * 文档库本身是协同索引房间，"新建 → 出现在列表"是**别人也会实时看到**的那条路径，
-     * 所以这里等的是卡片真的出现，而不是等一个返回码。
-     */
-    const title = unique("协作文档");
-    await page.getByRole("button", { name: "新建文档" }).first().click();
-    await expect(createDialog).toBeVisible();
-    await createDialog.locator("#collab-doc-title").fill(title);
-    await createDialog.getByRole("button", { name: "创建" }).click();
-    await page.waitForURL(/\/docs\/.+/, { timeout: 20_000 });
-    await page.goto("/docs");
-
-    /*
-     * 等**自己那一篇**出现，而不是"任何一张卡片"。
-     *
-     * 文档库是共享的协同索引房间，全量跑时前面几个用例建的文档都还在列表里；
-     * 按"第一张卡片"取会删到别人的文档（而且并发跑时那张可能刚被删掉，
-     * 于是报 element not found）。按标题精确定位后这条用例与执行顺序无关。
-     */
-    const del = page.getByRole("button", { name: `删除 ${title}` });
-    await expect(del).toBeVisible({ timeout: 30_000 });
-    await del.click();
-
-    const confirm = page.getByRole("dialog");
-    await expect(confirm.getByText("从文档库移除？")).toBeVisible();
-    await expect(confirm.getByRole("button", { name: "取消" })).toBeFocused();
-    await confirm.getByRole("button", { name: "取消" }).click();
-    await expect(confirm).toBeHidden();
-  });
+  /*
+   * D-10（协同文档库）整块退役：`/docs` 与 `/m/docs` 路由已删除（方案 §7.6 / §8），
+   * 协同从「一种独立文档类型」降级为「笔记的一种编辑模式」，入口就是笔记本身。
+   * 「删除走确认」这条前提随之消失，用例整体删除而不是改成空跑——
+   * 对应的 `d10-collab-library*` 参考图仍留档在 `reference/supplement/` 下备查。
+   */
 
   /** D-13：外观是带预览的单选卡 + radiogroup 语义，不是三个小胶囊。 */
   test("D-13 设置 · 外观：radiogroup 单选卡与生效说明", async ({ page }) => {

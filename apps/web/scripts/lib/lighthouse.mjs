@@ -19,12 +19,17 @@ export const MOBILE_THRESHOLDS = {
 
 /**
  * 默认审计的路由：一个公开页 + 四个代表性业务页
- * （工作台、列表页、协同页、AI 页各取一条，覆盖不同的首屏权重）。
+ * （工作台、列表页、**笔记编辑器**、AI 页各取一条，覆盖不同的首屏权重）。
+ *
+ * 采样点曾用 `/docs`（协同文档库），该路由随 M13.5 退役后是 404——
+ * Lighthouse 对 404 仍会给出分数（量到的是错误页），门禁会**假绿**。
+ * 换成 `/notes` 之外的编辑器路径需要真实 noteId，样本不稳定；
+ * 这里改用 `/notes/new`（笔记编辑器所在的同一路由段，且是当前最重的业务页之一）。
  */
-export const DEFAULT_ROUTES = ["/login", "/dashboard", "/notes", "/docs", "/ai/chat"];
+export const DEFAULT_ROUTES = ["/login", "/dashboard", "/notes", "/notes/new", "/ai/chat"];
 
 /** 移动端默认路由：同样的取样口径，换成 `/m/*` 的对应页。 */
-export const MOBILE_ROUTES = ["/login", "/m/dashboard", "/m/notes", "/m/docs", "/m/ai/chat"];
+export const MOBILE_ROUTES = ["/login", "/m/dashboard", "/m/notes", "/m/notes/new", "/m/ai/chat"];
 
 export function parseArgs(argv) {
   const urls = [];

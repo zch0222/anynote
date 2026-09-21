@@ -7,7 +7,12 @@ import { QueryClient } from "@tanstack/react-query";
 import { act, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AUTOSAVE_DEBOUNCE_MS, RETRY_DELAY_MS, useSaveNote } from "../use-save-note";
+import {
+  AUTOSAVE_DEBOUNCE_MS,
+  COLLAB_AUTOSAVE_DEBOUNCE_MS,
+  RETRY_DELAY_MS,
+  useSaveNote,
+} from "../use-save-note";
 
 vi.mock("@/lib/api/openapi", () => ({
   noteApi: { PATCH: vi.fn(), GET: vi.fn(), POST: vi.fn(), DELETE: vi.fn() },
@@ -616,5 +621,139 @@ describe("useSaveNote：版本号推进（回归 —— 正常编辑不该弹冲
       content: "未保存",
     });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: DETAIL_KEY });
+  });
+});
+
+describe("useSaveNote：协同模式（M13.3）", () => {
+  function renderCollab(overrides: Record<string, unknown> = {}) {
+    const queryClient = createPersistentQueryClient();
+    queryClient.setQueryData<NoteDetail>(DETAIL_KEY, initialDetail);
+    return renderHookWithProviders(
+      () =>
+        useSaveNote({
+          noteId: NOTE_ID,
+          initialVersion: "1000",
+          debounceMs: 20,
+          conflictPolicy: "overwrite",
+          ...overrides,
+        }),
+      { queryClient },
+    );
+  }
+
+  it("overwrite 策略下 A0409 不弹冲突框，对齐服务端版本号后原样重发", async () => {
+    patch.mockRejectedValueOnce(new ApiError(200, "A0409", "笔记已被其他会话更新，请刷新后重试"));
+    patch.mockResolvedValueOnce(okEnvelope(saveResult({ version: "9000" })));
+    // 回读拿到的是**别人改过**的内容，prompt 策略下这会进冲突态
+    get.mockImplementation(() =>
+      okEnvelope({
+        id: NOTE_ID,
+        title: "别人改过的标题",
+        content: "别人写的内容",
+        updateTime: "2026-09-11T03:00:00.000Z",
+      }),
+    );
+    const { result } = renderCollab();
+
+    act(() => result.current.scheduleSave({ title: "本地标题", content: "本地内容" }));
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+
+    expect(result.current.conflict).toBeNull();
+    expect(patch).toHaveBeenCalledTimes(2);
+  });
+
+  it("内容与基线完全相同就不发请求（防乒乓的关键守卫）", async () => {
+    const { result } = renderCollab();
+
+    act(() =>
+      result.current.scheduleSave({
+        title: initialDetail.title ?? "",
+        content: initialDetail.content ?? "",
+      }),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(patch).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("saved");
+  });
+
+  it("overwrite 模式下重试预算放宽到 4 拍，真并发时也不会停在 error", async () => {
+    // 前三拍都判过期，第四拍成功——两拍预算下会在第三拍前就放弃
+    patch
+      .mockRejectedValueOnce(new ApiError(200, "A0409", "过期"))
+      .mockRejectedValueOnce(new ApiError(200, "A0409", "过期"))
+      .mockRejectedValueOnce(new ApiError(200, "A0409", "过期"))
+      .mockResolvedValueOnce(okEnvelope(saveResult({ version: "9000" })));
+    let version = 0;
+    get.mockImplementation(() =>
+      okEnvelope({
+        id: NOTE_ID,
+        title: "服务端标题",
+        content: "服务端内容",
+        updateTime: new Date(Date.UTC(2026, 8, 11, 3, 0, version++)).toISOString(),
+      }),
+    );
+    const { result } = renderCollab();
+
+    act(() => result.current.scheduleSave({ title: "本地标题", content: "本地内容" }));
+    await waitFor(() => expect(result.current.status).toBe("saved"), { timeout: 3000 });
+    expect(patch).toHaveBeenCalledTimes(4);
+  });
+
+  it("默认 prompt 策略仍然弹冲突（协同开关关闭时的现状语义不变）", async () => {
+    patch.mockRejectedValueOnce(new ApiError(200, "A0409", "过期"));
+    get.mockResolvedValue(
+      okEnvelope({
+        id: NOTE_ID,
+        title: "别人改过的标题",
+        content: "别人写的内容",
+        updateTime: "2026-09-11T03:00:00.000Z",
+      }),
+    );
+    const { result } = renderCollab({ conflictPolicy: "prompt" });
+
+    act(() => result.current.scheduleSave({ title: "本地标题", content: "本地内容" }));
+    await waitFor(() => expect(result.current.status).toBe("conflict"));
+  });
+
+  it("sharedVersion 把本地版本号顶到别人刚存过的最新值（常态 A0409 归零）", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult({ version: "9000" })));
+    const { result, rerender } = renderHookWithProviders(
+      (props: { sharedVersion: string | null }) =>
+        useSaveNote({
+          noteId: NOTE_ID,
+          initialVersion: "1000",
+          debounceMs: 20,
+          conflictPolicy: "overwrite",
+          sharedVersion: props.sharedVersion,
+        }),
+      {
+        queryClient: createPersistentQueryClient(),
+        initialProps: { sharedVersion: null as string | null },
+      },
+    );
+
+    rerender({ sharedVersion: "7777" });
+    act(() => result.current.scheduleSave({ title: "t", content: "c" }));
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+
+    expect(patch.mock.calls[0]?.[1].body.version).toBe("7777");
+  });
+
+  it("每次保存成功后回调 onSaved，携带新版本号（供写回共享 meta）", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult({ version: "9000" })));
+    const onSaved = vi.fn();
+    const { result } = renderCollab({ onSaved });
+
+    act(() => result.current.scheduleSave({ title: "t", content: "c" }));
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+
+    expect(onSaved).toHaveBeenCalledWith("9000");
+  });
+
+  it(`协同模式的防抖常量是 ${COLLAB_AUTOSAVE_DEBOUNCE_MS}ms，比单人的 ${AUTOSAVE_DEBOUNCE_MS}ms 更宽`, () => {
+    expect(COLLAB_AUTOSAVE_DEBOUNCE_MS).toBeGreaterThan(AUTOSAVE_DEBOUNCE_MS);
   });
 });

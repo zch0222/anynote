@@ -26,7 +26,16 @@ const BASE_ID = 7;
 const NOTE_ID = 42;
 
 const NOW_ISO = new Date().toISOString();
-const YESTERDAY_ISO = new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString();
+/*
+ * 取「上一个本地日历日」而不是 `now - 26h`：分组按**本地日历天**切（见
+ * `lib/history-groups.ts`），而 26 小时在凌晨会跨掉两个日历日，让这条用例
+ * 只在白天通过。`setDate(getDate() - 1)` 恒为昨天同一钟点，与运行时刻无关。
+ */
+const YESTERDAY_ISO = (() => {
+  const date = new Date();
+  date.setDate(date.getDate() - 1);
+  return date.toISOString();
+})();
 
 function envelope(data: unknown, code = "00000") {
   return {

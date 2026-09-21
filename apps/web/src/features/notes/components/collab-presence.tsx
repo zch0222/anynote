@@ -11,7 +11,12 @@ const STATUS_TEXT: Record<CollabStatus, string> = {
   error: "连接失败",
 };
 
-/** 协同连接状态徽标。颜色只做提示，文案才是无障碍读到的内容。 */
+/**
+ * 协同连接状态徽标。颜色只做提示，文案才是无障碍读到的内容。
+ *
+ * 从 `features/collab/components/collab-status.tsx` 迁入笔记域（M13.5）：
+ * `/docs` 退役后，协同状态挂在**笔记编辑器**头部，不再是独立文档库的一部分。
+ */
 export function CollabStatusBadge({ status }: { status: CollabStatus }) {
   const offline = status === "error" || status === "disconnected";
   const Icon = offline ? WifiOff : Wifi;
