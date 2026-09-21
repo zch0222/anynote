@@ -184,8 +184,14 @@ test.describe("笔记图片：上传过程有 loading 提示", () => {
 
     const indicator = page.locator('[data-testid="image-upload-indicator"]');
 
-    // 让建任务直接失败（业务错误码 + HTTP 200，与后端真实错误形态一致）
+    // 让建任务失败（业务错误码 + HTTP 200，与后端真实错误形态一致）
     await page.route("**/images/uploadTasks", async (route) => {
+      /*
+       * 先压一拍再回。**不是**在等 UI，而是给下面那条「指示器出现过」的断言一个
+       * 可观察的窗口：瞬间失败时指示器的生存期可能短于一次断言轮询，用例会偶发
+       * 「element(s) not found」——实测全量跑里就这么红过一次。
+       */
+      await new Promise((resolve) => setTimeout(resolve, 500));
       await route.fulfill({
         status: 200,
         contentType: "application/json",
