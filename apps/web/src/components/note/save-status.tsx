@@ -35,14 +35,27 @@ export function SaveStatusBadge({
   status,
   lastSavedAt,
   className,
+  collabConnected = false,
 }: {
   status: NoteSaveStatus;
   lastSavedAt?: Date | null;
   className?: string;
+  /**
+   * 协同连接是否正常（方案 §7.4）。
+   *
+   * 协同模式下正文由在场所有人共同推进，本地 `lastSavedAt` 与本房间是否同步无关，
+   * 停在「已保存 12 分钟前」会让用户误以为内容没被同步。因此**连上时**把已保存态
+   * 改成「已同步」且不显示时间；保存中 / 保存失败 / 冲突仍按本地状态显示——
+   * 那些是用户真正需要知道、且与连接状态正交的信息。
+   */
+  collabConnected?: boolean;
 }) {
-  const { label, icon: Icon, className: tone } = presentation[status];
+  const base = presentation[status];
+  const label = collabConnected && status === "saved" ? "已同步" : base.label;
+  const Icon = base.icon;
+  const tone = base.className;
   const savedAt =
-    status === "saved" && lastSavedAt
+    status === "saved" && !collabConnected && lastSavedAt
       ? `${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt
           .getMinutes()
           .toString()

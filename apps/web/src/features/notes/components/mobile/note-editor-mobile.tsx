@@ -3,11 +3,13 @@
 import { TiptapEditor, type TiptapEditorProps } from "@/components/editor/TiptapEditor";
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
 import type { AiContinueFn } from "@/components/editor/presets/types";
+import type { CollaborationBinding } from "@/components/editor/presets/types";
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { EditorSkeleton } from "@/components/loading/skeletons";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
 import { SaveStatusBadge } from "@/components/note/save-status";
+import { useCollabNote } from "@/features/collab/use-collab-note";
 import { bodyCharCount, ensureLeadingHeading } from "@/features/notes/lib/leading-heading";
 import { toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
@@ -15,10 +17,12 @@ import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { useMoveNoteMutation } from "@/features/notes/use-move-note";
 import { useNoteQuery } from "@/features/notes/use-note";
 import { useNoteTitle } from "@/features/notes/use-note-title";
-import { useSaveNote } from "@/features/notes/use-save-note";
+import { COLLAB_AUTOSAVE_DEBOUNCE_MS, useSaveNote } from "@/features/notes/use-save-note";
 import { continueWriting } from "@/lib/ai/sse";
+import { env } from "@/lib/env";
 import { formatRelativeTime } from "@/lib/format-time";
 import { mobileNoteHistoryHref } from "@/lib/mobile/hrefs";
+import type { Editor } from "@tiptap/core";
 import { FolderInput, History, MoreHorizontal, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -38,6 +42,9 @@ import { toast } from "sonner";
  * 与桌面一致：**没有独立的标题输入行**，标题就是正文的第一个 H1
  * （见 `note-editor.tsx` 的说明与 `lib/leading-heading.ts`）。
  */
+/** 可写笔记所需的最低权限（`NotePermissions.EDIT`）。低于它维持现状静态读（D8）。 */
+const EDIT_PERMISSION = 6;
+
 export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: number }) {
   const router = useRouter();
   const note = useNoteQuery(noteId);
@@ -57,7 +64,28 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
   const loadedNoteId = useRef<number | null>(null);
   const contentRef = useRef("");
 
-  const save = useSaveNote({ noteId, initialVersion: toVersion(note.data?.updateTime) });
+  /** 是否进入协同模式：总开关打开 **且** 当前用户对该笔记有编辑权（D7 / D8）。 */
+  const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
+  const collabEnabled =
+    env.NEXT_PUBLIC_COLLAB_NOTES && (note.data?.notePermissions ?? 0) >= EDIT_PERMISSION;
+  const collabLocalChangeRef = useRef<((editor: Editor) => void) | undefined>(undefined);
+  const collab = useCollabNote({
+    noteId,
+    enabled: collabEnabled,
+    editor: editorInstance,
+    markdown: initialContent,
+    onLocalChange: (editor) => collabLocalChangeRef.current?.(editor),
+  });
+
+  const save = useSaveNote({
+    noteId,
+    initialVersion: toVersion(note.data?.updateTime),
+    // 协同模式下 A0409 不再弹冲突框：本地 CRDT 状态已包含所有人的编辑，换号重发即可
+    conflictPolicy: collab.active ? "overwrite" : "prompt",
+    debounceMs: collab.active ? COLLAB_AUTOSAVE_DEBOUNCE_MS : undefined,
+    sharedVersion: collab.savedVersion,
+    onSaved: collab.publishSavedVersion,
+  });
   const { scheduleSave, flush, resolveConflict, status, lastSavedAt, conflict } = save;
 
   useEffect(() => {
@@ -72,15 +100,42 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
     setCharCount(bodyCharCount(content));
   }, [note.data, noteId, setTitle]);
 
+  const handleCollabLocalChange = useCallback(
+    (editor: Editor) => {
+      // markdown 取 `contentRef.current`，不在协同路径里读编辑器——见桌面版同处的说明：
+      // 读编辑器要静态引入 markdown 序列化链路，会把本路由顶出预算。
+      scheduleSave({ title: getTitleForContent(editor), content: contentRef.current });
+    },
+    [getTitleForContent, scheduleSave],
+  );
+  collabLocalChangeRef.current = handleCollabLocalChange;
+
   const handleContentChange = useCallback<NonNullable<TiptapEditorProps["onChange"]>>(
     (markdown, editor) => {
       contentRef.current = markdown;
       // 字数随每次 docChanged 推进，不留在打开时的快照上
       setCharCount(bodyCharCount(markdown));
-      scheduleSave({ title: getTitleForContent(editor), content: markdown });
+      setEditorInstance(editor);
+      // 协同模式下保存由 `useCollabNote` 的 origin 过滤驱动，这里再排一次会让全场各存一遍
+      if (!collabEnabled) {
+        scheduleSave({ title: getTitleForContent(editor), content: markdown });
+      }
     },
-    [scheduleSave, getTitleForContent],
+    [scheduleSave, getTitleForContent, collabEnabled],
   );
+
+  /**
+   * 协同绑定：`preset="collaborative"` 时正文的唯一真相是 Y.Doc。
+   * 引用须稳定，否则每次渲染都会重建编辑器实例。
+   */
+  const collaboration: CollaborationBinding | undefined = useMemo(() => {
+    if (!collab.active || !collab.doc || !collab.provider || !collab.user) return undefined;
+    return {
+      doc: collab.doc,
+      provider: collab.provider,
+      user: { name: collab.user.name, color: collab.user.color },
+    };
+  }, [collab.active, collab.doc, collab.provider, collab.user]);
 
   // 图片走 file 服务的分片直传；实现只在真的插图时才下载（静态 import 会压进首屏）。
   // 引用须稳定，否则每次渲染都会重建编辑器实例。
@@ -220,11 +275,29 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
             <span className="tabular">{charCount.toLocaleString("zh-CN")} 字</span>
             {note.data?.knowledgeBaseName ? ` · ${note.data.knowledgeBaseName}` : ""}
           </p>
+          {/* 断线降级（§7.4）：协同连不上时提示并回退单人模式 */}
+          {collabEnabled && collab.degraded ? (
+            <div
+              role="alert"
+              data-testid="collab-degraded"
+              className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-footnote text-warning"
+            >
+              <span className="min-w-0 flex-1">协同服务连不上，已切换为单人编辑。</span>
+              <button
+                type="button"
+                className="shrink-0 font-medium underline"
+                onClick={collab.reconnect}
+              >
+                重连
+              </button>
+            </div>
+          ) : null}
           <TiptapEditor
             key={noteId}
-            preset="full"
+            preset={collaboration ? "collaborative" : "full"}
             toolbar="mobile"
-            value={initialContent}
+            value={initialContent ?? ""}
+            {...(collaboration ? { collaboration } : {})}
             onChange={handleContentChange}
             onReady={onEditorReady}
             aiContinue={handleAiContinue}
