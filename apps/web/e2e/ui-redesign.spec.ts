@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { ensureKnowledgeBase, openKnowledgeBase } from "./support/account";
+import { expectNoteSaved } from "./support/save-status";
 
 /**
  * 新前端 UI 重设计的端到端验收。
@@ -101,15 +102,29 @@ test.describe("信息架构：知识库是唯一顶层对象", () => {
     const navigation = page.getByRole("navigation", { name: "主导航" });
     await expect(navigation).toBeVisible({ timeout: 30_000 });
 
-    // 跨库能力保留在一级
+    // 跨库能力保留在一级：退役后仍在的就是「知识库」+ 完整的 AI 助手一组
     await expect(navigation.getByRole("link", { name: "AI 对话" })).toHaveAttribute(
       "href",
       "/ai/chat",
     );
-    await expect(navigation.getByRole("link", { name: "协同文档" })).toHaveAttribute(
+    await expect(navigation.getByRole("link", { name: "AI 工作流" })).toHaveAttribute(
       "href",
-      "/docs",
+      "/ai/workflow",
     );
+    await expect(navigation.getByRole("link", { name: "PDF 问答" })).toHaveAttribute(
+      "href",
+      "/ai/pdf",
+    );
+    // 知识库是唯一顶层对象：它自己不另立一格，而是这组动态列表的表头 + 新建入口
+    await expect(navigation.getByTestId("sidebar-new-base")).toBeVisible();
+    /*
+     * 「协同文档」随 `/docs` 退役从一级导航移除（M13.5）。
+     *
+     * 协同不再是独立的文档库，而是「笔记的一种编辑模式」——入口就是笔记本身，
+     * 再在一级导航里留一格会让人以为它还是个跨库的顶层对象。
+     * 这里同时是**反向断言**：哪天有人把入口加回来，这条会明确指出。
+     */
+    await expect(navigation.getByRole("link", { name: "协同文档" })).toHaveCount(0);
     // 旧的四平铺入口不再作为一级导航项
     await expect(navigation.getByRole("link", { name: "工作台" })).toHaveCount(0);
     await expect(navigation.getByRole("link", { name: "慕课" })).toHaveCount(0);
@@ -321,9 +336,7 @@ test.describe("笔记列表与编辑器版式", () => {
     await expect(surface).toBeVisible({ timeout: 30_000 });
     await surface.click();
     await page.keyboard.type("列出这篇笔记");
-    await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectNoteSaved(page);
 
     await page.goto(baseUrl);
     await expect(page.getByTestId("note-list-items").getByRole("link").first()).toBeVisible({
@@ -353,8 +366,10 @@ test.describe("笔记列表与编辑器版式", () => {
     await firstRow.click();
     await expect(page.locator(".anynote-editor__content")).toBeVisible({ timeout: 30_000 });
 
-    // 保存状态是胶囊徽标（有底色、有圆角），不是一行裸文字
-    const badge = page.getByRole("status").filter({ hasText: "已保存" });
+    // 保存状态是胶囊徽标（有底色、有圆角），不是一行裸文字。
+    // 用 `data-status` 定位而不是文案：协同模式下文案是「已同步」（方案 §7.4），
+    // 这条用例要看的是胶囊的**样式**，与文案无关。
+    const badge = page.locator('[data-status="saved"]').first();
     await expect(badge).toBeVisible({ timeout: 30_000 });
     const badgeStyle = await badge.evaluate((element) => {
       const style = getComputedStyle(element);

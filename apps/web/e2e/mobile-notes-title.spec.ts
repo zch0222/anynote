@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { replaceLeadingHeading } from "./support/editor";
+import { expectNoteSaved } from "./support/save-status";
 
 /**
  * 移动端与桌面共用一套标题规则：**没有独立的标题输入行**，
@@ -27,7 +28,8 @@ test("移动端顶部 H1 即笔记标题，列表与刷新后仍一致", async (
   await expect(page.getByLabel("笔记标题")).toHaveCount(0);
 
   await replaceLeadingHeading(page, "移动同步标题");
-  await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible();
+  // 判据走 `data-status`：协同模式下徽标文案是「已同步」，写死「已保存」会假红
+  await expectNoteSaved(page);
   await page.reload();
   await expect(surface.locator("h1")).toHaveText("移动同步标题");
 
@@ -37,7 +39,7 @@ test("移动端顶部 H1 即笔记标题，列表与刷新后仍一致", async (
   await page.getByRole("link", { name: /移动同步标题/ }).click();
   await expect(surface.locator("h1")).toHaveText("移动同步标题");
   await replaceLeadingHeading(page, "移动更新标题");
-  await expect(page.getByRole("status").filter({ hasText: "已保存" })).toBeVisible();
+  await expectNoteSaved(page);
   await page.getByTestId("mobile-back").click();
   await expect(page).toHaveURL(/\/m\/notes\/\d+$/);
   await page.getByRole("link", { name: /移动更新标题/ }).click();
