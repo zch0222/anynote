@@ -56,7 +56,8 @@ public interface NoteService extends IService<Note> {
      *
      * <p>复用 {@link #getNotePermissions(Long)} 的权限推导，再附上当前版本令牌与标题，
      * 供 BFF 决定是否签发协同令牌、令牌里的房间与只读标志怎么填。无权限时
-     * {@code perm} 回 {@code NONE} 而不抛异常。</p>
+     * {@code perm} 回 {@code NONE} 而不抛异常，且**不回标题与版本令牌**——
+     * 该端点对任何登录用户开放，回了等于开放全站笔记标题与更新时间的枚举。</p>
      *
      * @param noteId 笔记id
      * @return 协同准入结果；笔记不存在抛 {@code A0404}
