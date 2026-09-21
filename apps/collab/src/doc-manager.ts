@@ -41,6 +41,16 @@ export class CollabDocManager {
     return this.entries.size;
   }
 
+  /** 当前已打开的房间名，供 /healthz 汇总各房间的观察指标。 */
+  rooms(): string[] {
+    return [...this.entries.keys()];
+  }
+
+  /** 某房间被丢弃的写方向消息数（只读连接触发）；房间不存在时返回 0。 */
+  rejectedWrites(room: string): number {
+    return this.entries.get(room)?.shared.rejectedWrites ?? 0;
+  }
+
   open(room: string): Promise<CollabDoc> {
     const existing = this.entries.get(room);
     if (existing) return Promise.resolve(existing.shared);

@@ -30,10 +30,10 @@ afterEach(() => vi.useRealTimers());
 describe("CollabDocManager 打开房间", () => {
   it("首次打开会加载持久化状态", async () => {
     const store = createMemoryStore();
-    store.files.set("index", seedState("已落盘的内容"));
+    store.files.set("note:1", seedState("已落盘的内容"));
     const manager = new CollabDocManager({ persistence: store });
 
-    const shared = await manager.open("index");
+    const shared = await manager.open("note:1");
 
     expect(shared.doc.getText("content").toString()).toBe("已落盘的内容");
     expect(manager.size).toBe(1);
@@ -43,8 +43,8 @@ describe("CollabDocManager 打开房间", () => {
     const store = createMemoryStore();
     const manager = new CollabDocManager({ persistence: store });
 
-    const first = await manager.open("index");
-    const second = await manager.open("index");
+    const first = await manager.open("note:1");
+    const second = await manager.open("note:1");
 
     expect(second).toBe(first);
     expect(store.read).toHaveBeenCalledTimes(1);
@@ -54,7 +54,7 @@ describe("CollabDocManager 打开房间", () => {
     const store = createMemoryStore();
     const manager = new CollabDocManager({ persistence: store });
 
-    const [a, b] = await Promise.all([manager.open("index"), manager.open("index")]);
+    const [a, b] = await Promise.all([manager.open("note:1"), manager.open("note:1")]);
 
     expect(a).toBe(b);
     expect(store.read).toHaveBeenCalledTimes(1);
@@ -69,18 +69,18 @@ describe("CollabDocManager 打开房间", () => {
     const onError = vi.fn();
     const manager = new CollabDocManager({ persistence: store, onError });
 
-    const shared = await manager.open("index");
+    const shared = await manager.open("note:1");
 
     expect(shared.doc.getText("content").toString()).toBe("");
-    expect(onError).toHaveBeenCalledWith(failure, "index");
+    expect(onError).toHaveBeenCalledWith(failure, "note:1");
   });
 
   it("空的持久化状态不会被当成 update 应用", async () => {
     const store = createMemoryStore();
-    store.files.set("index", new Uint8Array());
+    store.files.set("note:1", new Uint8Array());
     const manager = new CollabDocManager({ persistence: store });
 
-    await expect(manager.open("index")).resolves.toBeDefined();
+    await expect(manager.open("note:1")).resolves.toBeDefined();
   });
 });
 
@@ -88,7 +88,7 @@ describe("CollabDocManager 落盘", () => {
   it("编辑后经过静默期才写一次盘", async () => {
     const store = createMemoryStore();
     const manager = new CollabDocManager({ persistence: store, saveDebounceMs: 50 });
-    const shared = await manager.open("index");
+    const shared = await manager.open("note:1");
 
     shared.doc.getText("content").insert(0, "a");
     shared.doc.getText("content").insert(1, "b");
@@ -98,15 +98,15 @@ describe("CollabDocManager 落盘", () => {
 
     expect(store.write).toHaveBeenCalledTimes(1);
     const restored = new Y.Doc();
-    Y.applyUpdate(restored, store.files.get("index") as Uint8Array);
+    Y.applyUpdate(restored, store.files.get("note:1") as Uint8Array);
     expect(restored.getText("content").toString()).toBe("ab");
   });
 
   it("加载持久化状态本身不会触发回写", async () => {
     const store = createMemoryStore();
-    store.files.set("index", seedState("已落盘"));
+    store.files.set("note:1", seedState("已落盘"));
     const manager = new CollabDocManager({ persistence: store, saveDebounceMs: 50 });
-    await manager.open("index");
+    await manager.open("note:1");
 
     await vi.advanceTimersByTimeAsync(200);
 
@@ -116,9 +116,9 @@ describe("CollabDocManager 落盘", () => {
   it("没有变更时 flush 不写盘", async () => {
     const store = createMemoryStore();
     const manager = new CollabDocManager({ persistence: store });
-    await manager.open("index");
+    await manager.open("note:1");
 
-    await manager.flush("index");
+    await manager.flush("note:1");
 
     expect(store.write).not.toHaveBeenCalled();
   });
@@ -131,28 +131,28 @@ describe("CollabDocManager 落盘", () => {
     });
     const onError = vi.fn();
     const manager = new CollabDocManager({ persistence: store, onError, saveDebounceMs: 10 });
-    const shared = await manager.open("index");
+    const shared = await manager.open("note:1");
 
     shared.doc.getText("content").insert(0, "a");
     await vi.advanceTimersByTimeAsync(10);
 
-    expect(onError).toHaveBeenCalledWith(failure, "index");
+    expect(onError).toHaveBeenCalledWith(failure, "note:1");
     expect(manager.size).toBe(1);
   });
 
   it("flushAll 把所有房间的未落盘内容写出去", async () => {
     const store = createMemoryStore();
     const manager = new CollabDocManager({ persistence: store, saveDebounceMs: 10_000 });
-    const index = await manager.open("index");
-    const doc = await manager.open("doc:abcdefgh");
-    index.doc.getText("content").insert(0, "i");
+    const firstRoom = await manager.open("note:1");
+    const doc = await manager.open("note:2");
+    firstRoom.doc.getText("content").insert(0, "i");
     doc.doc.getText("content").insert(0, "d");
 
     await manager.flushAll();
 
     expect(store.write).toHaveBeenCalledTimes(2);
-    expect(store.files.has("index")).toBe(true);
-    expect(store.files.has("doc:abcdefgh")).toBe(true);
+    expect(store.files.has("note:1")).toBe(true);
+    expect(store.files.has("note:2")).toBe(true);
   });
 });
 
@@ -160,24 +160,24 @@ describe("CollabDocManager 关闭房间", () => {
   it("仍有连接时不关闭", async () => {
     const store = createMemoryStore();
     const manager = new CollabDocManager({ persistence: store });
-    const shared = await manager.open("index");
+    const shared = await manager.open("note:1");
     shared.conns.set(conn, new Set());
 
-    await expect(manager.closeIfEmpty("index")).resolves.toBe(false);
+    await expect(manager.closeIfEmpty("note:1")).resolves.toBe(false);
     expect(manager.size).toBe(1);
   });
 
   it("最后一个连接离开时先落盘再销毁（不丢最后一段编辑）", async () => {
     const store = createMemoryStore();
     const manager = new CollabDocManager({ persistence: store, saveDebounceMs: 10_000 });
-    const shared = await manager.open("index");
+    const shared = await manager.open("note:1");
     shared.doc.getText("content").insert(0, "最后一笔");
 
-    await expect(manager.closeIfEmpty("index")).resolves.toBe(true);
+    await expect(manager.closeIfEmpty("note:1")).resolves.toBe(true);
 
     expect(store.write).toHaveBeenCalledTimes(1);
     const restored = new Y.Doc();
-    Y.applyUpdate(restored, store.files.get("index") as Uint8Array);
+    Y.applyUpdate(restored, store.files.get("note:1") as Uint8Array);
     expect(restored.getText("content").toString()).toBe("最后一笔");
     expect(manager.size).toBe(0);
   });
@@ -185,17 +185,41 @@ describe("CollabDocManager 关闭房间", () => {
   it("关闭后再打开能读回刚落盘的内容", async () => {
     const store = createMemoryStore();
     const manager = new CollabDocManager({ persistence: store, saveDebounceMs: 10_000 });
-    const shared = await manager.open("index");
+    const shared = await manager.open("note:1");
     shared.doc.getText("content").insert(0, "重启前");
-    await manager.closeIfEmpty("index");
+    await manager.closeIfEmpty("note:1");
 
-    const reopened = await manager.open("index");
+    const reopened = await manager.open("note:1");
 
     expect(reopened.doc.getText("content").toString()).toBe("重启前");
   });
 
   it("关闭不存在的房间返回 false", async () => {
     const manager = new CollabDocManager({ persistence: createMemoryStore() });
-    await expect(manager.closeIfEmpty("index")).resolves.toBe(false);
+    await expect(manager.closeIfEmpty("note:1")).resolves.toBe(false);
+  });
+});
+
+describe("CollabDocManager 观察指标", () => {
+  it("rooms() 列出已打开的房间，关闭后移除", async () => {
+    const manager = new CollabDocManager({ persistence: createMemoryStore() });
+    await manager.open("note:1");
+    await manager.open("note:2");
+
+    expect(manager.rooms().sort()).toEqual(["note:1", "note:2"]);
+
+    await manager.closeIfEmpty("note:1");
+    expect(manager.rooms()).toEqual(["note:2"]);
+  });
+
+  it("rejectedWrites() 汇总房间内被丢弃的写方向消息，未知房间返回 0", async () => {
+    const manager = new CollabDocManager({ persistence: createMemoryStore() });
+    const shared = await manager.open("note:1");
+
+    expect(manager.rejectedWrites("note:1")).toBe(0);
+    expect(manager.rejectedWrites("note:404")).toBe(0);
+
+    shared.rejectedWrites = 3;
+    expect(manager.rejectedWrites("note:1")).toBe(3);
   });
 });
