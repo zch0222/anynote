@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { ensureKnowledgeBase } from "./support/account";
+import { focusWritableEditor } from "./support/editor";
 import { expectNoteSaved } from "./support/save-status";
 
 /**
@@ -44,8 +45,8 @@ async function createNote(page: Page, title: string): Promise<string> {
  * 点开菜单后编辑器会插一个隐藏 input，直接把文件喂给它最稳。
  */
 async function uploadImageThroughSlashMenu(page: Page) {
-  const surface = page.locator(".anynote-editor__content");
-  await surface.click();
+  // 只读态下敲 "/" 不会有任何反应，slash 菜单永远等不到
+  await focusWritableEditor(page);
   // 新开一段再敲 "/" 唤起命令面板（段首才会触发 suggestion）
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");

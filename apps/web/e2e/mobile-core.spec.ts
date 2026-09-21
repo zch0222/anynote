@@ -1,4 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
+import { focusWritableEditor } from "./support/editor";
 import { expectNoteSaved } from "./support/save-status";
 import { establishFreshSession } from "./support/session";
 
@@ -263,9 +264,7 @@ test.describe("移动端笔记三级导航与编辑", () => {
     await page.goto(noteUrl);
 
     const marker = `移动端自动保存 ${Date.now()}`;
-    const surface = page.locator(EDITOR_SURFACE);
-    await expect(surface).toBeVisible({ timeout: 30_000 });
-    await surface.click();
+    const surface = await focusWritableEditor(page);
     await page.keyboard.type(marker);
 
     await expectNoteSaved(page);
@@ -301,9 +300,7 @@ test.describe("移动端笔记三级导航与编辑", () => {
     await page.getByRole("button", { name: "创建笔记" }).click();
     await expect(page).toHaveURL(/\/m\/notes\/\d+\/\d+/, { timeout: 30_000 });
 
-    const surface = page.locator(EDITOR_SURFACE);
-    await expect(surface).toBeVisible({ timeout: 30_000 });
-    await surface.click();
+    const surface = await focusWritableEditor(page);
     await page.keyboard.type("第二篇正文");
     await expectNoteSaved(page);
 
