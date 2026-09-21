@@ -10,6 +10,7 @@ import { EditorSkeleton } from "@/components/loading/skeletons";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
 import { SaveStatusBadge } from "@/components/note/save-status";
 import { useCollabNote } from "@/features/collab/use-collab-note";
+import { CollabPresence } from "@/features/notes/components/collab-presence";
 import { bodyCharCount, ensureLeadingHeading } from "@/features/notes/lib/leading-heading";
 import { toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
@@ -115,7 +116,6 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
       contentRef.current = markdown;
       // 字数随每次 docChanged 推进，不留在打开时的快照上
       setCharCount(bodyCharCount(markdown));
-      setEditorInstance(editor);
       // 协同模式下保存由 `useCollabNote` 的 origin 过滤驱动，这里再排一次会让全场各存一遍
       if (!collabEnabled) {
         scheduleSave({ title: getTitleForContent(editor), content: markdown });
@@ -136,6 +136,24 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
       user: { name: collab.user.name, color: collab.user.color },
     };
   }, [collab.active, collab.doc, collab.provider, collab.user]);
+
+  /**
+   * 编辑器就绪：建立标题基线，并把实例交给协同运行时。
+   *
+   * 与桌面同源的一处修正：交接必须在 `onReady`，**不能**放 `onChange`。
+   * 后者是 TipTap 的 `onUpdate`、只在 `docChanged` 时触发，而协同模式下编辑器
+   * 初始为空（`content` 刻意不设，真相是 Y.Doc），空文档不产生任何 `docChanged`，
+   * 实例会永远是 null —— 冷启动注入守卫饿死，笔记打开是空白。
+   * 同理只交出**协同绑定就绪后**的实例：绑定前编辑器是 `full` 预设，
+   * 那时注入进不了 Y.Doc 却会把 `meta.seeded` 置位，导致笔记永久空白。
+   */
+  const handleEditorReady = useCallback(
+    (editor: Editor) => {
+      onEditorReady(editor);
+      setEditorInstance(collaboration ? editor : null);
+    },
+    [onEditorReady, collaboration],
+  );
 
   // 图片走 file 服务的分片直传；实现只在真的插图时才下载（静态 import 会压进首屏）。
   // 引用须稳定，否则每次渲染都会重建编辑器实例。
@@ -219,7 +237,22 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
 
   return (
     <MobileScreen
-      title={<SaveStatusBadge status={status} lastSavedAt={lastSavedAt} />}
+      title={
+        /*
+         * 协同态徽标与在线成员条（方案 §7.2 / §7.4）。移动端与桌面走同一套语义：
+         * 连上房间时「已保存」改说「已同步」——本地 lastSavedAt 与本房间是否同步无关，
+         * 停在「已保存 12 分钟前」会让用户以为内容没同步。在线成员条让「房间里还有谁」
+         * 在移动端同样可见，否则多人共编时用户看不到任何同伴反馈。
+         */
+        <span className="flex min-w-0 items-center gap-2">
+          <SaveStatusBadge
+            status={status}
+            lastSavedAt={lastSavedAt}
+            collabConnected={collaboration !== undefined && collab.connected}
+          />
+          {collaboration ? <CollabPresence peers={collab.peers} /> : null}
+        </span>
+      }
       back={`/m/notes/${baseId}`}
       tone="paper"
       actions={
@@ -299,7 +332,7 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
             value={initialContent ?? ""}
             {...(collaboration ? { collaboration } : {})}
             onChange={handleContentChange}
-            onReady={onEditorReady}
+            onReady={handleEditorReady}
             aiContinue={handleAiContinue}
             uploadFn={uploadFn}
             fill

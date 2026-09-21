@@ -164,7 +164,6 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
        * `docChanged` 时触发，是同一份正文，不需要再建一条订阅。
        */
       setCharCount(bodyCharCount(markdown));
-      setEditorInstance(editor);
       /*
        * 协同模式下保存由 `useCollabNote` 的 origin 过滤驱动：`onChange` 对远端广播同样会触发，
        * 在这里再排一次会让一个人打字引来全场各存一遍（§7.3.1）。只更新本地展示状态。
@@ -190,6 +189,27 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
       user: { name: collab.user.name, color: collab.user.color },
     };
   }, [collab.active, collab.doc, collab.provider, collab.user]);
+
+  /**
+   * 编辑器就绪：建立标题基线，并把实例交给协同运行时。
+   *
+   * **必须用 `onReady` 而不是 `onChange`**。`onChange` 就是 TipTap 的 `onUpdate`，
+   * 只在 `docChanged` 时触发；而协同模式下编辑器初始为空（正文的唯一真相是 Y.Doc，
+   * `content` 刻意不设），空文档不产生任何 `docChanged`——用 `onChange` 赋值会让
+   * 实例**永远是 null**，冷启动注入守卫的 `!editor` 恒成立，注入永不执行，
+   * 有内容的笔记打开后就是空白编辑器（只剩占位提示与「0 字」）。
+   *
+   * 只在**协同绑定就绪后**交接：绑定之前编辑器跑的是 `full` 预设，此时注入不会经
+   * ySyncPlugin 写进 Y.Doc，却已经把 `meta.seeded` 置位，会让笔记永久空白。
+   * 绑定失效（断线降级）时收回，避免把非协同实例留给运行时。
+   */
+  const handleEditorReady = useCallback(
+    (editor: Editor) => {
+      onEditorReady(editor);
+      setEditorInstance(collaboration ? editor : null);
+    },
+    [onEditorReady, collaboration],
+  );
 
   // 图片走 file 服务的分片直传。实现（SHA-256 + 分片签名）只在真的插图时才下载，
   // 静态 import 会把它压进笔记路由的首屏 JS；引用须稳定，否则每次渲染都会重建编辑器实例
@@ -383,7 +403,7 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                   value={initialContent ?? ""}
                   {...(collaboration ? { collaboration } : {})}
                   onChange={handleContentChange}
-                  onReady={onEditorReady}
+                  onReady={handleEditorReady}
                   aiContinue={handleAiContinue}
                   uploadFn={uploadFn}
                   // 设计稿的桌面编辑器没有常驻工具条（移动端才有，见 note-editor-mobile）
