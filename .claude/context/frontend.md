@@ -16,7 +16,7 @@
 |------|------|
 | L0（侧栏动态列表） | 知识库 —— 来自 `useKnowledgeBasesQuery()` 的缓存，**不是静态路由表** |
 | L1（知识库内二级 Tab） | 概览 / 笔记 / 慕课 / 任务 / 资料 / 成员 |
-| 跨库能力（侧栏固定分组） | AI 对话 · AI 工作流 · PDF 问答 · 协同文档 |
+| 跨库能力（侧栏固定分组） | AI 对话 · AI 工作流 · PDF 问答（协同文档随 `/docs` 退役） |
 | 设置 | 收在侧栏页脚的用户卡里，不占一级导航 |
 
 二级 Tab 的地址由 `knowledgeBaseSectionHref(baseId, section)` 生成（`notes` 是裸路径
@@ -76,12 +76,12 @@
 
 | 预设 | 宿主 |
 |------|------|
-| `CardGridSkeleton` | 知识库列表 / 慕课列表 / 协同文档库（卡片网格） |
+| `CardGridSkeleton` | 知识库列表 / 慕课列表（卡片网格） |
 | `ListRowsSkeleton` | 笔记列表 / 成员列表 / 资料列表（行 + 缩略图） |
 | `TableSkeleton` | 任务（表格行） |
 | `DocumentSkeleton` | PDF 预览（A4 竖版纸面） |
 | `EditorSkeleton` | 笔记 / 协作文档 / Wikis（标题 + 参差段落） |
-| `PanelSkeleton` | 协同工作区 / 设置面板（一整块） |
+| `PanelSkeleton` | 笔记编辑器加载 / AI 对话 / 设置面板（一整块） |
 
 **形状必须对得上宿主**：选错了加载完成时整页跳一下，比不显示骨架更糟。
 反例记在 `mooc-detail.tsx`（16:9 视频位**不用** `DocumentSkeleton`，那是 A4 竖版）
@@ -169,7 +169,7 @@ apps/web/
 │   ├── lib/
 │   │   ├── api/              openapi-fetch 实例、错误信封、DTO query 序列化
 │   │   ├── auth/             BFF 侧 Cookie / 刷新 / 资料（server-only）
-│   │   ├── collab/           协同房间命名、会话、索引文档
+│   │   ├── collab/           协同房间命名（note:<id>）、会话、注入守卫
 │   │   ├── desktop/          桌面壳桥接（令牌交换 + 本地保管）
 │   │   ├── editor/           Markdown 桥接、Shiki、KaTeX、上传
 │   │   ├── mobile/           移动端 UA 分流与搜索（纯函数，middleware 与单测共用）
@@ -258,15 +258,27 @@ API 客户端由 `pnpm openapi:generate` 从后端 Swagger 自动生成，**不�
 
 ---
 
-## 协同编辑（M8.1）
+## 协同编辑（M13.2–M13.4 起：笔记的一种编辑模式）
 
-- 服务端：`apps/collab`（自建 y-websocket 协议服务，:1234），房间名 `index` 与 `doc:<id>`
-- 前端：`features/collab/use-collab-room.ts` 管连接生命周期，`use-collab-index.ts` 管文档索引
-- 文档库索引本身也是一个协同房间，**没有任何后端接口**参与 `/docs` 的读写
+协同不再是独立文档库——`/docs` 与 `index` 房间已退役（方案
+[`docs/collab/notes-collab-merge-plan.md`](../../docs/collab/notes-collab-merge-plan.md) v2.0，M13.0–M13.5）。
+
+- 服务端 `apps/collab`（自建 y-websocket 协议服务，:1234），房间名 **`note:<noteId>`**（`n_note` 主键）。
+  令牌 claim 带 `room` 与 `ro`：**令牌房间必须等于握手房间**（不符 403），`ro=true` 的连接被丢弃写方向消息
+  （syncStep2 / update），因此越权面从「任何登录用户可写任意房间」收敛到知识库权限体系。
+- **note 房间不落盘**：真相源是 MySQL `n_note_text` 的 Markdown，Y.Doc 只是进程内会话态；
+  房间空了就销毁，下次从 DB 重新注入。
+- 前端 `features/collab/use-collab-note.ts` 组合「grant → token → 房间 → 注入守卫 → 保存排队」；
+  `lib/collab/session.ts` 管连接与续期（**续期即重查权限**），`lib/collab/injection.ts` 是冷启动注入守卫。
+- **冷启动注入**（D4）：房间空时由客户端把 REST 拿到的 Markdown 灌进 Y.Doc，条件是
+  「已 synced + 文档为空 + `meta.seeded` 未置位 + awareness 里只有我」且持续 600ms；无服务端选举。
 - 编辑器用 `preset="collaborative"`：关掉 StarterKit 的本地 undo/redo（会撤销掉别人的编辑），
-  改用 Collaboration 的 Y.UndoManager；且**不设初始 content**，正文只由 Y.Doc 灌入
-- `/docs` 与 `/docs/[id]` 走 `dynamic(..., { ssr: false })` 懒加载：
-  yjs + y-websocket 静态引入会把首屏 JS 顶出 300KB 预算
+  改用 Collaboration 的 Y.UndoManager；且**不设初始 content**，正文只由 Y.Doc 灌入。
+- **保存人人各跑一份**（不选 leader）：只在**本地编辑**排队（按 Y.Doc 的 origin 过滤掉远端广播与注入），
+  防抖 3s（`COLLAB_AUTOSAVE_DEBOUNCE_MS`），A0409 走**覆盖式换号重发**、不弹冲突框；
+  保存成功后把新版本号写进共享 `meta.savedVersion`，在场各端据此同步版本号，把常态 A0409 降到 0。
+- 开关：`NEXT_PUBLIC_COLLAB_NOTES=1`；权限 < EDIT 的用户维持现状 REST 静态读（D8）。
+  连不上时提示并**自动回退单人模式**（`full` 预设 + 单人保存与冲突对话框）。
 
 ---
 
@@ -303,8 +315,8 @@ import { TiptapEditor } from "@/components/editor/TiptapEditor";
 |------|--------|------|
 | `full` | playground | 全部 23 个命令，一行铺开 |
 | `minimal` | 评论 / 输入框 | 只留基础排版 |
-| `mobile` | 移动端笔记 / 协同文档 | 单行横滑 10 个常驻 + 「更多」底部弹层 |
-| `none` | **桌面笔记 / 协同文档** | 不渲染常驻工具条——设计稿的桌面编辑器从标题直接进正文；格式化走气泡菜单、Slash 菜单与快捷键 |
+| `mobile` | 移动端笔记（含协同） | 单行横滑 10 个常驻 + 「更多」底部弹层 |
+| `none` | **桌面笔记（含协同）** | 不渲染常驻工具条——设计稿的桌面编辑器从标题直接进正文；格式化走气泡菜单、Slash 菜单与快捷键 |
 
 自定义节点（`components/editor/extensions/`）：`anynote-callout`（`> [!INFO]`）、
 `anynote-image`（分片直传）、`anynote-wikilink`（`[[双链]]`）、`anynote-ai-block`（```anynote-ai fence）、
@@ -366,6 +378,7 @@ pnpm --filter web lighthouse:budget
 | `NEXT_PUBLIC_APP_URL`      | 浏览器侧应用源（默认 `http://localhost:3000`） |
 | `INTERNAL_API_URL`         | BFF 直连 Gateway 地址（默认 `http://localhost:8080`） |
 | `NEXT_PUBLIC_COLLAB_WS_URL`| 协同服务地址（默认 `ws://localhost:1234`） |
+| `NEXT_PUBLIC_COLLAB_NOTES` | 笔记协同总开关（严格 `"1"` 才开，默认关闭） |
 | `COLLAB_TOKEN_SECRET`      | 协同令牌 HMAC 密钥，**必须与 `apps/collab` 一致** |
 | `DESKTOP_EXCHANGE_KEY`     | 桌面令牌交换开关，**Web 部署不要配** |
 | `DESKTOP_ALLOWED_ORIGINS`  | 允许交换令牌的桌面来源，仅在上一项配置后生效 |
