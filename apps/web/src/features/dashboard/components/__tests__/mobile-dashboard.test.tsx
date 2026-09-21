@@ -60,6 +60,9 @@ describe("MobileDashboard", () => {
    * H-2：画板是**三个**快捷格子（新建笔记 / AI 对话 / 协同文档），搜索在**上方独立的
    * 全宽伪输入框**里（M-01 图例 3）。原实现是 2×2 四格、把「搜索」也算作一格，
    * 于是三个高频入口被挤成两行、搜索框则完全缺失。
+   *
+   * 第三格的名目由 M13.5 改过：画板图例 6 写的是「协同文档 → /m/docs」，
+   * 而 `/docs` 体系已整体退役，照画板实现会得到一个 404 死链（回归用例见下一条）。
    */
   it("快捷操作是三个格子，且不含搜索", () => {
     setup({});
@@ -74,11 +77,25 @@ describe("MobileDashboard", () => {
       "href",
       "/m/ai/chat",
     );
-    expect(within(quick).getByRole("link", { name: "协同文档" })).toHaveAttribute(
-      "href",
-      "/m/docs",
-    );
+    expect(within(quick).getByRole("link", { name: "知识库" })).toHaveAttribute("href", "/m/notes");
     expect(within(quick).queryByRole("link", { name: "搜索" })).toBeNull();
+  });
+
+  /**
+   * 回归：第三格曾经指向 `/m/docs`，`/docs` 体系退役后那是一条**必 404** 的死链，
+   * 而它就在移动端首屏（工作台）上。这里对整组快捷格子做一次"指向已退役路由"的兜底断言，
+   * 避免以后再漏掉同类残留。
+   */
+  it("快捷操作不指向任何已退役路由", () => {
+    setup({});
+    renderWithProviders(<MobileDashboard />);
+    const quick = screen.getByRole("navigation", { name: "快捷操作" });
+    const hrefs = within(quick)
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
+    expect(hrefs).not.toContain("/m/docs");
+    expect(hrefs).not.toContain("/docs");
+    for (const href of hrefs) expect(href).toMatch(/^\/m\//);
   });
 
   it("搜索是上方独立的全宽入口，指向 /m/search", () => {

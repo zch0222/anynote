@@ -27,11 +27,19 @@ const BASE_CARD_COUNT = 4;
  * 早期是 2×2 四格、图标在左，还多出一格「搜索」——但搜索在画板里是**上方独立的
  * 全宽伪输入框**（图例 3），不是快捷格子。把搜索挤进格子里会让它和其它三个
  * "新建 / 打开"类动作混在一起，且占掉一格后三个高频入口变成两行。
+ *
+ * 第三格原为「协同文档 → /m/docs」（图例 6）。`/docs` 体系随 M13.5 整体退役，
+ * 那条链接会 404，故改为知识库 Tab 根（`/m/notes`）：
+ * - 前两格本就与 Tab 重合（图例 4 → `/m/notes/new`、图例 5 → `/m/ai/chat` 同 `AI` Tab），
+ *   第三格指向 `知识库` Tab 是同一套"新建 / 对话 / 浏览"三分法，不引入新模式；
+ * - 画板 M-01 的正文也写明「协同文档不进本页（要建 WebSocket）」，原格子与该说明自相矛盾，
+ *   本次一并纠正。
+ * 该偏离已记入 `docs/changelist/2026-09-21-notes-collab-merge.md`。
  */
 const QUICK_ACTIONS = [
   { title: "新建笔记", href: "/m/notes/new", icon: PenLine, tone: "accent" },
   { title: "AI 对话", href: "/m/ai/chat", icon: MessageSquare, tone: "accent" },
-  { title: "协同文档", href: "/m/docs", icon: FileText, tone: "accent" },
+  { title: "知识库", href: "/m/notes", icon: FileText, tone: "accent" },
 ] as const;
 
 /**
