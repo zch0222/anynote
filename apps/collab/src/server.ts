@@ -9,7 +9,6 @@ import {
   handleMessage,
   removeConnection,
 } from "./protocol.ts";
-import { parseRoom } from "./rooms.ts";
 import { authorizeUpgrade } from "./upgrade.ts";
 
 /** 心跳周期：超过一个周期没收到 pong 就判定连接已死并断开。 */
