@@ -33,7 +33,6 @@ describe("工作区导航", () => {
       "/ai/chat",
       "/ai/workflow",
       "/ai/pdf",
-      "/docs",
       "/notes/new",
       "/settings/profile",
     ]);
@@ -41,9 +40,9 @@ describe("工作区导航", () => {
     for (const route of workspaceRoutes) expect(getWorkspaceRoute(route.href)).toEqual(route);
   });
 
-  it("知识库是唯一的一级动态入口，AI 与协作各自成组", () => {
+  it("知识库是唯一的一级动态入口，AI 单独成组（协作已随 /docs 退役）", () => {
     expect(knowledgeBaseRoute.href).toBe("/notes");
-    expect(toolGroups.map((group) => group.label)).toEqual(["AI 助手", "协作"]);
+    expect(toolGroups.map((group) => group.label)).toEqual(["AI 助手"]);
     // 四类子资源降为知识库内的二级 Tab，不再是顶层入口
     for (const href of ["/wikis", "/mooc", "/tasks"]) {
       expect(workspaceRoutes.some((route) => route.href === href)).toBe(false);
@@ -170,10 +169,9 @@ describe("移动端导航映射", () => {
   });
 
   it("不在 tab 里的页面不点亮任何一格", () => {
-    // 待办与协同文档降级为「我的」里的更多入口，没有自己的 tab
+    // 待办与慕课降级为「我的」里的更多入口，没有自己的 tab
     expect(activeMobileTab("/m/tasks")).toBeUndefined();
     expect(activeMobileTab("/m/mooc/12")).toBeUndefined();
-    expect(activeMobileTab("/m/docs")).toBeUndefined();
   });
 
   it("桌面路由映射到移动端，带参数原样保留", () => {
@@ -223,7 +221,8 @@ describe("移动端导航映射", () => {
   it("沉浸式路由只覆盖详情页，列表页仍显示 tab bar", () => {
     expect(isImmersiveMobileRoute("/m/notes/3/7")).toBe(true);
     expect(isImmersiveMobileRoute("/m/notes/3/7/history")).toBe(true);
-    expect(isImmersiveMobileRoute("/m/docs/abc")).toBe(true);
+    // `/m/docs` 已退役：即便有人留着旧书签，它也不该再被当成沉浸式详情页
+    expect(isImmersiveMobileRoute("/m/docs/abc")).toBe(false);
     expect(isImmersiveMobileRoute("/m/ai/chat/9")).toBe(true);
     expect(isImmersiveMobileRoute("/m/search")).toBe(true);
 
@@ -248,7 +247,9 @@ describe("移动端导航映射", () => {
     const hrefs = mobileMoreRoutes.map((route) => route.href);
     expect(hrefs).not.toContain("/m/tasks");
     expect(hrefs).not.toContain("/m/mooc");
-    expect(hrefs).toEqual(["/m/docs", "/m/ai/pdf"]);
+    // 协同文档随 /docs 退役，更多入口只剩 PDF 问答
+    expect(hrefs).not.toContain("/m/docs");
+    expect(hrefs).toEqual(["/m/ai/pdf"]);
   });
 
   it("更多入口与不可用路由都指向存在的地址", () => {

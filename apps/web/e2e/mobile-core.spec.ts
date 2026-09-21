@@ -172,6 +172,7 @@ test.describe("移动端外壳与导航", () => {
     const rhythm = await active.evaluate((element) => {
       const icon = element.querySelector("svg");
       const label = element.querySelector("span");
+      if (!icon || !label) throw new Error("底栏 tab 缺少图标或标签");
       const link = element.getBoundingClientRect();
       const box = icon.getBoundingClientRect();
       const text = label.getBoundingClientRect();

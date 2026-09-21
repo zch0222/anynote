@@ -168,10 +168,8 @@ describe("AppShell 交互", () => {
       "href",
       "/ai/chat",
     );
-    expect(within(navigation).getByRole("link", { name: "协同文档" })).toHaveAttribute(
-      "href",
-      "/docs",
-    );
+    // 「协同文档」随 /docs 退役从一级导航移除：协同已是笔记的一种编辑模式，入口就是笔记本身
+    expect(within(navigation).queryByRole("link", { name: "协同文档" })).toBeNull();
     // 四类子资源降为知识库内的二级 Tab，不出现在一级导航
     expect(within(navigation).queryByRole("link", { name: "慕课" })).toBeNull();
     expect(within(navigation).queryByRole("link", { name: "任务" })).toBeNull();
