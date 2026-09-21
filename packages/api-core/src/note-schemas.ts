@@ -49,6 +49,13 @@ export const noteDetailSchema = z.object({
   knowledgeBaseId: z.number().nullish(),
   knowledgeBaseName: z.string().nullish(),
   updateTime: z.string().nullish(),
+  /**
+   * 当前用户对该笔记的权限，取值同 `NotePermissions` 枚举：
+   * MANAGE=7 / EDIT=6 / READ=4 / NO=0。后端由 `@RequiresNotePermissions` 切面填入。
+   *
+   * 协同模式据此判断「能否写」：`>= EDIT(6)` 才连协同房间，低于它维持现状静态读（D8）。
+   */
+  notePermissions: z.number().nullish(),
 });
 export type NoteDetail = z.infer<typeof noteDetailSchema>;
 
