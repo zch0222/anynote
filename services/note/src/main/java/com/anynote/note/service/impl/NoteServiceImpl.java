@@ -44,6 +44,7 @@ import com.anynote.note.mapper.NoteMapper;
 import com.anynote.note.mapper.NoteTextMapper;
 import com.anynote.note.model.bo.*;
 import com.anynote.note.model.dto.NoteSearchDTO;
+import com.anynote.note.model.vo.CollabGrantVO;
 import com.anynote.note.model.vo.NoteListVO;
 import com.anynote.note.model.vo.NoteSaveResultVO;
 import com.anynote.note.service.KnowledgeBaseService;
@@ -494,12 +495,51 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
         }
         // 知识库中有阅读权限的用户
         else if (KnowledgeBasePermissions.READ.getValue() == knowledgeBasePermissions) {
-            NotePermissions notePermissions = this.permissionCompute(Integer.valueOf(noteInfo.getPermissions().charAt(2)));
+            NotePermissions notePermissions = this.permissionCompute(Integer.parseInt(noteInfo.getPermissions().substring(2, 3)));
             if (NotePermissions.NO.getValue() < notePermissions.getValue()) {
                 return NotePermissions.READ;
             }
         }
         return NotePermissions.NO;
+    }
+
+    /**
+     * 推导当前用户对某笔记的协同准入（`GET /notes/{noteId}/collab-grant`）。
+     *
+     * <p>权限推导复用 {@link #getNotePermissions(Long)}——两条链路必须同一口径，
+     * 否则会出现「能打开笔记却拿不到协同令牌」这类只在协同模式暴露的偏差。
+     * 这里额外回传权威版本令牌（供客户端首拍保存）与标题；**不回正文**，
+     * 正文仍由客户端单独读 {@code GET /notes/{noteId}}。</p>
+     */
+    @Override
+    public CollabGrantVO getCollabGrant(Long noteId) {
+        LambdaQueryWrapper<Note> noteLambdaQueryWrapper = new LambdaQueryWrapper<>();
+        noteLambdaQueryWrapper
+                .eq(Note::getId, noteId)
+                .select(Note::getTitle, Note::getUpdateTime);
+        Note noteInfo = this.baseMapper.selectOne(noteLambdaQueryWrapper);
+        if (StringUtils.isNull(noteInfo)) {
+            throw new UserParamException("笔记不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND);
+        }
+
+        NotePermissions permissions = this.getNotePermissions(noteId);
+        return CollabGrantVO.builder()
+                .noteId(noteId)
+                .perm(grantPerm(permissions))
+                .version(NoteVersionUtil.toVersion(noteInfo.getUpdateTime()))
+                .title(noteInfo.getTitle())
+                .build();
+    }
+
+    /**
+     * 权限枚举名 → 协同准入的对外取值。
+     *
+     * <p>唯一的差异是「无权限」：枚举名是 {@code NO}，而对外的协同契约（方案 §5.2 与
+     * OpenSpec 提案）写的是 {@code NONE}。这里显式映射，避免把内部枚举名泄进 API 契约，
+     * 将来枚举改名也不会悄悄改掉线上字段。</p>
+     */
+    private static String grantPerm(NotePermissions permissions) {
+        return permissions == NotePermissions.NO ? "NONE" : permissions.name();
     }
 
     private NotePermissions permissionCompute(Integer permission) {
