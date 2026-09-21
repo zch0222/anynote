@@ -25,6 +25,16 @@ const clientSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   /** 浏览器连协同服务的地址；容器化部署时应指向 Nginx 上的 ws 反代路径。 */
   NEXT_PUBLIC_COLLAB_WS_URL: z.string().url().default("ws://localhost:1234"),
+  /**
+   * 笔记协同总开关（方案 D7）。`"1"` 打开、其余关闭，默认关闭即完全回到单人链路。
+   *
+   * 刻意用环境变量而不是数据库列：两种模式下真相源、正文格式、保存端点完全相同，
+   * per-note 粒度买不到额外风险隔离，却要付 SQL 迁移 + 全链路成本。回滚 = 改环境变量重部署。
+   */
+  NEXT_PUBLIC_COLLAB_NOTES: z
+    .string()
+    .optional()
+    .transform((value) => value === "1"),
 });
 
 const processEnv = {
@@ -36,6 +46,7 @@ const processEnv = {
   DESKTOP_ALLOWED_ORIGINS: process.env.DESKTOP_ALLOWED_ORIGINS,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   NEXT_PUBLIC_COLLAB_WS_URL: process.env.NEXT_PUBLIC_COLLAB_WS_URL,
+  NEXT_PUBLIC_COLLAB_NOTES: process.env.NEXT_PUBLIC_COLLAB_NOTES,
 } as const;
 
 const isServer = typeof window === "undefined";

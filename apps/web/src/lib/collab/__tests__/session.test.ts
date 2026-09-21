@@ -1,5 +1,10 @@
 import { ApiError } from "@/lib/api/errors";
-import { type CollabToken, fetchCollabToken, openCollabRoom } from "@/lib/collab/session";
+import {
+  type CollabToken,
+  type CollabTokenRequest,
+  fetchCollabToken,
+  openCollabRoom,
+} from "@/lib/collab/session";
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WebsocketProvider } from "y-websocket";
 import type * as Y from "yjs";
@@ -24,21 +29,35 @@ describe("fetchCollabToken", () => {
     const fetchMock = vi.fn().mockResolvedValue(envelope(tokenPayload));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(fetchCollabToken()).resolves.toEqual(tokenPayload);
+    await expect(fetchCollabToken({ noteId: 42 })).resolves.toEqual(tokenPayload);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/collab-token",
-      expect.objectContaining({ method: "POST", credentials: "same-origin" }),
+      expect.objectContaining({
+        method: "POST",
+        credentials: "same-origin",
+        body: JSON.stringify({ noteId: 42 }),
+      }),
     );
+  });
+
+  it("请求体带 noteId：令牌绑定的是具体笔记，不是整站", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(envelope(tokenPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchCollabToken({ noteId: 7 });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(body).toEqual({ noteId: 7 });
   });
 
   it("业务错误码抛 ApiError（调用方据此展示连接失败）", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(envelope(null, "A0311", 401)));
-    await expect(fetchCollabToken()).rejects.toBeInstanceOf(ApiError);
+    await expect(fetchCollabToken({ noteId: 42 })).rejects.toBeInstanceOf(ApiError);
   });
 
   it("响应结构不符合契约时抛 ApiError", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(envelope({ token: "" })));
-    await expect(fetchCollabToken()).rejects.toBeInstanceOf(ApiError);
+    await expect(fetchCollabToken({ noteId: 42 })).rejects.toBeInstanceOf(ApiError);
   });
 });
 
@@ -59,7 +78,7 @@ function createFakeProvider(): FakeProvider {
 describe("openCollabRoom", () => {
   let provider: FakeProvider;
   let created: { serverUrl: string; room: string; params: Record<string, string> } | null;
-  let fetchToken: Mock<(signal?: AbortSignal) => Promise<CollabToken>>;
+  let fetchToken: Mock<(request: CollabTokenRequest, signal?: AbortSignal) => Promise<CollabToken>>;
 
   const createProvider = (
     serverUrl: string,
@@ -81,17 +100,19 @@ describe("openCollabRoom", () => {
   afterEach(() => vi.useRealTimers());
 
   it("先换令牌再建连接，令牌走查询参数（浏览器 WebSocket 不能自定义请求头）", async () => {
-    const session = await openCollabRoom("doc:abcdefgh", { fetchToken, createProvider });
+    const session = await openCollabRoom("note:42", { fetchToken, createProvider });
 
     expect(fetchToken).toHaveBeenCalledTimes(1);
-    expect(created?.room).toBe("doc:abcdefgh");
+    // 换令牌与续期都必须带上 noteId：续期即重查权限（D2）
+    expect(fetchToken).toHaveBeenCalledWith({ noteId: 42 }, undefined);
+    expect(created?.room).toBe("note:42");
     expect(created?.params).toEqual({ token: "jwt-1" });
     expect(session.user).toEqual(tokenPayload.user);
     session.destroy();
   });
 
   it("把本人姓名与配色写进 awareness，别人才看得到光标标签", async () => {
-    const session = await openCollabRoom("index", { fetchToken, createProvider });
+    const session = await openCollabRoom("note:42", { fetchToken, createProvider });
 
     expect(provider.awareness.setLocalStateField).toHaveBeenCalledWith("user", {
       name: "小明",
@@ -104,7 +125,7 @@ describe("openCollabRoom", () => {
     fetchToken
       .mockResolvedValueOnce(tokenPayload)
       .mockResolvedValueOnce({ ...tokenPayload, token: "jwt-2" });
-    const session = await openCollabRoom("index", { fetchToken, createProvider });
+    const session = await openCollabRoom("note:42", { fetchToken, createProvider });
 
     // 300s 有效期 - 60s 提前量 = 240s 后续期
     await vi.advanceTimersByTimeAsync(239_000);
@@ -122,7 +143,7 @@ describe("openCollabRoom", () => {
       .mockResolvedValueOnce(tokenPayload)
       .mockRejectedValueOnce(new Error("网络异常"))
       .mockResolvedValueOnce({ ...tokenPayload, token: "jwt-3" });
-    const session = await openCollabRoom("index", { fetchToken, createProvider });
+    const session = await openCollabRoom("note:42", { fetchToken, createProvider });
 
     await vi.advanceTimersByTimeAsync(240_000);
     expect(provider.params.token).toBe("jwt-1");
@@ -136,7 +157,7 @@ describe("openCollabRoom", () => {
 
   it("有效期异常短时也不会退化成忙循环（最少 10 秒一续）", async () => {
     fetchToken.mockResolvedValue({ ...tokenPayload, expiresIn: 1 });
-    const session = await openCollabRoom("index", { fetchToken, createProvider });
+    const session = await openCollabRoom("note:42", { fetchToken, createProvider });
 
     await vi.advanceTimersByTimeAsync(9_000);
     expect(fetchToken).toHaveBeenCalledTimes(1);
@@ -146,7 +167,7 @@ describe("openCollabRoom", () => {
   });
 
   it("destroy 会拆连接并停掉续期定时器", async () => {
-    const session = await openCollabRoom("index", { fetchToken, createProvider });
+    const session = await openCollabRoom("note:42", { fetchToken, createProvider });
     session.destroy();
 
     expect(provider.destroy).toHaveBeenCalledTimes(1);
@@ -156,9 +177,17 @@ describe("openCollabRoom", () => {
 
   it("换令牌就失败时直接抛出，不会建立连接", async () => {
     fetchToken.mockRejectedValue(new ApiError(401, "A0311", "登录状态已过期"));
-    await expect(openCollabRoom("index", { fetchToken, createProvider })).rejects.toBeInstanceOf(
+    await expect(openCollabRoom("note:42", { fetchToken, createProvider })).rejects.toBeInstanceOf(
       ApiError,
     );
+    expect(created).toBeNull();
+  });
+
+  it("非法房间名在换令牌之前就被拒（不会把无效房间带进协同服务）", async () => {
+    await expect(openCollabRoom("index", { fetchToken, createProvider })).rejects.toThrow(
+      /非法协同房间名/,
+    );
+    expect(fetchToken).not.toHaveBeenCalled();
     expect(created).toBeNull();
   });
 });

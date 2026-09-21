@@ -1,7 +1,12 @@
 import { unwrapEnvelope } from "@/lib/api/errors";
+import { parseCollabRoom } from "@/lib/collab/rooms";
 import { env } from "@/lib/env";
-import { WebsocketProvider } from "y-websocket";
-import * as Y from "yjs";
+// `yjs` / `y-websocket` 一律**动态**引入（见 `openCollabRoom`）：它们是重依赖，
+// 静态引入会被算进笔记路由的首屏图，把 `/notes/[baseId]/[noteId]` 顶出预算
+// （仓库禁止清单明确要求这两者 `dynamic(..., { ssr: false })`）。
+// 这里只保留类型（编译期擦除，不产生 import）。
+import type { WebsocketProvider } from "y-websocket";
+import type * as Y from "yjs";
 import { z } from "zod";
 
 export const collabUserSchema = z.object({
@@ -22,13 +27,35 @@ export type CollabToken = z.infer<typeof collabTokenSchema>;
 /** 令牌到期前多久换新的。留足余量，避免刚好卡在重连时过期。 */
 const REFRESH_LEAD_SECONDS = 60;
 
-/** 向 BFF 换一枚协同令牌。accessToken 仍在 httpOnly Cookie 里，前端全程拿不到它。 */
-export async function fetchCollabToken(signal?: AbortSignal): Promise<CollabToken> {
+/**
+ * 房间名 → noteId。续期时必须重新告知 BFF 是哪个房间：续期即重查权限（D2），
+ * 权限被撤销最迟在令牌过期时生效。
+ */
+function noteIdFromRoom(room: string): number {
+  const parsed = parseCollabRoom(room);
+  if (!parsed) throw new Error(`非法协同房间名：${room}`);
+  return parsed.noteId;
+}
+
+/** 协同令牌的请求体：绑定到具体笔记（方案 §7.1）。 */
+export type CollabTokenRequest = { noteId: number };
+
+/**
+ * 向 BFF 换一枚协同令牌。accessToken 仍在 httpOnly Cookie 里，前端全程拿不到它。
+ *
+ * 请求体带 `noteId`：BFF 以会话身份查一次协同准入，令牌里带上 `room` 与 `ro`，
+ * 协同服务据此强制「令牌房间 = 握手房间」。
+ */
+export async function fetchCollabToken(
+  request: CollabTokenRequest,
+  signal?: AbortSignal,
+): Promise<CollabToken> {
   const response = await fetch("/api/auth/collab-token", {
     method: "POST",
     credentials: "same-origin",
     // BFF 与网关都会校验 Origin，同源 fetch 由浏览器自动带上
     headers: { "content-type": "application/json" },
+    body: JSON.stringify(request),
     ...(signal ? { signal } : {}),
   });
   return unwrapEnvelope(response, collabTokenSchema.parse);
@@ -48,17 +75,19 @@ export type OpenCollabRoomOptions = {
     room: string,
     doc: Y.Doc,
     params: Record<string, string>,
-  ) => WebsocketProvider;
-  fetchToken?: (signal?: AbortSignal) => Promise<CollabToken>;
+  ) => WebsocketProvider | Promise<WebsocketProvider>;
+  fetchToken?: (request: CollabTokenRequest, signal?: AbortSignal) => Promise<CollabToken>;
   signal?: AbortSignal;
 };
 
-function defaultCreateProvider(
+/** 动态加载 `y-websocket` 后建 provider。默认实现放在 async 里，保证它不进首屏图。 */
+async function defaultCreateProvider(
   serverUrl: string,
   room: string,
   doc: Y.Doc,
   params: Record<string, string>,
-) {
+): Promise<WebsocketProvider> {
+  const { WebsocketProvider } = await import("y-websocket");
   return new WebsocketProvider(serverUrl, room, doc, {
     params,
     // 跨标签页的 BroadcastChannel 同步保持开启：同一浏览器的多个标签
@@ -80,9 +109,10 @@ export async function openCollabRoom(
   const fetchToken = options.fetchToken ?? fetchCollabToken;
   const createProvider = options.createProvider ?? defaultCreateProvider;
 
-  const initial = await fetchToken(options.signal);
+  const initial = await fetchToken({ noteId: noteIdFromRoom(room) }, options.signal);
+  const Y = await import("yjs");
   const doc = new Y.Doc();
-  const provider = createProvider(env.NEXT_PUBLIC_COLLAB_WS_URL, room, doc, {
+  const provider = await createProvider(env.NEXT_PUBLIC_COLLAB_WS_URL, room, doc, {
     token: initial.token,
   });
 
@@ -100,7 +130,7 @@ export async function openCollabRoom(
     timer = setTimeout(async () => {
       if (stopped) return;
       try {
-        const next = await fetchToken();
+        const next = await fetchToken({ noteId: noteIdFromRoom(room) });
         provider.params.token = next.token;
         scheduleRefresh(next.expiresIn);
       } catch (error) {

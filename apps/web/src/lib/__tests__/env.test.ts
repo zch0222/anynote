@@ -8,6 +8,7 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_APP_URL", undefined);
   vi.stubEnv("COLLAB_TOKEN_SECRET", undefined);
   vi.stubEnv("NEXT_PUBLIC_COLLAB_WS_URL", undefined);
+  vi.stubEnv("NEXT_PUBLIC_COLLAB_NOTES", undefined);
   vi.stubEnv("DESKTOP_EXCHANGE_KEY", undefined);
   vi.stubEnv("DESKTOP_ALLOWED_ORIGINS", undefined);
 });
@@ -37,6 +38,7 @@ describe("服务端环境变量", () => {
       DESKTOP_ALLOWED_ORIGINS: "tauri://localhost,http://tauri.localhost,https://tauri.localhost",
       NEXT_PUBLIC_APP_URL: "http://localhost:3000",
       NEXT_PUBLIC_COLLAB_WS_URL: "ws://localhost:1234",
+      NEXT_PUBLIC_COLLAB_NOTES: false,
     });
   });
 
@@ -105,12 +107,32 @@ describe("浏览器环境变量", () => {
     expect(env).toEqual({
       NEXT_PUBLIC_APP_URL: "http://localhost:3000",
       NEXT_PUBLIC_COLLAB_WS_URL: "ws://localhost:1234",
+      NEXT_PUBLIC_COLLAB_NOTES: false,
     });
     expect(env).not.toHaveProperty("INTERNAL_API_URL");
     expect(env).not.toHaveProperty("NODE_ENV");
     // 协同密钥与桌面交换密钥都是服务端机密，绝不能进浏览器包
     expect(env).not.toHaveProperty("COLLAB_TOKEN_SECRET");
     expect(env).not.toHaveProperty("DESKTOP_EXCHANGE_KEY");
+  });
+
+  it('笔记协同总开关默认关闭，只有 "1" 才打开（D7）', async () => {
+    const { env: off } = await import("../env");
+    expect(off.NEXT_PUBLIC_COLLAB_NOTES).toBe(false);
+
+    vi.resetModules();
+    vi.stubEnv("NEXT_PUBLIC_COLLAB_NOTES", "1");
+    const { env: on } = await import("../env");
+    expect(on.NEXT_PUBLIC_COLLAB_NOTES).toBe(true);
+  });
+
+  it('开关取非 "1" 的任意值时视为关闭（不是真值判断）', async () => {
+    for (const value of ["0", "true", "yes", ""]) {
+      vi.resetModules();
+      vi.stubEnv("NEXT_PUBLIC_COLLAB_NOTES", value);
+      const { env } = await import("../env");
+      expect(env.NEXT_PUBLIC_COLLAB_NOTES).toBe(false);
+    }
   });
 
   it("公共地址非法时仍拒绝加载", async () => {
