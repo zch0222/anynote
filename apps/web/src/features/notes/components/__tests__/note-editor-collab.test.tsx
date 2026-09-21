@@ -1,3 +1,4 @@
+import { COLLAB_AUTOSAVE_DEBOUNCE_MS } from "@/features/notes/use-save-note";
 import { noteApi } from "@/lib/api/openapi";
 import { renderWithProviders } from "@/test/render";
 import { act, waitFor } from "@testing-library/react";
@@ -55,6 +56,8 @@ const collabState = vi.hoisted(() => ({
   user: null as unknown,
   connected: false,
   degraded: false,
+  contentReady: true,
+  editable: true,
   peers: [],
   savedVersion: null,
   publishSavedVersion: vi.fn(),
@@ -68,6 +71,7 @@ vi.mock("@/features/collab/use-collab-note", () => ({
 }));
 
 const get = noteApi.GET as unknown as Mock;
+const patch = noteApi.PATCH as unknown as Mock;
 
 const BASE_ID = 7;
 const NOTE_ID = 42;
@@ -122,6 +126,19 @@ beforeEach(() => {
   collabState.doc = null;
   collabState.provider = null;
   collabState.user = null;
+  collabState.degraded = false;
+  collabState.contentReady = true;
+  collabState.editable = true;
+  patch.mockReset();
+  patch.mockResolvedValue(
+    envelope({
+      id: NOTE_ID,
+      title: "协同笔记",
+      content: "# 协同笔记\n\n正文",
+      updateTime: "2026-09-11T02:00:00.000Z",
+      version: "2",
+    }),
+  );
   get.mockImplementation((path: string) => {
     if (path === "/notes/{noteId}") {
       return Promise.resolve(
@@ -205,5 +222,119 @@ describe("NoteEditor 协同模式接线（M13.3）", () => {
 
     // 不应因为接管 onReady 而丢掉 useNoteTitle 的基线建立
     expect(() => emitReady()).not.toThrow();
+  });
+});
+
+describe("NoteEditor 协同连接期间的可写状态", () => {
+  /**
+   * 回归：协同绑定到位前编辑器**必须只读**。
+   *
+   * 那段时间编辑器跑的是单人 `full` 预设、显示的是 REST 正文；绑定到位后整个
+   * 实例会被重建（`useEditor` 的依赖里有 collaboration），这期间敲下的字会连同
+   * 旧实例一起被丢掉——实测现象是「屏幕上没了、库里却有」。
+   */
+  it("正文未就位时把 editable=false 传给编辑器，并给出提示条", async () => {
+    collabState.contentReady = false;
+    collabState.editable = false;
+    const { findByTestId } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    expect(editorProps.mock.calls.at(-1)?.[0].editable).toBe(false);
+    // 不给提示，用户只会觉得"这页打不出字"
+    expect(await findByTestId("collab-connecting")).toBeTruthy();
+  });
+
+  it("正文就位后转为可写，提示条消失", async () => {
+    const { queryByTestId } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+
+    expect(editorProps.mock.calls.at(-1)?.[0].editable).toBe(true);
+    expect(queryByTestId("collab-connecting")).toBeNull();
+  });
+
+  it("降级后不显示连接提示条（已回到单人链路，可写）", async () => {
+    collabState.degraded = true;
+    collabState.contentReady = false;
+    collabState.editable = true;
+    const { queryByTestId, findByTestId } = renderWithProviders(
+      <NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />,
+    );
+
+    expect(await findByTestId("collab-degraded")).toBeTruthy();
+    expect(queryByTestId("collab-connecting")).toBeNull();
+    expect(editorProps.mock.calls.at(-1)?.[0].editable).toBe(true);
+  });
+});
+
+// 防抖 3s，这一组每条都要跨一到两个防抖窗口，默认 5s 超时不够
+describe("NoteEditor 协同模式的保存排队", { timeout: 20_000 }, () => {
+  /** 触发编辑器 onChange，模拟一次 docChanged。 */
+  function emitChange(markdown: string) {
+    act(() => {
+      (
+        editorProps.mock.calls.at(-1)?.[0].onChange as
+          | ((markdown: string, editor: unknown) => void)
+          | undefined
+      )?.(markdown, fakeEditor);
+    });
+  }
+
+  /** 取协同运行时收到的「本地编辑」回调。 */
+  function fireLocalEdit() {
+    act(() => {
+      (lastCollabOptions().onLocalEdit as (() => void) | undefined)?.();
+    });
+  }
+
+  it("远端广播（没有本地编辑标记）不排队保存", async () => {
+    makeBindingReady();
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(lastCollabOptions().enabled).toBe(true));
+    emitReady();
+
+    emitChange("# 协同笔记\n\n别人写的");
+
+    await new Promise((resolve) => setTimeout(resolve, COLLAB_AUTOSAVE_DEBOUNCE_MS + 200));
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 回归：正文取 `onChange` 那一份，**不能**在 Y.Doc 的 origin 回调里现取。
+   *
+   * ySyncPlugin 先把改动写进 Y.Doc、TipTap 才发 `onUpdate`，在 origin 回调里
+   * 读到的快照恒落后一次击键——实测一段输入的最后一个字停在本地不落库
+   * （从前被「写 meta 也触发保存」这个缺陷顺手补上了，两个错凑成一个对）。
+   */
+  it("本地编辑用 onChange 带来的最新正文排队保存，不落后一拍", async () => {
+    makeBindingReady();
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(lastCollabOptions().enabled).toBe(true));
+    emitReady();
+
+    // 真实顺序：Y.Doc 先响（置标记），TipTap 的 onChange 后到（带最新正文）
+    fireLocalEdit();
+    emitChange("# 协同笔记\n\n最新正文");
+
+    await waitFor(() => expect(patch).toHaveBeenCalled(), {
+      timeout: COLLAB_AUTOSAVE_DEBOUNCE_MS + 2000,
+    });
+    expect(patch.mock.calls.at(-1)?.[1].body.content).toBe("# 协同笔记\n\n最新正文");
+  });
+
+  it("标记只消费一次：下一次远端广播不会蹭到它", async () => {
+    makeBindingReady();
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(lastCollabOptions().enabled).toBe(true));
+    emitReady();
+
+    fireLocalEdit();
+    emitChange("# 协同笔记\n\n我写的");
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1), {
+      timeout: COLLAB_AUTOSAVE_DEBOUNCE_MS + 2000,
+    });
+
+    emitChange("# 协同笔记\n\n别人写的");
+    await new Promise((resolve) => setTimeout(resolve, COLLAB_AUTOSAVE_DEBOUNCE_MS + 200));
+    expect(patch).toHaveBeenCalledTimes(1);
   });
 });

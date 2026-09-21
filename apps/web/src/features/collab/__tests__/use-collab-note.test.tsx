@@ -1,5 +1,10 @@
 import { useCollabNote } from "@/features/collab/use-collab-note";
-import { COLLAB_INJECT_ORIGIN, COLLAB_META_KEY, readSavedVersion } from "@/lib/collab/injection";
+import {
+  COLLAB_INJECT_ORIGIN,
+  COLLAB_META_KEY,
+  COLLAB_META_ORIGIN,
+  readSavedVersion,
+} from "@/lib/collab/injection";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
@@ -120,63 +125,163 @@ describe("useCollabNote 共享版本号", () => {
 });
 
 describe("useCollabNote 保存排队过滤（§7.3.1）", () => {
-  it("provider 广播的远端更新不触发 onLocalChange", () => {
+  it("provider 广播的远端更新不触发 onLocalEdit", () => {
     const { state, doc, provider } = room();
     useCollabRoom.mockReturnValue(state);
-    const onLocalChange = vi.fn();
+    const onLocalEdit = vi.fn();
     renderHook(() =>
       useCollabNote({
         noteId: 42,
         enabled: true,
         editor: {} as never,
         markdown: null,
-        onLocalChange,
+        onLocalEdit,
       }),
     );
 
     act(() => {
       doc.transact(() => doc.getText("remote").insert(0, "远端"), provider);
     });
-    expect(onLocalChange).not.toHaveBeenCalled();
+    expect(onLocalEdit).not.toHaveBeenCalled();
   });
 
-  it("冷启动注入的 origin 不触发 onLocalChange（内容本就来自 DB）", () => {
+  it("冷启动注入的 origin 不触发 onLocalEdit（内容本就来自 DB）", () => {
     const { state, doc } = room();
     useCollabRoom.mockReturnValue(state);
-    const onLocalChange = vi.fn();
+    const onLocalEdit = vi.fn();
     renderHook(() =>
       useCollabNote({
         noteId: 42,
         enabled: true,
         editor: {} as never,
         markdown: null,
-        onLocalChange,
+        onLocalEdit,
       }),
     );
 
     act(() => {
       doc.transact(() => doc.getText("seed").insert(0, "注入"), COLLAB_INJECT_ORIGIN);
     });
-    expect(onLocalChange).not.toHaveBeenCalled();
+    expect(onLocalEdit).not.toHaveBeenCalled();
   });
 
-  it("本地编辑（origin 既不是 provider 也不是注入）触发 onLocalChange", () => {
+  /**
+   * 回归：写共享 meta 不是正文编辑。
+   *
+   * 从前它没有 origin，于是「保存成功 → 写 savedVersion → 又排一次保存」，
+   * 每个编辑批次固定多发一次 PATCH。
+   */
+  it("写共享 meta 不触发 onLocalEdit", () => {
     const { state, doc } = room();
     useCollabRoom.mockReturnValue(state);
-    const onLocalChange = vi.fn();
-    const editor = { id: "editor" };
+    const onLocalEdit = vi.fn();
+    const { result } = renderHook(() =>
+      useCollabNote({
+        noteId: 42,
+        enabled: true,
+        editor: {} as never,
+        markdown: null,
+        onLocalEdit,
+      }),
+    );
+
+    act(() => result.current.publishSavedVersion("1758297600000"));
+    expect(readSavedVersion(doc)).toBe("1758297600000");
+    expect(onLocalEdit).not.toHaveBeenCalled();
+
+    act(() => {
+      doc.transact(() => doc.getMap(COLLAB_META_KEY).set("seeded", true), COLLAB_META_ORIGIN);
+    });
+    expect(onLocalEdit).not.toHaveBeenCalled();
+  });
+
+  it("本地编辑（origin 既不是 provider 也不是协同运行时自己）触发 onLocalEdit", () => {
+    const { state, doc } = room();
+    useCollabRoom.mockReturnValue(state);
+    const onLocalEdit = vi.fn();
     renderHook(() =>
       useCollabNote({
         noteId: 42,
         enabled: true,
-        editor: editor as never,
+        editor: { id: "editor" } as never,
         markdown: null,
-        onLocalChange,
+        onLocalEdit,
       }),
     );
 
     act(() => doc.getText("local").insert(0, "本地"));
-    expect(onLocalChange).toHaveBeenCalledWith(editor);
+    // 刻意不带正文参数：那一刻编辑器的 markdown 快照还落后一次击键
+    expect(onLocalEdit).toHaveBeenCalledWith();
+  });
+});
+
+describe("useCollabNote 正文就位与可写判定", () => {
+  it("开关关闭时恒可写（单人链路由编辑器自己管）", () => {
+    const { state } = room();
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: false, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.contentReady).toBe(true);
+    expect(result.current.editable).toBe(true);
+  });
+
+  /**
+   * 回归：连接建立前不得放开编辑。
+   *
+   * 那段时间编辑器跑的是单人 `full` 预设，协同绑定到位后整个实例会被重建，
+   * 这期间敲下的字会连同旧实例一起被丢掉——实测「屏幕上没了、库里却有」。
+   */
+  it("协同开启但还没连上时不可写", () => {
+    const { state } = room({ doc: null, provider: null, status: "connecting" });
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.contentReady).toBe(false);
+    expect(result.current.editable).toBe(false);
+  });
+
+  /**
+   * 回归：这是冷启动缺陷里真正毁数据的一环。
+   *
+   * 房间还空、正文还没注入时放开编辑，用户会对着空白编辑器打字，
+   * 那一拍保存就把库里的正文整段覆盖掉。
+   */
+  it("连上但房间正文还空时不可写；正文到位后转为可写", async () => {
+    const { state, doc } = room();
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+
+    expect(result.current.editable).toBe(false);
+
+    act(() => {
+      doc.getXmlFragment("default").insert(0, [new Y.XmlText("正文")]);
+    });
+    await waitFor(() => expect(result.current.contentReady).toBe(true));
+    expect(result.current.editable).toBe(true);
+  });
+
+  it("没有待注入的正文（新笔记）时不等待", () => {
+    const { state } = room();
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: null }),
+    );
+    expect(result.current.editable).toBe(true);
+  });
+
+  it("降级后恢复可写（回到单人链路，不能锁着编辑器）", () => {
+    const { state } = room({ status: "error", connected: false });
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.degraded).toBe(true);
+    expect(result.current.contentReady).toBe(false);
+    expect(result.current.editable).toBe(true);
   });
 });
 

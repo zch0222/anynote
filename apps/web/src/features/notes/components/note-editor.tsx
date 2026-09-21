@@ -81,7 +81,6 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
    */
   const [charCount, setCharCount] = useState(0);
   const loadedNoteId = useRef<number | null>(null);
-  const contentRef = useRef("");
   /** 删除确认框（D-04 ④）：取代 `window.confirm`。 */
   const [deleteOpen, setDeleteOpen] = useState(false);
   /**
@@ -98,13 +97,24 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
    * 不碰任何共享状态，下面所有协同分支都走进单人链路。
    */
   const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
-  const collabLocalChangeRef = useRef<((editor: Editor) => void) | undefined>(undefined);
+  /**
+   * 「下一拍 `onChange` 是本地编辑」的标记。
+   *
+   * 协同模式下保存由 Y.Doc 的 origin 过滤驱动，但**正文不能在那一刻取**：
+   * ySyncPlugin 先把改动写进 Y.Doc、TipTap 才发 `onUpdate`，因此 origin 回调里
+   * 拿到的正文快照恒落后一次击键——实测一段输入的最后一个字会停在本地不落库
+   * （从前被另一个缺陷「写 meta 也触发保存」顺手补掉了，两个错凑成一个对）。
+   * 所以那边只置这个标记，正文取 `onChange` 带来的那一份。
+   */
+  const localEditRef = useRef(false);
   const collab = useCollabNote({
     noteId,
     enabled: collabEnabled,
     editor: editorInstance,
     markdown: initialContent,
-    onLocalChange: (editor) => collabLocalChangeRef.current?.(editor),
+    onLocalEdit: () => {
+      localEditRef.current = true;
+    },
   });
 
   const save = useSaveNote({
@@ -125,38 +135,13 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
     // 正文不以 H1 开头就先补一个（标题从前是单独的输入框，老笔记正文里没有 H1）。
     // 只改喂给编辑器的初始值，不单独发写请求：用户第一次编辑会连它一起存回去。
     const content = ensureLeadingHeading(note.data.content ?? "", note.data.title);
-    contentRef.current = content;
     setInitialContent(content);
     // 初值跟着同一次设置走，避免首屏先闪一个 0 再跳到真实值
     setCharCount(bodyCharCount(content));
   }, [note.data, noteId, setTitle]);
 
-  /**
-   * 协同模式下的「本地改动」回调：交给 `useSaveNote` 排队。
-   *
-   * 远端广播与冷启动注入都不会走到这里（`use-collab-note` 已按 origin 过滤），
-   * 所以一个人打字不会让在场每个人都排一次保存。
-   */
-  const handleCollabLocalChange = useCallback(
-    (editor: Editor) => {
-      /*
-       * markdown 取 `contentRef.current`，**不在这里读编辑器**：读编辑器要 `getMarkdown`
-       * (`@/lib/editor/markdown`，牵出 `tiptap-markdown` / markdown-it)，而该模块在笔记路由里
-       * 只能存在于编辑器的异步包——一旦静态引入，整条 markdown 序列化链路会被并进首屏图，
-       * 把 `/notes/[baseId]/[noteId]` 顶出 310KB 预算（实测 +143KB）。
-       * `contentRef` 由下面 `onChange` 在**每次** docChanged（含远端广播）时更新，
-       * 因此本地改动时它总是不早于本次事务的最新正文。
-       */
-      scheduleSave({ title: getTitleForContent(editor), content: contentRef.current });
-    },
-    [getTitleForContent, scheduleSave],
-  );
-  // 交给 `useCollabNote` 的 `onLocalChange` 是稳定的转发引用，避免每次渲染重建 Y.Doc 订阅
-  collabLocalChangeRef.current = handleCollabLocalChange;
-
   const handleContentChange = useCallback<NonNullable<TiptapEditorProps["onChange"]>>(
     (markdown, editor) => {
-      contentRef.current = markdown;
       /*
        * 字数在这里更新，**不能**从 `initialContent` 现算：那个值只在打开笔记时设一次，
        * 拿它算出来的数字会一直停在打开那一刻，用户边打字边看就是"统计不动"。
@@ -164,13 +149,19 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
        * `docChanged` 时触发，是同一份正文，不需要再建一条订阅。
        */
       setCharCount(bodyCharCount(markdown));
-      /*
-       * 协同模式下保存由 `useCollabNote` 的 origin 过滤驱动：`onChange` 对远端广播同样会触发，
-       * 在这里再排一次会让一个人打字引来全场各存一遍（§7.3.1）。只更新本地展示状态。
-       */
       if (!collabEnabled) {
         scheduleSave({ title: getTitleForContent(editor), content: markdown });
+        return;
       }
+      /*
+       * 协同模式：**本地编辑**才排队。远端广播同样会走到这里（ySyncPlugin 把远端
+       * update 应用成一次 ProseMirror 事务），照单全收会让一个人打字引来全场各存一遍
+       * （§7.3.1）。判据是 `useCollabNote` 在 Y.Doc 层按 origin 置下的标记，
+       * 正文则取这里的 `markdown`——它是本次事务之后的最新一份，不会落后一拍。
+       */
+      if (!localEditRef.current) return;
+      localEditRef.current = false;
+      scheduleSave({ title: getTitleForContent(editor), content: markdown });
     },
     [scheduleSave, getTitleForContent, collabEnabled],
   );
@@ -383,6 +374,18 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                   断线降级（§7.4）：协同连不上时提示并回退单人模式——数据仍在，
                   切 `full` 预设继续编辑，保存走单人链路（A0409 与冲突对话框重新生效）。
                 */}
+                {/*
+                  连接中 / 正文未就位：编辑器此刻是**只读**的（见下面的 `editable`）。
+                  不给提示的话，用户只会觉得"这页卡住了、打不出字"。
+                */}
+                {collabEnabled && !collab.degraded && !collab.contentReady ? (
+                  <output
+                    data-testid="collab-connecting"
+                    className="mb-4 block rounded-lg border border-separator bg-fill-tertiary px-4 py-3 text-footnote text-label-secondary"
+                  >
+                    正在接入协同会话，正文载入后即可编辑…
+                  </output>
+                ) : null}
                 {collabEnabled && collab.degraded ? (
                   <div
                     role="alert"
@@ -402,6 +405,12 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                   preset={collaboration ? "collaborative" : "full"}
                   value={initialContent ?? ""}
                   {...(collaboration ? { collaboration } : {})}
+                  /*
+                   * 协同模式下正文的唯一真相是 Y.Doc，而它在「连上但还没注入」这段时间里是空的。
+                   * 此时放开编辑，用户会对着空白编辑器打字，那一拍保存就把库里的正文覆盖掉——
+                   * 这正是冷启动缺陷里真正毁数据的一环。降级回单人链路后恢复可写。
+                   */
+                  editable={collab.editable}
                   onChange={handleContentChange}
                   onReady={handleEditorReady}
                   aiContinue={handleAiContinue}
