@@ -95,7 +95,7 @@ pnpm format              # Biome format only
 ### 端到端与性能门禁（需生产构建 + 真实后端栈）
 
 ```bash
-pnpm --filter web test:e2e          # Playwright 136 条用例：桌面 95（chromium）+ 移动端 41（mobile）
+pnpm --filter web test:e2e          # Playwright 141 条用例：桌面 99（chromium）+ 移动端 42（mobile）
 pnpm --filter web bundle:budget     # 首屏 JS ≤ 310KB、/m/* ≤ 250KB、编辑器 ≤ 250KB（gzip）
 pnpm --filter web lighthouse:budget # 桌面 Performance ≥ 90、Accessibility ≥ 95
 pnpm --filter web lighthouse:budget:mobile  # 移动口径 Performance ≥ 85、Accessibility ≥ 95
@@ -285,7 +285,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `docs/changelist/` — 各批改动的逐文件审计清单；`README.md` 是编写规范与命名规则（`YYYY-MM-DD-<slug>.md`）
 - `apps/cli/README.md` — CLI 的构建、环境变量、凭据安全与测试命令
 - `.claude/skills/anynote-*` — 给 Claude Code 的 CLI / 笔记配方 / 仓库操作手册（`anynote-cli` 的 `reference/commands.md` 是生成物）
-- `docs/collab/notes-collab-merge-plan.md` — 笔记协同合并方案（**v2.0 简化稿，2026-09-21，实施中**（分支 `feat/notes-collab-merge`，M13.0–M13.5），取代 v1.0 草案）：把 `/docs` 协同文档并入知识库笔记——房间改 `note:<noteId>`、令牌绑定房间与只读、真相源收敛回 MySQL、note 房间不落盘、**每个客户端各自保存（不选 leader，A0409 走覆盖式重发）**、灰度用环境变量而非数据库列、`/docs` 直接退役；里程碑 M13.0-M13.5，逐文件清单见 `docs/changelist/2026-09-21-notes-collab-merge.md`。§1.4 记了一个开工前必修的既有缺陷（`getNotePermissions` 只读成员分支），§13 记了 v1.0 被砍掉的设计与理由（type 5 选举、`.ver` 仲裁、服务端权威写回、迁移向导）
+- `docs/collab/notes-collab-merge-plan.md` — 笔记协同合并方案（**v2.0 简化稿，2026-09-21，M13.0–M13.5 已实现并 `--no-ff` 合并 `dev`**（分支 `feat/notes-collab-merge`），取代 v1.0 草案）：把 `/docs` 协同文档并入知识库笔记——房间改 `note:<noteId>`、令牌绑定房间与只读、真相源收敛回 MySQL、note 房间不落盘、**每个客户端各自保存（不选 leader，A0409 走覆盖式重发）**、灰度用环境变量而非数据库列、`/docs` 直接退役；里程碑 M13.0-M13.5，逐文件清单见 `docs/changelist/2026-09-21-notes-collab-merge.md`。§1.4 记了一个开工前必修的既有缺陷（`getNotePermissions` 只读成员分支），§13 记了 v1.0 被砍掉的设计与理由（type 5 选举、`.ver` 仲裁、服务端权威写回、迁移向导）。实施期间另发现并修掉三个方案未覆盖的缺陷（**协同模式下编辑器正文恒为空**、移动端协同态不可见、移动工作台第三格死链），见该清单「审计要点」6–7
 - `docs/refactor/REFACTOR_PLAN.md` / `FRONTEND_REFACTOR_PLAN.md` / `FRONTEND_MILESTONES.md` — 重构决策与执行计划
 - `docs/refactor/TASKS.md` — Phase 级进度与未完成项
 - `docs/backend-security-inventory.md` — 后端安全配置清单
