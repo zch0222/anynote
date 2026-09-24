@@ -508,11 +508,26 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
      *
      * <p>权限推导复用 {@link #getNotePermissions(Long)}——两条链路必须同一口径，
      * 否则会出现「能打开笔记却拿不到协同令牌」这类只在协同模式暴露的偏差。
-     * 这里额外回传权威版本令牌（供客户端首拍保存）与标题；**不回正文**，
+     * 有权限时额外回传权威版本令牌（供客户端首拍保存）与标题；**不回正文**，
      * 正文仍由客户端单独读 {@code GET /notes/{noteId}}。</p>
+     *
+     * <p><b>无权限（{@code perm=NONE}）时只回权限本身，不回标题与版本令牌。</b>
+     * 该端点是普通 Bearer 认证、刻意不挂 {@code @RequiresNotePermissions}
+     * （要把「没权限」与「没登录」区分开），因此任何登录用户都能按 id 调用它；
+     * 无差别回标题与 {@code updateTime} 等于给出一份可枚举的全站笔记标题与
+     * 最后修改时间清单。顺带省掉一次查库：拒签路径不必为回不出去的字段再查一遍。</p>
      */
     @Override
     public CollabGrantVO getCollabGrant(Long noteId) {
+        // 笔记不存在由 getNotePermissions 抛 A0404，与 GET /notes/{id} 同一口径
+        NotePermissions permissions = this.getNotePermissions(noteId);
+        CollabGrantVO.CollabGrantVOBuilder grant = CollabGrantVO.builder()
+                .noteId(noteId)
+                .perm(grantPerm(permissions));
+        if (NotePermissions.NO == permissions) {
+            return grant.build();
+        }
+
         LambdaQueryWrapper<Note> noteLambdaQueryWrapper = new LambdaQueryWrapper<>();
         noteLambdaQueryWrapper
                 .eq(Note::getId, noteId)
@@ -521,11 +536,7 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
         if (StringUtils.isNull(noteInfo)) {
             throw new UserParamException("笔记不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND);
         }
-
-        NotePermissions permissions = this.getNotePermissions(noteId);
-        return CollabGrantVO.builder()
-                .noteId(noteId)
-                .perm(grantPerm(permissions))
+        return grant
                 .version(NoteVersionUtil.toVersion(noteInfo.getUpdateTime()))
                 .title(noteInfo.getTitle())
                 .build();

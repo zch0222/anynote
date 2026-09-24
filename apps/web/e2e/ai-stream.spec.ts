@@ -30,10 +30,16 @@ test.describe("关键路径 4：AI 流式对话", () => {
     // 用户消息立刻上屏
     await expect(page.getByText("用一句话介绍 Anynote").first()).toBeVisible();
 
-    // 终态二选一：出现失败提示（当前后端状态），或出现 AI 回答
+    /*
+     * 终态二选一：出现失败提示（当前后端状态），或出现 AI 回答。
+     *
+     * 末尾这个 `.first()` 不能省：失败文案本身就渲染在只读编辑器里，于是
+     * `failed` 与 `answered` **会同时命中**，`or()` 返回两个元素、直接撞 strict mode，
+     * 把一次本该通过的「明确失败态」判成用例失败。
+     */
     const failed = page.getByText(/失败|出错|重试/).first();
     const answered = page.locator(".anynote-editor__content").first();
-    await expect(failed.or(answered)).toBeVisible({ timeout: 45_000 });
+    await expect(failed.or(answered).first()).toBeVisible({ timeout: 45_000 });
   });
 
   test("流式进行中切走路由不会丢消息（会话状态挂在 store 上）", async ({ page }) => {

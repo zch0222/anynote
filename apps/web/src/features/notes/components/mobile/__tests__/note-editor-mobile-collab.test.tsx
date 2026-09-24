@@ -71,6 +71,8 @@ const collabState = vi.hoisted(() => ({
   user: null as unknown,
   connected: false,
   degraded: false,
+  contentReady: true,
+  editable: true,
   peers: [] as Array<{ clientId: number; name: string; color: string; self: boolean }>,
   savedVersion: null,
   publishSavedVersion: vi.fn(),
@@ -120,6 +122,8 @@ beforeEach(() => {
   collabState.active = false;
   collabState.connected = false;
   collabState.degraded = false;
+  collabState.contentReady = true;
+  collabState.editable = true;
   collabState.doc = null;
   collabState.provider = null;
   collabState.user = null;
@@ -205,5 +209,31 @@ describe("移动端笔记协同接线（M13.4）", () => {
     const alert = await screen.findByTestId("collab-degraded");
     expect(alert).toHaveTextContent("协同服务连不上");
     expect(screen.getByRole("button", { name: "重连" })).toBeInTheDocument();
+  });
+});
+
+describe("移动端协同连接期间的可写状态", () => {
+  /**
+   * 与桌面同一条约束：协同绑定到位前编辑器必须只读。
+   *
+   * 移动端更要紧——软键盘一弹用户就开始打字，而绑定到位后编辑器实例会被重建，
+   * 这期间的输入连同旧实例一起丢掉；若房间正文还空，那一拍保存还会把库里的正文覆盖掉。
+   */
+  it("正文未就位时 editable=false，并给出提示条", async () => {
+    collabState.contentReady = false;
+    collabState.editable = false;
+    renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    expect(editorProps.mock.calls.at(-1)?.[0].editable).toBe(false);
+    expect(await screen.findByTestId("collab-connecting")).toBeTruthy();
+  });
+
+  it("正文就位后可写，且不显示提示条", async () => {
+    renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+
+    expect(editorProps.mock.calls.at(-1)?.[0].editable).toBe(true);
+    expect(screen.queryByTestId("collab-connecting")).toBeNull();
   });
 });

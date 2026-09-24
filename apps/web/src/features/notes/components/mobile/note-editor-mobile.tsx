@@ -63,19 +63,29 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
    */
   const [charCount, setCharCount] = useState(0);
   const loadedNoteId = useRef<number | null>(null);
-  const contentRef = useRef("");
 
   /** 是否进入协同模式：总开关打开 **且** 当前用户对该笔记有编辑权（D7 / D8）。 */
   const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
   const collabEnabled =
     env.NEXT_PUBLIC_COLLAB_NOTES && (note.data?.notePermissions ?? 0) >= EDIT_PERMISSION;
-  const collabLocalChangeRef = useRef<((editor: Editor) => void) | undefined>(undefined);
+  /**
+   * 「下一拍 `onChange` 是本地编辑」的标记。
+   *
+   * 协同模式下保存由 Y.Doc 的 origin 过滤驱动，但**正文不能在那一刻取**：
+   * ySyncPlugin 先把改动写进 Y.Doc、TipTap 才发 `onUpdate`，因此 origin 回调里
+   * 拿到的正文快照恒落后一次击键——实测一段输入的最后一个字会停在本地不落库
+   * （从前被另一个缺陷「写 meta 也触发保存」顺手补掉了，两个错凑成一个对）。
+   * 所以那边只置这个标记，正文取 `onChange` 带来的那一份。
+   */
+  const localEditRef = useRef(false);
   const collab = useCollabNote({
     noteId,
     enabled: collabEnabled,
     editor: editorInstance,
     markdown: initialContent,
-    onLocalChange: (editor) => collabLocalChangeRef.current?.(editor),
+    onLocalEdit: () => {
+      localEditRef.current = true;
+    },
   });
 
   const save = useSaveNote({
@@ -95,31 +105,23 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
     setTitle(note.data.title ?? "");
     // 与桌面同一处补齐：标题是正文的首节点 H1，老笔记要先补上才看得见
     const content = ensureLeadingHeading(note.data.content ?? "", note.data.title);
-    contentRef.current = content;
     setInitialContent(content);
     // 初值跟着同一次设置走，避免首屏先闪一个 0 再跳到真实值
     setCharCount(bodyCharCount(content));
   }, [note.data, noteId, setTitle]);
 
-  const handleCollabLocalChange = useCallback(
-    (editor: Editor) => {
-      // markdown 取 `contentRef.current`，不在协同路径里读编辑器——见桌面版同处的说明：
-      // 读编辑器要静态引入 markdown 序列化链路，会把本路由顶出预算。
-      scheduleSave({ title: getTitleForContent(editor), content: contentRef.current });
-    },
-    [getTitleForContent, scheduleSave],
-  );
-  collabLocalChangeRef.current = handleCollabLocalChange;
-
   const handleContentChange = useCallback<NonNullable<TiptapEditorProps["onChange"]>>(
     (markdown, editor) => {
-      contentRef.current = markdown;
       // 字数随每次 docChanged 推进，不留在打开时的快照上
       setCharCount(bodyCharCount(markdown));
-      // 协同模式下保存由 `useCollabNote` 的 origin 过滤驱动，这里再排一次会让全场各存一遍
       if (!collabEnabled) {
         scheduleSave({ title: getTitleForContent(editor), content: markdown });
+        return;
       }
+      // 协同模式：本地编辑才排队（远端广播也会走到这里，但没有标记），正文取这份最新的
+      if (!localEditRef.current) return;
+      localEditRef.current = false;
+      scheduleSave({ title: getTitleForContent(editor), content: markdown });
     },
     [scheduleSave, getTitleForContent, collabEnabled],
   );
@@ -309,6 +311,15 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
             {note.data?.knowledgeBaseName ? ` · ${note.data.knowledgeBaseName}` : ""}
           </p>
           {/* 断线降级（§7.4）：协同连不上时提示并回退单人模式 */}
+          {/* 连接中 / 正文未就位：编辑器只读，不给提示用户只会觉得"打不出字" */}
+          {collabEnabled && !collab.degraded && !collab.contentReady ? (
+            <output
+              data-testid="collab-connecting"
+              className="mx-4 mt-3 block rounded-xl border border-separator bg-fill-tertiary px-4 py-3 text-sm text-label-secondary"
+            >
+              正在接入协同会话，正文载入后即可编辑…
+            </output>
+          ) : null}
           {collabEnabled && collab.degraded ? (
             <div
               role="alert"
@@ -331,6 +342,8 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
             toolbar="mobile"
             value={initialContent ?? ""}
             {...(collaboration ? { collaboration } : {})}
+            /* 与桌面同一条约束：正文未就位时只读，否则对着空白编辑器打字会覆盖库里的正文 */
+            editable={collab.editable}
             onChange={handleContentChange}
             onReady={handleEditorReady}
             aiContinue={handleAiContinue}

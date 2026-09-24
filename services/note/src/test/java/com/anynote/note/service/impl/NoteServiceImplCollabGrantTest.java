@@ -33,6 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -40,6 +42,10 @@ import static org.mockito.Mockito.when;
  *
  * <p>覆盖权限推导的六条分支（作者 / 库管理 / 库编辑 / 库读 / 无关用户 / 笔记不存在），
  * 并钉住「无权限回 perm=NONE 而不是抛 401」与「version 取自 updateTime」两条契约。</p>
+ *
+ * <p>另钉住越权信息泄露的修复：{@code perm=NONE} 时不得回标题与版本令牌——该端点
+ * 是普通 Bearer 认证、不挂 {@code @RequiresNotePermissions}，回了就等于给任何登录
+ * 用户一份可按 id 枚举的全站笔记标题清单。</p>
  *
  * @author 称霸幼儿园
  */
@@ -184,6 +190,39 @@ class NoteServiceImplCollabGrantTest {
         row.setUpdateTime(null);
         when(noteMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(row);
         assertNull(noteService.getCollabGrant(NOTE_ID).getVersion());
+    }
+
+    @Test
+    @DisplayName("无权限用户拿不到标题与版本令牌（越权信息泄露修复）")
+    void noneGrantHidesTitleAndVersion() {
+        loginAs(STRANGER_ID, false);
+        // 第 4 槽位 '0'：其它用户无权限
+        when(noteMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(grantRow("76600", AUTHOR_ID));
+        when(knowledgeBaseService.getUserKnowledgeBasePermissionsByNoteId(STRANGER_ID, NOTE_ID))
+                .thenReturn(null);
+
+        CollabGrantVO grant = noteService.getCollabGrant(NOTE_ID);
+
+        // 端点是普通 Bearer 认证、不挂 @RequiresNotePermissions，任何登录用户都能按 id 调用。
+        // 回标题与 updateTime 等于把「全站笔记标题 + 最后修改时间」做成可枚举清单。
+        assertEquals("NONE", grant.getPerm());
+        assertEquals(NOTE_ID, grant.getNoteId());
+        assertNull(grant.getTitle(), "无权限时不得回标题");
+        assertNull(grant.getVersion(), "无权限时不得回版本令牌");
+    }
+
+    @Test
+    @DisplayName("无权限时不再为取标题多查一次库")
+    void noneGrantSkipsMetadataQuery() {
+        loginAs(STRANGER_ID, false);
+        when(noteMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(grantRow("76600", AUTHOR_ID));
+        when(knowledgeBaseService.getUserKnowledgeBasePermissionsByNoteId(STRANGER_ID, NOTE_ID))
+                .thenReturn(null);
+
+        noteService.getCollabGrant(NOTE_ID);
+
+        // 权限推导本身要查一次；拒绝之后不该再为「回不出去的字段」查第二次
+        verify(noteMapper, times(1)).selectOne(any(LambdaQueryWrapper.class));
     }
 
     @Test

@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { ensureKnowledgeBase, openKnowledgeBase } from "./support/account";
+import { focusWritableEditor } from "./support/editor";
 import { expectNoteSaved } from "./support/save-status";
 import { setTheme } from "./support/theme";
 
@@ -15,10 +16,7 @@ const CONFLICT_TITLE = "这篇笔记已被其他会话修改";
 
 /** 等编辑器可交互；正文是 dynamic 懒加载的，直接点会点空。 */
 async function focusEditor(page: Page) {
-  const surface = page.locator(EDITOR_SURFACE);
-  await expect(surface).toBeVisible({ timeout: 30_000 });
-  await surface.click();
-  return surface;
+  return focusWritableEditor(page);
 }
 
 /** 等保存落到终态；文案在协同模式下是「已同步」，所以判据走 `data-status`。 */

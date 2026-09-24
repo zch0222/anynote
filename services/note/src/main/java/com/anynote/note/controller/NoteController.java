@@ -119,7 +119,8 @@ public class NoteController {
     @Operation(summary = "获取笔记协同准入",
             description = "返回当前登录用户对该笔记的协同权限、版本令牌与标题，供 BFF 决定是否签发协同令牌。"
                     + "普通 Bearer 认证（语义是「我对此笔记的协同准入」，非内部调用，不加 @InnerAuth）；"
-                    + "无权限时 perm 为 NONE 而不抛 401，便于前端区分「没权限」与「没登录」；"
+                    + "无权限时 perm 为 NONE 而不抛 401，便于前端区分「没权限」与「没登录」，"
+                    + "此时 title 与 version 为 null（端点对任何登录用户开放，回标题等于开放全站笔记标题枚举）；"
                     + "笔记不存在返回 A0404")
     @GetMapping("{noteId}/collab-grant")
     public ResData<CollabGrantVO> getCollabGrant(@NotNull(message = "笔记id不能为空")
