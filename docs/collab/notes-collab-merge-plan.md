@@ -142,7 +142,7 @@ NotePermissions notePermissions = this.permissionCompute(Integer.valueOf(noteInf
 1. **开笔记**：客户端经 BFF 拿 `GET /notes/{id}`（Markdown 正文 + `updateTime`），与今天单人模式完全一致。
 2. **换令牌**：`POST /api/auth/collab-token { noteId }`；BFF 以会话身份调 `GET /notes/{id}/collab-grant` 取权限，签一枚带 `room` / `ro` 的 5 分钟 JWT。权限为 NONE 直接不签。
 3. **连房间**：`wss://…/collab/note:<noteId>?token=…`；collab 校验 `token.room` 必须等于握手房间名，`ro=true` 的连接丢弃写方向消息。
-4. **冷启动注入**：房间为空时，满足“已 `synced` + 文档为空 + awareness 里只有我 + `meta.seeded` 未置位”的那个客户端，把第 1 步的 Markdown 经 `prosemirrorToYDoc` 在一个事务内注入并置位 `seeded`。详见 D4。
+4. **冷启动注入**：房间为空时，满足“已 `synced` + 文档为空 + `meta.seeded` 未置位 + 我是在场 clientID 最小的那个”的那个客户端，把第 1 步的 Markdown 在**一个** `INJECT_ORIGIN` 事务内注入并置位 `seeded`。正文未就位前编辑器只读。详见 D4。
 5. **协同编辑**：所有连接经 CRDT 合并；awareness 带光标与协作者（现状机制不变）。collab 全程不解析内容。
 6. **保存**：**每个客户端各自保存**，只在本地编辑产生改动时排队（远端广播不触发）。防抖 3s，`PATCH /notes/{id}`；协同模式下 A0409 走覆盖式换号重发，不弹冲突框。详见 D5 与 §7.3。
 7. **落库后**：照常发 MQ 生成 ES 索引与历史。内容相同的重复保存在后端算空 diff，`NoteMessageListener#generateNoteEditLog` 直接跳过，不产 operation log / edit log / history。
@@ -187,23 +187,51 @@ Y.Doc 不进数据库、不成为长期存储。理由：笔记生态（ES、行
 
 ### D4 冷启动注入：客户端守卫，不引入服务端选举
 
+> **2026-09-21 修订（实施后实测纠正）**：本节原文的守卫条件第 4 条写的是“awareness 里只有我一个 clientID”，
+> 该规则**有致命缺陷**，已改为确定性选举。原文与纠正记录都保留在下面，理由见本节末尾的「修订说明」。
+
 房间为空时，由客户端把 REST 拿到的 Markdown 注入 Y.Doc。以下条件同时成立才注入：
 
 ```
 provider.synced === true                     // 已与服务端完成同步，“空”是真的空
 && 文档为空（XmlFragment.length === 0）
 && meta.get("seeded") !== true               // 共享 meta（D6）里没人注入过
-&& awareness 里只有我一个 clientID            // 我是此刻房间里唯一的人
+&& 我是在场 clientID 最小的那个               // 确定性选举，各端结论一致
 && 上述条件持续满足 SETTLE_MS（建议 600ms）
 ```
 
-注入在一个 `doc.transact(fn, INJECT_ORIGIN)` 事务里完成，同事务置位 `meta.seeded = true`。
+注入在一个 `doc.transact(fn, INJECT_ORIGIN)` 事务里完成——**正文与 `meta.seeded = true` 必须同在这一个事务里**，
+只给 `seeded` 打 origin 的话，正文那一半会带着 ySyncPlugin 自己的 binding 作 origin，逃过 §7.3.1 的保存过滤。
 
-为什么不需要服务端选举：两个客户端不可能同时满足“awareness 里只有我”——只要对方已连上，双方的 awareness 都会看到两个 clientID。`seeded` 标记再挡一道“带本地状态重连的客户端”路径：它的状态里 `seeded` 已是 true，同步后到场的新客户端看到非空且已置位，自然跳过。
+为什么不需要服务端选举：各端看到的是同一组 awareness clientID，取最小值这件事不需要协商。
+`seeded` 标记再挡一道“带本地状态重连的客户端”路径：它的状态里 `seeded` 已是 true，同步后到场的新客户端看到非空且已置位，自然跳过。
 
-自愈性：若唯一在场者在注入前掉线，房间回到空态，下一个进来的客户端会重新满足条件并注入——不存在“没人注入导致笔记显示为空”的死角（这正是服务端选举方案必须额外实现“重指派”的原因）。
+自愈性：若被选中者在注入前掉线，房间回到空态，剩下的人里 clientID 最小的那个会重新满足条件并注入——不存在“没人注入导致笔记显示为空”的死角（这正是服务端选举方案必须额外实现“重指派”的原因）。
+
+残留风险：awareness 尚未收敛时两端可能各自选出自己，内容重复（可由笔记历史恢复）。
+`SETTLE_MS` 的静默窗口足以让 awareness 收敛——服务端在新连接建立时就会把现有 awareness 推过去，
+收敛时间是一个 RTT 量级。
 
 `prosemirrorToYDoc` 与 `ySyncPluginKey` 由 `@tiptap/y-tiptap` 导出（TipTap 3 的 y-prosemirror 封装，已随 `@tiptap/extension-collaboration` 进依赖树，不新增体积）。
+
+#### 修订说明：为什么“awareness 里只有我”是错的
+
+原文的论证是“两个客户端不可能同时满足『awareness 里只有我』”。这句话本身成立，
+但它恰恰导出了相反的结论：**两端互见时，双方都不满足条件，于是谁都不注入**。
+房间永远停在空态，两端都显示空白正文——原文断言的“不存在没人注入导致笔记显示为空的死角”
+只对“注入者先掉线”的串行情形成立，对并发首连不成立。
+
+实测（真实容器栈 + 真 Chromium）：第二端在 **1 秒内**进来即触发；0ms / 500ms 交错必现，
+1000ms 起正常。触发方式包括同一用户开两个标签页、手机与桌面同时打开、两人点同一条链接。
+死锁不会自行超时，只在一端离开后另一端才注入。
+
+后果不止是“显示为空”：用户看到空白编辑器会开始打字，那一拍保存把库里的正文**整段覆盖**
+（实测原正文被替换成刚敲的一句话）。因此本次除了改选举规则，还加了一道兜底——
+**正文就位前编辑器只读**（见 §7.4），即便选举再出意外也不可能写出空白正文。
+
+§11 的风险 7 预判了这个场景，但预判的失效方向反了（写的是“内容重复”，实际是“两端全空”），
+缓解措施“awareness 互见即互斥”正是缺陷本身。
+
 
 ### D5 保存：人人保存 + 覆盖式冲突策略，不选 leader
 
@@ -365,6 +393,17 @@ doc.on("update", (_update, origin) => {
 
 本地编辑经 ySyncPlugin 写回 Y.Doc 时 origin 是绑定对象，与 provider 天然可分；Y.UndoManager 的撤销同样不是 provider，会正常触发保存。
 
+> **2026-09-21 修订（实施后实测纠正）**，两处：
+>
+> 1. **过滤名单要加上 meta 写入**。`meta.savedVersion` 原本用裸 `Y.Map.set` 写，没有 origin，
+>    于是「保存成功 → 写 meta → 又排一次保存」，每个编辑批次固定多发一次 PATCH。现已加
+>    `COLLAB_META_ORIGIN` 并一并过滤。
+> 2. **正文不能在这个回调里现取**。ySyncPlugin 在 `view.updateState` 阶段就把改动写进 Y.Doc，
+>    而 TipTap 的 `onUpdate` 在其后才发，因此此刻调用方手里的正文快照**恒落后一次击键**——
+>    实测一段输入的最后一个字停在本地不落库。这个缺陷从前被上面第 1 条顺手补掉了
+>    （多出来的那次保存正好带着最新正文），两个错凑成一个对；只修一个会让丢字暴露出来。
+>    现在这个回调只置「下一拍 `onChange` 是本地编辑」的标记，正文取 `onChange` 带来的那一份。
+
 > 备选方案是读 `ySyncPluginKey` 的 `isChangeOrigin` / `isUndoRedoOperation` meta（`@tiptap/y-tiptap@3.0.9` 的 dist 里两个标记都在），但那要改共享的 `onUpdate` 签名，没必要。
 
 #### 7.3.2 对 `use-save-note` 的三处改动
@@ -427,6 +466,11 @@ if (base && base.title === draft.title && base.content === draft.content) {
 ### 7.4 编辑器双模式与降级（M13.3）
 
 - `NEXT_PUBLIC_COLLAB_NOTES` 开启且 `perm >= EDIT` → `preset="collaborative"`，保存走 §7.3；否则现状单人链路，一行不改。
+- **正文就位前编辑器只读**（2026-09-21 补）：协同模式下正文的唯一真相是 Y.Doc，而它在「连接中」与
+  「已连上但还没注入」这两段时间里是空的。放开编辑就是「对着空白编辑器打字 → 那一拍保存覆盖掉库里的正文」，
+  这是 D4 缺陷里真正毁数据的一环。判据是 `useCollabNote` 的 `contentReady`（房间正文非空，或本来就没有
+  待注入的正文），连接中一律为 false；降级后回到单人链路即恢复可写。同时给出「正在接入协同会话」提示条，
+  否则用户只会觉得这页打不出字。
 - **断线降级**：协同连接失败（collab 不可达、令牌签发失败）→ 提示条 + 自动回退单人模式（数据仍在，切 `full` 预设继续编辑；此间他人无法实时看到，保存走单人链路，A0409 与冲突对话框重新生效）。
 - **状态徽标**：协同模式下非保存方不该长时间停在“已保存 12 分钟前”。文案改为以连接状态为准的“已同步”，保存中 / 保存失败仍按本地状态显示。
 
@@ -471,6 +515,19 @@ if (base && base.title === draft.title && base.content === draft.content) {
 4. 关掉最后一个客户端后重开笔记，内容完整（验证“不落盘 + 卸载兜底”这条组合路径）。
 5. 协同会话期间的 history 条数与 ES 索引更新次数记录在案，作为 D9 是否回头加节流的依据。
 
+> **2026-09-21 复核纠正**：第 1、3 条在当前后端下**不可能达成**，M13 的验收记录声称“§9 验收项已全部跑到”属于夸大。
+> `createNote` 把 `n_note.permissions` 硬编码成 `"70000"`（作者 MANAGE、其余槽位全 0），全仓没有任何
+> 修改笔记权限的端点（另一处只有 `submitNote` 的 `"44000"`，同库用户槽位仍是 0）。实测矩阵：
+> 知识库**管理员 / 编辑成员 / 只读成员**对他人笔记一律 `GET /notes/{id}` → `A0301`、`collab-grant` → `NONE`。
+> 因此：
+> - 第 1 条「两位有 EDIT 权的库成员共编」拿不到，当前唯一可用的多端场景是**同一用户的多个标签页 / 设备**；
+> - 第 3 条后半句「知识库只读成员能正常打开笔记」未达成——§1.4 的修复是真的（错误码从
+>   `A0300 笔记权限错误` 变成正确的 `NONE` → `A0301`），但只读成员仍然打不开任何笔记。
+>
+> 这不是 M13 引入的缺陷（`getNotePermissions` 的其余分支未改），而是方案与验收都没注意到的**前置缺口**。
+> 按 2026-09-21 的决定，本期**不修**，登记为未解缺口；补权限入口（新端点或改默认槽位）另立工单。
+> 详见 [`docs/changelist/2026-09-21-notes-collab-coldstart-fixes.md`](../changelist/2026-09-21-notes-collab-coldstart-fixes.md)。
+
 ---
 
 ## 10. 里程碑
@@ -496,7 +553,7 @@ if (base && base.title === draft.title && base.content === draft.content) {
 | 4 | 换手时多一次 GET + 一次 PATCH | `meta.savedVersion` 把常态下的 A0409 降到 0；剩余放大只在真并发时发生 |
 | 5 | ES 重索引随每次成功保存无条件触发 | 内容未变的保存被 §7.3 守卫挡在前面；实测后若仍偏高，在 listener 侧加内容指纹判重 |
 | 6 | 移动端预算超限（yjs 进笔记编辑器） | 门禁实测把关；超限则把协同运行时做成 `/m/*` 的动态分包 |
-| 7 | 注入守卫的 settle 窗口内两人同时首连 | awareness 互见即互斥 + `meta.seeded` 二道锁；极端情况下内容重复可由笔记历史恢复 |
+| 7 | 注入守卫的 settle 窗口内两人同时首连 | ~~awareness 互见即互斥~~ —— **该缓解措施本身就是缺陷**，互斥导致双方都不注入（2026-09-21 实测，见 D4 修订说明）。现为确定性选举（clientID 最小者注入）+ `meta.seeded` 二道锁 + 正文就位前编辑器只读；残留的内容重复可由笔记历史恢复 |
 | 8 | 协同期间 legacy/CLI 的 A0409 频发 | 既有冲突处理链路；CLI 侧报冲突提示已是现状语义 |
 | 9 | 协同保存的 `operation_log.operator` 记落库那一刻的人 | 见 Q3 |
 

@@ -270,15 +270,31 @@ API 客户端由 `pnpm openapi:generate` 从后端 Swagger 自动生成，**不�
   房间空了就销毁，下次从 DB 重新注入。
 - 前端 `features/collab/use-collab-note.ts` 组合「grant → token → 房间 → 注入守卫 → 保存排队」；
   `lib/collab/session.ts` 管连接与续期（**续期即重查权限**），`lib/collab/injection.ts` 是冷启动注入守卫。
-- **冷启动注入**（D4）：房间空时由客户端把 REST 拿到的 Markdown 灌进 Y.Doc，条件是
-  「已 synced + 文档为空 + `meta.seeded` 未置位 + awareness 里只有我」且持续 600ms；无服务端选举。
+- **冷启动注入**（D4，2026-09-21 修订）：房间空时由客户端把 REST 拿到的 Markdown 灌进 Y.Doc，条件是
+  「已 synced + 文档为空 + `meta.seeded` 未置位 + **我是在场 clientID 最小的那个**」且持续 600ms；
+  无服务端选举。选举是**确定性**的：各端看到同一组 awareness clientID，结论必然一致。
+  **不能用「awareness 里只有我」**——两端同时首连时会互相让路，谁都不注入，房间永远停在空态
+  （两端空白正文，一打字就把库里的正文覆盖掉）；实测第二端在 1 秒内进来即触发。
+- 注入**整体**包在一个带 `COLLAB_INJECT_ORIGIN` 的事务里（正文 + `meta.seeded` 同一拍）。
+  只给 `seeded` 打 origin 不够：正文那一半会带着 ySyncPlugin 的 binding 作 origin 逃过保存过滤，
+  让「打开一篇没有顶部 H1 的老笔记」本身变成一次 PATCH。`meta` 的其余写入走 `COLLAB_META_ORIGIN`。
+- **正文就位前编辑器只读**（`useCollabNote` 的 `contentReady` / `editable`）：协同模式下正文的唯一
+  真相是 Y.Doc，连接中与注入前它是空的，此时放开编辑就是「对着空白编辑器打字 → 覆盖库里的正文」。
+  降级回单人链路后恢复可写。
 - 编辑器用 `preset="collaborative"`：关掉 StarterKit 的本地 undo/redo（会撤销掉别人的编辑），
   改用 Collaboration 的 Y.UndoManager；且**不设初始 content**，正文只由 Y.Doc 灌入。
-- **保存人人各跑一份**（不选 leader）：只在**本地编辑**排队（按 Y.Doc 的 origin 过滤掉远端广播与注入），
-  防抖 3s（`COLLAB_AUTOSAVE_DEBOUNCE_MS`），A0409 走**覆盖式换号重发**、不弹冲突框；
+- **保存人人各跑一份**（不选 leader）：只在**本地编辑**排队（按 Y.Doc 的 origin 过滤掉远端广播、
+  注入与 meta 写入），防抖 3s（`COLLAB_AUTOSAVE_DEBOUNCE_MS`），A0409 走**覆盖式换号重发**、不弹冲突框；
   保存成功后把新版本号写进共享 `meta.savedVersion`，在场各端据此同步版本号，把常态 A0409 降到 0。
+  **正文取 `onChange` 那一份**：Y.Doc 的 origin 回调只置「下一拍是本地编辑」的标记——
+  ySyncPlugin 先写 Y.Doc、TipTap 才发 `onUpdate`，在 origin 回调里现取的快照恒落后一次击键。
 - 开关：`NEXT_PUBLIC_COLLAB_NOTES=1`；权限 < EDIT 的用户维持现状 REST 静态读（D8）。
   连不上时提示并**自动回退单人模式**（`full` 预设 + 单人保存与冲突对话框）。
+- ⚠️ **当前只能「同一用户多端」共编**：`createNote` 把 `n_note.permissions` 硬编码成 `"70000"`
+  （作者 MANAGE、其余全 0），全仓也没有修改笔记权限的端点，因此知识库管理员 / 编辑成员 / 只读成员
+  对他人笔记一律 `A0301`、`collab-grant` 一律 `NONE`。「两位有 EDIT 权的库成员同时编辑」
+  这条能力在后端补上权限入口之前是拿不到的，详见
+  [`docs/changelist/2026-09-21-notes-collab-coldstart-fixes.md`](../../docs/changelist/2026-09-21-notes-collab-coldstart-fixes.md)。
 
 ---
 
