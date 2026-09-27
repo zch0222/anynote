@@ -26,6 +26,12 @@
 > `/dashboard` 保留为登录后的稳定落地地址（middleware 入口分流与既有书签在用），
 > 内容 redirect 到 `/notes`，**query 原样带走**（`?desktop=1` 是版式逃生口）。
 
+**侧栏收起**（2026-09-27）：桌面侧栏可整个收起（没有图标窄轨），偏好存 `stores/ui-store.ts` 的
+`sidebarOpen`（localStorage `anynote-ui`，persist `version: 1`，v0 值一律作废回到展开）。
+入口在 `components/layout/sidebar-toggle.tsx`：收起按钮在侧栏头部右端；展开按钮在顶栏最左侧，
+没有顶栏的库内 Tab 页由 `AppShell` 补在内容区左上并让出 72px。`Cmd/Ctrl+B` 切换，
+但已被处理的（编辑器加粗）或发生在 input / textarea / contenteditable 里的不接（`ui/sidebar.tsx`）。
+
 ---
 
 ## 设计系统（Token 三层）
