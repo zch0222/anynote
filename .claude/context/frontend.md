@@ -169,7 +169,7 @@ apps/web/
 │   ├── lib/
 │   │   ├── api/              openapi-fetch 实例、错误信封、DTO query 序列化
 │   │   ├── auth/             BFF 侧 Cookie / 刷新 / 资料（server-only）
-│   │   ├── collab/           协同房间命名（note:<id>）、会话、注入守卫
+│   │   ├── collab/           协同房间命名（note:<id>）、会话、注入守卫、确认计数、IndexedDB 本地副本、闲置断开
 │   │   ├── desktop/          桌面壳桥接（令牌交换 + 本地保管）
 │   │   ├── editor/           Markdown 桥接、Shiki、KaTeX、上传
 │   │   ├── mobile/           移动端 UA 分流与搜索（纯函数，middleware 与单测共用）
@@ -266,10 +266,25 @@ API 客户端由 `pnpm openapi:generate` 从后端 Swagger 自动生成，**不�
 - 服务端 `apps/collab`（自建 y-websocket 协议服务，:1234），房间名 **`note:<noteId>`**（`n_note` 主键）。
   令牌 claim 带 `room` 与 `ro`：**令牌房间必须等于握手房间**（不符 403），`ro=true` 的连接被丢弃写方向消息
   （syncStep2 / update），因此越权面从「任何登录用户可写任意房间」收敛到知识库权限体系。
-- **note 房间不落盘**：真相源是 MySQL `n_note_text` 的 Markdown，Y.Doc 只是进程内会话态；
-  房间空了就销毁，下次从 DB 重新注入。
-- 前端 `features/collab/use-collab-note.ts` 组合「grant → token → 房间 → 注入守卫 → 保存排队」；
-  `lib/collab/session.ts` 管连接与续期（**续期即重查权限**），`lib/collab/injection.ts` 是冷启动注入守卫。
+- **两种保存模式，由协同服务的 `COLLAB_SERVER_PERSIST` 决定**（M14，方案
+  [`docs/collab-persistence/COLLAB_PERSISTENCE_PLAN.md`](../../docs/collab-persistence/COLLAB_PERSISTENCE_PLAN.md)）：
+  - **服务端落库（开关打开）**：协同服务开房时从 note 服务内部端点加载、防抖（2s / 最长 10s）后原子写回
+    MySQL，并把 Y 状态存进 `n_note_collab_state`；握手后服务端先发 hello（类型 100，带谱系 epoch），
+    客户端据此**不再发保存请求**、不注入、不写 meta。每条写方向同步消息回 ACK，2 秒未确认才显示「同步中」；
+    顶部 H1 一变就把标题写进列表与详情缓存；写库成功后服务端广播 STORED（`{ version, title }`），编辑页据此刷新版本号并重新拉取笔记列表；
+    本地副本存 IndexedDB（`lib/collab/local-persistence.ts`，库名 `anynote-note-<id>`），断线编辑关页不丢；
+    握手带 `editorVersion` 与 `lineage`，关闭码 4426（版本不符 → 只读提示刷新）/ 4409（谱系不符 → 清本地副本重建）/
+    4404（已删除）。徽标换成 `CollabSyncBadge`（连接中 / 已同步 / 同步中 / 离线 / 需刷新）。
+  - **客户端保存（开关关闭，或旧服务端）**：下面各条的 v2.0 行为不变——房间不落盘，冷启动由客户端注入、各端各自保存。
+    客户端只有收到 hello 才切到服务端落库行为（能力协商），所以先发前端、再开开关，回滚只需关开关。
+- 前端 `features/collab/use-collab-note.ts` 组合「grant → token → 房间 →（客户端保存模式）注入守卫 → 保存排队」，
+  并按 hello 分流两条路径；`lib/collab/session.ts` 管连接、续期（**续期即重查权限**）、消息类型 100 与关闭码，
+  `lib/collab/sync-state.ts` 是确认计数，`lib/collab/injection.ts` 是冷启动注入守卫。
+  桌面与移动编辑页的接线统一在 `features/notes/use-note-editor-session.ts`。
+- **离开拦截**（`features/notes/use-leave-guard.ts`）：服务端落库时按同步状态拦截；其余情况（单人、客户端保存、协同降级）
+  在保存状态为离线 / 失败 / 冲突时拦截（`hasUnsavedRisk`）。站内链接与关页由 `useLeaveGuard` 统一处理；
+  按钮触发的跳转（移动端返回键、历史版本、移动笔记）调用会话的 `confirmLeave()`。用户在站内确认离开后，
+  紧随其后的整页卸载不再弹浏览器自带的二次确认（`features/notes/leave-confirmation.ts`）。
 - **冷启动注入**（D4，2026-09-21 修订）：房间空时由客户端把 REST 拿到的 Markdown 灌进 Y.Doc，条件是
   「已 synced + 文档为空 + `meta.seeded` 未置位 + **我是在场 clientID 最小的那个**」且持续 600ms；
   无服务端选举。选举是**确定性**的：各端看到同一组 awareness clientID，结论必然一致。
@@ -289,7 +304,8 @@ API 客户端由 `pnpm openapi:generate` 从后端 Swagger 自动生成，**不�
   **正文取 `onChange` 那一份**：Y.Doc 的 origin 回调只置「下一拍是本地编辑」的标记——
   ySyncPlugin 先写 Y.Doc、TipTap 才发 `onUpdate`，在 origin 回调里现取的快照恒落后一次击键。
 - 开关：`NEXT_PUBLIC_COLLAB_NOTES=1`；权限 < EDIT 的用户维持现状 REST 静态读（D8）。
-  连不上时提示并**自动回退单人模式**（`full` 预设 + 单人保存与冲突对话框）。
+  连不上时提示并**自动回退单人模式**（`full` 预设 + 单人保存与冲突对话框）；降级后的编辑按
+  「有没有可用的协同会话」走单人保存链路（2026-09-25 修正：此前降级后编辑一次都不保存）。
 - ⚠️ **当前只能「同一用户多端」共编**：`createNote` 把 `n_note.permissions` 硬编码成 `"70000"`
   （作者 MANAGE、其余全 0），全仓也没有修改笔记权限的端点，因此知识库管理员 / 编辑成员 / 只读成员
   对他人笔记一律 `A0301`、`collab-grant` 一律 `NONE`。「两位有 EDIT 权的库成员同时编辑」

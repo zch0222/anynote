@@ -35,6 +35,8 @@ flowchart TB
             minio --> volume
             data --> volume
             collab --> volume
+            collab -.->|服务端落库时：内网 HTTP + @InnerAuth 签名<br/>GET/PUT /notes/:id/collab-snapshot| services
+            collab -.->|服务端落库时：订阅外部写入通知| data
         end
         webPort --> web
         wsPort --> collab
@@ -51,6 +53,7 @@ flowchart TB
 - 浏览器登录请求先到 Next `/api/auth/login`；BFF 调 Auth 并写 Secure、httpOnly Cookie。后续 `/api/proxy/*` 由 BFF 转换为 Gateway 的 Bearer 请求。
 - SSE 同样经过 BFF，Nginx `/api/` 关闭缓冲和压缩，使用长读超时。静态资源缓存头由 Next 决定。
 - BFF `/api/auth/collab-token` 签发短期协同令牌；浏览器携带该令牌连接同源 `/collab/<room>`。Nginx 保留 WebSocket Upgrade，协同容器核对签名及 Origin，握手查询串不写入访问日志。
+- 打开 `COLLAB_SERVER_PERSIST` 后，协同容器在 Compose 网络内**直连** `anynote-modules-note:18091` 的内部端点读取与写回笔记（不经网关，请求带 `ANYNOTE_INTERNAL_SECRET` 签名；网关会剥掉外部请求的 `from-source`，这两个端点从外部不可达），并订阅 Redis 频道 `collab:note-updated:*` 即时合并外部写入。`collab-data` 卷只存写库失败时的应急落盘（`spool/`）。方案见 [`docs/collab-persistence/COLLAB_PERSISTENCE_PLAN.md`](collab-persistence/COLLAB_PERSISTENCE_PLAN.md)。
 - **CLI 直连 Gateway，走独立的 `api.YOUR_DOMAIN`**：CLI 没有 Cookie jar、不经 BFF，直接请求 `apiUrl + /api/<domain>/*`（见 [`docs/cli/CLI_PLAN.md`](cli/CLI_PLAN.md)）。站点域的 `/api/` 归 BFF，两者路径前缀重叠但上游不同（`/api/auth/cli-exchange` 属 BFF、`/api/auth/login` 属 Gateway），只能用独立 `server_name` 区分。该入口只做 TLS 终止与转发，鉴权仍是网关的 `AuthFilter`；`/actuator/*` 只放通 `health`（供 `anynote doctor` 探测），Springdoc 与其余 actuator 端点一律 404。因此 `anynote-gateway` 是**唯一**在 prod 保留宿主机入口的 Java 服务（`GATEWAY_BIND_IP` 默认 `127.0.0.1`，跨主机 Nginx 时改它）。
 - **对象存储走独立子域，不是主域子路径**：minio-java 的 endpoint 不允许带路径（`no path allowed in endpoint`），所以不能用 `https://YOUR_DOMAIN/oss/` 反代。`oss.YOUR_DOMAIN` 必须**原样透传 Host**（SigV4 把 Host 计入签名），且不要在那里再加 CORS 头——CORS 由 MinIO 自己按 `MINIO_API_CORS_ALLOW_ORIGIN` 回，重复头会让浏览器直接判失败。服务端自己的调用走容器内 `http://minio:9000`，不绕公网。分片直传的签名、Bucket、region 对应关系见 [`docs/minio/MINIO_PLAN.md`](minio/MINIO_PLAN.md) §4.4 与 §7 的 nginx 片段。
 - 生产只发布 web/collab/gateway 三个**回环**入口；其余业务服务、数据库、配置中心等没有宿主机端口。Nginx 配置和 TLS 证书均在 Compose 外。

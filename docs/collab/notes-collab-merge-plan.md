@@ -3,6 +3,9 @@
 > 版本：v2.0（简化稿，待评审） · 日期：2026-09-21 · **取代 v1.0（2026-09-20 草案）**
 > 方向与 v1.0 一致，实现路径按评审结论收窄：**不新增分布式状态机**。被砍掉的设计与理由记在 §13。
 > 关联文档：`docs/refactor/FRONTEND_MILESTONES.md` M8.1（协同服务起源）、`.claude/context/frontend.md`（协同编辑现状）、`docs/deployment-network.md`（collab 反代拓扑）
+> **2026-09-25 注**：协同服务落库方案 [`docs/collab-persistence/COLLAB_PERSISTENCE_PLAN.md`](../collab-persistence/COLLAB_PERSISTENCE_PLAN.md)（M14）已实施。
+> 协同服务打开 `COLLAB_SERVER_PERSIST` 后，本文的 **D3（note 房间不落盘）、D4（客户端冷启动注入）、D5（人人保存 + 覆盖式冲突）、D6（共享 meta）与 §7.3** 由该方案取代（对照见其附录 C）；
+> 开关关闭时本文描述的客户端保存链路仍然生效，直到 M14.6 删除。
 
 ---
 
@@ -262,7 +265,7 @@ provider.synced === true                     // 已与服务端完成同步，�
 
 ### D7 灰度用环境变量总开关，不加 `collab_enabled` 列
 
-`NEXT_PUBLIC_COLLAB_NOTES=1` 开启笔记协同；关闭即完全回到现状单人链路。
+`NEXT_PUBLIC_COLLAB_NOTES=1` 开启笔记协同；关闭即完全回到现状单人链路。**默认关闭**（2026-09-27 拍板，见 §12 Q4）。
 
 不加数据库列的理由：真相源、正文格式、保存端点在两种模式下完全相同，per-note 粒度买不到额外的风险隔离，却要付出 SQL 迁移 + PO/mapper/VO + 开关端点 + OpenSpec + OpenAPI 重生 + 菜单项 + 双分支测试的全链路成本。回滚 = 改环境变量重部署。
 
@@ -566,7 +569,7 @@ if (base && base.title === draft.title && base.content === draft.content) {
 | Q1 | `/docs` 是否有需要保留的真实数据 | 按 §8 前提（只有测试数据）直接删；**M13.0 必须确认**，不确认不动手 |
 | Q2 | 协同模式的防抖时长 | 3 秒（单人仍 1.5 秒） |
 | Q3 | `operation_log.operator` 记“落库那一刻的人”是否可接受 | 建议接受（`edit_log` 本就不区分操作者）；不可接受则需要服务端权威写回，那是另一个方案 |
-| Q4 | `NEXT_PUBLIC_COLLAB_NOTES` 何时默认开 | M13.5 验收后一周稳定期，随小版本改默认值 |
+| Q4 | `NEXT_PUBLIC_COLLAB_NOTES` 何时默认开 | ~~M13.5 验收后一周稳定期，随小版本改默认值~~ **2026-09-27 拍板：默认保持关闭**，非协同（单人保存）是默认模式，协同需以 `NEXT_PUBLIC_COLLAB_NOTES=1` 构建 web 显式开启 |
 | Q5 | 只读用户进房间看实时流的优先级 | 待定，协议已就绪，接前端即可 |
 
 ---
