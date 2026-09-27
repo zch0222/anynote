@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { formatHistoryTime, groupByDay } from "@/features/notes/lib/history-groups";
-import { ensureLeadingHeading } from "@/features/notes/lib/leading-heading";
 import { type NoteHistoryItem, historyUpdaterName } from "@/features/notes/schemas";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import {
@@ -18,6 +17,7 @@ import {
 } from "@/features/notes/use-note-history";
 import { toUserMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
+import { ensureLeadingHeading } from "@anynote/editor-core/leading-heading";
 import { ChevronLeft, Clock, History } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";

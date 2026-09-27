@@ -11,12 +11,13 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 - `services/` — Java 21 · Spring Boot 3.3.4 · Spring Cloud 2023.0.3（9 个微服务 + Feign API 模块 + common 共享库 + BOM）
 - `apps/web/` — Next.js 15 · React 19（**Phase 5 重写，M0-M8 已实现并验收；M8 于 2026-09-11 完成，发版待定**）。桌面版在 `app/(workspace)/**`，移动端在 `app/(mobile)/m/**`（M10.x，见 `docs/mobile/`）
 - `apps/web-legacy/` — Next.js 13.5（**旧前端，仍是当前用户访问的版本**，删除条件见下方 Phase 5 表）
-- `apps/collab/` — Node · yjs 13 · ws（协同编辑 WebSocket 服务，:1234；M8.1 自建，后端无此端点）。**房间契约 `note:<noteId>`**（M13.2 起）：令牌绑定房间与只读标志，`note` 房间不落盘，`index` / `doc:<uuid>` 已退役
+- `apps/collab/` — Node · yjs 13 · ws（协同编辑 WebSocket 服务，:1234；M8.1 自建，后端无此端点）。**房间契约 `note:<noteId>`**（M13.2 起）：令牌绑定房间与只读标志，`index` / `doc:<uuid>` 已退役。**笔记默认是非协同模式**（单人保存，`NEXT_PUBLIC_COLLAB_NOTES` 不设即关闭，2026-09-27 拍板），协同需以 `NEXT_PUBLIC_COLLAB_NOTES=1` 构建 web 显式开启。开启协同时 `note` 房间默认不落盘（客户端各自保存）；**打开 `COLLAB_SERVER_PERSIST` 后由协同服务经 note 内部端点写回 MySQL**（M14，见 `docs/collab-persistence/`）。产物由 tsup 打包（含 TS 源码包 `@anynote/editor-core`）
 - `apps/desktop/` — Tauri 2 桌面壳（M8.2 骨架；构建需 Rust + MSVC 工具链，尚未编译验证）
 - `apps/cli/` — TypeScript CLI 前端 `@anynote/cli`（供人与 agent 操作知识库/笔记；直连 Gateway，配套 `.claude/skills/anynote-*`，方案见 `docs/cli/`）
 - `ai-service/` — Python 3 · FastAPI · LangChain 0.3 · Pydantic v2
 - `packages/api-client/` — `pnpm openapi:generate` 产出的 TS 客户端（**不要手改**，`src/` 已 gitignore）
 - `packages/api-core/` — 前端与 CLI 共用的数据层（`ResData` 信封拆包、springdoc 包装对象 query 展平、笔记/知识库 zod schema）
+- `packages/editor-core/` — 编辑器内核（TS 源码包）：TipTap 扩展的 schema 与 Markdown 规则、`coreExtensions()`、取标题规则、`EDITOR_SCHEMA_VERSION`。web 在其上叠加界面，协同服务用它做无界面转换；**改 schema 或 Markdown 规则必须递增 `EDITOR_SCHEMA_VERSION` 并登记 `schema-lock.json`**（测试卡死）
 - `infra/` — docker-compose（中间件 + 全栈）+ SQL + nginx
 - `openapi/` — spec 聚合与生成脚本
 
@@ -95,7 +96,7 @@ pnpm format              # Biome format only
 ### 端到端与性能门禁（需生产构建 + 真实后端栈）
 
 ```bash
-pnpm --filter web test:e2e          # Playwright 144 条用例：桌面 102（chromium）+ 移动端 42（mobile）
+pnpm --filter web test:e2e          # Playwright 164 条用例：桌面 117（chromium）+ 移动端 47（mobile）；默认构建不开协同，协同相关用例自动跳过（跑它们需以 NEXT_PUBLIC_COLLAB_NOTES=1 构建 web，落库联调另需协同服务开 COLLAB_SERVER_PERSIST）
 pnpm --filter web bundle:budget     # 首屏 JS ≤ 310KB、/m/* ≤ 250KB、编辑器 ≤ 250KB（gzip）
 pnpm --filter web lighthouse:budget # 桌面 Performance ≥ 90、Accessibility ≥ 95
 pnpm --filter web lighthouse:budget:mobile  # 移动口径 Performance ≥ 85、Accessibility ≥ 95
@@ -171,6 +172,7 @@ CLI 的见 [`apps/cli/README.md`](./apps/cli/README.md)。
 | Python service 层与 Pydantic 校验逻辑 | |
 | 构建期脚本里的判定逻辑（`apps/web/scripts/lib/**` 的预算与门槛） | 脚本里读盘 / 起浏览器的 IO 外壳 |
 | 协同服务的协议、握手准入、持久化与房间生命周期（`apps/collab/src/**`） | |
+| 编辑器内核的扩展定义、Markdown 规则、取标题规则与 schema 版本锁（`packages/editor-core/src/**`） | `apps/collab/scripts/spike/**`（一次性技术验证脚本） |
 | CLI 的参数解析、输出信封、退出码映射、凭据存储与跨进程刷新锁、各命令的成功/失败路径（`apps/cli/src/**`） | `apps/cli/e2e/**`（另有真实栈端到端用例） |
 
 **Bug 修复必须先写复现该 bug 的失败用例，再改代码**——否则无法证明修好了。
@@ -228,7 +230,7 @@ CLI 的见 [`apps/cli/README.md`](./apps/cli/README.md)。
 
 ### 服务间调用：HMAC 签名 + `@InnerAuth`（非显然）
 
-内部 Feign 调用由 `FeignRequestInterceptor` 自动注入 `from-source: inner` + `X-Internal-Timestamp` + `X-Internal-Sign: HMAC-SHA256(secret, timestamp)`。被调端用 `@InnerAuth` 注解（AOP）校验。**新增内部端点必须加 `@InnerAuth`**，否则可被外部直接访问。Reactive 服务用 `InnerAuthWebfluxAspect` + `ContextWebFilter`（Reactor 上下文桥接）。
+内部 Feign 调用由 `FeignRequestInterceptor` 自动注入 `from-source: inner` + `X-Internal-Timestamp` + `X-Internal-Sign: HMAC-SHA256(secret, timestamp)`。被调端用 `@InnerAuth` 注解（AOP）校验。密钥是配置项 `anynote.internal.secret`（环境变量 `ANYNOTE_INTERNAL_SECRET`，`InternalSecretProperties` 统一读取），未配置时回落到随仓库公开的默认值并在非 dev profile 打 WARN；协同服务（Node）按同一规则签名调用 note 内部端点，两边必须一致。**新增内部端点必须加 `@InnerAuth`**，否则可被外部直接访问。Reactive 服务用 `InnerAuthWebfluxAspect` + `ContextWebFilter`（Reactor 上下文桥接）。
 
 ### 配置中心是 Nacos，不是 application.yml
 
@@ -285,6 +287,7 @@ SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化
 - `docs/changelist/` — 各批改动的逐文件审计清单；`README.md` 是编写规范与命名规则（`YYYY-MM-DD-<slug>.md`）
 - `apps/cli/README.md` — CLI 的构建、环境变量、凭据安全与测试命令
 - `.claude/skills/anynote-*` — 给 Claude Code 的 CLI / 笔记配方 / 仓库操作手册（`anynote-cli` 的 `reference/commands.md` 是生成物）
+- `docs/collab-persistence/COLLAB_PERSISTENCE_PLAN.md` — 协同服务落库方案（路线 B，**v1.3，2026-09-25，M14.P、M14.0–M14.5、M14.7 已实施，M14.6 待生产灰度观察一周后执行**，分支 `feat/collab-server-persist`）：协同服务开房时从 note 服务内部端点（`GET/PUT /notes/{id}/collab-snapshot`，`@InnerAuth`）加载与原子写回，Y 状态存 `n_note_collab_state`，浏览器不再发保存请求；hello / ACK / 谱系不符（消息类型 100）、关闭码 4409 / 4426 / 4404、IndexedDB 本地副本、2 秒确认宽限、闲置断开、Redis 外部写入即时合并。开关 `COLLAB_SERVER_PERSIST`（默认关，先发前端再开），内部调用密钥改为可配置 `ANYNOTE_INTERNAL_SECRET`（Java 与 collab 共用）。附录 E 是单人模式 8 处缺陷（已修），附录 H 是实施记录：拍板结论、M14.0 性能数据、与方案的偏差（分支 C 谱系确定化、同谱系按 Y 状态合并、**公开 PATCH 改为原子比较且版本号严格递增**）、端到端发现并修复的缺陷（含 M13 遗留的「协同降级后编辑不保存」）。已知限制：正文列 `TEXT` 上限 64KB（R13）。逐文件清单见 `docs/changelist/2026-09-25-collab-server-persistence.md`
 - `docs/collab/notes-collab-merge-plan.md` — 笔记协同合并方案（**v2.0 简化稿，2026-09-21，M13.0–M13.5 已实现并 `--no-ff` 合并 `dev`**（分支 `feat/notes-collab-merge`），取代 v1.0 草案）：把 `/docs` 协同文档并入知识库笔记——房间改 `note:<noteId>`、令牌绑定房间与只读、真相源收敛回 MySQL、note 房间不落盘、**每个客户端各自保存（不选 leader，A0409 走覆盖式重发）**、灰度用环境变量而非数据库列、`/docs` 直接退役；里程碑 M13.0-M13.5，逐文件清单见 `docs/changelist/2026-09-21-notes-collab-merge.md`。§1.4 记了一个开工前必修的既有缺陷（`getNotePermissions` 只读成员分支），§13 记了 v1.0 被砍掉的设计与理由（type 5 选举、`.ver` 仲裁、服务端权威写回、迁移向导）。实施期间另发现并修掉三个方案未覆盖的缺陷（**协同模式下编辑器正文恒为空**、移动端协同态不可见、移动工作台第三格死链），见该清单「审计要点」6–7。**2026-09-21 复核后另修四处冷启动缺陷**（分支 `fix/notes-collab-cold-start`，已 `--no-ff` 合并 `dev`）：两端同时打开冷房间时双方互相让路导致空白正文并在打字时覆盖库里正文（注入守卫改确定性选举 + 正文就位前编辑器只读）、注入正文逃过保存过滤导致「打开老笔记即改写」、协同保存正文落后一次击键、`collab-grant` 向任意登录用户泄露笔记标题与更新时间；同批登记了一个**未解前置缺口**——`createNote` 硬编码 `permissions="70000"` 且全仓没有修改笔记权限的端点，所以「两位库成员共编同一笔记」目前拿不到，协同只能同一用户多端使用。逐文件清单见 `docs/changelist/2026-09-21-notes-collab-coldstart-fixes.md`，方案 D4 / §7.3 / §7.4 / §9 / §11 已同步订正
 - `docs/refactor/REFACTOR_PLAN.md` / `FRONTEND_REFACTOR_PLAN.md` / `FRONTEND_MILESTONES.md` — 重构决策与执行计划
 - `docs/refactor/TASKS.md` — Phase 级进度与未完成项

@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { ensureKnowledgeBase, openKnowledgeBase } from "./support/account";
+import { expectNoteSaved } from "./support/save-status";
 
 /**
  * 加载体系的端到端验收（设计稿 P12-P16）。
@@ -695,7 +696,7 @@ test.describe("加载态的版式约束", () => {
        * 「保存后确实出现在列表里」由下面 `firstRow` 那条断言负责，
        * 不再重复轮询接口。
        */
-      await expect(page.locator('[data-status="saved"]')).toBeVisible({ timeout: 30_000 });
+      await expectNoteSaved(page);
       await page.goto(baseUrl);
     }
 

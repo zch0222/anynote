@@ -3,7 +3,6 @@ package com.anynote.note.service.impl;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.query_dsl.*;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
-import com.alibaba.fastjson2.JSON;
 import com.anynote.common.elasticsearch.constant.ElasticsearchIndexConstants;
 import com.anynote.common.elasticsearch.model.EsNoteIndex;
 import com.anynote.common.elasticsearch.model.bo.SearchPageBean;
@@ -32,7 +31,6 @@ import com.anynote.file.api.model.dto.OssSliceUploadTaskCreateDTO;
 import com.anynote.file.api.model.bo.HuaweiOBSTemporarySignature;
 import com.anynote.file.api.model.po.FilePO;
 import com.anynote.file.api.model.vo.OssSliceUploadTaskVO;
-import com.anynote.note.api.model.bo.GenerateNoteEditLogMessage;
 import com.anynote.note.api.model.po.*;
 import com.anynote.note.datascope.annotation.RequiresKnowledgeBasePermissions;
 import com.anynote.note.datascope.annotation.RequiresNotePermissions;
@@ -40,6 +38,7 @@ import com.anynote.note.datascope.aspect.RequiresNotePermissionsAspect;
 import com.anynote.note.api.enums.KnowledgeBasePermissions;
 import com.anynote.note.enums.NoteFileType;
 import com.anynote.note.enums.NotePermissions;
+import com.anynote.note.mapper.NoteCollabStateMapper;
 import com.anynote.note.mapper.NoteMapper;
 import com.anynote.note.mapper.NoteTextMapper;
 import com.anynote.note.model.bo.*;
@@ -48,6 +47,7 @@ import com.anynote.note.model.vo.CollabGrantVO;
 import com.anynote.note.model.vo.NoteListVO;
 import com.anynote.note.model.vo.NoteSaveResultVO;
 import com.anynote.note.service.KnowledgeBaseService;
+import com.anynote.note.service.NoteChangePublisher;
 import com.anynote.note.service.NoteImageService;
 import com.anynote.note.service.NoteService;
 import com.anynote.note.utils.MarkdownUtil;
@@ -105,6 +105,12 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
 
     @Autowired
     private ElasticsearchClient elasticsearchClient;
+
+    @Autowired
+    private NoteChangePublisher noteChangePublisher;
+
+    @Autowired
+    private NoteCollabStateMapper noteCollabStateMapper;
 
 
     @Override
@@ -229,6 +235,9 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
         Note noteInfo = this.baseMapper.selectOne(noteLambdaQueryWrapper);
         this.baseMapper.deleteById(param.getId());
         noteTextMapper.deleteById(noteInfo.getNoteTextId());
+        // 协同状态随笔记一起删除；在线的协同房间收到通知后回读发现笔记已删除，会断开连接
+        noteCollabStateMapper.deleteByNoteId(param.getId());
+        noteChangePublisher.publishExternalUpdate(param.getId(), null);
 
         String destination = rocketMQProperties.getNoteTopic() + ":" + NoteTagsEnum.DELETE_NOTE_INDEX.name();
         rocketMQTemplate.asyncSend(destination, param.getId(), RocketmqSendCallbackBuilder.commonCallback());
@@ -319,16 +328,19 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
     @Override
     public NoteSaveResultVO editNote(NoteUpdateParam updateParam) {
         LoginUser loginUser = tokenUtil.getLoginUser();
-        // n_note.update_time 是秒级 datetime：先截断到整秒再写，返回的 version 才能和下次读回来的值精确相等，
-        // 否则毫秒尾数会让紧接着的第二次保存被误判成冲突
-        Date updateTime = new Date(System.currentTimeMillis() / 1000L * 1000L);
-        updateParam.setUpdateTime(updateTime);
         Note oldNote = this.baseMapper.selectNoteById(NoteQueryParam.builder()
                 .id(updateParam.getId())
                 .build());
         if (StringUtils.isNull(oldNote)) {
             throw new UserParamException("笔记不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND);
         }
+        // n_note.update_time 是秒级 datetime：新时间截断到整秒且严格大于旧版本，
+        // 返回的 version 才能和下次读回的值精确相等，并且每次写入都得到新的版本号
+        Date updateTime = new Date(NoteVersionUtil.nextUpdateTime(oldNote.getUpdateTime(), System.currentTimeMillis()));
+        updateParam.setUpdateTime(updateTime);
+        updateParam.setUpdateBy(loginUser.getSysUser().getId());
+        // 写入时再比较一次读到的更新时间：读与写之间被协同服务或其他会话写过就不覆盖
+        updateParam.setBaseUpdateTime(oldNote.getUpdateTime());
         // 冲突检测放在任何写入之前：版本过期时不落库、不发索引与编辑日志消息
         if (NoteVersionUtil.isStale(updateParam.getVersion(), NoteVersionUtil.toVersion(oldNote.getUpdateTime()))) {
             throw new BusinessException("笔记已被其他会话更新，请刷新后重试", ResCode.RESOURCE_VERSION_CONFLICT);
@@ -348,6 +360,9 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
             updateParam.setKnowledgeBaseId(null);
         }
         Integer count = this.baseMapper.updateNote(updateParam);
+        if (count == null || count == 0) {
+            throw new BusinessException("笔记已被其他会话更新，请刷新后重试", ResCode.RESOURCE_VERSION_CONFLICT);
+        }
         if (count != 1) {
             throw new BusinessException("更新笔记失败", ResCode.USER_ERROR);
         }
@@ -378,17 +393,9 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
                 .knowledgeBaseName(oldNote.getKnowledgeBaseName())
                 .submitTaskName(oldNote.getSubmitTaskName())
                 .build();
-        String destination = rocketMQProperties.getNoteTopic() +  ":" + NoteTagsEnum.GENERATOR_NOTE_INDEX.name();
-        rocketMQTemplate.asyncSend(destination, updateParam.getId(), RocketmqSendCallbackBuilder.commonCallback());
-
-        String generateNoteLogDestination = rocketMQProperties.getNoteTopic() + ":" + NoteTagsEnum.GENERATE_NOTE_EDIT_LOG.name();
-        rocketMQTemplate.asyncSend(generateNoteLogDestination, JSON.toJSONString(GenerateNoteEditLogMessage.builder()
-                .noteId(updateParam.getId())
-                .oldNote(oldNote)
-                .currentNote(currentNote)
-                .date(new Date())
-                .userId(loginUser.getSysUser().getId())
-                .build()), RocketmqSendCallbackBuilder.commonCallback());
+        noteChangePublisher.publishSaved(updateParam.getId(), oldNote, currentNote, loginUser.getSysUser().getId());
+        // 协同房间在线时据此回读并合并这次写入
+        noteChangePublisher.publishExternalUpdate(updateParam.getId(), loginUser.getSysUser().getId());
         return NoteSaveResultVO.builder()
                 .id(updateParam.getId())
                 .title(currentNote.getTitle())

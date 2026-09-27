@@ -1,9 +1,12 @@
-import { AnynoteHighlight, AnynoteUnderline } from "@/components/editor/extensions/anynote-marks";
 import { DEFAULT_PLACEHOLDER, type PresetContext } from "@/components/editor/presets/types";
-import { MarkdownBridge } from "@/lib/editor/markdown";
+import {
+  AnynoteHighlight,
+  AnynoteUnderline,
+  MarkdownBridge,
+  StarterKit,
+} from "@anynote/editor-core";
 import type { Extensions } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
-import StarterKit from "@tiptap/starter-kit";
 
 /**
  * `minimal`：评论、AI 聊天输入框等轻量输入场景。

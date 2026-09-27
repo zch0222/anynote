@@ -10,6 +10,8 @@ const { post, replace, refresh } = vi.hoisted(() => ({
 }));
 vi.mock("openapi-fetch", () => ({ default: () => ({ POST: post }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, refresh }) }));
+const clearAllLocalNotes = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("@/lib/collab/local-persistence", () => ({ clearAllLocalNotes }));
 beforeEach(() => vi.clearAllMocks());
 
 describe("useLogoutMutation", () => {
@@ -26,6 +28,8 @@ describe("useLogoutMutation", () => {
     expect(queryClient.getQueryData(["notes"])).toBeUndefined();
     expect(replace).toHaveBeenCalledExactlyOnceWith("/login");
     expect(refresh).toHaveBeenCalledOnce();
+    // 笔记离线副本随退出登录一起删除
+    expect(clearAllLocalNotes).toHaveBeenCalledOnce();
   });
 
   it.each([new Response(JSON.stringify({ code: "B0400" })), new Response("oops", { status: 502 })])(
@@ -40,6 +44,7 @@ describe("useLogoutMutation", () => {
       expect(queryClient.getQueryData(["notes"])).toEqual(["private"]);
       expect(replace).not.toHaveBeenCalled();
       expect(post).toHaveBeenCalledOnce();
+      expect(clearAllLocalNotes).not.toHaveBeenCalled();
     },
   );
 });

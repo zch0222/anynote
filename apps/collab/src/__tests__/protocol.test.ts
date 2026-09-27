@@ -5,12 +5,18 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import * as syncProtocol from "y-protocols/sync";
 import * as Y from "yjs";
 import {
+  ANYNOTE_ACK,
+  ANYNOTE_HELLO,
   type CollabConnection,
   CollabDoc,
+  MESSAGE_ANYNOTE,
   MESSAGE_AWARENESS,
   MESSAGE_SYNC,
   addConnection,
+  decodeAnynoteMessage,
+  encodeAnynoteMessage,
   encodeAwareness,
+  encodeSyncStep1,
   handleMessage,
   removeConnection,
 } from "../protocol.ts";
@@ -361,5 +367,78 @@ describe("handleMessage 容错", () => {
     handleMessage(shared, conn, encoding.toUint8Array(update));
     // 空 update 不改变文档，服务端也就没有东西要广播回去
     expect(conn.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("自定义消息类型 100", () => {
+  it("编码为 varUint(100) · varUint(子类型) · varString(JSON)，可解码回原值", () => {
+    const message = encodeAnynoteMessage(ANYNOTE_HELLO, {
+      serverPersist: true,
+      epoch: "e",
+      editorVersion: 1,
+    });
+    expect(message[0]).toBe(MESSAGE_ANYNOTE);
+    expect(decodeAnynoteMessage(message)).toEqual({
+      subType: ANYNOTE_HELLO,
+      payload: { serverPersist: true, epoch: "e", editorVersion: 1 },
+    });
+    expect(decodeAnynoteMessage(encodeAnynoteMessage(ANYNOTE_ACK))).toEqual({
+      subType: ANYNOTE_ACK,
+      payload: {},
+    });
+  });
+
+  it("不是类型 100 的消息解码为 null", () => {
+    expect(decodeAnynoteMessage(new Uint8Array([0, 0]))).toBeNull();
+    expect(decodeAnynoteMessage(new Uint8Array([]))).toBeNull();
+  });
+});
+
+describe("handleMessage 的写确认", () => {
+  function updateMessage(source: Y.Doc): Uint8Array {
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MESSAGE_SYNC);
+    syncProtocol.writeUpdate(encoder, Y.encodeStateAsUpdate(source));
+    return encoding.toUint8Array(encoder);
+  }
+
+  it("可写连接的 update 应用后调用 acknowledge", () => {
+    const shared = new CollabDoc("note:1");
+    const acknowledge = vi.fn();
+    const conn = { send: vi.fn(), close: vi.fn(), acknowledge };
+    const source = new Y.Doc();
+    source.getText("t").insert(0, "x");
+
+    handleMessage(shared, conn, updateMessage(source));
+
+    expect(acknowledge).toHaveBeenCalledOnce();
+    expect(shared.doc.getText("t").toString()).toBe("x");
+  });
+
+  it("syncStep1（读方向）不确认", () => {
+    const shared = new CollabDoc("note:1");
+    const acknowledge = vi.fn();
+    handleMessage(
+      shared,
+      { send: vi.fn(), close: vi.fn(), acknowledge },
+      encodeSyncStep1(new Y.Doc()),
+    );
+    expect(acknowledge).not.toHaveBeenCalled();
+  });
+
+  it("只读连接的写消息被丢弃，也不确认", () => {
+    const shared = new CollabDoc("note:1");
+    const acknowledge = vi.fn();
+    const source = new Y.Doc();
+    source.getText("t").insert(0, "x");
+
+    handleMessage(
+      shared,
+      { send: vi.fn(), close: vi.fn(), readonly: true, acknowledge },
+      updateMessage(source),
+    );
+
+    expect(acknowledge).not.toHaveBeenCalled();
+    expect(shared.doc.getText("t").toString()).toBe("");
   });
 });

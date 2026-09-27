@@ -1,6 +1,8 @@
+import { noteQueryKeys } from "@/features/notes/query-keys";
 import { COLLAB_AUTOSAVE_DEBOUNCE_MS } from "@/features/notes/use-save-note";
 import { noteApi } from "@/lib/api/openapi";
 import { renderWithProviders } from "@/test/render";
+import { QueryClient } from "@tanstack/react-query";
 import { act, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -62,6 +64,15 @@ const collabState = vi.hoisted(() => ({
   savedVersion: null,
   publishSavedVersion: vi.fn(),
   reconnect: vi.fn(),
+  serverPersist: false,
+  syncStatus: "synced" as string,
+  hasLocalPersistence: false,
+  editedWhileOffline: false,
+  fatal: null as unknown,
+  leaveGuard: { active: false, message: "" },
+  recoveredMarkdown: null as string | null,
+  dismissRecovered: vi.fn(),
+  stored: null as { version: string; title: string | null } | null,
 }));
 vi.mock("@/features/collab/use-collab-note", () => ({
   useCollabNote: (options: unknown) => {
@@ -129,6 +140,11 @@ beforeEach(() => {
   collabState.degraded = false;
   collabState.contentReady = true;
   collabState.editable = true;
+  collabState.serverPersist = false;
+  collabState.syncStatus = "synced";
+  collabState.leaveGuard = { active: false, message: "" };
+  collabState.fatal = null;
+  collabState.stored = null;
   patch.mockReset();
   patch.mockResolvedValue(
     envelope({
@@ -336,5 +352,256 @@ describe("NoteEditor 协同模式的保存排队", { timeout: 20_000 }, () => {
     emitChange("# 协同笔记\n\n别人写的");
     await new Promise((resolve) => setTimeout(resolve, COLLAB_AUTOSAVE_DEBOUNCE_MS + 200));
     expect(patch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("NoteEditor 服务端落库模式（M14.4）", { timeout: 20_000 }, () => {
+  function emitChange(markdown: string) {
+    act(() => {
+      (
+        editorProps.mock.calls.at(-1)?.[0].onChange as
+          | ((markdown: string, editor: unknown) => void)
+          | undefined
+      )?.(markdown, fakeEditor);
+    });
+  }
+
+  it("编辑不发 PATCH：正文由协同服务写库", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(lastCollabOptions().enabled).toBe(true));
+    emitReady();
+
+    act(() => {
+      (lastCollabOptions().onLocalEdit as (() => void) | undefined)?.();
+    });
+    emitChange("# 协同笔记\n\n本地编辑");
+
+    await new Promise((resolve) => setTimeout(resolve, COLLAB_AUTOSAVE_DEBOUNCE_MS + 200));
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("徽标改为同步状态（这里是同步中），不再显示保存状态", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    collabState.syncStatus = "unsynced";
+    const { container } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+
+    await waitFor(() =>
+      expect(container.querySelector('[data-status="unsynced"]')).toHaveTextContent("同步中"),
+    );
+    expect(container.querySelector('[data-status="saved"]')).toBeNull();
+  });
+
+  it("正文就位前不绑定协同，只读显示 REST 正文", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    collabState.contentReady = false;
+    collabState.editable = false;
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+
+    const props = editorProps.mock.calls.at(-1)?.[0];
+    expect(props.preset).toBe("full");
+    expect(props.collaboration).toBeUndefined();
+    expect(props.value).toBe("# 协同笔记\n\n正文");
+    expect(props.editable).toBe(false);
+  });
+
+  it("有未同步改动时拦截关页", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    collabState.leaveGuard = {
+      active: true,
+      message: "改动尚未同步，已保存在本设备。确定离开吗？",
+    };
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  /** 顶部 H1 为 text 的假编辑器。 */
+  function editorWithHeading(text: string) {
+    return {
+      state: {
+        doc: { firstChild: { type: { name: "heading" }, attrs: { level: 1 }, textContent: text } },
+      },
+    };
+  }
+
+  const LIST_KEY = noteQueryKeys.list({ knowledgeBaseId: BASE_ID, page: 1, pageSize: 20 });
+
+  /** 列表缓存在测试里没有观察者，默认 `gcTime: 0` 会立刻回收，这里给一个不回收的实例。 */
+  function retainingClient() {
+    return new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0, gcTime: Number.POSITIVE_INFINITY } },
+    });
+  }
+
+  function seedList(queryClient: QueryClient) {
+    queryClient.setQueryData(LIST_KEY, {
+      rows: [
+        { id: NOTE_ID, title: "协同笔记" },
+        { id: 99, title: "另一篇" },
+      ],
+      total: 2,
+      pages: 1,
+      current: 1,
+    });
+  }
+
+  it("顶部 H1 一变就更新列表与详情缓存里的标题，不等写库；标题没变时不动缓存", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    const { queryClient } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />, {
+      queryClient: retainingClient(),
+    });
+    seedList(queryClient);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    emitReady();
+    const seededAt = queryClient.getQueryState(LIST_KEY)?.dataUpdatedAt;
+
+    emitChange("# 协同笔记\n\n只改正文");
+    expect(queryClient.getQueryState(LIST_KEY)?.dataUpdatedAt).toBe(seededAt);
+
+    act(() => {
+      (
+        editorProps.mock.calls.at(-1)?.[0].onChange as
+          | ((markdown: string, editor: unknown) => void)
+          | undefined
+      )?.("# 新的标题\n\n只改正文", editorWithHeading("新的标题"));
+    });
+
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData<{ rows: Array<{ id: number; title: string }> }>(LIST_KEY)?.rows,
+      ).toEqual([
+        { id: NOTE_ID, title: "新的标题" },
+        { id: 99, title: "另一篇" },
+      ]),
+    );
+    expect(queryClient.getQueryData<{ title: string }>(noteQueryKeys.detail(NOTE_ID))?.title).toBe(
+      "新的标题",
+    );
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("落库通知里的标题落后于本地标题时不重新拉取列表，免得目录标题倒退", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    const { queryClient, rerender } = renderWithProviders(
+      <NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />,
+    );
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    emitReady();
+    act(() => {
+      (
+        editorProps.mock.calls.at(-1)?.[0].onChange as
+          | ((markdown: string, editor: unknown) => void)
+          | undefined
+      )?.("# 最新标题\n\n正文", editorWithHeading("最新标题"));
+    });
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+
+    collabState.stored = { version: "1790265601000", title: "较早的标题" };
+    rerender(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: noteQueryKeys.detail(NOTE_ID),
+        refetchType: "none",
+      }),
+    );
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: noteQueryKeys.lists });
+    expect(queryClient.getQueryData<{ title: string }>(noteQueryKeys.detail(NOTE_ID))?.title).toBe(
+      "最新标题",
+    );
+  });
+
+  it("收到落库通知时更新详情缓存的版本号并标记过期，标题与本地一致时刷新笔记列表", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    const { queryClient, rerender } = renderWithProviders(
+      <NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />,
+    );
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+
+    const version = String(Date.parse("2026-09-25T09:30:00.000Z"));
+    collabState.stored = { version, title: "协同笔记" };
+    rerender(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: noteQueryKeys.lists }));
+    const detail = queryClient.getQueryData<{ title: string; updateTime: string }>(
+      noteQueryKeys.detail(NOTE_ID),
+    );
+    expect(detail?.title).toBe("协同笔记");
+    expect(Date.parse(detail?.updateTime ?? "")).toBe(Number(version));
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: noteQueryKeys.detail(NOTE_ID),
+      refetchType: "none",
+    });
+  });
+
+  it("同一条落库通知只处理一次；新通知再刷新一次", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    const { queryClient, rerender } = renderWithProviders(
+      <NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />,
+    );
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const listRefreshes = () =>
+      invalidate.mock.calls.filter(([filters]) => filters?.queryKey === noteQueryKeys.lists).length;
+
+    collabState.stored = { version: "1790265601000", title: "协同笔记" };
+    rerender(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(listRefreshes()).toBe(1));
+    rerender(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    expect(listRefreshes()).toBe(1);
+
+    collabState.stored = { version: "1790265602000", title: "协同笔记" };
+    rerender(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(listRefreshes()).toBe(2));
+  });
+
+  it("编辑器版本不符时给出刷新提示", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    collabState.syncStatus = "outdated";
+    collabState.fatal = { kind: "outdated", serverVersion: 99 };
+    collabState.editable = false;
+    const { findByTestId } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+
+    expect(await findByTestId("collab-outdated")).toBeTruthy();
+    await waitFor(() => expect(editorProps.mock.calls.at(-1)?.[0].editable).toBe(false));
+  });
+});
+
+describe("NoteEditor 协同降级后的保存", { timeout: 20_000 }, () => {
+  /**
+   * 回归：协同令牌签发失败（降级）时提示条写着「你的改动仍会保存」，
+   * 但编辑仍走协同分支、等不到本地编辑标记，一次 PATCH 都不发。
+   */
+  it("降级后编辑走单人保存链路，发出 PATCH", async () => {
+    collabState.degraded = true;
+    collabState.contentReady = false;
+    collabState.editable = true;
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(lastCollabOptions().enabled).toBe(true));
+
+    act(() => {
+      (
+        editorProps.mock.calls.at(-1)?.[0].onChange as
+          | ((markdown: string, editor: unknown) => void)
+          | undefined
+      )?.("# 协同笔记\n\n降级后写的", fakeEditor);
+    });
+
+    await waitFor(() => expect(patch).toHaveBeenCalled(), { timeout: 5_000 });
+    expect(patch.mock.calls.at(-1)?.[1].body.content).toBe("# 协同笔记\n\n降级后写的");
   });
 });

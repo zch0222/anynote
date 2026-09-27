@@ -197,6 +197,42 @@ describe("MobileScreen", () => {
     expect(screen.getByTestId("mobile-screen")).toHaveAttribute("data-tone", "paper");
   });
 
+  it("confirmLeave 返回 false 时返回键不走（有未保存改动、用户取消离开）", () => {
+    setHistoryState({ idx: 3 });
+    const confirmLeave = vi.fn(() => false);
+    renderWithProviders(
+      <MobileScreen title="详情" back="/m/notes" confirmLeave={confirmLeave}>
+        <p>正文</p>
+      </MobileScreen>,
+    );
+    fireEvent.click(screen.getByTestId("mobile-back"));
+
+    expect(confirmLeave).toHaveBeenCalledOnce();
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("confirmLeave 返回 true 时照常返回，onBack 同样先经过确认", () => {
+    setHistoryState({ idx: 3 });
+    const { unmount } = renderWithProviders(
+      <MobileScreen title="详情" back="/m/notes" confirmLeave={() => true}>
+        <p>正文</p>
+      </MobileScreen>,
+    );
+    fireEvent.click(screen.getByTestId("mobile-back"));
+    expect(router.back).toHaveBeenCalledTimes(1);
+    unmount();
+
+    const onBack = vi.fn();
+    renderWithProviders(
+      <MobileScreen title="详情" back onBack={onBack} confirmLeave={() => false}>
+        <p>正文</p>
+      </MobileScreen>,
+    );
+    fireEvent.click(screen.getByTestId("mobile-back"));
+    expect(onBack).not.toHaveBeenCalled();
+  });
+
   it("onBack 覆盖返回键行为（版本页回同路由列表态）", () => {
     const onBack = vi.fn();
     renderWithProviders(

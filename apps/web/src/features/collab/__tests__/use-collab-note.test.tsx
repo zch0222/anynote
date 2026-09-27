@@ -5,12 +5,23 @@ import {
   COLLAB_META_ORIGIN,
   readSavedVersion,
 } from "@/lib/collab/injection";
+import type { CollabSessionState } from "@/lib/collab/session";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 
 const useCollabRoom = vi.hoisted(() => vi.fn());
 vi.mock("@/features/collab/use-collab-room", () => ({ useCollabRoom }));
+
+const EMPTY_SESSION: CollabSessionState = {
+  serverPersist: false,
+  epoch: null,
+  localReady: false,
+  hasLocalPersistence: false,
+  sync: { unsynced: false, pending: 0, editedWhileOffline: false },
+  fatal: null,
+  stored: null,
+};
 
 type AwarenessState = Map<number, unknown>;
 
@@ -42,6 +53,7 @@ function room(overrides: Partial<Record<string, unknown>> = {}) {
       error: null,
       peers: [],
       reconnect: vi.fn(),
+      session: EMPTY_SESSION,
       ...overrides,
     },
   };
@@ -59,7 +71,7 @@ describe("useCollabNote 连接与房间", () => {
       useCollabNote({ noteId: 42, enabled: false, editor: null, markdown: null }),
     );
 
-    expect(useCollabRoom).toHaveBeenCalledWith(null);
+    expect(useCollabRoom).toHaveBeenCalledWith(null, expect.anything());
     expect(result.current.active).toBe(false);
   });
 
@@ -70,7 +82,7 @@ describe("useCollabNote 连接与房间", () => {
       useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: null }),
     );
 
-    expect(useCollabRoom).toHaveBeenCalledWith("note:42");
+    expect(useCollabRoom).toHaveBeenCalledWith("note:42", expect.anything());
     expect(result.current.active).toBe(true);
     expect(result.current.doc).toBe(doc);
     expect(result.current.provider).toBe(provider);
@@ -297,5 +309,221 @@ describe("useCollabNote 暴露房间状态", () => {
 
     expect(result.current.peers).toEqual(peers);
     expect(result.current.reconnect).toBe(reconnect);
+  });
+});
+
+describe("useCollabNote：服务端落库路径", () => {
+  function persistRoom(
+    session: Partial<CollabSessionState>,
+    overrides: Record<string, unknown> = {},
+  ) {
+    return room({
+      session: { ...EMPTY_SESSION, serverPersist: true, epoch: "e", ...session },
+      ...overrides,
+    });
+  }
+
+  it("本地编辑不触发 onLocalEdit，也不写共享 meta", () => {
+    const { state, doc } = persistRoom({});
+    useCollabRoom.mockReturnValue(state);
+    const onLocalEdit = vi.fn();
+    const { result } = renderHook(() =>
+      useCollabNote({
+        noteId: 42,
+        enabled: true,
+        editor: {} as never,
+        markdown: "# 标题",
+        onLocalEdit,
+      }),
+    );
+
+    act(() => doc.getText("t").insert(0, "本地编辑"));
+    act(() => result.current.publishSavedVersion("123"));
+
+    expect(onLocalEdit).not.toHaveBeenCalled();
+    expect(readSavedVersion(doc)).toBeNull();
+    expect(result.current.serverPersist).toBe(true);
+  });
+
+  it("本地有同谱系副本时连上之前即可编辑（本地优先）", () => {
+    const { state } = persistRoom(
+      { localReady: true },
+      { synced: false, status: "connecting", connected: false },
+    );
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.contentReady).toBe(true);
+    expect(result.current.editable).toBe(true);
+    expect(result.current.syncStatus).toBe("offline");
+  });
+
+  it("没有本地副本时要等首次同步完成才可写，期间状态是连接中", () => {
+    const { state } = persistRoom({}, { synced: false });
+    useCollabRoom.mockReturnValue(state);
+    const { result, rerender } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.contentReady).toBe(false);
+    expect(result.current.editable).toBe(false);
+    expect(result.current.syncStatus).toBe("connecting");
+
+    useCollabRoom.mockReturnValue({ ...state, synced: true });
+    rerender();
+    expect(result.current.contentReady).toBe(true);
+    expect(result.current.syncStatus).toBe("synced");
+  });
+
+  it("连接已建立但服务端还没接受（未完成同步）时状态是连接中，不是已同步", () => {
+    const { state } = persistRoom({ localReady: true }, { synced: false });
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.editable).toBe(true);
+    expect(result.current.syncStatus).toBe("connecting");
+  });
+
+  it("会话换了新文档（谱系重建）后，要等新文档同步完成才可写", () => {
+    const { state } = persistRoom({});
+    useCollabRoom.mockReturnValue(state);
+    const { result, rerender } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.editable).toBe(true);
+
+    const rebuilt = new Y.Doc();
+    useCollabRoom.mockReturnValue({ ...state, doc: rebuilt, synced: false });
+    rerender();
+    expect(result.current.contentReady).toBe(false);
+    expect(result.current.editable).toBe(false);
+    expect(result.current.syncStatus).toBe("connecting");
+
+    useCollabRoom.mockReturnValue({ ...state, doc: rebuilt, synced: true });
+    rerender();
+    expect(result.current.contentReady).toBe(true);
+    expect(result.current.syncStatus).toBe("synced");
+  });
+
+  it("谱系不符（4409）后、新会话建好之前只读：旧文档已断开，此时输入会丢", () => {
+    const { state } = persistRoom(
+      { localReady: true, fatal: { kind: "lineage" } },
+      { status: "connecting", connected: false, synced: false },
+    );
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.contentReady).toBe(false);
+    expect(result.current.editable).toBe(false);
+    expect(result.current.syncStatus).toBe("connecting");
+    expect(result.current.fatal).toBeNull();
+  });
+
+  it("首次同步之后断线仍可写，状态是离线", () => {
+    const { state } = persistRoom({});
+    useCollabRoom.mockReturnValue(state);
+    const { result, rerender } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    useCollabRoom.mockReturnValue({
+      ...state,
+      synced: false,
+      status: "connecting",
+      connected: false,
+    });
+    rerender();
+    expect(result.current.editable).toBe(true);
+    expect(result.current.syncStatus).toBe("offline");
+  });
+
+  it("有改动超过宽限期未确认时状态是同步中，并拦截离开", () => {
+    const { state } = persistRoom({
+      hasLocalPersistence: true,
+      sync: { unsynced: true, pending: 2, editedWhileOffline: false },
+    });
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.syncStatus).toBe("unsynced");
+    expect(result.current.leaveGuard).toEqual({
+      active: true,
+      message: "改动尚未同步，已保存在本设备。确定离开吗？",
+    });
+  });
+
+  it("离线且断线后有过编辑时拦截离开；没有本地缓存时提示会丢失", () => {
+    const { state } = persistRoom(
+      { localReady: true, sync: { unsynced: false, pending: 0, editedWhileOffline: true } },
+      { status: "connecting", connected: false, synced: false },
+    );
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.leaveGuard).toEqual({
+      active: true,
+      message: "改动尚未同步，离开后会丢失。确定离开吗？",
+    });
+  });
+
+  it("回传最近一次落库通知", () => {
+    const stored = { version: "1790265601000", title: "新标题" };
+    const { state } = persistRoom({ stored });
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.stored).toBe(stored);
+  });
+
+  it("已同步时不拦截离开", () => {
+    const { state } = persistRoom({});
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.leaveGuard.active).toBe(false);
+  });
+
+  it("编辑器版本不符（4426）时只读，状态是需刷新", () => {
+    const { state } = persistRoom({ fatal: { kind: "outdated", serverVersion: 2 } });
+    useCollabRoom.mockReturnValue(state);
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: null, markdown: "# 标题" }),
+    );
+    expect(result.current.syncStatus).toBe("outdated");
+    expect(result.current.editable).toBe(false);
+    expect(result.current.fatal).toEqual({ kind: "outdated", serverVersion: 2 });
+  });
+
+  it("谱系重建前有未同步改动时，取回编辑器里的正文交给界面", () => {
+    const { state } = persistRoom({
+      sync: { unsynced: false, pending: 1, editedWhileOffline: false },
+    });
+    useCollabRoom.mockReturnValue(state);
+    const editor = { storage: { markdown: { getMarkdown: () => "# 标题\n\n没同步的改动" } } };
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: editor as never, markdown: "# 标题" }),
+    );
+
+    act(() => useCollabRoom.mock.calls.at(-1)?.[1].onLineageReset());
+
+    expect(result.current.recoveredMarkdown).toBe("# 标题\n\n没同步的改动");
+    act(() => result.current.dismissRecovered());
+    expect(result.current.recoveredMarkdown).toBeNull();
+  });
+
+  it("谱系重建前没有未同步改动时不打扰用户", () => {
+    const { state } = persistRoom({});
+    useCollabRoom.mockReturnValue(state);
+    const editor = { storage: { markdown: { getMarkdown: () => "# 标题" } } };
+    const { result } = renderHook(() =>
+      useCollabNote({ noteId: 42, enabled: true, editor: editor as never, markdown: "# 标题" }),
+    );
+    act(() => useCollabRoom.mock.calls.at(-1)?.[1].onLineageReset());
+    expect(result.current.recoveredMarkdown).toBeNull();
   });
 });

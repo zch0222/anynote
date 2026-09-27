@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { noteRoomName, parseHandshake, parseRoom, roomName } from "../rooms.ts";
+import { noteRoomName, parseHandshake, parseLineage, parseRoom, roomName } from "../rooms.ts";
 
 describe("parseRoom", () => {
   it("只认 note:<正整数>", () => {
@@ -68,17 +68,40 @@ describe("parseRoom", () => {
 });
 
 describe("parseHandshake", () => {
-  it("从 URL 取出房间与令牌", () => {
+  it("从 URL 取出房间与令牌；没有版本与谱系参数时分别为 null 与 unknown", () => {
     expect(parseHandshake("/note:42?token=abc")).toEqual({
+      room: { kind: "note", noteId: 42 },
+      token: "abc",
+      editorVersion: null,
+      lineage: { kind: "unknown" },
+    });
+  });
+
+  it("房间名经过 URL 编码时同样能解析", () => {
+    expect(parseHandshake("/note%3A42?token=abc")).toMatchObject({
       room: { kind: "note", noteId: 42 },
       token: "abc",
     });
   });
 
-  it("房间名经过 URL 编码时同样能解析", () => {
-    expect(parseHandshake("/note%3A42?token=abc")).toEqual({
-      room: { kind: "note", noteId: 42 },
-      token: "abc",
+  it("取出编辑器版本与谱系参数", () => {
+    const epoch = "7d4f0c9e-1b2a-4c3d-8e9f-0a1b2c3d4e5f";
+    expect(
+      parseHandshake(
+        `/note:42?token=abc&editorVersion=3&lineage=${encodeURIComponent(`epoch:${epoch}`)}`,
+      ),
+    ).toMatchObject({ editorVersion: 3, lineage: { kind: "epoch", epoch } });
+    expect(parseHandshake("/note:42?token=abc&lineage=fresh")).toMatchObject({
+      lineage: { kind: "fresh" },
+    });
+  });
+
+  it("非法的编辑器版本视为缺失", () => {
+    expect(parseHandshake("/note:42?token=abc&editorVersion=v1")).toMatchObject({
+      editorVersion: null,
+    });
+    expect(parseHandshake("/note:42?token=abc&editorVersion=-1")).toMatchObject({
+      editorVersion: null,
     });
   });
 
@@ -98,5 +121,22 @@ describe("parseHandshake", () => {
     expect(parseHandshake("note:42?token=abc")).toBeNull();
     // '//' 会被当成 protocol-relative 写法，缺 host 的 http URL 直接解析失败
     expect(parseHandshake("///note:42?token=abc")).toBeNull();
+  });
+});
+
+describe("parseLineage", () => {
+  it("fresh 与合法的 epoch:<uuid> 原样解析", () => {
+    expect(parseLineage("fresh")).toEqual({ kind: "fresh" });
+    expect(parseLineage("epoch:7d4f0c9e-1b2a-4c3d-8e9f-0a1b2c3d4e5f")).toEqual({
+      kind: "epoch",
+      epoch: "7d4f0c9e-1b2a-4c3d-8e9f-0a1b2c3d4e5f",
+    });
+  });
+
+  it("缺失、unknown、格式不对的 epoch 一律视为 unknown", () => {
+    expect(parseLineage(null)).toEqual({ kind: "unknown" });
+    expect(parseLineage("unknown")).toEqual({ kind: "unknown" });
+    expect(parseLineage("epoch:not-a-uuid")).toEqual({ kind: "unknown" });
+    expect(parseLineage("epoch:7D4F0C9E-1B2A-4C3D-8E9F-0A1B2C3D4E5F")).toEqual({ kind: "unknown" });
   });
 });

@@ -37,14 +37,46 @@ export function noteRoomName(noteId: number): string {
 }
 
 /**
- * 从 WebSocket 握手 URL 里取房间名与令牌。
+ * 客户端声明的本地 Y 状态谱系：
+ * - `fresh`：本地文档为空；
+ * - `epoch`：本地文档来自该谱系；
+ * - `unknown`：本地文档非空但不知道谱系（例如来自旧版客户端保存链路的房间）。
+ */
+export type Lineage = { kind: "fresh" } | { kind: "epoch"; epoch: string } | { kind: "unknown" };
+
+/** 握手查询串解析结果。 */
+export type Handshake = {
+  room: CollabRoom;
+  token: string;
+  /** 客户端的编辑器版本；缺失或非法时为 null。 */
+  editorVersion: number | null;
+  lineage: Lineage;
+};
+
+const EPOCH_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** 解析 `lineage` 参数：`fresh`、`epoch:<uuid>`，其余一律视为 `unknown`。 */
+export function parseLineage(raw: string | null): Lineage {
+  if (raw === "fresh") return { kind: "fresh" };
+  if (raw?.startsWith("epoch:")) {
+    const epoch = raw.slice("epoch:".length);
+    if (EPOCH_PATTERN.test(epoch)) return { kind: "epoch", epoch };
+  }
+  return { kind: "unknown" };
+}
+
+function parseEditorVersion(raw: string | null): number | null {
+  if (raw === null || !/^[0-9]{1,6}$/.test(raw)) return null;
+  return Number(raw);
+}
+
+/**
+ * 从 WebSocket 握手 URL 里取房间名、令牌、编辑器版本与谱系。
  *
  * 浏览器的 WebSocket 构造函数不能自定义请求头，令牌只能走查询串；
  * 因此签发端必须把有效期压到分钟级（见 BFF `/api/auth/collab-token`）。
  */
-export function parseHandshake(
-  url: string | undefined,
-): { room: CollabRoom; token: string } | null {
+export function parseHandshake(url: string | undefined): Handshake | null {
   if (!url) return null;
 
   let parsed: URL;
@@ -58,7 +90,12 @@ export function parseHandshake(
   const token = parsed.searchParams.get("token");
   if (!room || !token) return null;
 
-  return { room, token };
+  return {
+    room,
+    token,
+    editorVersion: parseEditorVersion(parsed.searchParams.get("editorVersion")),
+    lineage: parseLineage(parsed.searchParams.get("lineage")),
+  };
 }
 
 /** 结构化房间 → 规范房间名（`parseRoom` 的逆运算）。 */

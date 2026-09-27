@@ -13,6 +13,7 @@ import com.anynote.note.model.bo.NoteUpdateParam;
 import com.anynote.note.model.dto.NoteEditDTO;
 import com.anynote.note.model.vo.NoteSaveResultVO;
 import com.anynote.note.service.KnowledgeBaseService;
+import com.anynote.note.service.NoteChangePublisher;
 import com.anynote.system.api.model.bo.LoginUser;
 import com.anynote.system.api.model.po.SysUser;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
@@ -24,6 +25,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Date;
@@ -34,6 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -70,6 +75,12 @@ class NoteServiceImplEditNoteTest {
     @Mock
     private RocketMQProperties rocketMQProperties;
 
+    @Mock
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Mock
+    private ObjectProvider<StringRedisTemplate> redisProvider;
+
     private NoteServiceImpl noteService;
 
     @BeforeEach
@@ -80,6 +91,9 @@ class NoteServiceImplEditNoteTest {
         ReflectionTestUtils.setField(noteService, "knowledgeBaseService", knowledgeBaseService);
         ReflectionTestUtils.setField(noteService, "rocketMQTemplate", rocketMQTemplate);
         ReflectionTestUtils.setField(noteService, "rocketMQProperties", rocketMQProperties);
+        when(redisProvider.getIfAvailable()).thenReturn(stringRedisTemplate);
+        ReflectionTestUtils.setField(noteService, "noteChangePublisher",
+                new NoteChangePublisher(rocketMQTemplate, rocketMQProperties, redisProvider));
 
         SysUser sysUser = new SysUser();
         sysUser.setId(USER_ID);
@@ -160,6 +174,7 @@ class NoteServiceImplEditNoteTest {
         verify(noteMapper, never()).updateNote(any(NoteUpdateParam.class));
         verify(noteMapper, never()).updateContent(any(NoteUpdateParam.class));
         verify(rocketMQTemplate, never()).asyncSend(anyString(), any(Object.class), any());
+        verify(stringRedisTemplate, never()).convertAndSend(anyString(), anyString());
     }
 
     @Test
@@ -251,5 +266,64 @@ class NoteServiceImplEditNoteTest {
 
         verify(knowledgeBaseService, never()).getUserKnowledgeBasePermissions(anyLong(), anyLong());
         assertEquals(null, updateParam.getKnowledgeBaseId());
+    }
+
+    @Test
+    @DisplayName("保存时记下更新者，协同写回只合并外部写入时才能沿用它")
+    void recordsUpdater() {
+        NoteEditDTO dto = new NoteEditDTO();
+        dto.setContent("新正文");
+
+        NoteUpdateParam updateParam = param(dto);
+        noteService.editNote(updateParam);
+
+        assertEquals(USER_ID, updateParam.getUpdateBy());
+    }
+
+    @Test
+    @DisplayName("保存成功后发出索引、编辑日志两条消息，并通知协同房间有外部写入")
+    void publishesIndexEditLogAndExternalUpdate() {
+        NoteEditDTO dto = new NoteEditDTO();
+        dto.setContent("新正文");
+        dto.setVersion(CURRENT_VERSION);
+
+        noteService.editNote(param(dto));
+
+        verify(rocketMQTemplate).asyncSend(eq("note-topic:GENERATOR_NOTE_INDEX"), eq(NOTE_ID), any());
+        verify(rocketMQTemplate).asyncSend(eq("note-topic:GENERATE_NOTE_EDIT_LOG"), anyString(), any());
+        verify(stringRedisTemplate).convertAndSend(eq("collab:note-updated:" + NOTE_ID),
+                startsWith("{\"actorId\":" + USER_ID));
+    }
+
+    @Test
+    @DisplayName("库里的版本号比当前时间还新（协同写回会把版本推到下一秒）时，新版本号仍严格大于旧版本")
+    void versionStrictlyIncreasesEvenWhenStoredVersionIsAhead() {
+        long ahead = (System.currentTimeMillis() / 1000L + 2L) * 1000L;
+        Note note = existingNote();
+        note.setUpdateTime(new java.util.Date(ahead));
+        when(noteMapper.selectNoteById(any(NoteQueryParam.class))).thenReturn(note);
+        NoteEditDTO dto = new NoteEditDTO();
+        dto.setContent("新正文");
+        dto.setVersion(String.valueOf(ahead));
+
+        NoteSaveResultVO result = noteService.editNote(param(dto));
+
+        assertEquals(ahead + 1000L, Long.parseLong(result.getVersion()));
+    }
+
+    @Test
+    @DisplayName("写入带上读到的更新时间做原子比较：比较与写入之间被别人写过时返回 A0409 而不是覆盖")
+    void rejectsWhenNoteChangedBetweenReadAndWrite() {
+        when(noteMapper.updateNote(any(NoteUpdateParam.class))).thenReturn(0);
+        NoteEditDTO dto = new NoteEditDTO();
+        dto.setContent("新正文");
+
+        NoteUpdateParam updateParam = param(dto);
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> noteService.editNote(updateParam));
+
+        assertEquals(ResCode.RESOURCE_VERSION_CONFLICT, exception.getErrorCode());
+        assertEquals(CURRENT_UPDATE_TIME, updateParam.getBaseUpdateTime());
+        verify(noteMapper, never()).updateContent(any(NoteUpdateParam.class));
     }
 }

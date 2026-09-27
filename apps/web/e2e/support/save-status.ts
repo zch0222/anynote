@@ -10,16 +10,22 @@ import { type Page, expect } from "@playwright/test";
  * 差别只在协同连接是否存在，用例不该把其中一个写死。
  *
  * 判据取 `<output data-status>` 而不是文案：`save-status.tsx` 把
- * `NoteSaveStatus`（saved / pending / saving / offline / error / conflict）
- * 直接写进 `data-status`，它与文案、与协同连接**都**无关，是这套状态机唯一稳定的锚点。
- * 之前 `loading-system.spec.ts` 已经这么用（`[data-status="saved"]`），这里统一成公共实现。
+ * `NoteSaveStatus`（saved / pending / saving / offline / error / conflict / failed）
+ * 或服务端落库模式的同步状态（connecting / synced / unsynced / offline / outdated）
+ * 直接写进 `data-status`，它与文案无关，是这套状态机唯一稳定的锚点。
  *
  * `collabConnected` 只影响 `saved` 那一个态的文案（`save-status.tsx` 的
  * `collabConnected && status === "saved"`），所以传不传都不影响本断言的判定。
  */
 export async function expectNoteSaved(page: Page, timeout = 30_000): Promise<void> {
-  await expect(page.locator('[data-status="saved"]').first()).toBeVisible({ timeout });
+  await expect(page.locator(SAVED_SELECTOR).first()).toBeVisible({ timeout });
 }
+
+/**
+ * 终态锚点：单人模式与客户端保存链路是 `saved`；服务端落库模式（协同服务写库）
+ * 的徽标换成同步状态，终态是 `synced`（服务端已收到改动）。
+ */
+export const SAVED_SELECTOR = '[data-status="saved"], [data-status="synced"]';
 
 /**
  * 等保存徽标稳定在「已保存 / 已同步」终态，并返回它读到的文案。
@@ -29,6 +35,6 @@ export async function expectNoteSaved(page: Page, timeout = 30_000): Promise<voi
  */
 export async function readSaveBadgeText(page: Page, timeout = 30_000): Promise<string> {
   await expectNoteSaved(page, timeout);
-  const badge = page.locator('[data-status="saved"]').first();
+  const badge = page.locator(SAVED_SELECTOR).first();
   return ((await badge.textContent()) ?? "").trim();
 }

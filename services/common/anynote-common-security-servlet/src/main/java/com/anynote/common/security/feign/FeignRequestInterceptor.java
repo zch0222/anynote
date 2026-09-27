@@ -1,5 +1,6 @@
 package com.anynote.common.security.feign;
 
+import com.anynote.common.security.properties.InternalSecretProperties;
 import com.anynote.core.utils.ServletUtils;
 import com.anynote.core.constant.SecurityConstants;
 import com.anynote.core.utils.StringUtils;
@@ -12,12 +13,18 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 
 /**
- * feign 请求拦截器
+ * feign 请求拦截器：透传用户身份头，并按 {@link InternalSecretProperties} 的密钥签内部调用头。
  *
  * @author 称霸幼儿园
  */
 @Component
 public class FeignRequestInterceptor implements RequestInterceptor {
+
+    private final InternalSecretProperties internalSecretProperties;
+
+    public FeignRequestInterceptor(InternalSecretProperties internalSecretProperties) {
+        this.internalSecretProperties = internalSecretProperties;
+    }
 
     @Override
     public void apply(RequestTemplate requestTemplate) {
@@ -55,7 +62,7 @@ public class FeignRequestInterceptor implements RequestInterceptor {
             String timestamp = String.valueOf(System.currentTimeMillis());
             requestTemplate.header(SecurityConstants.INTERNAL_TIMESTAMP, timestamp);
             requestTemplate.header(SecurityConstants.INTERNAL_SIGN,
-                    HmacUtils.sign(SecurityConstants.INTERNAL_SECRET, timestamp));
+                    HmacUtils.sign(internalSecretProperties.resolveSecret(), timestamp));
 
 //            String contentType = headers.get(SecurityConstants.CONTENT_TYPE);
 //            if (StringUtils.isNotEmpty(contentType)) {

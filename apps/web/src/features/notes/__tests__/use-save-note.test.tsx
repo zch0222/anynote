@@ -1,3 +1,4 @@
+import { clearLeaveConfirmed, markLeaveConfirmed } from "@/features/notes/leave-confirmation";
 import { noteQueryKeys } from "@/features/notes/query-keys";
 import type { NoteDetail } from "@/features/notes/schemas";
 import { ApiError } from "@/lib/api/errors";
@@ -10,7 +11,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AUTOSAVE_DEBOUNCE_MS,
   COLLAB_AUTOSAVE_DEBOUNCE_MS,
+  type NoteSaveStatus,
   RETRY_DELAY_MS,
+  hasUnsavedRisk,
   useSaveNote,
 } from "../use-save-note";
 
@@ -312,14 +315,14 @@ describe("useSaveNote：离线与卸载", () => {
     }
   });
 
-  it("组件卸载时未落盘的改动通过 keepalive 请求送出", async () => {
+  it("关页（pagehide）时未落盘的改动通过 keepalive 请求送出", async () => {
     patch.mockResolvedValue(okEnvelope(saveResult()));
-    const { result, unmount } = renderHookWithProviders(() =>
+    const { result } = renderHookWithProviders(() =>
       useSaveNote({ noteId: NOTE_ID, initialVersion: "1000", debounceMs: 20 }),
     );
 
     act(() => result.current.scheduleSave({ title: "离开前", content: "未保存" }));
-    unmount();
+    window.dispatchEvent(new Event("pagehide"));
 
     expect(patch).toHaveBeenCalledTimes(1);
     expect(patch.mock.calls[0]?.[1]).toMatchObject({
@@ -453,15 +456,15 @@ describe("useSaveNote：离线与卸载", () => {
           releaseFirst = resolve;
         }),
     );
-    const { result, unmount } = renderHookWithProviders(() =>
+    const { result } = renderHookWithProviders(() =>
       useSaveNote({ noteId: NOTE_ID, initialVersion: "1000", debounceMs: 20 }),
     );
 
     act(() => result.current.scheduleSave({ title: "飞行中", content: "未保存" }));
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
 
-    // 第一次请求仍挂起（响应未回），此刻离开页面
-    unmount();
+    // 第一次请求仍挂起（响应未回），此刻关页
+    window.dispatchEvent(new Event("pagehide"));
 
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
     expect(patch.mock.calls[1]?.[1]).toMatchObject({
@@ -614,13 +617,13 @@ describe("useSaveNote：版本号推进（回归 —— 正常编辑不该弹冲
     act(() => result.current.scheduleSave({ title: "离开前", content: "未保存" }));
     unmount();
 
-    expect(patch.mock.calls[0]?.[1]).toMatchObject({ keepalive: true });
+    expect(patch.mock.calls[0]?.[1].body).toMatchObject({ title: "离开前", content: "未保存" });
     // SPA 返回时编辑器拿缓存当初始内容：不写回就会用落盘前的旧正文接着编辑
     expect(queryClient.getQueryData<NoteDetail>(DETAIL_KEY)).toMatchObject({
       title: "离开前",
       content: "未保存",
     });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: DETAIL_KEY });
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: DETAIL_KEY }));
   });
 });
 
@@ -755,5 +758,322 @@ describe("useSaveNote：协同模式（M13.3）", () => {
 
   it(`协同模式的防抖常量是 ${COLLAB_AUTOSAVE_DEBOUNCE_MS}ms，比单人的 ${AUTOSAVE_DEBOUNCE_MS}ms 更宽`, () => {
     expect(COLLAB_AUTOSAVE_DEBOUNCE_MS).toBeGreaterThan(AUTOSAVE_DEBOUNCE_MS);
+  });
+});
+
+describe("useSaveNote：单人模式缺陷修复（M14.P）", () => {
+  function renderSeeded(overrides: Record<string, unknown> = {}) {
+    const queryClient = createPersistentQueryClient();
+    queryClient.setQueryData<NoteDetail>(DETAIL_KEY, initialDetail);
+    return renderHookWithProviders(
+      () =>
+        useSaveNote({
+          noteId: NOTE_ID,
+          initialVersion: "1000",
+          debounceMs: 20,
+          ...overrides,
+        }),
+      { queryClient },
+    );
+  }
+
+  function serverNote() {
+    return okEnvelope({
+      id: NOTE_ID,
+      title: "服务端标题",
+      content: "服务端内容",
+      updateTime: "2026-09-11T03:00:00.000Z",
+    });
+  }
+
+  async function reachConflict(rendered: ReturnType<typeof renderSeeded>) {
+    await waitFor(() => expect(rendered.result.current.status).toBe("conflict"));
+  }
+
+  it("① 选放弃后卸载也不发请求：被放弃的草稿不会经卸载补发写回服务端", async () => {
+    patch.mockRejectedValueOnce(new ApiError(200, "A0409", "笔记已被其他会话更新"));
+    get.mockImplementation(() => serverNote());
+    const rendered = renderSeeded();
+    act(() => rendered.result.current.scheduleSave({ title: "本地标题", content: "本地内容" }));
+    await reachConflict(rendered);
+
+    await act(async () => {
+      await rendered.result.current.resolveConflict("useServer");
+    });
+    rendered.unmount();
+    window.dispatchEvent(new Event("pagehide"));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+  });
+
+  it("① 选放弃时把服务端内容交给调用方载入编辑器", async () => {
+    patch.mockRejectedValueOnce(new ApiError(200, "A0409", "笔记已被其他会话更新"));
+    get.mockImplementation(() => serverNote());
+    const onDiscardLocal = vi.fn();
+    const rendered = renderSeeded({ onDiscardLocal });
+    act(() => rendered.result.current.scheduleSave({ title: "本地标题", content: "本地内容" }));
+    await reachConflict(rendered);
+
+    await act(async () => {
+      await rendered.result.current.resolveConflict("useServer");
+    });
+
+    expect(onDiscardLocal).toHaveBeenCalledExactlyOnceWith({
+      title: "服务端标题",
+      content: "服务端内容",
+    });
+  });
+
+  it("③ 不可重试的错误（笔记已删除）停在 failed，展示后端原因且不再自动重试", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    patch.mockRejectedValue(new ApiError(200, "A0404", "笔记不存在"));
+    const { result } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "t", content: "c" }));
+    await waitFor(() => expect(result.current.status).toBe("failed"));
+    expect(result.current.failure).toMatchObject({ kind: "notFound", message: "笔记不存在" });
+
+    await act(async () => {
+      vi.advanceTimersByTime(RETRY_DELAY_MS * 3);
+    });
+    expect(patch).toHaveBeenCalledTimes(1);
+  });
+
+  it("③ 登录过期时停止重试、提示重新登录，草稿保留到手动重试", async () => {
+    patch.mockRejectedValueOnce(new ApiError(401, "A0311", "登录已过期"));
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "离线标题", content: "登录过期前写的" }));
+    await waitFor(() => expect(result.current.status).toBe("failed"));
+    expect(result.current.failure?.kind).toBe("auth");
+
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(patch).toHaveBeenCalledTimes(2);
+    expect(patch.mock.calls[1]?.[1].body).toMatchObject({
+      title: "离线标题",
+      content: "登录过期前写的",
+    });
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+  });
+
+  it("③ 服务端 5xx 与网络错误仍进 error 并按间隔重试", async () => {
+    patch.mockRejectedValueOnce(new ApiError(502, "B0500", "网关错误"));
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "t", content: "c" }));
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    await act(async () => {
+      vi.advanceTimersByTime(RETRY_DELAY_MS);
+    });
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
+  });
+
+  it("④ 有未保存改动时关页先拦截，并立刻发起一次普通保存", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result } = renderSeeded({ debounceMs: 600_000 });
+    act(() => result.current.scheduleSave({ title: "t", content: "未保存" }));
+
+    const event = new Event("beforeunload", { cancelable: true });
+    act(() => {
+      window.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+    expect(patch.mock.calls[0]?.[1].keepalive).toBeUndefined();
+  });
+
+  it("④ 刚在站内确认过离开时，关页不再二次拦截，但仍发起一次保存", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result } = renderSeeded({ debounceMs: 600_000 });
+    act(() => result.current.scheduleSave({ title: "t", content: "未保存" }));
+    markLeaveConfirmed();
+
+    const event = new Event("beforeunload", { cancelable: true });
+    act(() => {
+      window.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(false);
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+    clearLeaveConfirmed();
+  });
+
+  it("④ 没有未保存改动时关页不拦截", () => {
+    renderSeeded();
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("④ SPA 路由卸载时页面仍在，用普通请求送出草稿", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result, unmount } = renderSeeded({ debounceMs: 600_000 });
+    act(() => result.current.scheduleSave({ title: "离开前", content: "未保存" }));
+
+    unmount();
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(patch.mock.calls[0]?.[1].keepalive).toBeUndefined();
+    expect(patch.mock.calls[0]?.[1].body).toMatchObject({ content: "未保存", version: "1000" });
+  });
+
+  it("④ 关页时草稿不超过 keepalive 上限用 keepalive，超过则改用普通请求", () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result } = renderSeeded({ debounceMs: 600_000 });
+
+    act(() => result.current.scheduleSave({ title: "小", content: "短正文" }));
+    window.dispatchEvent(new Event("pagehide"));
+    expect(patch.mock.calls[0]?.[1].keepalive).toBe(true);
+
+    act(() => result.current.scheduleSave({ title: "大", content: "字".repeat(30_000) }));
+    window.dispatchEvent(new Event("pagehide"));
+    expect(patch).toHaveBeenCalledTimes(2);
+    expect(patch.mock.calls[1]?.[1].keepalive).toBeUndefined();
+  });
+
+  it("⑤ 保存失败后把内容改回原样，离开页面不会补发改之前的内容", async () => {
+    patch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const { result, unmount } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "改过的", content: "改过的正文" }));
+    await waitFor(() => expect(result.current.status).toBe("error"));
+
+    act(() =>
+      result.current.scheduleSave({
+        title: initialDetail.title ?? "",
+        content: initialDetail.content ?? "",
+      }),
+    );
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+    unmount();
+    window.dispatchEvent(new Event("pagehide"));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+  });
+
+  it("⑥ flush() 等在飞请求结束后再把新改动存一次", async () => {
+    let release: (() => void) | null = null;
+    patch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(okEnvelope(saveResult()));
+        }),
+    );
+    patch.mockResolvedValue(okEnvelope(saveResult({ version: "3000" })));
+    const { result } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "第一次", content: "c1" }));
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+    act(() => result.current.scheduleSave({ title: "第二次", content: "c2" }));
+
+    let flushed = false;
+    const flushing = result.current.flush().then(() => {
+      flushed = true;
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(flushed).toBe(false);
+
+    act(() => release?.());
+    await act(async () => {
+      await flushing;
+    });
+    expect(patch).toHaveBeenCalledTimes(2);
+    expect(patch.mock.calls[1]?.[1].body).toMatchObject({ content: "c2", version: "2000" });
+  });
+
+  it("⑦ 冲突回读期间打的字，选「用我的改动覆盖」时一并保留", async () => {
+    patch.mockRejectedValueOnce(new ApiError(200, "A0409", "笔记已被其他会话更新"));
+    patch.mockResolvedValue(okEnvelope(saveResult({ version: "4000" })));
+    let releaseRead: (() => void) | null = null;
+    get.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseRead = () => resolve(serverNote());
+        }),
+    );
+    const rendered = renderSeeded();
+
+    act(() => rendered.result.current.scheduleSave({ title: "本地", content: "本地内容" }));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    act(() =>
+      rendered.result.current.scheduleSave({ title: "本地", content: "本地内容+回读期间" }),
+    );
+    act(() => releaseRead?.());
+    await reachConflict(rendered);
+
+    await act(async () => {
+      await rendered.result.current.resolveConflict("keepLocal");
+    });
+
+    expect(patch.mock.calls[1]?.[1].body).toMatchObject({ content: "本地内容+回读期间" });
+  });
+
+  it("⑧ 请求在飞时继续编辑，徽标保持「保存中」", async () => {
+    let release: (() => void) | null = null;
+    patch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(okEnvelope(saveResult()));
+        }),
+    );
+    patch.mockResolvedValue(okEnvelope(saveResult({ version: "3000" })));
+    const { result } = renderSeeded();
+
+    act(() => result.current.scheduleSave({ title: "t", content: "c1" }));
+    await waitFor(() => expect(result.current.status).toBe("saving"));
+    act(() => result.current.scheduleSave({ title: "t", content: "c2" }));
+    expect(result.current.status).toBe("saving");
+
+    act(() => release?.());
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+  });
+
+  it("持续输入不停顿时，最长等待到期也会保存一次", async () => {
+    patch.mockResolvedValue(okEnvelope(saveResult()));
+    const { result } = renderSeeded({ debounceMs: 80, maxWaitMs: 150 });
+
+    for (let index = 0; index < 8; index += 1) {
+      act(() => result.current.scheduleSave({ title: "t", content: `c${index}` }));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      });
+    }
+
+    expect(patch).toHaveBeenCalled();
+  });
+});
+
+describe("useSaveNote：离开拦截的判据", () => {
+  it("离线、可重试失败、不可重试失败与冲突时离开会丢改动；其余状态不会", () => {
+    const risky: NoteSaveStatus[] = ["offline", "error", "failed", "conflict"];
+    const safe: NoteSaveStatus[] = ["saved", "pending", "saving"];
+    for (const status of risky) expect(hasUnsavedRisk(status)).toBe(true);
+    for (const status of safe) expect(hasUnsavedRisk(status)).toBe(false);
+  });
+
+  it("getStatus 同步给出最新状态：flush 失败返回后立即可读到 error，不必等重新渲染", async () => {
+    patch.mockRejectedValue(new ApiError(502, "B0500", "网关错误"));
+    const { result } = renderHookWithProviders(() =>
+      useSaveNote({ noteId: NOTE_ID, initialVersion: "1000", debounceMs: 600_000 }),
+    );
+    act(() => result.current.scheduleSave({ title: "t", content: "c" }));
+
+    let afterFlush: NoteSaveStatus | undefined;
+    const { getStatus, flush } = result.current;
+    await act(async () => {
+      await flush();
+      afterFlush = getStatus();
+    });
+
+    expect(afterFlush).toBe("error");
+    expect(result.current.getStatus()).toBe(result.current.status);
   });
 });

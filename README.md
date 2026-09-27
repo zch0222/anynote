@@ -204,9 +204,19 @@ done
 curl --noproxy '*' -fsS -m 2 http://127.0.0.1:1234/healthz
 ```
 
-> `anynote-collab` 是 `apps/web` 的 `/docs` 协同编辑所依赖的 WebSocket 服务。它不连
-> Nacos / MySQL，文档状态落在自己的 `collab-data` 卷里。`COLLAB_TOKEN_SECRET` 必须与
-> 前端的同名环境变量一致，否则所有握手都会 401（错误只出现在 collab 容器日志里）。
+> `anynote-collab` 是笔记协同（`NEXT_PUBLIC_COLLAB_NOTES=1`）依赖的 WebSocket 服务，不连 Nacos。笔记默认是非协同模式（不设该变量即单人保存），此时协同服务空闲不影响使用。
+> `COLLAB_TOKEN_SECRET` 必须与前端的同名环境变量一致，否则所有握手都会 401（错误只出现在 collab 容器日志里）。
+>
+> **服务端落库**（`COLLAB_SERVER_PERSIST=true`，方案 [`docs/collab-persistence/`](docs/collab-persistence/COLLAB_PERSISTENCE_PLAN.md)）
+> 打开后，协同服务经容器网络直连 `anynote-modules-note:18091` 的内部端点加载与写回笔记，
+> 浏览器不再发保存请求。需要：
+> - 先执行 `infra/sql/migrations/2026-09-25-note-collab-state.sql` 建表；
+> - `ANYNOTE_INTERNAL_SECRET` 与 Java 服务一致（compose 已同时注入两边，默认值仅供开发）；
+> - 上线顺序：先发新前端，旧页面基本退场后再打开开关；回滚只需关掉开关并重启 `anynote-collab`。
+>
+> `/healthz` 在落库模式下额外返回 `pendingStores`、`failingRooms`、`lastStoreError`；
+> note 服务不可用时房间退避重试，容器退出时仍未写成的房间落到 `collab-data` 卷的 `spool/` 目录，
+> 下次开房自动补写。停容器请给足 30 秒（compose 已设 `stop_grace_period: 30s`）。
 
 #### A.4 验证 OpenAPI 聚合
 
@@ -391,9 +401,9 @@ anynote doctor                                     # gateway 应为 "UP"
 
 #### C.5 验证与持久化
 
-访问 `https://你的域名/login`，确认所有 JS/CSS 返回 200；验证登录失败提示、成功后 Cookie/用户资料、`/docs` 协同连接和 SSE。自动检查命令见「测试」节。没有真实域名、证书和生产 Nacos 配置前，只能完成本地容器验证，不能把它记作生产发版验收。
+访问 `https://你的域名/login`，确认所有 JS/CSS 返回 200；验证登录失败提示、成功后 Cookie/用户资料、笔记协同连接和 SSE。自动检查命令见「测试」节。没有真实域名、证书和生产 Nacos 配置前，只能完成本地容器验证，不能把它记作生产发版验收。
 
-MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同文档均保留命名卷。尤其 `collab-data` 存储协同文档，备份时停写或使用一致性快照；前端产物无数据卷，每次发布来自新镜像。MySQL 用 `mysqldump`、MinIO 用 `mc mirror` 做异地备份，保留 Nacos 配置备份。生产不要执行 `down -v`。
+MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同服务均保留命名卷。`collab-data` 只存服务端落库模式的应急落盘（`spool/`），笔记正文与协同状态都在 MySQL；前端产物无数据卷，每次发布来自新镜像。MySQL 用 `mysqldump`、MinIO 用 `mc mirror` 做异地备份，保留 Nacos 配置备份。生产不要执行 `down -v`。
 
 ---
 ## 环境变量参考
@@ -423,6 +433,7 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同文档均保留命名�
 | `NEXT_PUBLIC_COLLAB_WS_URL` | `wss://192.168.3.90:3000/collab` | 生产为同源 `wss://域名/collab` |
 | `COLLAB_ALLOWED_ORIGINS` | `https://192.168.3.90:3000` | 协同服务允许的握手来源，必须与 `NEXT_PUBLIC_APP_URL` 同源（精确匹配，写错一位即 403） |
 | `COLLAB_TOKEN_SECRET` | 开发密钥 | 生产必须独立生成至少 32 字符，web/collab 共用 |
+| `ANYNOTE_INTERNAL_SECRET` | 开发密钥（随仓库公开） | 服务间内部调用签名密钥，生产必须独立生成至少 32 字符，Java 服务与 collab 共用 |
 | `WEB_BIND_IP` / `COLLAB_BIND_IP` / `GATEWAY_BIND_IP` | `127.0.0.1` | 只发布外部 Nginx 所需入口 |
 | `WEB_PORT` / `COLLAB_PORT` / `GATEWAY_PORT` | `3000` / `1234` / `8080` | 改动后同步 Nginx upstream |
 | `APP_DOCKERFILE` | `infra/Dockerfile.local` | 构建用 Dockerfile 路径 |
@@ -691,6 +702,8 @@ node apps/web/scripts/ui-capture.mjs                 # 真实构建上截图 + �
 
   浏览器侧不需要额外配置——CA 已导入 Windows「受信任的根证书颁发机构」，Chromium 直接信任。`playwright.config.ts` 只在 `E2E_BASE_URL` 显式为 `https:` 时才设 `ignoreHTTPSErrors`；显式给了该变量时也不再尝试拉起本地 `next start`（自签地址上的健康检查必然超时）。
 - **图片上传用例需要 MinIO 桶已建好**：先 `minio-init` 跑到 `minio-init done`，并确认 Redis 里的 `MIN_IO_CONFIG` 带真实凭据（改完 `sys_config` 要 `restart anynote-modules-system`，见 [`docs/minio/MINIO_PLAN.md`](docs/minio/MINIO_PLAN.md) §2.8 / §6.4）。**`MIN_IO_CONFIG.publicEndPoint` 必须是 `https://192.168.3.90:9000`**：预签名 URL 的 Host 计入 SigV4 签名，且页面在 https 下时浏览器会拦掉指向 `http://` 的混合内容，分片 PUT 会被直接 block。
+- **默认构建不开笔记协同**（`NEXT_PUBLIC_COLLAB_NOTES` 不设即单人保存）：`collab.spec.ts` 里依赖协同的两组会探测当前构建（打开一篇笔记，看有没有去换协同令牌），没开就自动跳过。要跑协同用例，先以 `NEXT_PUBLIC_COLLAB_NOTES=1` 重建 `anynote-web`。
+- **协同服务落库的联调与故障演练**（`collab-persist.spec.ts`、`mobile-collab-persist.spec.ts`）要求协同容器以 `COLLAB_SERVER_PERSIST=true` 运行、web 镜像以 `NEXT_PUBLIC_COLLAB_NOTES=1` 构建；开关没开时整组自动跳过。演练会直接操作**本机 Docker**（`kill -9` / `stop` / `pause` 协同与 note 容器、在 MySQL 容器里执行 SQL），容器名可用 `E2E_COLLAB_CONTAINER` / `E2E_NOTE_CONTAINER` / `E2E_MYSQL_CONTAINER` 覆盖，只能对开发栈跑。
 - **Lighthouse 必须用官方 desktop 预设**（脚本里已固定）。只设 `formFactor: "desktop"` 而不换节流参数，量到的是「桌面页面跑在移动 4G + 4 倍 CPU 降速下」的分数，与桌面门槛对不上。
 - 需要登录的路由靠 E2E 攒下的 `state.json` 提供 Cookie，所以 **Lighthouse 要在 E2E 之后跑**。
 - 跑之前确认没有旧的 `next start` 占着 3000 端口：同一 `.next` 上并行两个实例会产出引用不存在 chunk 的 HTML。

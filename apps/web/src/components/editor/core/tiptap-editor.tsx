@@ -9,7 +9,7 @@ import {
   type PresetName,
   presets,
 } from "@/components/editor/presets";
-import { getMarkdown } from "@/lib/editor/markdown";
+import { getMarkdown } from "@anynote/editor-core";
 // KaTeX 布局样式 + 自托管字体（public/fonts/katex）；编辑器样式表
 import "@/styles/katex.css";
 import "@/styles/tiptap.css";
@@ -144,9 +144,10 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
     [preset, placeholder, uploadFn, aiContinue, collaboration],
   );
 
-  // 外部 value 变化（如切换示例内容）时同步进编辑器，避免覆盖用户正在输入的内容
+  // 外部 value 变化（如切换示例内容）时同步进编辑器，避免覆盖用户正在输入的内容。
+  // 切换协同绑定时旧实例会先被销毁，这一拍拿到的可能是已销毁的实例，跳过即可。
   useEffect(() => {
-    if (!editor || isCollaborative) {
+    if (!editor || editor.isDestroyed || isCollaborative) {
       return;
     }
     if (value === lastEmitted.current) {
@@ -161,7 +162,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
   }, [editor, value, isCollaborative]);
 
   useEffect(() => {
-    editor?.setEditable(effectiveEditable);
+    if (editor && !editor.isDestroyed) editor.setEditable(effectiveEditable);
   }, [editor, effectiveEditable]);
 
   useEffect(() => {

@@ -1,12 +1,16 @@
 import { type CollabIdentity, isOriginAllowed, verifyCollabToken } from "./auth.ts";
 import type { CollabConfig } from "./config.ts";
-import { parseHandshake, roomName } from "./rooms.ts";
+import { type Lineage, parseHandshake, roomName } from "./rooms.ts";
 
 /** 握手的只读标志由令牌决定，握手阶段不重算。 */
 export type CollabSession = {
   identity: CollabIdentity;
   /** 只读连接：服务端丢弃其写方向消息（D2）。 */
   ro: boolean;
+  /** 客户端声明的编辑器版本，缺失时为 null。 */
+  editorVersion: number | null;
+  /** 客户端声明的本地 Y 状态谱系。 */
+  lineage: Lineage;
 };
 
 export type UpgradeDecision =
@@ -53,5 +57,14 @@ export async function authorizeUpgrade(
     return { ok: false, status: 403, message: "协同令牌与房间不匹配" };
   }
 
-  return { ok: true, room: canonicalRoom, session: { identity: claims.identity, ro: claims.ro } };
+  return {
+    ok: true,
+    room: canonicalRoom,
+    session: {
+      identity: claims.identity,
+      ro: claims.ro,
+      editorVersion: handshake.editorVersion,
+      lineage: handshake.lineage,
+    },
+  };
 }

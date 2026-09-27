@@ -1,5 +1,5 @@
 import { TiptapEditorImpl } from "@/components/editor/core/tiptap-editor";
-import { getMarkdown } from "@/lib/editor/markdown";
+import { getMarkdown } from "@anynote/editor-core";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import type { Editor } from "@tiptap/react";
 import { describe, expect, it, vi } from "vitest";
@@ -123,5 +123,46 @@ describe("TiptapEditor", () => {
     expect(root?.getAttribute("data-fill")).toBe("true");
     // 外层类名要原样落到根节点上，否则 flex-1 撑不满父容器
     expect(root?.className).toContain("flex-1");
+  });
+});
+
+describe("TiptapEditor 协同绑定切换", () => {
+  /**
+   * 回归：协同会话重建（谱系不符 4409）时绑定先撤掉、再换新的 Y.Doc。
+   * 撤掉绑定的那一拍 `useEditor` 会销毁旧实例，同步 `value` 的副作用不能再对它调用命令，
+   * 否则整页抛出「Cannot read properties of null (reading 'commands')」。
+   */
+  it("从协同绑定切回普通模式、同时 value 变化时不抛错并显示新正文", async () => {
+    const Y = await import("yjs");
+    const { Awareness } = await import("y-protocols/awareness");
+    const doc = new Y.Doc();
+    const binding = {
+      doc,
+      provider: { awareness: new Awareness(doc) },
+      user: { name: "小明", color: "#2563eb" },
+    };
+    const onReady = vi.fn();
+    const { rerender, container } = render(
+      <TiptapEditorImpl
+        preset="collaborative"
+        value="# 旧正文"
+        collaboration={binding}
+        onReady={onReady}
+      />,
+    );
+    await waitFor(() => expect(onReady).toHaveBeenCalled());
+
+    const errors: unknown[] = [];
+    const onError = (event: ErrorEvent) => errors.push(event.error);
+    window.addEventListener("error", onError);
+    try {
+      rerender(<TiptapEditorImpl preset="full" value="# 新正文" onReady={onReady} />);
+      await waitFor(() =>
+        expect(container.querySelector(".ProseMirror h1")?.textContent).toBe("新正文"),
+      );
+    } finally {
+      window.removeEventListener("error", onError);
+    }
+    expect(errors).toEqual([]);
   });
 });

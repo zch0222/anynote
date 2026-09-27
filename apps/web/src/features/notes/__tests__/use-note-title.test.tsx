@@ -29,6 +29,30 @@ function heading(text: string, level = 1) {
 }
 
 describe("useNoteTitle", () => {
+  it("② 顶部 H1 超过 80 字时标题截断到 80 字（n_note.title 为 varchar(80)）", () => {
+    const { result } = renderHook(() => useNoteTitle());
+    const long = "长".repeat(120);
+    act(() => {
+      result.current.setTitle("原标题");
+      result.current.onEditorReady(editorWith([heading("原标题")]));
+    });
+    act(() => {
+      expect(result.current.getTitleForContent(editorWith([heading(long)]))).toBe("长".repeat(80));
+    });
+    expect(result.current.title).toHaveLength(80);
+  });
+
+  it("② 截断不会把代理对（emoji）切成半个，长度与后端 @Size(max = 80) 同口径", () => {
+    const { result } = renderHook(() => useNoteTitle());
+    const long = `${"字".repeat(79)}😀😀`;
+    act(() => {
+      result.current.onEditorReady(editorWith([heading("原标题")]));
+    });
+    act(() => {
+      expect(result.current.getTitleForContent(editorWith([heading(long)]))).toBe("字".repeat(79));
+    });
+  });
+
   it("修改顶部 H1 时立即更新标题，并返回同一标题供正文一起保存", () => {
     const { result } = renderHook(() => useNoteTitle());
     act(() => {

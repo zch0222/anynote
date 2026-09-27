@@ -1,6 +1,7 @@
 package com.anynote.note.model.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,7 +19,8 @@ public class NoteEditDTO {
     @Schema(description = "笔记id，由路径参数覆盖，请求体无需携带")
     private Long noteId;
 
-    @Schema(description = "笔记标题，为空表示不修改标题")
+    @Schema(description = "笔记标题，为空表示不修改标题；最长 80 字（与 n_note.title 一致）", maxLength = 80)
+    @Size(max = 80, message = "标题不能超过 80 字")
     private String title;
 
     @Schema(description = "笔记正文，为空表示不修改正文")

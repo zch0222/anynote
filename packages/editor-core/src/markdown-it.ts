@@ -1,4 +1,4 @@
-import { escapeHtmlAttribute } from "@/lib/editor/markdown";
+import { escapeHtmlAttribute } from "./markdown";
 
 /**
  * tiptap-markdown 通过 markdown-it 把 Markdown 解析成 HTML，再交给 ProseMirror 的 parseHTML。

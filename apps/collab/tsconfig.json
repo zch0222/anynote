@@ -1,19 +1,15 @@
 {
   "extends": "@anynote/tsconfig/base.json",
   "compilerOptions": {
-    "lib": ["ES2022"],
-    "module": "NodeNext",
-    "moduleResolution": "nodenext",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    // 产物由 tsup 打包（含 TS 源码形式的 @anynote/editor-core），tsc 只做类型检查
+    "moduleResolution": "bundler",
     "types": ["node"],
-    "outDir": "dist",
-    "rootDir": "src",
-    "noEmit": false,
-    "declaration": false,
-    "sourceMap": true,
-    // 源码里写 `./x.ts`：Node 的类型擦除（pnpm dev）能直接跑，tsc 产物里再改写成 `./x.js`。
-    "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true
+    "noEmit": true,
+    // 源码里写 `./x.ts`，打包器与 vitest 都能直接解析
+    "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tsup.config.ts"],
   "exclude": ["dist", "node_modules", "src/__tests__/**"]
 }
