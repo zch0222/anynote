@@ -285,6 +285,9 @@ API 客户端由 `pnpm openapi:generate` 从后端 Swagger 自动生成，**不�
   在保存状态为离线 / 失败 / 冲突时拦截（`hasUnsavedRisk`）。站内链接与关页由 `useLeaveGuard` 统一处理；
   按钮触发的跳转（移动端返回键、历史版本、移动笔记）调用会话的 `confirmLeave()`。用户在站内确认离开后，
   紧随其后的整页卸载不再弹浏览器自带的二次确认（`features/notes/leave-confirmation.ts`）。
+- **Cmd / Ctrl + S**（`features/notes/use-save-shortcut.ts`，接线在 `use-note-editor-session.ts`）：编辑页挂载期间
+  在 window **捕获阶段**拦下浏览器的「网页另存为」（长按连发也拦，只存一次）。单人 / 客户端保存 / 协同降级时跳过防抖
+  立即 `flush()`，不可重试的失败时等同「重试」；服务端落库时只拦截不发请求。
 - **冷启动注入**（D4，2026-09-21 修订）：房间空时由客户端把 REST 拿到的 Markdown 灌进 Y.Doc，条件是
   「已 synced + 文档为空 + `meta.seeded` 未置位 + **我是在场 clientID 最小的那个**」且持续 600ms；
   无服务端选举。选举是**确定性**的：各端看到同一组 awareness clientID，结论必然一致。
