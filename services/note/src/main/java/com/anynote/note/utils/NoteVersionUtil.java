@@ -26,6 +26,25 @@ public final class NoteVersionUtil {
     }
 
     /**
+     * 下一次写入的更新时间：当前时间截断到整秒，且至少比当前版本晚 1 秒。
+     *
+     * <p>{@code update_time} 只有秒级精度，所有写入方都按这条规则取新时间，
+     * 才能保证每次写入都得到一个新的版本号；否则同一秒内的两次写入版本号相同，
+     * 持有旧版本号的一方会把另一方的写入当成自己写的。</p>
+     *
+     * @param currentUpdateTime 写入前的更新时间，为空表示没有可比较的版本
+     * @param nowMillis         当前时间（毫秒）
+     * @return 新的更新时间（毫秒，整秒）
+     */
+    public static long nextUpdateTime(Date currentUpdateTime, long nowMillis) {
+        long now = nowMillis / 1000L * 1000L;
+        if (StringUtils.isNull(currentUpdateTime)) {
+            return now;
+        }
+        return Math.max(now, currentUpdateTime.getTime() / 1000L * 1000L + 1000L);
+    }
+
+    /**
      * 判断客户端提交的版本是否已过期
      *
      * @param clientVersion  客户端携带的版本，空白表示放弃冲突检测

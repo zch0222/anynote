@@ -33,6 +33,11 @@ public class NoteUpdateParam extends NoteQueryParam{
      */
     private String version;
 
+    /**
+     * 写入时的比较条件：只有 {@code update_time} 仍等于它时才更新，为空表示不比较
+     */
+    private java.util.Date baseUpdateTime;
+
     public NoteUpdateParam(NoteEditDTO noteEditDTO) {
         this.setId(noteEditDTO.getNoteId());
         this.setTitle(noteEditDTO.getTitle());

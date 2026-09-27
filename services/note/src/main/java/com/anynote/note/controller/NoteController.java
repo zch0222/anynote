@@ -160,7 +160,7 @@ public class NoteController {
                     + "成功时返回服务端权威的标题 / 正文 / 更新时间与新版本号")
     @PatchMapping("{noteId}")
     public ResData<NoteSaveResultVO> editNote(@NotNull(message = "笔记id不能为空") @PathVariable Long noteId,
-                                              @RequestBody NoteEditDTO noteEditDTO) {
+                                              @Validated @RequestBody NoteEditDTO noteEditDTO) {
         noteEditDTO.setNoteId(noteId);
         return ResUtil.success(noteService.editNote(new NoteUpdateParam(noteEditDTO)));
     }

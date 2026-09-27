@@ -204,6 +204,29 @@
             n_note.status = 0
           AND
             n_note.id = #{id}
+        <if test="baseUpdateTime != null">
+          AND
+            n_note.update_time = #{baseUpdateTime}
+        </if>
+    </update>
+
+    <!-- 协同服务写回：比较与写入在同一条语句里完成，不存在先查后写的竞态窗口 -->
+    <update id="updateNoteIfVersion">
+        UPDATE
+            n_note
+        SET
+            update_time = #{updateTime}, update_by = #{updateBy}
+        <if test="title != null and title != ''">
+            , title = #{title}
+        </if>
+        WHERE
+            id = #{id}
+          AND
+            update_time = #{baseUpdateTime}
+          AND
+            is_delete = 0
+          AND
+            status = 0
     </update>
 
     <update id="updateContent">

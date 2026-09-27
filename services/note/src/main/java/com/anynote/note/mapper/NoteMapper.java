@@ -9,7 +9,9 @@ import com.anynote.note.model.vo.NoteListVO;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -37,4 +39,20 @@ public interface NoteMapper extends BaseMapper<Note> {
     public Integer updateNote(NoteUpdateParam updateParam);
 
     public Integer updateContent(NoteUpdateParam updateParam);
+
+    /**
+     * 带版本条件的原子更新：只有 {@code update_time} 仍等于 {@code baseUpdateTime} 时才写入。
+     *
+     * @param id             笔记id
+     * @param title          新标题，为空表示不修改
+     * @param updateTime     新的更新时间（即新版本号）
+     * @param updateBy       更新者
+     * @param baseUpdateTime 写入所基于的更新时间（即基准版本号）
+     * @return 影响行数，0 表示版本已过期或笔记不存在
+     */
+    public Integer updateNoteIfVersion(@Param("id") Long id,
+                                       @Param("title") String title,
+                                       @Param("updateTime") Date updateTime,
+                                       @Param("updateBy") Long updateBy,
+                                       @Param("baseUpdateTime") Date baseUpdateTime);
 }

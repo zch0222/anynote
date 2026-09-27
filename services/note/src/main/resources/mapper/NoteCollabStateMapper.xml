@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.anynote.note.mapper.NoteCollabStateMapper">
+
+    <resultMap id="NoteCollabStateResult" type="com.anynote.note.model.po.NoteCollabState">
+        <id property="noteId" column="note_id"/>
+        <result property="state" column="state" jdbcType="LONGVARBINARY"/>
+        <result property="mdVersion" column="md_version"/>
+        <result property="epoch" column="epoch"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <select id="selectByNoteId" resultMap="NoteCollabStateResult">
+        SELECT note_id, state, md_version, epoch, update_time
+        FROM n_note_collab_state
+        WHERE note_id = #{noteId}
+    </select>
+
+    <insert id="upsert">
+        INSERT INTO n_note_collab_state (note_id, state, md_version, epoch)
+        VALUES (#{noteId}, #{state, jdbcType=LONGVARBINARY}, #{mdVersion}, #{epoch})
+        ON DUPLICATE KEY UPDATE
+            state = VALUES(state),
+            md_version = VALUES(md_version),
+            epoch = VALUES(epoch)
+    </insert>
+
+    <delete id="deleteByNoteId">
+        DELETE FROM n_note_collab_state WHERE note_id = #{noteId}
+    </delete>
+</mapper>
