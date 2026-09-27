@@ -1,13 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useSidebar } from "@/components/ui/sidebar";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { useUIStore } from "@/stores/ui-store";
-import { ChevronDown, PanelLeft, Search } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getWorkspaceRoute } from "./navigation";
+import { SidebarExpandButton } from "./sidebar-toggle";
 import { ThemeSwitcher } from "./theme-switcher";
 
 /** 从 `/notes/12/tasks` 这样的路径里取出知识库 id；不在知识库下则为 null。 */
@@ -29,11 +29,12 @@ export function parseBaseIdFromPath(pathname: string): number | null {
  * 知识库内的顶栏**刻意很空**：设计稿里这一条属于编辑器，写的是"我在看哪篇笔记"。
  * 曾经把六个二级 Tab 摆在这里，结果顶栏成了全站最挤的一行，而侧栏同一批入口
  * 又空着——两处都放等于两处都不像主导航。
+ *
+ * 最左侧的「展开侧边栏」只在侧栏收起时（以及窄屏的抽屉形态）出现。
  */
 export function AppHeader() {
   const pathname = usePathname();
   const baseId = parseBaseIdFromPath(pathname);
-  const { toggleSidebar } = useSidebar();
   const route = getWorkspaceRoute(pathname);
 
   return (
@@ -41,15 +42,7 @@ export function AppHeader() {
       data-testid="app-header"
       className="sticky top-0 z-20 flex min-h-14 shrink-0 flex-wrap items-center gap-3 bg-grouped px-4 py-2 sm:px-6"
     >
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="切换侧边栏"
-        onClick={toggleSidebar}
-        className="md:hidden"
-      >
-        <PanelLeft aria-hidden="true" />
-      </Button>
+      <SidebarExpandButton />
 
       {baseId ? <KnowledgeBaseSwitcher baseId={baseId} /> : <Breadcrumb title={route?.title} />}
 

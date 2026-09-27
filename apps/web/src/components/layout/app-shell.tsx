@@ -2,6 +2,7 @@
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
@@ -10,6 +11,7 @@ import { AppSidebar } from "./app-sidebar";
 import { CommandPalette } from "./command-palette";
 import { isFullBleedRoute, isKnowledgeBaseTabRoute } from "./navigation";
 import { RouteProgressBar } from "./route-progress-bar";
+import { SidebarExpandButton } from "./sidebar-toggle";
 import { WorkspaceSession } from "./workspace-session";
 
 /**
@@ -73,6 +75,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           无顶栏的页面没有要对齐的东西，进度条也就一并省略。
         */}
         {hideHeader ? null : <RouteProgressBar />}
+        {/*
+          没有顶栏的库内 Tab 页，「展开侧边栏」补在内容区左上角，与页头标题顶端对齐。
+          横向与顶栏里的同一个按钮对齐（左 24px）。它出现时（侧栏收起，或窄屏）
+          内容区左侧让出 72px，按钮不会盖住标题；
+          展开态的桌面端它隐藏，左侧留白回到画板的 32px。
+        */}
+        {hideHeader ? <SidebarExpandButton className="absolute top-7 left-6 z-10" /> : null}
         <div
           id="workspace-content"
           tabIndex={-1}
@@ -85,7 +94,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                    * 从 y=27 起，而常规页面那 56 高的顶栏本身就相当于留白。少了这一段，
                    * 页头会贴着窗口上沿，整页比画板高 27px。
                    */
-                  "flex-1 px-5 pt-7 pb-5 outline-none sm:px-8"
+                  cn("flex-1 pt-7 pr-5 pb-5 pl-18 outline-none sm:pr-8", sidebarOpen && "md:pl-8")
                 : "flex-1 px-5 pb-5 outline-none sm:px-8"
           }
         >

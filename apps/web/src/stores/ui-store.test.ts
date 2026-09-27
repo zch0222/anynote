@@ -12,7 +12,7 @@ describe("工作区 UI 状态", () => {
     useUIStore.getState().setCommandPaletteOpen(true);
     expect(useUIStore.getState().commandPaletteOpen).toBe(true);
     expect(JSON.parse(localStorage.getItem("anynote-ui") || "{}")).toEqual({
-      version: 0,
+      version: 1,
       state: { sidebarOpen: false },
     });
   });
@@ -21,7 +21,7 @@ describe("工作区 UI 状态", () => {
     localStorage.setItem(
       "anynote-ui",
       JSON.stringify({
-        version: 0,
+        version: 1,
         state: { sidebarOpen: false, commandPaletteOpen: true, accessToken: "invalid" },
       }),
     );
@@ -32,7 +32,20 @@ describe("工作区 UI 状态", () => {
   });
 
   it.each([null, {}, { sidebarOpen: "false" }])("忽略不合法的偏好 %s", async (state) => {
-    localStorage.setItem("anynote-ui", JSON.stringify({ version: 0, state }));
+    localStorage.setItem("anynote-ui", JSON.stringify({ version: 1, state }));
+    await useUIStore.persist.rehydrate();
+    expect(useUIStore.getState().sidebarOpen).toBe(true);
+  });
+
+  /*
+   * v0 的偏好不可信：桌面侧栏那时不响应它，而编辑器里每次 Cmd / Ctrl + B 加粗
+   * 都会把它翻转一次。侧栏能收起之后照单全收，一部分用户打开页面就是收起的。
+   */
+  it("v0 的偏好一律作废，回到展开", async () => {
+    localStorage.setItem(
+      "anynote-ui",
+      JSON.stringify({ version: 0, state: { sidebarOpen: false } }),
+    );
     await useUIStore.persist.rehydrate();
     expect(useUIStore.getState().sidebarOpen).toBe(true);
   });

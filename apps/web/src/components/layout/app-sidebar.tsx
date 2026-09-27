@@ -1,6 +1,12 @@
 "use client";
 
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/components/ui/sidebar";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { useMoocsQuery } from "@/features/mooc/use-moocs";
 import { DEFAULT_PAGE_SIZE } from "@/features/notes/schemas";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
@@ -20,6 +26,7 @@ import {
 } from "./knowledge-base-sidebar";
 import { parseKnowledgeBaseSection } from "./navigation";
 import { SidebarKnowledgeBases, SidebarToolGroups, SidebarUserCard } from "./sidebar-nav";
+import { SidebarCollapseButton } from "./sidebar-toggle";
 
 /**
  * 产品标记。
@@ -52,15 +59,22 @@ function Brand() {
  * 两个都挂就会把同一份导航渲染两遍（读屏会念两遍、`data-testid` 也会撞），
  * 所以这里用 `useIsMobile` 二选一。断点与 `ui/sidebar` 内部的判定同源（同为
  * `hooks/use-mobile` 的 768px），不会出现"两边都以为对方在渲染"的空档。
+ *
+ * 桌面侧栏可以**整个收起**（头部右端的按钮或 ⌘B），收起后内容区占满整宽，
+ * 展开入口在顶栏最左侧（没有顶栏的库内 Tab 页由 AppShell 补在内容区左上）。
+ * 收起用 `hidden` 属性而不是只靠样式：读屏与 Tab 键都不再进入收起的侧栏；
+ * 节点保留不卸载，展开时目录的滚动位置与查询都还在。
  */
 export function AppSidebar() {
   const isMobile = useIsMobile();
   const pathname = usePathname();
+  const { state } = useSidebar();
 
   const content = (
     <>
-      <SidebarHeader className="px-4 py-3">
+      <SidebarHeader className="flex-row items-center justify-between gap-2 px-4 py-3">
         <Brand />
+        <SidebarCollapseButton />
       </SidebarHeader>
       <SidebarContent className="gap-0 px-2.5 pb-2">
         <SidebarBody />
@@ -91,6 +105,8 @@ export function AppSidebar() {
     <aside
       data-testid="app-sidebar"
       data-width={insideBase ? "wide" : "default"}
+      data-state={state}
+      hidden={state === "collapsed"}
       className={cn(
         "hidden shrink-0 flex-col bg-sidebar md:flex",
         insideBase ? "w-[296px]" : "w-[272px]",

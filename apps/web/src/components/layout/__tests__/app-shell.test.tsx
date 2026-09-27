@@ -402,7 +402,7 @@ describe("AppShell 交互", () => {
   it("挂载时恢复侧栏，卸载时清空命令面板", async () => {
     localStorage.setItem(
       "anynote-ui",
-      JSON.stringify({ state: { sidebarOpen: false }, version: 0 }),
+      JSON.stringify({ state: { sidebarOpen: false }, version: 1 }),
     );
     const { unmount } = render(<AppShell>内容</AppShell>);
     expect(useUIStore.getState().sidebarOpen).toBe(false);
@@ -432,5 +432,138 @@ describe("AppShell 交互", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     expect(bases.refetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AppShell 侧栏收起", () => {
+  /** 在 `target` 上按下 Cmd / Ctrl + B，返回事件。 */
+  function pressToggle(target: EventTarget = document.body, init: KeyboardEventInit = {}) {
+    const event = new KeyboardEvent("keydown", {
+      key: "b",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    });
+    act(() => {
+      target.dispatchEvent(event);
+    });
+    return event;
+  }
+
+  it("侧栏头部的「收起侧边栏」把桌面侧栏整个收起，并记住偏好", () => {
+    pathname.current = "/ai/chat";
+    render(<AppShell>内容</AppShell>);
+    const sidebar = screen.getByTestId("app-sidebar");
+    expect(sidebar).toHaveAttribute("data-state", "expanded");
+    expect(sidebar).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "收起侧边栏" }));
+
+    expect(sidebar).toHaveAttribute("data-state", "collapsed");
+    // 用 hidden 属性而不是只靠样式：读屏与 Tab 键都不再进入收起的侧栏
+    expect(sidebar).not.toBeVisible();
+    expect(useUIStore.getState().sidebarOpen).toBe(false);
+  });
+
+  it("收起后顶栏最左侧出现「展开侧边栏」，点它恢复", () => {
+    pathname.current = "/ai/chat";
+    render(<AppShell>内容</AppShell>);
+    const header = screen.getByTestId("app-header");
+    // 展开态下它只给窄屏（抽屉形态）用，桌面端隐藏
+    expect(within(header).getByRole("button", { name: "展开侧边栏" }).className).toContain(
+      "md:hidden",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "收起侧边栏" }));
+    const expand = within(header).getByRole("button", { name: "展开侧边栏" });
+    expect(expand.className).not.toContain("md:hidden");
+    expect(header.firstElementChild).toBe(expand);
+
+    fireEvent.click(expand);
+    expect(screen.getByTestId("app-sidebar")).toHaveAttribute("data-state", "expanded");
+    expect(useUIStore.getState().sidebarOpen).toBe(true);
+  });
+
+  /*
+   * 知识库内的 Tab 页没有顶栏（见 isKnowledgeBaseTabRoute）。不在内容区补一个入口的话，
+   * 在这些页收起侧栏之后就只剩快捷键能展开——用户根本找不回来。
+   */
+  it("没有顶栏的知识库 Tab 页收起后在内容区左上给出展开入口，并让出位置", () => {
+    pathname.current = "/notes/7/overview";
+    render(<AppShell>内容</AppShell>);
+    const content = document.getElementById("workspace-content");
+    expect(screen.queryByTestId("app-header")).toBeNull();
+    expect(content?.className).toContain("md:pl-8");
+
+    fireEvent.click(screen.getByRole("button", { name: "收起侧边栏" }));
+
+    const expand = screen.getByRole("button", { name: "展开侧边栏" });
+    expect(expand.className).not.toContain("md:hidden");
+    // 页头标题从左上角起，按钮叠在上面会盖住标题；收起时内容区左侧让出按钮的位置
+    expect(content?.className).not.toContain("md:pl-8");
+    expect(content?.className).toContain("pl-18");
+
+    fireEvent.click(expand);
+    expect(screen.getByTestId("app-sidebar")).toHaveAttribute("data-state", "expanded");
+  });
+
+  it("Cmd / Ctrl + B 在编辑区外切换侧栏", () => {
+    render(<AppShell>内容</AppShell>);
+
+    expect(pressToggle().defaultPrevented).toBe(true);
+    expect(screen.getByTestId("app-sidebar")).toHaveAttribute("data-state", "collapsed");
+
+    pressToggle(document.body, { metaKey: false, ctrlKey: true });
+    expect(screen.getByTestId("app-sidebar")).toHaveAttribute("data-state", "expanded");
+  });
+
+  /*
+   * 回归：Cmd / Ctrl + B 在编辑器里是加粗。侧栏的快捷键监听不看事件是否已被处理，
+   * 于是每加粗一次就把侧栏偏好翻转一次——侧栏不响应偏好时看不出来，能收起之后
+   * 就变成「一加粗侧栏就收起」。
+   */
+  it("编辑器已处理的 Cmd / Ctrl + B（加粗）不切换侧栏", () => {
+    render(<AppShell>内容</AppShell>);
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    document.body.append(editor);
+    editor.addEventListener("keydown", (event) => event.preventDefault());
+
+    pressToggle(editor);
+
+    expect(screen.getByTestId("app-sidebar")).toHaveAttribute("data-state", "expanded");
+    expect(useUIStore.getState().sidebarOpen).toBe(true);
+    editor.remove();
+  });
+
+  it.each(["contenteditable", "input", "textarea"])(
+    "焦点在可编辑区域（%s）里时不切换侧栏",
+    (kind) => {
+      render(<AppShell>内容</AppShell>);
+      const field =
+        kind === "contenteditable" ? document.createElement("div") : document.createElement(kind);
+      if (kind === "contenteditable") field.setAttribute("contenteditable", "true");
+      document.body.append(field);
+
+      const event = pressToggle(field);
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(screen.getByTestId("app-sidebar")).toHaveAttribute("data-state", "expanded");
+      field.remove();
+    },
+  );
+
+  it("窄屏下顶栏按钮打开抽屉，抽屉里的「收起侧边栏」关上它，不改桌面偏好", async () => {
+    vi.stubGlobal("innerWidth", 500);
+    pathname.current = "/ai/chat";
+    render(<AppShell>内容</AppShell>);
+
+    fireEvent.click(screen.getByRole("button", { name: "展开侧边栏" }));
+    const drawer = await screen.findByRole("dialog");
+    fireEvent.click(within(drawer).getByRole("button", { name: "收起侧边栏" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(useUIStore.getState().sidebarOpen).toBe(true);
   });
 });
