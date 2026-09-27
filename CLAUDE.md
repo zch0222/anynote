@@ -96,7 +96,7 @@ pnpm format              # Biome format only
 ### 端到端与性能门禁（需生产构建 + 真实后端栈）
 
 ```bash
-pnpm --filter web test:e2e          # Playwright 164 条用例：桌面 117（chromium）+ 移动端 47（mobile）；默认构建不开协同，协同相关用例自动跳过（跑它们需以 NEXT_PUBLIC_COLLAB_NOTES=1 构建 web，落库联调另需协同服务开 COLLAB_SERVER_PERSIST）
+pnpm --filter web test:e2e          # Playwright 165 条用例：桌面 118（chromium）+ 移动端 47（mobile）；默认构建不开协同，协同相关用例自动跳过（跑它们需以 NEXT_PUBLIC_COLLAB_NOTES=1 构建 web，落库联调另需协同服务开 COLLAB_SERVER_PERSIST）
 pnpm --filter web bundle:budget     # 首屏 JS ≤ 310KB、/m/* ≤ 250KB、编辑器 ≤ 250KB（gzip）
 pnpm --filter web lighthouse:budget # 桌面 Performance ≥ 90、Accessibility ≥ 95
 pnpm --filter web lighthouse:budget:mobile  # 移动口径 Performance ≥ 85、Accessibility ≥ 95

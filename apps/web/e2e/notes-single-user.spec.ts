@@ -105,3 +105,36 @@ test("③ 离线时有未保存改动，点站内链接先确认；取消就留�
   await expectNoteSaved(page);
   await waitStored(page, noteId, ["联网时写的一段", "断网时写的一段"]);
 });
+
+test("④ Cmd / Ctrl + S 立即保存：不等防抖直接发出保存请求，并拦下浏览器的「网页另存为」", async ({
+  page,
+}) => {
+  await forceSingleUser(page);
+  const { noteId } = await createNote(
+    page,
+    "E2E 单人库",
+    `快捷键保存 ${Date.now().toString().slice(-6)}`,
+  );
+  await appendParagraph(page, "快捷键之前的一段");
+  await expectNoteSaved(page);
+
+  // 原生另存为对话框 Playwright 看不到，改在冒泡阶段记下默认动作是否已被拦下
+  await page.evaluate(() => {
+    window.addEventListener("keydown", (event) => {
+      if (event.key.toLowerCase() !== "s") return;
+      document.documentElement.dataset.e2eSavePrevented = String(event.defaultPrevented);
+    });
+  });
+  await page.keyboard.type("，紧接着按下快捷键");
+  // 防抖是 1.5 秒：1 秒内等到请求，说明是快捷键触发的而不是防抖到期
+  const patched = page.waitForRequest(
+    (request) => request.method() === "PATCH" && request.url().includes("/api/proxy/note/notes/"),
+    { timeout: 1_000 },
+  );
+  await page.keyboard.press("ControlOrMeta+s");
+  await patched;
+
+  await expect(page.locator("html")).toHaveAttribute("data-e2e-save-prevented", "true");
+  await expectNoteSaved(page);
+  await waitStored(page, noteId, ["快捷键之前的一段，紧接着按下快捷键"]);
+});
