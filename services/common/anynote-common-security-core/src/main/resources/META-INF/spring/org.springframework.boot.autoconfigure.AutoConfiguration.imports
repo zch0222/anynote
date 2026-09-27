@@ -1,2 +1,3 @@
 com.anynote.common.security.properties.JWTTokenProperties
+com.anynote.common.security.properties.InternalSecretProperties
 com.anynote.common.security.token.TokenUtil

@@ -24,6 +24,17 @@ class HmacUtilsTest {
         return String.valueOf(System.currentTimeMillis());
     }
 
+    /**
+     * 与协同服务（Node）共用的签名测试向量，两侧断言同一个结果：
+     * {@code apps/collab/src/__tests__/note-store.test.ts}。
+     */
+    @Test
+    @DisplayName("sign：与协同服务共用的测试向量得到同一个签名")
+    void signMatchesCrossLanguageVector() {
+        assertThat(HmacUtils.sign("anynote-shared-test-vector-secret", "1790265600000"))
+                .isEqualTo("XJ2VScsXMnbKvXkZmlWkkgIRHO6sxRvuh6WcNmwUpCM=");
+    }
+
     @Test
     @DisplayName("sign：同样的 secret + payload 结果稳定（否则验签必然失败）")
     void signIsDeterministic() {

@@ -34,7 +34,8 @@ public class SecurityConstants {
     public static final String INTERNAL_TIMESTAMP = "X-Internal-Timestamp";
 
     /**
-     * 内部调用共享密钥（生产环境应从 Nacos 配置中心注入覆盖）
+     * 内部调用的默认密钥，仅在未配置 {@code anynote.internal.secret} 时使用。
+     * 该值随仓库公开，生产环境必须配置自己的密钥。
      */
     public static final String INTERNAL_SECRET = "anynote-internal-secret-change-in-prod";
 

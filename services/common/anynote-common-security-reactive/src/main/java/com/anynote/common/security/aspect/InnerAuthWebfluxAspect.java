@@ -1,6 +1,7 @@
 package com.anynote.common.security.aspect;
 
 import com.anynote.common.security.annotation.InnerAuth;
+import com.anynote.common.security.properties.InternalSecretProperties;
 import com.anynote.core.condition.SpringWebfluxCondition;
 import com.anynote.core.constant.SecurityConstants;
 import com.anynote.core.exception.auth.InnerAuthException;
@@ -25,6 +26,12 @@ import reactor.core.publisher.Mono;
 @Order(0)
 public class InnerAuthWebfluxAspect {
 
+    private final InternalSecretProperties internalSecretProperties;
+
+    public InnerAuthWebfluxAspect(InternalSecretProperties internalSecretProperties) {
+        this.internalSecretProperties = internalSecretProperties;
+    }
+
     @Around("@annotation(innerAuth)")
     public Object doAround(ProceedingJoinPoint joinPoint, InnerAuth innerAuth) {
         return Mono.deferContextual(ctx -> {
@@ -35,7 +42,7 @@ public class InnerAuthWebfluxAspect {
 
             String timestamp = ctx.getOrDefault(SecurityConstants.INTERNAL_TIMESTAMP, "");
             String sign = ctx.getOrDefault(SecurityConstants.INTERNAL_SIGN, "");
-            if (!HmacUtils.verify(SecurityConstants.INTERNAL_SECRET, timestamp, sign)) {
+            if (!HmacUtils.verify(internalSecretProperties.resolveSecret(), timestamp, sign)) {
                 return Mono.error(new InnerAuthException("内部调用签名验证失败"));
             }
 

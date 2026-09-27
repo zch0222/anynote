@@ -2,6 +2,7 @@ package com.anynote.common.security.aspect;
 
 import com.anynote.common.security.annotation.InnerAuth;
 import com.anynote.common.security.condition.SpringMvcCondition;
+import com.anynote.common.security.properties.InternalSecretProperties;
 import com.anynote.core.constant.SecurityConstants;
 import com.anynote.core.exception.auth.InnerAuthException;
 import com.anynote.core.utils.HmacUtils;
@@ -17,6 +18,9 @@ import org.springframework.stereotype.Component;
 /**
  * 内部服务调用验证（Spring MVC）
  *
+ * <p>校验 {@code from-source: inner} 与 {@code X-Internal-Sign = HMAC-SHA256(secret, timestamp)}，
+ * 密钥来自 {@link InternalSecretProperties}。</p>
+ *
  * @author 称霸幼儿园
  */
 @Aspect
@@ -24,6 +28,12 @@ import org.springframework.stereotype.Component;
 @Conditional(SpringMvcCondition.class)
 @Order(0)
 public class InnerAuthAspect {
+
+    private final InternalSecretProperties internalSecretProperties;
+
+    public InnerAuthAspect(InternalSecretProperties internalSecretProperties) {
+        this.internalSecretProperties = internalSecretProperties;
+    }
 
     @Before("@annotation(innerAuth)")
     public void doBefore(JoinPoint joinPoint, InnerAuth innerAuth) {
@@ -34,7 +44,7 @@ public class InnerAuthAspect {
 
         String timestamp = ServletUtils.getRequest().getHeader(SecurityConstants.INTERNAL_TIMESTAMP);
         String sign = ServletUtils.getRequest().getHeader(SecurityConstants.INTERNAL_SIGN);
-        if (!HmacUtils.verify(SecurityConstants.INTERNAL_SECRET, timestamp, sign)) {
+        if (!HmacUtils.verify(internalSecretProperties.resolveSecret(), timestamp, sign)) {
             throw new InnerAuthException("内部调用签名验证失败");
         }
 

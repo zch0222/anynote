@@ -1,5 +1,6 @@
 package com.anynote.common.security.feign;
 
+import com.anynote.common.security.properties.InternalSecretProperties;
 import feign.RequestInterceptor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
 public class FeignAutoConfiguration {
 
     @Bean
-    public RequestInterceptor requestInterceptor() {
-        return new FeignRequestInterceptor();
+    public RequestInterceptor requestInterceptor(InternalSecretProperties internalSecretProperties) {
+        return new FeignRequestInterceptor(internalSecretProperties);
     }
 }
