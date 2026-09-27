@@ -1,7 +1,7 @@
 import { renderWithProviders } from "@/test/render";
 import { fireEvent, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import { SaveStatusBadge } from "../save-status";
+import { describe, expect, it, vi } from "vitest";
+import { CollabSyncBadge, SaveFailureNotice, SaveStatusBadge } from "../save-status";
 
 describe("SaveStatusBadge", () => {
   it.each([
@@ -44,5 +44,80 @@ describe("SaveStatusBadge", () => {
   ] as const)("协同模式下状态 %s 仍按本地状态显示（%s），不被连接状态盖掉", (status, label) => {
     renderWithProviders(<SaveStatusBadge status={status} lastSavedAt={null} collabConnected />);
     expect(screen.getByRole("status")).toHaveTextContent(label);
+  });
+});
+
+describe("SaveStatusBadge：不可重试的失败（M14.P ③）", () => {
+  it.each([
+    ["auth", "登录已过期，未保存"],
+    ["forbidden", "没有编辑权限，未保存"],
+    ["notFound", "笔记已不存在，未保存"],
+    ["invalid", "内容未被接受，未保存"],
+  ] as const)("失败类别 %s 展示「%s」，悬停可看后端原因", (kind, label) => {
+    renderWithProviders(
+      <SaveStatusBadge status="failed" failure={{ kind, message: "后端给出的原因" }} />,
+    );
+    const badge = screen.getByRole("status");
+    expect(badge).toHaveTextContent(label);
+    expect(badge).toHaveAttribute("title", "后端给出的原因");
+  });
+
+  it("没有失败详情时退回通用文案", () => {
+    renderWithProviders(<SaveStatusBadge status="failed" />);
+    expect(screen.getByRole("status")).toHaveTextContent("保存失败");
+  });
+});
+
+describe("SaveFailureNotice", () => {
+  it("展示原因并提供重试", () => {
+    const onRetry = vi.fn();
+    renderWithProviders(
+      <SaveFailureNotice failure={{ kind: "notFound", message: "笔记不存在" }} onRetry={onRetry} />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("笔记不存在。改动尚未保存。");
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("登录过期时提示重新登录后再重试", () => {
+    renderWithProviders(
+      <SaveFailureNotice
+        failure={{ kind: "auth", message: "登录已过期，请重新登录后重试" }}
+        onRetry={() => undefined}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("重新登录后点「重试」保存");
+  });
+});
+
+describe("CollabSyncBadge（服务端落库）", () => {
+  it.each([
+    ["connecting", "连接中"],
+    ["synced", "已同步"],
+    ["unsynced", "同步中"],
+    ["offline", "离线"],
+  ] as const)("状态 %s 展示「%s」", (status, label) => {
+    renderWithProviders(<CollabSyncBadge status={status} />);
+    const badge = screen.getByRole("status");
+    expect(badge).toHaveTextContent(label);
+    expect(badge).toHaveAttribute("data-status", status);
+  });
+
+  it("离线且有过编辑时按有无本地缓存说明改动去向", () => {
+    const { rerender } = renderWithProviders(
+      <CollabSyncBadge status="offline" editedWhileOffline hasLocalPersistence />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("离线，改动已保存在本设备");
+    rerender(<CollabSyncBadge status="offline" editedWhileOffline hasLocalPersistence={false} />);
+    expect(screen.getByRole("status")).toHaveTextContent("离线，改动尚未保存");
+  });
+
+  it("需刷新：服务端版本较新时提示刷新页面，较旧时提示服务正在升级", () => {
+    const { rerender } = renderWithProviders(
+      <CollabSyncBadge status="outdated" serverEditorVersion={999} />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("有新版本，请刷新页面");
+    rerender(<CollabSyncBadge status="outdated" serverEditorVersion={0} />);
+    expect(screen.getByRole("status")).toHaveTextContent("服务正在升级，请稍后刷新");
   });
 });

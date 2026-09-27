@@ -1,11 +1,14 @@
-import { useCollabRoom } from "@/features/collab/use-collab-room";
-import type { CollabSession } from "@/lib/collab/session";
+import { EMPTY_SESSION_STATE, useCollabRoom } from "@/features/collab/use-collab-room";
+import type { CollabSession, CollabSessionState } from "@/lib/collab/session";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 
 const openCollabRoom = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/collab/session", () => ({ openCollabRoom }));
+
+const watchIdleDisconnect = vi.hoisted(() => vi.fn(() => () => {}));
+vi.mock("@/lib/collab/idle", () => ({ watchIdleDisconnect }));
 
 type Listener = (payload: never) => void;
 
@@ -15,11 +18,19 @@ function createSession(options: { connected?: boolean; synced?: boolean } = {}) 
   const awarenessListeners: Listener[] = [];
   const states = new Map<number, unknown>();
   const doc = new Y.Doc();
+  const sessionListeners: Array<(state: CollabSessionState) => void> = [];
+  let sessionState: CollabSessionState = EMPTY_SESSION_STATE;
 
   const session = {
     doc,
     user: { id: "7", name: "小明", color: "#2563eb" },
     destroy: vi.fn(),
+    getState: () => sessionState,
+    subscribe: (listener: (state: CollabSessionState) => void) => {
+      sessionListeners.push(listener);
+      return () => {};
+    },
+    clearLocal: vi.fn(async () => {}),
     provider: {
       wsconnected: options.connected ?? false,
       synced: options.synced ?? false,
@@ -45,11 +56,16 @@ function createSession(options: { connected?: boolean; synced?: boolean } = {}) 
     emitAwareness() {
       for (const listener of awarenessListeners) listener(undefined as never);
     },
+    setSessionState(next: Partial<CollabSessionState>) {
+      sessionState = { ...sessionState, ...next };
+      for (const listener of sessionListeners) listener(sessionState);
+    },
   };
 }
 
 beforeEach(() => {
   openCollabRoom.mockReset();
+  watchIdleDisconnect.mockClear();
 });
 
 describe("useCollabRoom", () => {
@@ -286,5 +302,47 @@ describe("useCollabRoom", () => {
       }).not.toThrow();
       expect(result.current.status).toBe("disconnected");
     });
+  });
+});
+
+describe("useCollabRoom：服务端落库的会话状态", () => {
+  it("暴露会话状态并跟随其变化", async () => {
+    const fake = createSession({ connected: true });
+    openCollabRoom.mockResolvedValue(fake.session);
+    const { result } = renderHook(() => useCollabRoom("note:1"));
+    await waitFor(() => expect(result.current.doc).toBe(fake.doc));
+    expect(result.current.session).toEqual(EMPTY_SESSION_STATE);
+
+    act(() => fake.setSessionState({ serverPersist: true, epoch: "e" }));
+
+    expect(result.current.session).toMatchObject({ serverPersist: true, epoch: "e" });
+  });
+
+  it("服务端落库时启用闲置断开", async () => {
+    const fake = createSession({ connected: true });
+    openCollabRoom.mockResolvedValue(fake.session);
+    const { result } = renderHook(() => useCollabRoom("note:1"));
+    await waitFor(() => expect(result.current.doc).toBe(fake.doc));
+    expect(watchIdleDisconnect).not.toHaveBeenCalled();
+
+    act(() => fake.setSessionState({ serverPersist: true }));
+
+    await waitFor(() => expect(watchIdleDisconnect).toHaveBeenCalledOnce());
+  });
+
+  it("谱系不符（4409）时先通知调用方，再清掉本地副本并重建会话", async () => {
+    const first = createSession({ connected: true });
+    const second = createSession({ connected: true });
+    openCollabRoom.mockResolvedValueOnce(first.session).mockResolvedValueOnce(second.session);
+    const onLineageReset = vi.fn();
+    const { result } = renderHook(() => useCollabRoom("note:1", { onLineageReset }));
+    await waitFor(() => expect(result.current.doc).toBe(first.doc));
+
+    act(() => first.setSessionState({ fatal: { kind: "lineage" } }));
+
+    expect(onLineageReset).toHaveBeenCalledOnce();
+    expect(first.session.clearLocal).toHaveBeenCalledOnce();
+    await waitFor(() => expect(result.current.doc).toBe(second.doc));
+    expect(first.session.destroy).toHaveBeenCalled();
   });
 });

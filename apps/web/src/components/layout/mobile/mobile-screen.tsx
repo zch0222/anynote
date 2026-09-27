@@ -21,6 +21,11 @@ export type MobileScreenProps = {
    * 返回键形态（画板统一），又不套用浏览器历史语义。
    */
   onBack?: () => void;
+  /**
+   * 返回前的确认（例如有未保存的改动）；返回 false 时本次返回作废。
+   * 对缺省的返回语义与 `onBack` 同样生效。
+   */
+  confirmLeave?: () => boolean;
   /** 顶栏右侧动作区。 */
   actions?: ReactNode;
   /** 顶栏下方的附加区域（筛选条、面包屑等），跟着顶栏一起 sticky。 */
@@ -112,6 +117,7 @@ export function MobileScreen({
   title,
   back,
   onBack,
+  confirmLeave,
   actions,
   toolbar,
   fill = false,
@@ -131,6 +137,7 @@ export function MobileScreen({
   const hasBack = Boolean(back);
 
   const goBack = () => {
+    if (confirmLeave && !confirmLeave()) return;
     if (onBack) {
       onBack();
       return;

@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -27,6 +27,7 @@ const save = vi.hoisted(() => ({
   flush: vi.fn(async () => undefined),
   resolveConflict: vi.fn(),
   hasPendingChanges: () => false,
+  getStatus: () => save.status,
 }));
 vi.mock("@/features/notes/use-save-note", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("@/features/notes/use-save-note");
@@ -53,6 +54,7 @@ vi.mock("@/components/editor/TiptapEditor", () => ({
 
 import { MobileNoteEditor } from "@/features/notes/components/mobile/note-editor-mobile";
 import { useNoteQuery } from "@/features/notes/use-note";
+import { UNSAVED_LEAVE_MESSAGE } from "@/features/notes/use-save-note";
 import { renderWithProviders } from "@/test/render";
 
 function mockNote(value: Record<string, unknown>) {
@@ -215,6 +217,63 @@ describe("MobileNoteEditor", () => {
     // 先落盘再跳：否则刚敲下的那几秒改动不会出现在历史列表里
     await waitFor(() => expect(save.flush).toHaveBeenCalled());
     await waitFor(() => expect(router.push).toHaveBeenCalledWith("/m/notes/3/7/history"));
+  });
+
+  describe("离开拦截（单人保存链路）", () => {
+    afterEach(() => {
+      save.status = "saved";
+    });
+
+    it("保存失败时点返回键先确认，取消就留在本页", () => {
+      save.status = "error";
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      mockNote(LOADED);
+      renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+      fireEvent.click(screen.getByTestId("mobile-back"));
+
+      expect(confirm).toHaveBeenCalledWith(UNSAVED_LEAVE_MESSAGE);
+      expect(router.back).not.toHaveBeenCalled();
+      expect(router.push).not.toHaveBeenCalled();
+    });
+
+    it("已保存时返回键照常返回，不打扰", () => {
+      const confirm = vi.spyOn(window, "confirm");
+      mockNote(LOADED);
+      renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+      fireEvent.click(screen.getByTestId("mobile-back"));
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(router.push.mock.calls.length + router.back.mock.calls.length).toBe(1);
+    });
+
+    it("离线时进「历史版本」先确认，取消就不跳转", async () => {
+      save.status = "offline";
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      mockNote(LOADED);
+      renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+      fireEvent.click(screen.getByTestId("mobile-note-actions"));
+      fireEvent.click(screen.getByRole("button", { name: "历史版本" }));
+
+      await waitFor(() => expect(confirm).toHaveBeenCalledWith(UNSAVED_LEAVE_MESSAGE));
+      expect(router.push).not.toHaveBeenCalled();
+    });
+
+    it("冲突未解决时「移动到…」先确认，取消就不移动", async () => {
+      save.status = "conflict";
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      mockNote(LOADED);
+      renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+      fireEvent.click(screen.getByTestId("mobile-note-actions"));
+      fireEvent.click(screen.getByRole("button", { name: /移动到「另一个库」/ }));
+
+      await waitFor(() => expect(confirm).toHaveBeenCalledWith(UNSAVED_LEAVE_MESSAGE));
+      expect(move.mutateAsync).not.toHaveBeenCalled();
+      expect(router.push).not.toHaveBeenCalled();
+    });
   });
 
   it("删除需要二次确认，确认后回到该知识库的列表", async () => {

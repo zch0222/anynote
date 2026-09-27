@@ -1,3 +1,4 @@
+import { UNSAVED_LEAVE_MESSAGE } from "@/features/notes/use-save-note";
 import { noteApi } from "@/lib/api/openapi";
 import { renderWithProviders } from "@/test/render";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -299,7 +300,7 @@ describe("NoteEditor 布局与编辑器接线", () => {
 
 describe("NoteEditor 顶部 ⋯ 菜单入口（D-16 图例 1）", () => {
   it("第一项是「历史版本」，点击前先把未保存的正文落盘", async () => {
-    vi.mocked(noteApi.PATCH).mockResolvedValue(envelope({ version: "next" }) as never);
+    vi.mocked(noteApi.PATCH).mockResolvedValue(envelope({ id: NOTE_ID, version: "next" }) as never);
 
     renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
     await waitFor(() => expect(editorProps).toHaveBeenCalled());
@@ -353,5 +354,153 @@ describe("NoteEditor 顶部 ⋯ 菜单入口（D-16 图例 1）", () => {
     await waitFor(() =>
       expect(router.push).toHaveBeenCalledWith(`/notes/${BASE_ID}/${NOTE_ID}/history`),
     );
+  });
+});
+
+describe("NoteEditor 单人模式缺陷修复（M14.P）", () => {
+  function fakeEditor() {
+    return {
+      isDestroyed: false,
+      commands: { setContent: vi.fn() },
+      state: {
+        doc: {
+          firstChild: { type: { name: "heading" }, attrs: { level: 1 }, textContent: "测试笔记" },
+        },
+      },
+    };
+  }
+
+  it("① 冲突时选「放弃我的改动」，编辑器载入服务端内容，离开页面也不回写本地改动", async () => {
+    let reads = 0;
+    get.mockImplementation((path: string) => {
+      if (path === "/notes/{noteId}") {
+        reads += 1;
+        return Promise.resolve(
+          envelope({
+            id: NOTE_ID,
+            title: "测试笔记",
+            content: reads === 1 ? "正文" : "# 测试笔记\n\n别人写的正文",
+            knowledgeBaseId: BASE_ID,
+            knowledgeBaseName: "测试库",
+            updateTime: reads === 1 ? "2026-09-11T01:00:00.000Z" : "2026-09-11T02:00:00.000Z",
+          }),
+        );
+      }
+      return Promise.resolve(envelope({ rows: [] }));
+    });
+    vi.mocked(noteApi.PATCH).mockImplementation(
+      () => Promise.resolve(envelope(null, "A0409")) as never,
+    );
+    const editor = fakeEditor();
+    const { unmount } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    act(() => editorProps.mock.calls.at(-1)?.[0].onReady(editor));
+    act(() => editorProps.mock.calls.at(-1)?.[0].onChange("# 测试笔记\n\n我的改动", editor));
+
+    const dialog = await screen.findByRole("dialog", {}, { timeout: 5000 });
+    fireEvent.click(within(dialog).getByRole("button", { name: "放弃我的改动" }));
+
+    await waitFor(() =>
+      expect(editor.commands.setContent).toHaveBeenCalledWith("# 测试笔记\n\n别人写的正文", {
+        emitUpdate: false,
+      }),
+    );
+    expect(editorProps.mock.calls.at(-1)?.[0].value).toBe("# 测试笔记\n\n别人写的正文");
+    expect(screen.getByTestId("note-char-count")).toHaveTextContent("6 字");
+
+    unmount();
+    window.dispatchEvent(new Event("pagehide"));
+    expect(noteApi.PATCH).toHaveBeenCalledTimes(1);
+  });
+
+  it("③ 不可重试的失败给出原因与重试入口", async () => {
+    vi.mocked(noteApi.PATCH)
+      .mockImplementationOnce(() => Promise.resolve(envelope(null, "A0404")) as never)
+      .mockImplementation(
+        () =>
+          Promise.resolve(
+            envelope({ id: NOTE_ID, title: "测试笔记", content: "x", version: "9" }),
+          ) as never,
+      );
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    const editor = fakeEditor();
+    act(() => editorProps.mock.calls.at(-1)?.[0].onChange("# 测试笔记\n\n改动", editor));
+
+    const notice = await screen.findByTestId("save-failure", {}, { timeout: 5000 });
+    expect(notice).toHaveAttribute("data-kind", "notFound");
+    fireEvent.click(within(notice).getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(noteApi.PATCH).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("NoteEditor 离开拦截（单人保存链路）", () => {
+  const editor = {
+    isDestroyed: false,
+    commands: { setContent: vi.fn() },
+    state: {
+      doc: {
+        firstChild: { type: { name: "heading" }, attrs: { level: 1 }, textContent: "测试笔记" },
+      },
+    },
+  };
+
+  /** 打一段字并等保存失败（可重试）。 */
+  async function editUntilSaveFails() {
+    vi.mocked(noteApi.PATCH).mockImplementation(
+      () => Promise.resolve(envelope(null, "B0500")) as never,
+    );
+    const view = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    act(() => editorProps.mock.calls.at(-1)?.[0].onChange("# 测试笔记\n\n没存上的字", editor));
+    await waitFor(
+      () => expect(view.container.querySelector('[data-status="error"]')).not.toBeNull(),
+      { timeout: 5000 },
+    );
+    return view;
+  }
+
+  /** 点正文上方的知识库链接；返回链接自身是否收到了这次点击（被拦下时收不到）。 */
+  function clickBaseLink(container: HTMLElement): boolean {
+    const link = container.querySelector(`a[href="/notes/${BASE_ID}"]`) as HTMLAnchorElement;
+    const reached = vi.fn((event: Event) => event.preventDefault());
+    link.addEventListener("click", reached);
+    fireEvent.click(link);
+    return reached.mock.calls.length > 0;
+  }
+
+  it("保存失败时点站内链接先确认，取消就留在本页", async () => {
+    const { container } = await editUntilSaveFails();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    expect(clickBaseLink(container)).toBe(false);
+    expect(confirm).toHaveBeenCalledWith(UNSAVED_LEAVE_MESSAGE);
+  });
+
+  it("保存失败时确认离开就照常跳转", async () => {
+    const { container } = await editUntilSaveFails();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    expect(clickBaseLink(container)).toBe(true);
+  });
+
+  it("已保存时点站内链接不打扰", async () => {
+    const { container } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    expect(clickBaseLink(container)).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("「历史版本」落盘后仍没存上时先确认，取消就不跳转", async () => {
+    await editUntilSaveFails();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    fireEvent.click(screen.getByTestId("note-actions"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "历史版本" }));
+
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith(UNSAVED_LEAVE_MESSAGE));
+    expect(router.push).not.toHaveBeenCalled();
   });
 });

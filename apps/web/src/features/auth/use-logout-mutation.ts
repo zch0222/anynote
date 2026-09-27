@@ -25,6 +25,10 @@ export function useLogoutMutation() {
     onSuccess: async () => {
       await queryClient.cancelQueries();
       queryClient.clear();
+      // 笔记的离线副本存在浏览器 IndexedDB 里，退出登录时一并删除，共用电脑上不留正文
+      await import("@/lib/collab/local-persistence")
+        .then(({ clearAllLocalNotes }) => clearAllLocalNotes())
+        .catch(() => undefined);
       router.replace("/login");
       router.refresh();
     },

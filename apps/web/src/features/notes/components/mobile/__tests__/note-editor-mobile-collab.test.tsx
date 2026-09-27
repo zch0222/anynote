@@ -77,6 +77,15 @@ const collabState = vi.hoisted(() => ({
   savedVersion: null,
   publishSavedVersion: vi.fn(),
   reconnect: vi.fn(),
+  serverPersist: false,
+  syncStatus: "synced" as string,
+  hasLocalPersistence: false,
+  editedWhileOffline: false,
+  fatal: null as unknown,
+  leaveGuard: { active: false, message: "" },
+  recoveredMarkdown: null as string | null,
+  dismissRecovered: vi.fn(),
+  stored: null as { version: string; title: string | null } | null,
 }));
 vi.mock("@/features/collab/use-collab-note", () => ({
   useCollabNote: (options: unknown) => {
@@ -128,6 +137,10 @@ beforeEach(() => {
   collabState.provider = null;
   collabState.user = null;
   collabState.peers = [];
+  collabState.serverPersist = false;
+  collabState.syncStatus = "synced";
+  collabState.editedWhileOffline = false;
+  collabState.hasLocalPersistence = false;
 
   vi.mocked(useNoteQuery).mockReturnValue({
     isPending: false,
@@ -235,5 +248,22 @@ describe("移动端协同连接期间的可写状态", () => {
 
     expect(editorProps.mock.calls.at(-1)?.[0].editable).toBe(true);
     expect(screen.queryByTestId("collab-connecting")).toBeNull();
+  });
+});
+
+describe("移动端服务端落库模式（M14.4）", () => {
+  it("离线且有过编辑时，顶栏徽标说明改动已保存在本设备", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    collabState.syncStatus = "offline";
+    collabState.editedWhileOffline = true;
+    collabState.hasLocalPersistence = true;
+    const { container } = renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+    await waitFor(() =>
+      expect(container.querySelector('[data-status="offline"]')).toHaveTextContent(
+        "离线，改动已保存在本设备",
+      ),
+    );
   });
 });

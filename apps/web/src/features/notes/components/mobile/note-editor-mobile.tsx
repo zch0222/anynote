@@ -1,171 +1,59 @@
 "use client";
 
-import { TiptapEditor, type TiptapEditorProps } from "@/components/editor/TiptapEditor";
-import type { UploadFn } from "@/components/editor/extensions/anynote-image";
+import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import type { AiContinueFn } from "@/components/editor/presets/types";
-import type { CollaborationBinding } from "@/components/editor/presets/types";
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { EditorSkeleton } from "@/components/loading/skeletons";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
-import { SaveStatusBadge } from "@/components/note/save-status";
-import { useCollabNote } from "@/features/collab/use-collab-note";
+import { CollabSyncBadge, SaveFailureNotice, SaveStatusBadge } from "@/components/note/save-status";
+import { CollabNotices } from "@/features/notes/components/collab-notices";
 import { CollabPresence } from "@/features/notes/components/collab-presence";
-import { bodyCharCount, ensureLeadingHeading } from "@/features/notes/lib/leading-heading";
-import { toVersion } from "@/features/notes/schemas";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { useMoveNoteMutation } from "@/features/notes/use-move-note";
-import { useNoteQuery } from "@/features/notes/use-note";
-import { useNoteTitle } from "@/features/notes/use-note-title";
-import { COLLAB_AUTOSAVE_DEBOUNCE_MS, useSaveNote } from "@/features/notes/use-save-note";
+import { useNoteEditorSession } from "@/features/notes/use-note-editor-session";
 import { continueWriting } from "@/lib/ai/sse";
-import { env } from "@/lib/env";
 import { formatRelativeTime } from "@/lib/format-time";
 import { mobileNoteHistoryHref } from "@/lib/mobile/hrefs";
-import type { Editor } from "@tiptap/core";
 import { FolderInput, History, MoreHorizontal, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 /**
- * `/m/notes/[baseId]/[noteId]`：移动端笔记编辑器（方案 D5）。
+ * `/m/notes/[baseId]/[noteId]`：移动端笔记编辑器。
  *
- * 复用桌面的全部逻辑，一行不改：`useNoteQuery` / `useSaveNote`（自动保存 + 冲突）/
- * `useMoveNote` / `lib/editor/upload`。差别只有四点：
+ * 详情加载、协同运行时与自动保存的接线与桌面共用 `useNoteEditorSession`，差别只在布局：
  *
- * 1. 没有目录树——它在手机上放不下，返回键代替
+ * 1. 没有目录树，返回键代替
  * 2. `toolbar="mobile"`：单行横滑 + 贴底（靠近软键盘），气泡菜单关掉
  * 3. 保存状态显示在顶栏，不占正文空间
- * 4. "移动到…"与删除走底部动作表，不用 hover 才出现的下拉菜单
- *
- * 与桌面一致：**没有独立的标题输入行**，标题就是正文的第一个 H1
- * （见 `note-editor.tsx` 的说明与 `lib/leading-heading.ts`）。
+ * 4. "移动到…"与删除走底部动作表
  */
-/** 可写笔记所需的最低权限（`NotePermissions.EDIT`）。低于它维持现状静态读（D8）。 */
-const EDIT_PERMISSION = 6;
-
 export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: number }) {
   const router = useRouter();
-  const note = useNoteQuery(noteId);
   const bases = useKnowledgeBasesQuery();
   const remove = useDeleteNoteMutation();
   const move = useMoveNoteMutation();
   const [actionsOpen, setActionsOpen] = useState(false);
-
-  const { title, setTitle, onEditorReady, getTitleForContent } = useNoteTitle();
-  // 只在笔记切换时重置一次编辑器初始值，避免自动保存的回写打断输入
-  const [initialContent, setInitialContent] = useState<string | null>(null);
-  /**
-   * 正文字数（不含顶部 H1）。与桌面同一处口径，理由见 `note-editor.tsx` 的同名 state：
-   * 从 `initialContent` 现算的数字会一直停在"打开笔记那一刻"，打字时不跟着动。
-   */
-  const [charCount, setCharCount] = useState(0);
-  const loadedNoteId = useRef<number | null>(null);
-
-  /** 是否进入协同模式：总开关打开 **且** 当前用户对该笔记有编辑权（D7 / D8）。 */
-  const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
-  const collabEnabled =
-    env.NEXT_PUBLIC_COLLAB_NOTES && (note.data?.notePermissions ?? 0) >= EDIT_PERMISSION;
-  /**
-   * 「下一拍 `onChange` 是本地编辑」的标记。
-   *
-   * 协同模式下保存由 Y.Doc 的 origin 过滤驱动，但**正文不能在那一刻取**：
-   * ySyncPlugin 先把改动写进 Y.Doc、TipTap 才发 `onUpdate`，因此 origin 回调里
-   * 拿到的正文快照恒落后一次击键——实测一段输入的最后一个字会停在本地不落库
-   * （从前被另一个缺陷「写 meta 也触发保存」顺手补掉了，两个错凑成一个对）。
-   * 所以那边只置这个标记，正文取 `onChange` 带来的那一份。
-   */
-  const localEditRef = useRef(false);
-  const collab = useCollabNote({
-    noteId,
-    enabled: collabEnabled,
-    editor: editorInstance,
-    markdown: initialContent,
-    onLocalEdit: () => {
-      localEditRef.current = true;
-    },
-  });
-
-  const save = useSaveNote({
-    noteId,
-    initialVersion: toVersion(note.data?.updateTime),
-    // 协同模式下 A0409 不再弹冲突框：本地 CRDT 状态已包含所有人的编辑，换号重发即可
-    conflictPolicy: collab.active ? "overwrite" : "prompt",
-    debounceMs: collab.active ? COLLAB_AUTOSAVE_DEBOUNCE_MS : undefined,
-    sharedVersion: collab.savedVersion,
-    onSaved: collab.publishSavedVersion,
-  });
-  const { scheduleSave, flush, resolveConflict, status, lastSavedAt, conflict } = save;
-
-  useEffect(() => {
-    if (!note.data || loadedNoteId.current === noteId) return;
-    loadedNoteId.current = noteId;
-    setTitle(note.data.title ?? "");
-    // 与桌面同一处补齐：标题是正文的首节点 H1，老笔记要先补上才看得见
-    const content = ensureLeadingHeading(note.data.content ?? "", note.data.title);
-    setInitialContent(content);
-    // 初值跟着同一次设置走，避免首屏先闪一个 0 再跳到真实值
-    setCharCount(bodyCharCount(content));
-  }, [note.data, noteId, setTitle]);
-
-  const handleContentChange = useCallback<NonNullable<TiptapEditorProps["onChange"]>>(
-    (markdown, editor) => {
-      // 字数随每次 docChanged 推进，不留在打开时的快照上
-      setCharCount(bodyCharCount(markdown));
-      if (!collabEnabled) {
-        scheduleSave({ title: getTitleForContent(editor), content: markdown });
-        return;
-      }
-      // 协同模式：本地编辑才排队（远端广播也会走到这里，但没有标记），正文取这份最新的
-      if (!localEditRef.current) return;
-      localEditRef.current = false;
-      scheduleSave({ title: getTitleForContent(editor), content: markdown });
-    },
-    [scheduleSave, getTitleForContent, collabEnabled],
-  );
-
-  /**
-   * 协同绑定：`preset="collaborative"` 时正文的唯一真相是 Y.Doc。
-   * 引用须稳定，否则每次渲染都会重建编辑器实例。
-   */
-  const collaboration: CollaborationBinding | undefined = useMemo(() => {
-    if (!collab.active || !collab.doc || !collab.provider || !collab.user) return undefined;
-    return {
-      doc: collab.doc,
-      provider: collab.provider,
-      user: { name: collab.user.name, color: collab.user.color },
-    };
-  }, [collab.active, collab.doc, collab.provider, collab.user]);
-
-  /**
-   * 编辑器就绪：建立标题基线，并把实例交给协同运行时。
-   *
-   * 与桌面同源的一处修正：交接必须在 `onReady`，**不能**放 `onChange`。
-   * 后者是 TipTap 的 `onUpdate`、只在 `docChanged` 时触发，而协同模式下编辑器
-   * 初始为空（`content` 刻意不设，真相是 Y.Doc），空文档不产生任何 `docChanged`，
-   * 实例会永远是 null —— 冷启动注入守卫饿死，笔记打开是空白。
-   * 同理只交出**协同绑定就绪后**的实例：绑定前编辑器是 `full` 预设，
-   * 那时注入进不了 Y.Doc 却会把 `meta.seeded` 置位，导致笔记永久空白。
-   */
-  const handleEditorReady = useCallback(
-    (editor: Editor) => {
-      onEditorReady(editor);
-      setEditorInstance(collaboration ? editor : null);
-    },
-    [onEditorReady, collaboration],
-  );
-
-  // 图片走 file 服务的分片直传；实现只在真的插图时才下载（静态 import 会压进首屏）。
-  // 引用须稳定，否则每次渲染都会重建编辑器实例。
-  const uploadFn = useMemo<UploadFn>(
-    () => async (file, options) => {
-      const { createNoteImageUploader } = await import("@/lib/editor/upload");
-      return createNoteImageUploader(noteId, options?.onProgress)(file);
-    },
-    [noteId],
-  );
+  const session = useNoteEditorSession(noteId);
+  const {
+    note,
+    title,
+    initialContent,
+    charCount,
+    collabEnabled,
+    collab,
+    collaboration,
+    serverPersist,
+    save,
+    handleContentChange,
+    handleEditorReady,
+    uploadFn,
+    confirmLeave,
+  } = session;
+  const { flush, resolveConflict, retry, status, lastSavedAt, conflict, failure } = save;
 
   const handleAiContinue = useCallback<AiContinueFn>(
     async ({ contextTail, signal, onDelta, onError }) => {
@@ -183,6 +71,7 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
       try {
         // 移动前先把未保存的正文落盘，否则跳转后这段改动就丢了
         await flush();
+        if (!confirmLeave()) return;
         await move.mutateAsync({ noteId, knowledgeBaseId: targetBaseId });
         toast.success("笔记已移动");
         router.push(`/m/notes/${targetBaseId}/${noteId}`);
@@ -190,7 +79,7 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
         toast.error(error instanceof Error ? error.message : "移动失败，请稍后重试");
       }
     },
-    [flush, move, noteId, router],
+    [confirmLeave, flush, move, noteId, router],
   );
 
   /**
@@ -206,8 +95,10 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
       // flush 失败不拦住跳转：历史页自己能拉到服务端的最新列表，
       // 用户看到的是"这次改动还没进版本"，比一个跳不过去的按钮强
     }
+    // 落盘后仍没存上（离线、失败、冲突）时先确认，免得跳走丢掉改动
+    if (!confirmLeave()) return;
     router.push(mobileNoteHistoryHref(baseId, noteId));
-  }, [baseId, flush, noteId, router]);
+  }, [baseId, confirmLeave, flush, noteId, router]);
 
   const handleDelete = useCallback(async () => {
     try {
@@ -247,15 +138,28 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
          * 在移动端同样可见，否则多人共编时用户看不到任何同伴反馈。
          */
         <span className="flex min-w-0 items-center gap-2">
-          <SaveStatusBadge
-            status={status}
-            lastSavedAt={lastSavedAt}
-            collabConnected={collaboration !== undefined && collab.connected}
-          />
+          {serverPersist ? (
+            <CollabSyncBadge
+              status={collab.syncStatus}
+              editedWhileOffline={collab.editedWhileOffline}
+              hasLocalPersistence={collab.hasLocalPersistence}
+              serverEditorVersion={
+                collab.fatal?.kind === "outdated" ? collab.fatal.serverVersion : null
+              }
+            />
+          ) : (
+            <SaveStatusBadge
+              status={status}
+              lastSavedAt={lastSavedAt}
+              failure={failure}
+              collabConnected={collaboration !== undefined && collab.connected}
+            />
+          )}
           {collaboration ? <CollabPresence peers={collab.peers} /> : null}
         </span>
       }
       back={`/m/notes/${baseId}`}
+      confirmLeave={confirmLeave}
       tone="paper"
       actions={
         <MobileActionSheet
@@ -319,6 +223,14 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
             >
               正在接入协同会话，正文载入后即可编辑…
             </output>
+          ) : null}
+          <CollabNotices collab={collab} className="mx-4 mt-3" />
+          {status === "failed" && failure ? (
+            <SaveFailureNotice
+              failure={failure}
+              onRetry={() => void retry()}
+              className="mx-4 mt-3"
+            />
           ) : null}
           {collabEnabled && collab.degraded ? (
             <div

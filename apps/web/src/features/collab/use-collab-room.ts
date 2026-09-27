@@ -1,6 +1,11 @@
 "use client";
 
-import type { CollabSession, CollabUser } from "@/lib/collab/session";
+import type {
+  CollabFatal,
+  CollabSession,
+  CollabSessionState,
+  CollabUser,
+} from "@/lib/collab/session";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WebsocketProvider } from "y-websocket";
 import type * as Y from "yjs";
@@ -33,6 +38,27 @@ export type CollabRoomState = {
   peers: CollabPeer[];
   /** 手动重建连接（D-10 图例 16 · D-11 图例 12）。 */
   reconnect: () => void;
+  /** 服务端落库相关的会话状态（hello、谱系、本地副本、确认计数、终止原因）。 */
+  session: CollabSessionState;
+};
+
+/** 没有会话时的服务端落库状态。 */
+export const EMPTY_SESSION_STATE: CollabSessionState = {
+  serverPersist: false,
+  epoch: null,
+  localReady: false,
+  hasLocalPersistence: false,
+  sync: { unsynced: false, pending: 0, editedWhileOffline: false },
+  fatal: null,
+  stored: null,
+};
+
+export type UseCollabRoomOptions = {
+  /**
+   * 谱系不符（4409）、即将丢弃本地文档重建会话前调用，
+   * 调用方可以在此取出本地内容交还给用户。
+   */
+  onLineageReset?: (() => void) | undefined;
 };
 
 function readPeers(session: CollabSession): CollabPeer[] {
@@ -58,8 +84,14 @@ function readPeers(session: CollabSession): CollabPeer[] {
  * `room` 传 null 表示暂不连接（例如路由参数还没解析出来）。
  * 房间名变化会先销毁旧会话再建新的，保证不会有两个 provider 抢同一个 Y.Doc。
  */
-export function useCollabRoom(room: string | null): CollabRoomState {
+export function useCollabRoom(
+  room: string | null,
+  options: UseCollabRoomOptions = {},
+): CollabRoomState {
   const [session, setSession] = useState<CollabSession | null>(null);
+  const [sessionState, setSessionState] = useState<CollabSessionState>(EMPTY_SESSION_STATE);
+  const lineageResetRef = useRef(options.onLineageReset);
+  lineageResetRef.current = options.onLineageReset;
   const [status, setStatus] = useState<CollabStatus>("connecting");
   const [error, setError] = useState<Error | null>(null);
   const [peers, setPeers] = useState<CollabPeer[]>([]);
@@ -85,6 +117,7 @@ export function useCollabRoom(room: string | null): CollabRoomState {
   useEffect(() => {
     setSession(null);
     sessionRef.current = null;
+    setSessionState(EMPTY_SESSION_STATE);
     setPeers([]);
     setError(null);
     // 换房间时先退回"未同步"，否则新房间会短暂沿用上一间的 synced=true
@@ -97,6 +130,7 @@ export function useCollabRoom(room: string | null): CollabRoomState {
     setStatus("connecting");
     let disposed = false;
     let active: CollabSession | null = null;
+    let cleanupSession: (() => void) | null = null;
     const controller = new AbortController();
 
     // 动态加载 session：它牵出 yjs / y-websocket（重依赖），静态引入会把这两者
@@ -125,6 +159,30 @@ export function useCollabRoom(room: string | null): CollabRoomState {
         syncPeers();
         if (next.provider.wsconnected) setStatus("connected");
         if (next.provider.synced) setSynced(true);
+
+        let stopIdle: (() => void) | null = null;
+        const applyState = (state: CollabSessionState) => {
+          setSessionState(state);
+          // 闲置断开只在服务端落库时启用：断开期间的改动由本地副本保存
+          if (state.serverPersist && !stopIdle && !state.fatal) {
+            void import("@/lib/collab/idle").then(({ watchIdleDisconnect }) => {
+              if (disposed || stopIdle) return;
+              stopIdle = watchIdleDisconnect(next.provider);
+            });
+          }
+          if (state.fatal?.kind === "lineage") {
+            lineageResetRef.current?.();
+            void next.clearLocal().finally(() => {
+              if (!disposed) setAttempt((value) => value + 1);
+            });
+          }
+        };
+        const unsubscribe = next.subscribe(applyState);
+        applyState(next.getState());
+        cleanupSession = () => {
+          unsubscribe();
+          stopIdle?.();
+        };
       })
       .catch((cause: unknown) => {
         if (disposed) return;
@@ -135,6 +193,7 @@ export function useCollabRoom(room: string | null): CollabRoomState {
     return () => {
       disposed = true;
       controller.abort();
+      cleanupSession?.();
       active?.destroy();
       // 只有仍指向本次 effect 建立的会话时才清空，避免旧 effect 的清理
       // 把接任的新会话引用抹掉（换房间 / 重连时两者会交错执行）。
@@ -173,5 +232,8 @@ export function useCollabRoom(room: string | null): CollabRoomState {
     error,
     peers,
     reconnect,
+    session: sessionState,
   };
 }
+
+export type { CollabFatal };
