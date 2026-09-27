@@ -28,6 +28,8 @@ x-java-prod: &java-prod
     SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE: ${NACOS_NAMESPACE:?请配置生产 Nacos namespace}
     SPRING_CLOUD_NACOS_CONFIG_NAMESPACE: ${NACOS_NAMESPACE:?请配置生产 Nacos namespace}
     MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+    # 内部调用 HMAC 密钥：生产不允许回落到随仓库公开的默认值
+    ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:?请配置至少32字符的内部调用密钥（Java 服务与协同服务共用）}
     SPRINGDOC_API_DOCS_ENABLED: "false"
     SPRINGDOC_SWAGGER_UI_ENABLED: "false"
 
@@ -53,6 +55,7 @@ services:
     environment:
       COLLAB_TOKEN_SECRET: ${COLLAB_TOKEN_SECRET:?请配置至少32字符的协同密钥}
       COLLAB_ALLOWED_ORIGINS: ${NEXT_PUBLIC_APP_URL:?请配置 HTTPS 站点来源}
+      ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:?请配置至少32字符的内部调用密钥（Java 服务与协同服务共用）}
   anynote-gateway:
     <<: *java-prod
     # 唯一保留宿主机端口的 Java 服务，且**默认只绑回环**：容器外 Nginx 需要一个可反代的

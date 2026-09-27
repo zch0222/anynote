@@ -482,6 +482,23 @@ CREATE TABLE `n_note` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `n_note_collab_state`
+--
+
+DROP TABLE IF EXISTS `n_note_collab_state`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `n_note_collab_state` (
+  `note_id`     bigint      NOT NULL COMMENT '笔记id（n_note.id）',
+  `state`       longblob    NOT NULL COMMENT 'Y.encodeStateAsUpdate 全量状态',
+  `md_version`  varchar(20) NOT NULL COMMENT '该状态对应的笔记版本号（NoteVersionUtil.toVersion）',
+  `epoch`       char(36)    NOT NULL COMMENT '状态谱系标识，从 Markdown 全新构建时生成',
+  `update_time` datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`note_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='笔记协同状态：仅用于会话连续性，真相源仍是 n_note_text';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `n_note_edit_log`
 --
 

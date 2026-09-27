@@ -11,6 +11,8 @@
 !packages/api-client/tsconfig.json
 !packages/api-core/
 !packages/api-core/**
+!packages/editor-core/
+!packages/editor-core/**
 !packages/tsconfig/
 !packages/tsconfig/**
 !openapi/

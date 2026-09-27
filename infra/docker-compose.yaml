@@ -36,6 +36,8 @@ x-app-environment: &app-environment
   XXL_JOB_ADMIN_ADDRESSES: http://xxl-job-admin:8080/xxl-job-admin
   XXL_JOB_ADMIN_ACCESSTOKEN: ${XXL_JOB_ADMIN_ACCESSTOKEN:-default_token}
   JWT_SECRET: ${JWT_SECRET:-yxlm}
+  # 服务间内部调用（@InnerAuth）的 HMAC 密钥，绑定到 anynote.internal.secret；必须与 anynote-collab 一致
+  ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:-anynote-internal-secret-change-in-prod}
   XXL_JOB_ADMIN_TIMEOUT: 3
   XXL_JOB_EXECUTOR_LOGPATH: /tmp/xxl-job-logs/jobhandler
   XXL_JOB_EXECUTOR_LOGRETENTIONDAYS: 30
@@ -295,17 +297,34 @@ services:
       context: ..
       dockerfile: infra/Dockerfile.collab
     restart: on-failure:5
+    # 退出时要把未写库的房间写回 note 服务（总超时 20 秒），仍失败的写入应急落盘
+    stop_grace_period: 30s
     environment:
       TZ: Asia/Shanghai
       COLLAB_PORT: 1234
+      # 服务端落库模式下用作应急落盘目录（/data/spool）
       COLLAB_PERSISTENCE_DIR: /data
       # 必须与 apps/web 的 COLLAB_TOKEN_SECRET 一致，否则所有握手都会 401
       COLLAB_TOKEN_SECRET: ${COLLAB_TOKEN_SECRET:-anynote-collab-dev-secret}
       COLLAB_ALLOWED_ORIGINS: ${COLLAB_ALLOWED_ORIGINS:-http://localhost:3000}
+      # 服务端落库总开关（docs/collab-persistence）：先发前端，旧页面退场后再打开
+      COLLAB_SERVER_PERSIST: ${COLLAB_SERVER_PERSIST:-false}
+      NOTE_SERVICE_URL: ${NOTE_SERVICE_URL:-http://anynote-modules-note:18091}
+      # 必须与 Java 服务的 ANYNOTE_INTERNAL_SECRET（anynote.internal.secret）一致
+      ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:-anynote-internal-secret-change-in-prod}
+      COLLAB_STORE_DEBOUNCE_MS: ${COLLAB_STORE_DEBOUNCE_MS:-2000}
+      COLLAB_STORE_MAX_DEBOUNCE_MS: ${COLLAB_STORE_MAX_DEBOUNCE_MS:-10000}
+      # 外部写入即时并入：订阅 note 服务发布的 collab:note-updated:* 通知；留空则只靠写库时的原子比较
+      COLLAB_REDIS_URL: ${COLLAB_REDIS_URL:-redis://:${REDIS_PASSWORD:-}@redis:6379}
     volumes:
       - collab-data:/data
     networks:
       - anynote-net
+    depends_on:
+      anynote-modules-note:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "${COLLAB_BIND_IP:-127.0.0.1}:${COLLAB_PORT:-1234}:1234"
     healthcheck:

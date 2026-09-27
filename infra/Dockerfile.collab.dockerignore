@@ -2,12 +2,19 @@
 # BuildKit 会优先采用与 Dockerfile 同名的 .dockerignore，这里只放 collab 构建真正需要的东西。
 *
 
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
 !apps/collab/package.json
 !apps/collab/tsconfig.json
+!apps/collab/tsup.config.ts
 !apps/collab/src
+!packages/editor-core
 !packages/tsconfig
 
 apps/collab/src/__tests__
 apps/collab/node_modules
 apps/collab/dist
+packages/editor-core/node_modules
+packages/editor-core/src/__tests__
 packages/tsconfig/node_modules
