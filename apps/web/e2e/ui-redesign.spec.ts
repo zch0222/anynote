@@ -1,6 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { ensureKnowledgeBase, openKnowledgeBase } from "./support/account";
-import { expectNoteSaved } from "./support/save-status";
+import { SAVED_SELECTOR, expectNoteSaved } from "./support/save-status";
 
 /**
  * 新前端 UI 重设计的端到端验收。
@@ -369,7 +369,7 @@ test.describe("笔记列表与编辑器版式", () => {
     // 保存状态是胶囊徽标（有底色、有圆角），不是一行裸文字。
     // 用 `data-status` 定位而不是文案：协同模式下文案是「已同步」（方案 §7.4），
     // 这条用例要看的是胶囊的**样式**，与文案无关。
-    const badge = page.locator('[data-status="saved"]').first();
+    const badge = page.locator(SAVED_SELECTOR).first();
     await expect(badge).toBeVisible({ timeout: 30_000 });
     const badgeStyle = await badge.evaluate((element) => {
       const style = getComputedStyle(element);

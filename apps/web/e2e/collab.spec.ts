@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
 import { ensureKnowledgeBase } from "./support/account";
+import { COLLAB_BUILD_REQUIRED, collabNotesEnabled } from "./support/collab-persist";
 import { focusWritableEditor } from "./support/editor";
 
 /**
@@ -10,6 +11,7 @@ import { focusWritableEditor } from "./support/editor";
  * `/notes/<baseId>/<noteId>`，不再出现 `/docs`。
  *
  * 需要 anynote-web（开着 `NEXT_PUBLIC_COLLAB_NOTES=1`）与 anynote-collab 在跑。
+ * 默认构建不开协同：依赖协同的两组在那种构建下自动跳过，其余两组照常执行。
  */
 test.describe.configure({ mode: "serial" });
 
@@ -42,6 +44,10 @@ async function expectSynced(page: Page) {
 }
 
 test.describe("笔记协同（M13.3）", () => {
+  test.beforeAll(async ({ browser }) => {
+    test.skip(!(await collabNotesEnabled(browser)), COLLAB_BUILD_REQUIRED);
+  });
+
   test("协同时能连上服务，两个浏览器上下文互见内容", async ({ page, browser }) => {
     const url = await createNote(page, "E2E 协同库", `E2E 协同 ${Date.now().toString().slice(-6)}`);
 
@@ -135,6 +141,10 @@ test.describe("/docs 退役（M13.5）", () => {
  *    恒落后一次击键）。
  */
 test.describe("冷启动注入的并发与写入约束（本批修复）", () => {
+  test.beforeAll(async ({ browser }) => {
+    test.skip(!(await collabNotesEnabled(browser)), COLLAB_BUILD_REQUIRED);
+  });
+
   // 协同服务的健康端点。默认按 dev/compose 的回环端口；换部署口径时用 COLLAB_HEALTH_URL 覆盖。
   const COLLAB_HEALTH = process.env.COLLAB_HEALTH_URL ?? "http://localhost:1234/healthz";
 
