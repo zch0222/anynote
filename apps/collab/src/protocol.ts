@@ -12,6 +12,29 @@ export const MESSAGE_SYNC = 0;
 export const MESSAGE_AWARENESS = 1;
 
 /**
+ * 自定义消息类型（只由服务端发往客户端）：`varUint(100) · varUint(子类型) · varString(JSON)`。
+ * y-websocket 已占用 0–3，取 100 以避开它将来的扩展；不认识它的旧客户端只会打一行日志。
+ */
+export const MESSAGE_ANYNOTE = 100;
+/** 版本与谱系判定通过后发送：`{ serverPersist, epoch, editorVersion }`。 */
+export const ANYNOTE_HELLO = 0;
+/** 处理完一条来自该连接的写方向同步消息后发送：`{}`。 */
+export const ANYNOTE_ACK = 1;
+/** 谱系不符，发送后立即以 4409 关闭：`{}`。 */
+export const ANYNOTE_EPOCH_MISMATCH = 2;
+/** 房间内容写库成功后广播给房间里的所有连接：`{ version, title }`。 */
+export const ANYNOTE_STORED = 3;
+
+/** 关闭码：客户端持有的 Y 状态与房间不是同一谱系。 */
+export const CLOSE_EPOCH_MISMATCH = 4409;
+/** 关闭码：客户端的编辑器版本与服务端不一致。 */
+export const CLOSE_EDITOR_VERSION = 4426;
+/** 关闭码：笔记不存在或已删除。 */
+export const CLOSE_NOT_FOUND = 4404;
+/** 关闭码：暂时无法加载房间（note 服务不可用等），客户端按常规退避重连。 */
+export const CLOSE_UNAVAILABLE = 4503;
+
+/**
  * `y-protocols/sync` 的 sync 子类型。本方案不新增消息类型，但服务端要**区分读写**
  * 才能对只读连接丢写，而 `readSyncMessage` 是委派式的、拿不到子类型，只能在委派前自己读一个 varUint。
  */
@@ -22,7 +45,8 @@ export const SYNC_UPDATE = syncProtocol.messageYjsUpdate;
 /** 服务端只依赖「能发字节、能关」，测试里用假连接替换真 WebSocket。 */
 export type CollabConnection = {
   send(data: Uint8Array): void;
-  close(): void;
+  /** 关闭连接；`code` 为 WebSocket 关闭码（4xxx 为本服务自定义）。 */
+  close(code?: number, reason?: string): void;
   /** 只读连接：丢弃 syncStep2 / update 这类写方向消息（D2）。 */
   readonly?: boolean;
   /**
@@ -30,6 +54,8 @@ export type CollabConnection = {
    * 因此服务端在广播前**以令牌为准覆盖**，避免伪造名字 / 颜色（D2）。
    */
   identity?: { userId: string; name: string; color: string } | undefined;
+  /** 可写连接的写方向同步消息应用之后调用；服务端落库模式下据此向该连接回确认。 */
+  acknowledge?: (() => void) | undefined;
 };
 
 /** 服务端本地事务的 origin 标记，用于区分「远端发来的更新」与「本地加载的更新」。 */
@@ -169,12 +195,16 @@ export function handleMessage(
         }
       }
 
+      const subType = decoding.peekVarUint(decoder);
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, MESSAGE_SYNC);
       syncProtocol.readSyncMessage(decoder, encoder, shared.doc, conn);
       // 只有 syncStep1 会产生回包；长度为 1 表示编码器里只有类型字节。
       if (encoding.length(encoder) > 1) {
         conn.send(encoding.toUint8Array(encoder));
+      }
+      if (subType === SYNC_STEP2 || subType === SYNC_UPDATE) {
+        conn.acknowledge?.();
       }
       return MESSAGE_SYNC;
     }
@@ -225,4 +255,36 @@ export function removeConnection(shared: CollabDoc, conn: CollabConnection) {
     awarenessProtocol.removeAwarenessStates(shared.awareness, [...owned], null);
   }
   conn.close();
+}
+
+/**
+ * 编码一条自定义消息（类型 100）。
+ *
+ * @param subType 子类型：{@link ANYNOTE_HELLO}、{@link ANYNOTE_ACK}、{@link ANYNOTE_EPOCH_MISMATCH} 或 {@link ANYNOTE_STORED}
+ * @param payload JSON 负载
+ */
+export function encodeAnynoteMessage(
+  subType: number,
+  payload: Record<string, unknown> = {},
+): Uint8Array {
+  const encoder = encoding.createEncoder();
+  encoding.writeVarUint(encoder, MESSAGE_ANYNOTE);
+  encoding.writeVarUint(encoder, subType);
+  encoding.writeVarString(encoder, JSON.stringify(payload));
+  return encoding.toUint8Array(encoder);
+}
+
+/** 解码自定义消息；不是类型 100 或格式不对时返回 null。 */
+export function decodeAnynoteMessage(
+  message: Uint8Array,
+): { subType: number; payload: Record<string, unknown> } | null {
+  try {
+    const decoder = decoding.createDecoder(message);
+    if (decoding.readVarUint(decoder) !== MESSAGE_ANYNOTE) return null;
+    const subType = decoding.readVarUint(decoder);
+    const payload = JSON.parse(decoding.readVarString(decoder)) as Record<string, unknown>;
+    return { subType, payload };
+  } catch {
+    return null;
+  }
 }

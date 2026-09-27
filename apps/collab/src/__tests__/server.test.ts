@@ -20,6 +20,12 @@ const config: CollabConfig = {
   tokenSecret: secret,
   persistenceDir: null,
   allowedOrigins: [origin],
+  serverPersist: false,
+  noteServiceUrl: null,
+  internalSecret: null,
+  storeDebounceMs: 2_000,
+  storeMaxDebounceMs: 10_000,
+  redisUrl: null,
 };
 
 let server: ReturnType<typeof createCollabServer>;
@@ -122,6 +128,7 @@ describe("HTTP 端点", () => {
       status: "ok",
       rooms: expect.any(Number),
       rejectedWrites: expect.any(Number),
+      serverPersist: false,
     });
   });
 

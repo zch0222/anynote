@@ -13,6 +13,12 @@ const config: CollabConfig = {
   tokenSecret: secret,
   persistenceDir: null,
   allowedOrigins: [origin],
+  serverPersist: false,
+  noteServiceUrl: null,
+  internalSecret: null,
+  storeDebounceMs: 2_000,
+  storeMaxDebounceMs: 10_000,
+  redisUrl: null,
 };
 
 /** 默认签一枚绑定 note:42 的令牌；可在 claims 上覆盖 room / ro。 */
@@ -39,7 +45,24 @@ describe("authorizeUpgrade", () => {
     expect(decision).toEqual({
       ok: true,
       room: "note:42",
-      session: { identity: { userId: "7", name: "甲", color: "#2563eb" }, ro: false },
+      session: {
+        identity: { userId: "7", name: "甲", color: "#2563eb" },
+        ro: false,
+        editorVersion: null,
+        lineage: { kind: "unknown" },
+      },
+    });
+  });
+
+  it("把握手里的编辑器版本与谱系带进会话", async () => {
+    const decision = await authorizeUpgrade(
+      `/note:42?token=${await token()}&editorVersion=1&lineage=fresh`,
+      origin,
+      config,
+    );
+    expect(decision).toMatchObject({
+      ok: true,
+      session: { editorVersion: 1, lineage: { kind: "fresh" } },
     });
   });
 
