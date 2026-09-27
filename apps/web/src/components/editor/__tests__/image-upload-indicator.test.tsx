@@ -4,10 +4,9 @@ import {
   IMAGE_UPLOAD_INDICATOR_SELECTOR,
   type UploadFn,
 } from "@/components/editor/extensions/anynote-image";
-import { MarkdownBridge } from "@/lib/editor/markdown";
+import { MarkdownBridge, StarterKit } from "@anynote/editor-core";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Editor } from "@tiptap/core";
-import StarterKit from "@tiptap/starter-kit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**

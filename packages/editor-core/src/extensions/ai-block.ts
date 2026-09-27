@@ -1,7 +1,7 @@
-import type { MarkdownSpecContext } from "@/lib/editor/markdown";
 import { Node, mergeAttributes } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import type { MarkdownSerializerState } from "prosemirror-markdown";
+import type { MarkdownSpecContext } from "../markdown";
 
 /**
  * `anynote-ai-block`：内嵌 AI 对话 / 补全结果的只读块，Markdown 用带 info 的 fenced code block 表达：

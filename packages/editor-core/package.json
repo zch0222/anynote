@@ -1,0 +1,41 @@
+{
+  "name": "@anynote/editor-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./leading-heading": "./src/leading-heading.ts",
+    "./version": "./src/version.ts"
+  },
+  "scripts": {
+    "lint": "cd ../.. && biome check packages/editor-core/src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tiptap/core": "^3.31.3",
+    "@tiptap/extension-code-block": "^3.31.3",
+    "@tiptap/extension-highlight": "^3.31.3",
+    "@tiptap/extension-image": "^3.31.3",
+    "@tiptap/extension-table": "^3.31.3",
+    "@tiptap/extension-task-item": "^3.31.3",
+    "@tiptap/extension-task-list": "^3.31.3",
+    "@tiptap/extension-text-align": "^3.31.3",
+    "@tiptap/extension-typography": "^3.31.3",
+    "@tiptap/extension-underline": "^3.31.3",
+    "@tiptap/pm": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
+    "prosemirror-markdown": "^1.13.7",
+    "tiptap-markdown": "^0.9.0"
+  },
+  "devDependencies": {
+    "@anynote/tsconfig": "workspace:*",
+    "@types/node": "^20",
+    "jsdom": "^29.1.1",
+    "typescript": "^5",
+    "vitest": "^4.1.7"
+  }
+}

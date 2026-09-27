@@ -1,8 +1,8 @@
-import { type MarkdownSpecContext, escapeHtmlAttribute } from "@/lib/editor/markdown";
-import { type MarkdownItLike, type MdToken, addInlineAtom } from "@/lib/editor/markdown-it";
 import { Node, mergeAttributes, nodeInputRule } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import type { MarkdownSerializerState } from "prosemirror-markdown";
+import { type MarkdownSpecContext, escapeHtmlAttribute } from "../markdown";
+import { type MarkdownItLike, type MdToken, addInlineAtom } from "../markdown-it";
 
 /**
  * `anynote-wikilink`：内部双链 `[[笔记名]]` / `[[笔记名|显示文本]]`。

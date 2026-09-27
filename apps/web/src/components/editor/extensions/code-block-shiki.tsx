@@ -1,7 +1,7 @@
 "use client";
 
 import { SUPPORTED_LANGUAGES, prepareHighlight, tokenize } from "@/lib/editor/shiki";
-import CodeBlock from "@tiptap/extension-code-block";
+import { CoreCodeBlock } from "@anynote/editor-core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
@@ -139,7 +139,8 @@ function CodeBlockShikiView({ node, updateAttributes, editor }: NodeViewProps) {
   );
 }
 
-export const CodeBlockShiki = CodeBlock.extend({
+/** 代码块的界面层：在 `@anynote/editor-core` 的定义上叠加语言下拉与 Shiki 高亮。 */
+export const CodeBlockShiki = CoreCodeBlock.extend({
   addNodeView() {
     return ReactNodeViewRenderer(CodeBlockShikiView);
   },

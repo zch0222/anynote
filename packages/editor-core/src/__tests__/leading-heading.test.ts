@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { bodyCharCount, ensureLeadingHeading, stripLeadingHeading } from "../leading-heading";
+import {
+  NOTE_TITLE_MAX_LENGTH,
+  bodyCharCount,
+  ensureLeadingHeading,
+  leadingHeadingOf,
+  stripLeadingHeading,
+  truncateTitle,
+} from "../leading-heading";
 
 describe("ensureLeadingHeading", () => {
   it("正文已经有顶部 H1 时原样返回，连前导空行都不动", () => {
@@ -92,5 +99,47 @@ describe("bodyCharCount", () => {
     const short = bodyCharCount("# 标题\n\n正文");
     const long = bodyCharCount("# 标题\n\n正文继续写下去");
     expect(long).toBeGreaterThan(short);
+  });
+});
+
+describe("truncateTitle", () => {
+  it("不超过上限时原样返回", () => {
+    expect(truncateTitle("周会纪要")).toBe("周会纪要");
+    expect(truncateTitle("字".repeat(NOTE_TITLE_MAX_LENGTH))).toHaveLength(NOTE_TITLE_MAX_LENGTH);
+  });
+
+  it("超过上限时截断到 80 个 UTF-16 码元", () => {
+    expect(truncateTitle("a".repeat(200))).toBe("a".repeat(80));
+  });
+
+  it("截断点落在代理对中间时去掉高位代理，不留半个字符", () => {
+    const title = `${"a".repeat(79)}😀`;
+    expect(truncateTitle(title)).toBe("a".repeat(79));
+    expect(truncateTitle(`${"a".repeat(78)}😀b`)).toBe(`${"a".repeat(78)}😀`);
+  });
+});
+
+describe("leadingHeadingOf", () => {
+  const heading = (textContent: string, level = 1) => ({
+    firstChild: { type: { name: "heading" }, attrs: { level }, textContent },
+  });
+
+  it("首节点是一级标题时返回去掉首尾空白的文字", () => {
+    expect(leadingHeadingOf(heading("  周会纪要  "))).toBe("周会纪要");
+  });
+
+  it("首节点不是一级标题、或标题为空时返回 null", () => {
+    expect(leadingHeadingOf(heading("二级", 2))).toBeNull();
+    expect(leadingHeadingOf(heading("   "))).toBeNull();
+    expect(
+      leadingHeadingOf({
+        firstChild: { type: { name: "paragraph" }, attrs: {}, textContent: "x" },
+      }),
+    ).toBeNull();
+    expect(leadingHeadingOf({ firstChild: null })).toBeNull();
+  });
+
+  it("超长标题截断到 80 字", () => {
+    expect(leadingHeadingOf(heading("长".repeat(100)))).toBe("长".repeat(80));
   });
 });

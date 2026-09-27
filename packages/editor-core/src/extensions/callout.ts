@@ -1,13 +1,13 @@
-import type { MarkdownSpecContext } from "@/lib/editor/markdown";
+import { Node, mergeAttributes } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import type { MarkdownSerializerState } from "prosemirror-markdown";
+import type { MarkdownSpecContext } from "../markdown";
 import {
   type MarkdownItLike,
   type MdCoreState,
   type MdToken,
   registerMdPlugin,
-} from "@/lib/editor/markdown-it";
-import { Node, mergeAttributes } from "@tiptap/core";
-import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import type { MarkdownSerializerState } from "prosemirror-markdown";
+} from "../markdown-it";
 
 /** Callout 支持的语气级别，与 `> [!INFO]` 一类标记一一对应。 */
 export const CALLOUT_LEVELS = ["info", "tip", "warn", "danger"] as const;

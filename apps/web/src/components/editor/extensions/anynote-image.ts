@@ -1,4 +1,4 @@
-import Image from "@tiptap/extension-image";
+import { CoreImage } from "@anynote/editor-core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 
@@ -225,11 +225,11 @@ function filesFromClipboard(event: ClipboardEvent): File[] {
 }
 
 /**
- * `anynote-image`：在官方 Image 基础上接入上传。
+ * `anynote-image`：在 `@anynote/editor-core` 的图片定义上接入上传。
  * 支持工具栏插入 / 粘贴 / 拖拽三种入口，统一走 `uploadFn` → 插入 `image` 节点。
  * Markdown 序列化沿用 tiptap-markdown 内置的 `image` 规则（`![alt](src)`）。
  */
-export const AnynoteImage = Image.extend<AnynoteImageOptions>({
+export const AnynoteImage = CoreImage.extend<AnynoteImageOptions>({
   addOptions() {
     return {
       ...this.parent?.(),

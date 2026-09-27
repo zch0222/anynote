@@ -1,18 +1,24 @@
-import { AnynoteAiBlock } from "@/components/editor/extensions/anynote-ai-block";
-import { AnynoteCallout } from "@/components/editor/extensions/anynote-callout";
 import { AnynoteImage } from "@/components/editor/extensions/anynote-image";
-import { AnynoteHighlight, AnynoteUnderline } from "@/components/editor/extensions/anynote-marks";
 import { AnynoteBlockMath, AnynoteInlineMath } from "@/components/editor/extensions/anynote-math";
-import { AnynoteTightTaskList } from "@/components/editor/extensions/anynote-tight-lists";
-import { AnynoteWikilink } from "@/components/editor/extensions/anynote-wikilink";
 import { CodeBlockShiki } from "@/components/editor/extensions/code-block-shiki";
-import { MarkdownBridge } from "@/lib/editor/markdown";
+import {
+  AnynoteAiBlock,
+  AnynoteCallout,
+  AnynoteHighlight,
+  AnynoteTightTaskList,
+  AnynoteUnderline,
+  AnynoteWikilink,
+  MarkdownBridge,
+  StarterKit,
+  Table,
+  TableCell,
+  TableHeader,
+  TableRow,
+  TaskItem,
+  TaskList,
+  Typography,
+} from "@anynote/editor-core";
 import type { Extensions } from "@tiptap/core";
-import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
-import TaskItem from "@tiptap/extension-task-item";
-import TaskList from "@tiptap/extension-task-list";
-import Typography from "@tiptap/extension-typography";
-import StarterKit from "@tiptap/starter-kit";
 
 /**
  * `readonly`：笔记预览、AI 输出渲染、Wikis 浏览。

@@ -1,8 +1,8 @@
-import type { MarkdownSpecContext } from "@/lib/editor/markdown";
-import { addInlineWrapper } from "@/lib/editor/markdown-it";
-import type { MarkdownItLike } from "@/lib/editor/markdown-it";
 import Highlight from "@tiptap/extension-highlight";
 import Underline from "@tiptap/extension-underline";
+import type { MarkdownSpecContext } from "../markdown";
+import { addInlineWrapper } from "../markdown-it";
+import type { MarkdownItLike } from "../markdown-it";
 
 /**
  * Markdown 没有下划线与高亮的原生语法，这里固定一套约定并与解析端成对实现，保证 round-trip：

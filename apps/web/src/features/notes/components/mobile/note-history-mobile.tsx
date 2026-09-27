@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { HistoryDiffView } from "@/features/notes/components/history-diff-view";
 import { formatHistoryTime, groupByDay } from "@/features/notes/lib/history-groups";
-import { ensureLeadingHeading } from "@/features/notes/lib/leading-heading";
 import { type NoteHistoryItem, historyUpdaterName } from "@/features/notes/schemas";
 import {
   useNoteHistoryInfinite,
@@ -16,6 +15,7 @@ import {
   useRestoreNoteVersionMutation,
 } from "@/features/notes/use-note-history";
 import { toUserMessage } from "@/lib/api/errors";
+import { ensureLeadingHeading } from "@anynote/editor-core/leading-heading";
 import { ChevronRight, Clock, History as HistoryIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";

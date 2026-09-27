@@ -10,9 +10,9 @@ const nextConfig: NextConfig = {
    */
   ...(process.env.NEXT_DISABLE_STANDALONE === "1" ? {} : { output: "standalone" }),
   outputFileTracingRoot: path.join(__dirname, "../.."),
-  // `@anynote/api-core` 以 TS 源码形式被 workspace 引用（与 api-client 不同，它有运行时代码），
+  // `@anynote/api-core` 与 `@anynote/editor-core` 以 TS 源码形式被 workspace 引用（有运行时代码），
   // 必须交给 Next 一起编译，否则构建时会把 .ts 当成未编译的 node_modules 产物。
-  transpilePackages: ["@anynote/api-core"],
+  transpilePackages: ["@anynote/api-core", "@anynote/editor-core"],
 };
 
 export default nextConfig;

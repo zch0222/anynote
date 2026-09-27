@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { type PresetName, presets } from "@/components/editor/presets";
-import { getMarkdown } from "@/lib/editor/markdown";
+import { getMarkdown } from "@anynote/editor-core";
 import { Editor } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 
@@ -25,7 +25,7 @@ function expectRoundTrip(markdown: string, preset: PresetName = "full"): void {
 }
 
 /** vitest 以 apps/web 为 cwd 运行，fixture 用相对路径拼接，避免 jsdom 下 import.meta.url 非 file: 协议。 */
-const FIXTURE_DIR = join(process.cwd(), "src", "components", "editor", "__tests__", "fixtures");
+const FIXTURE_DIR = join(process.cwd(), "..", "..", "packages", "editor-core", "fixtures");
 
 function loadFixtures(): Array<{ name: string; markdown: string }> {
   return readdirSync(FIXTURE_DIR)
@@ -73,8 +73,8 @@ describe("Markdown round-trip：单节点", () => {
 describe("Markdown round-trip：真实笔记 fixture", () => {
   const fixtures = loadFixtures();
 
-  it("包含 5 篇 fixture", () => {
-    expect(fixtures).toHaveLength(5);
+  it("包含 6 篇 fixture（语料在 packages/editor-core/fixtures，与协同服务共用）", () => {
+    expect(fixtures).toHaveLength(6);
   });
 
   it.each(fixtures.map((item) => [item.name, item.markdown] as const))(

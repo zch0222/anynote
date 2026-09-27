@@ -4,9 +4,8 @@ import {
   type UploadFn,
   uploadImageAt,
 } from "@/components/editor/extensions/anynote-image";
-import { MarkdownBridge, getMarkdown } from "@/lib/editor/markdown";
+import { MarkdownBridge, StarterKit, getMarkdown } from "@anynote/editor-core";
 import { Editor } from "@tiptap/core";
-import StarterKit from "@tiptap/starter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
