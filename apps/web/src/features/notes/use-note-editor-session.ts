@@ -18,6 +18,7 @@ import {
   hasUnsavedRisk,
   useSaveNote,
 } from "@/features/notes/use-save-note";
+import { useSaveShortcut } from "@/features/notes/use-save-shortcut";
 import { env } from "@/lib/env";
 import { bodyCharCount, ensureLeadingHeading } from "@anynote/editor-core/leading-heading";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
@@ -128,6 +129,20 @@ export function useNoteEditorSession(noteId: number) {
     markLeaveConfirmed();
     return true;
   }, [serverPersist, getStatus]);
+
+  const { flush, retry } = save;
+  /**
+   * Cmd / Ctrl + S 立即保存，代替浏览器的「网页另存为」。
+   *
+   * 服务端落库时编辑页不发保存请求（正文由协同服务写库），只拦下浏览器的默认动作；
+   * 不可重试的失败先解除停摆再保存，与失败提示条上的「重试」同义；
+   * 其余情况跳过防抖立刻落盘，冲突未解决时照旧等用户在对话框里决定。
+   */
+  const saveNow = useCallback(() => {
+    if (serverPersist) return;
+    void (getStatus() === "failed" ? retry() : flush());
+  }, [serverPersist, getStatus, retry, flush]);
+  useSaveShortcut(saveNow);
 
   const queryClient = useQueryClient();
   const titleRef = useRef(title);

@@ -504,3 +504,92 @@ describe("NoteEditor 离开拦截（单人保存链路）", () => {
     expect(router.push).not.toHaveBeenCalled();
   });
 });
+
+/*
+ * 回归：编辑页从没拦过 Cmd / Ctrl + S，按下去弹的是浏览器的「网页另存为」，
+ * 笔记本身一个字也没存——用户只能干等 1.5 秒防抖。
+ */
+describe("NoteEditor Cmd / Ctrl + S", () => {
+  const editor = {
+    isDestroyed: false,
+    commands: { setContent: vi.fn() },
+    state: {
+      doc: {
+        firstChild: { type: { name: "heading" }, attrs: { level: 1 }, textContent: "测试笔记" },
+      },
+    },
+  };
+
+  function pressSave() {
+    const event = new KeyboardEvent("keydown", {
+      key: "s",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      document.body.dispatchEvent(event);
+    });
+    return event;
+  }
+
+  it("有未保存改动时立即保存，不等防抖，并拦下浏览器的另存为", async () => {
+    vi.mocked(noteApi.PATCH).mockResolvedValue(
+      envelope({ id: NOTE_ID, title: "测试笔记", content: "x", version: "next" }) as never,
+    );
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    act(() => editorProps.mock.calls.at(-1)?.[0].onChange("# 测试笔记\n\n刚敲的字", editor));
+
+    const event = pressSave();
+
+    expect(event.defaultPrevented).toBe(true);
+    // waitFor 默认只等 1 秒，比 1.5 秒的防抖短：能等到说明是快捷键触发的，而不是防抖到期
+    await waitFor(() =>
+      expect(noteApi.PATCH).toHaveBeenCalledWith(
+        "/notes/{noteId}",
+        expect.objectContaining({
+          body: expect.objectContaining({ content: "# 测试笔记\n\n刚敲的字" }),
+        }),
+      ),
+    );
+    await waitFor(() => expect(document.querySelector('[data-status="saved"]')).not.toBeNull());
+  });
+
+  it("没有改动时也拦下另存为，但不发保存请求", async () => {
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+
+    expect(pressSave().defaultPrevented).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(noteApi.PATCH).not.toHaveBeenCalled();
+  });
+
+  it("不可重试的失败后按快捷键等同点「重试」", async () => {
+    vi.mocked(noteApi.PATCH)
+      .mockImplementationOnce(() => Promise.resolve(envelope(null, "A0404")) as never)
+      .mockImplementation(
+        () =>
+          Promise.resolve(
+            envelope({ id: NOTE_ID, title: "测试笔记", content: "x", version: "9" }),
+          ) as never,
+      );
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    act(() => editorProps.mock.calls.at(-1)?.[0].onChange("# 测试笔记\n\n改动", editor));
+    await screen.findByTestId("save-failure", {}, { timeout: 5000 });
+
+    pressSave();
+
+    await waitFor(() => expect(noteApi.PATCH).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId("save-failure")).toBeNull());
+  });
+
+  it("离开编辑页后不再拦截快捷键", async () => {
+    const { unmount } = renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(editorProps).toHaveBeenCalled());
+    unmount();
+
+    expect(pressSave().defaultPrevented).toBe(false);
+  });
+});

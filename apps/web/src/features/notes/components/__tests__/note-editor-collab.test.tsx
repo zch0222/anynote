@@ -382,6 +382,32 @@ describe("NoteEditor 服务端落库模式（M14.4）", { timeout: 20_000 }, () 
     expect(patch).not.toHaveBeenCalled();
   });
 
+  it("Cmd / Ctrl + S 只拦下浏览器的另存为，不发 PATCH（写库归协同服务）", async () => {
+    makeBindingReady();
+    collabState.serverPersist = true;
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(lastCollabOptions().enabled).toBe(true));
+    emitReady();
+    act(() => {
+      (lastCollabOptions().onLocalEdit as (() => void) | undefined)?.();
+    });
+    emitChange("# 协同笔记\n\n本地编辑");
+
+    const event = new KeyboardEvent("keydown", {
+      key: "s",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      window.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(patch).not.toHaveBeenCalled();
+  });
+
   it("徽标改为同步状态（这里是同步中），不再显示保存状态", async () => {
     makeBindingReady();
     collabState.serverPersist = true;

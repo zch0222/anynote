@@ -25,6 +25,7 @@ const save = vi.hoisted(() => ({
   conflict: null,
   scheduleSave: vi.fn(),
   flush: vi.fn(async () => undefined),
+  retry: vi.fn(async () => undefined),
   resolveConflict: vi.fn(),
   hasPendingChanges: () => false,
   getStatus: () => save.status,
@@ -217,6 +218,47 @@ describe("MobileNoteEditor", () => {
     // 先落盘再跳：否则刚敲下的那几秒改动不会出现在历史列表里
     await waitFor(() => expect(save.flush).toHaveBeenCalled());
     await waitFor(() => expect(router.push).toHaveBeenCalledWith("/m/notes/3/7/history"));
+  });
+
+  /*
+   * 回归：接外接键盘（平板）时 Cmd / Ctrl + S 弹的是浏览器的另存为。
+   * 移动端与桌面共用 useNoteEditorSession，这里只验证接线落到了移动端。
+   */
+  describe("Cmd / Ctrl + S", () => {
+    afterEach(() => {
+      save.status = "saved";
+    });
+
+    function pressSave() {
+      const event = new KeyboardEvent("keydown", {
+        key: "s",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(event);
+      return event;
+    }
+
+    it("立即落盘并拦下浏览器的另存为", async () => {
+      mockNote(LOADED);
+      renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+      expect(pressSave().defaultPrevented).toBe(true);
+      await waitFor(() => expect(save.flush).toHaveBeenCalledOnce());
+      expect(save.retry).not.toHaveBeenCalled();
+    });
+
+    it("不可重试的失败后等同点「重试」", async () => {
+      save.status = "failed";
+      mockNote(LOADED);
+      renderWithProviders(<MobileNoteEditor baseId={3} noteId={7} />);
+
+      pressSave();
+
+      await waitFor(() => expect(save.retry).toHaveBeenCalledOnce());
+      expect(save.flush).not.toHaveBeenCalled();
+    });
   });
 
   describe("离开拦截（单人保存链路）", () => {
