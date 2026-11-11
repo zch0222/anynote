@@ -15,6 +15,7 @@ import { NOTE } from "@/constants/route";
 import {Chip} from "@nextui-org/chip";
 import Loading from "@/components/Loading";
 import DashboardContext from "@/components/dashboard/Sider/context/DashboardContext";
+import { safeHighlightHtml } from "@/lib/safeHighlightHtml";
 
 function SearchItem({ data }: {
     data: SearchVO<NoteSearchHighlight, NoteSearchSource>
@@ -54,7 +55,7 @@ function SearchItem({ data }: {
             <div className="flex flex-col flex-grow">
                 <div className="flex flex-row">
                     {data.highlight.title !== undefined ?
-                        <div className="mr-1" dangerouslySetInnerHTML={{__html: data.highlight.title}}/> :  <div className="mr-1">{data.source.title}</div>}
+                        <div className="mr-1" dangerouslySetInnerHTML={{__html: safeHighlightHtml(data.highlight.title)}}/> :  <div className="mr-1">{data.source.title}</div>}
                     <div className="text-white">
                         {getPermissions(data.source.permissions)}
                     </div>
@@ -66,7 +67,7 @@ function SearchItem({ data }: {
                     return (
                         <div key={index} className="text-default-500 text-sm">
                             {item !== undefined ?
-                                <div dangerouslySetInnerHTML={{__html: item}}/> : <></>}
+                                <div dangerouslySetInnerHTML={{__html: safeHighlightHtml(item)}}/> : <></>
                         </div>
                     )
                 })}
