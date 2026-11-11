@@ -4,7 +4,6 @@ package com.anynote.gateway.filter;
 import java.nio.charset.StandardCharsets;
 
 import com.anynote.core.utils.StringUtils;
-import com.anynote.core.utils.html.EscapeUtil;
 import com.anynote.gateway.properties.XssProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -86,8 +85,12 @@ public class XSSFilter implements GlobalFilter, Ordered
                     join.read(content);
                     DataBufferUtils.release(join);
                     String bodyStr = new String(content, StandardCharsets.UTF_8);
-                    // 防xss攻击过滤
-                    bodyStr = EscapeUtil.clean(bodyStr);
+                    // 按字段防 xss：Markdown 文本字段原样放行，其余字符串字段做实体转义
+                    String sanitized = XssBodySanitizer.sanitize(bodyStr, xss.getTextFields());
+                    if (sanitized != null)
+                    {
+                        bodyStr = sanitized;
+                    }
                     // 转成字节
                     byte[] bytes = bodyStr.getBytes(StandardCharsets.UTF_8);
                     NettyDataBufferFactory nettyDataBufferFactory = new NettyDataBufferFactory(ByteBufAllocator.DEFAULT);
