@@ -33,6 +33,27 @@ describe("Toolbar variant=mobile", () => {
     expect(toolbar).toHaveAttribute("data-variant", "mobile");
   });
 
+  /**
+   * 走查 E-03：360px 视口下 8 个 40px 常驻按钮已经 392px，溢出入口若也参与横滑，
+   * 只会露出 16px，「更多格式」背后的 15 个命令几乎等于不可达。
+   * 现在横滑只发生在 `editor-toolbar-scroll` 里，「更多」被单独固定在右端。
+   */
+  it("「更多格式」固定在横滑区之外，横滑区里只有常驻命令", async () => {
+    render(<TiptapEditorImpl preset="full" toolbar="mobile" value="" />);
+    const toolbar = await screen.findByRole("toolbar");
+
+    const scroll = screen.getByTestId("editor-toolbar-scroll");
+    const more = screen.getByTestId("editor-toolbar-more");
+    const moreButton = screen.getByRole("button", { name: "更多格式" });
+
+    expect(scroll.contains(screen.getByRole("button", { name: LABELS.bold }))).toBe(true);
+    expect(scroll.contains(moreButton)).toBe(false);
+    expect(more.contains(moreButton)).toBe(true);
+    expect(toolbar.contains(more)).toBe(true);
+    // 常驻命令一个不少地待在滚动区里
+    expect(scroll.querySelectorAll("button")).toHaveLength(MOBILE_PRIMARY.length);
+  });
+
   it("「更多」弹层里能找到未常驻的命令", async () => {
     render(<TiptapEditorImpl preset="full" toolbar="mobile" value="" />);
     await screen.findByRole("toolbar");

@@ -354,34 +354,37 @@ test.describe("移动端笔记三级导航与编辑", () => {
     await expect(toolbar).toHaveAttribute("data-variant", "mobile");
 
     /*
-     * 不换行 + 横向可滚的容器（工具条自己滚，但不把页面顶出横向滚动条）。
+     * 结构：工具条本身不滚，横向滚动只发生在 `.anynote-toolbar__scroll` 里，
+     * 「更多格式」固定在右端、不参与横滑（2026-11-11 UI 走查 E-03：360px 下它只
+     * 露出过 16px）。
      *
-     * **不再断言 `scrollWidth > clientWidth`**：那条断言在常驻 10 个命令时成立，
-     * 但 M-09 画板的命令集是 8 个（`B I H2 •列表 1.列表 ☑列表 🔗 🖼 ⋯`）——
-     * 收到 8 个之后 9 个按钮在 390 宽下**正好放得下**，`scrollWidth === clientWidth`。
-     * 「内容装得下所以不滚」是更好的结果，不该判失败。
-     *
-     * 真正要守的是 H-8 那条：**画板末位的「⋯」不能被挤出右缘**。下面按几何逐个
-     * 按钮核对右边界，等价于"每个按钮都真的在可视区内"，比看 scrollWidth 更直接。
+     * **不断言 `scrollWidth > clientWidth`**：M-09 画板的命令集是 8 个
+     * （`B I H2 •列表 1.列表 ☑列表 🔗 🖼 ⋯`），390 宽下内容可能正好放得下——
+     * "装得下所以不滚"是更好的结果，不该判失败。真正要守的是**末位的「⋯」不能被
+     * 挤出右缘**，下面按几何核对它。
      */
     const metrics = await toolbar.evaluate((element) => {
       const box = element.getBoundingClientRect();
-      const buttons = [...element.querySelectorAll("button")];
+      const scroll = element.querySelector('[data-testid="editor-toolbar-scroll"]');
+      const more = element.querySelector('[data-testid="editor-toolbar-more"]');
       return {
         wrap: getComputedStyle(element).flexWrap,
-        overflowX: getComputedStyle(element).overflowX,
+        toolbarOverflowX: getComputedStyle(element).overflowX,
+        scrollOverflowX: scroll ? getComputedStyle(scroll).overflowX : null,
         clientWidth: element.clientWidth,
-        scrollWidth: element.scrollWidth,
-        buttonCount: buttons.length,
-        // 每个按钮右边界相对工具条左边界的位置
-        rights: buttons.map((button) => button.getBoundingClientRect().right - box.left),
+        moreRight: more ? more.getBoundingClientRect().right - box.left : null,
+        moreOutsideScroll: more !== null && scroll !== null && !scroll.contains(more),
+        scrollButtons: scroll ? scroll.querySelectorAll("button").length : 0,
       };
     });
     expect(metrics.wrap).toBe("nowrap");
-    expect(metrics.overflowX).toBe("auto");
-    for (const right of metrics.rights) {
-      expect(right).toBeLessThanOrEqual(metrics.clientWidth + 1);
-    }
+    // 横滑只在滚动区里，否则固定区会被一起滚走
+    expect(metrics.toolbarOverflowX).not.toBe("auto");
+    expect(metrics.scrollOverflowX).toBe("auto");
+    expect(metrics.scrollButtons).toBeGreaterThan(0);
+    expect(metrics.moreOutsideScroll).toBe(true);
+    expect(metrics.moreRight).not.toBeNull();
+    expect(metrics.moreRight as number).toBeLessThanOrEqual(metrics.clientWidth + 1);
     await expectNoHorizontalScroll(page);
 
     const boldBox = await page.getByRole("button", { name: "加粗" }).boundingBox();

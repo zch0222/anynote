@@ -593,3 +593,58 @@ describe("NoteEditor Cmd / Ctrl + S", () => {
     expect(pressSave().defaultPrevented).toBe(false);
   });
 });
+
+/**
+ * 走查 E-07：只有一个知识库时，菜单里「移动到知识库」整组是空的
+ * （标签 + 0 个目标 + 两条分隔线），用户会以为名单没加载出来。
+ */
+describe("NoteEditor ⋯ 菜单的「移动到知识库」分组（E-07）", () => {
+  it("只有一个知识库时整组不出现，菜单只剩历史版本与删除", async () => {
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("note-actions"));
+
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((item) => item.textContent?.trim())).toEqual(["历史版本", "删除笔记"]);
+    expect(screen.queryByText("移动到知识库")).toBeNull();
+  });
+
+  it("有其它知识库时才出现分组，并列出可移动目标", async () => {
+    get.mockImplementation((path: string) => {
+      if (path === "/notes/{noteId}") {
+        return Promise.resolve(
+          envelope({
+            id: NOTE_ID,
+            title: "测试笔记",
+            content: "正文",
+            knowledgeBaseId: BASE_ID,
+            knowledgeBaseName: "测试库",
+            updateTime: "2026-09-11T01:00:00.000Z",
+          }),
+        );
+      }
+      if (path === "/bases") {
+        return Promise.resolve(
+          envelope({
+            rows: [
+              { id: BASE_ID, knowledgeBaseName: "测试库" },
+              { id: 9, knowledgeBaseName: "另一个库" },
+            ],
+          }),
+        );
+      }
+      return Promise.resolve(envelope({ rows: [] }));
+    });
+
+    renderWithProviders(<NoteEditor baseId={BASE_ID} noteId={NOTE_ID} />);
+    await waitFor(() => expect(screen.getByTestId("tiptap-stub")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("note-actions"));
+
+    expect(await screen.findByText("移动到知识库")).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "另一个库" })).toBeInTheDocument();
+    // 当前所在的知识库不该出现在「移动到」列表里
+    expect(screen.queryByRole("menuitem", { name: "测试库" })).toBeNull();
+  });
+});

@@ -56,7 +56,7 @@ async function uploadImageThroughSlashMenu(page: Page) {
   await expect(menu).toBeVisible({ timeout: 30_000 });
 
   const chooser = page.waitForEvent("filechooser", { timeout: 30_000 });
-  await menu.getByRole("button", { name: /图片/ }).first().click();
+  await menu.getByRole("option", { name: /图片/ }).first().click();
   const fileChooser = await chooser;
   await fileChooser.setFiles({
     name: "e2e-pixel.png",

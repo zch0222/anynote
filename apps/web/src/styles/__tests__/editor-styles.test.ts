@@ -164,3 +164,31 @@ describe("编辑器容器不再自己画卡片", () => {
     expect(body).toContain("padding: 0");
   });
 });
+
+/**
+ * 走查 E-03：360px 下「更多格式」曾只露出 16px，且没有任何"还能横滑"的提示。
+ * 修法是把溢出入口移出横滑区，并给滚动区加右缘渐隐。
+ */
+describe("移动端工具条：溢出入口固定、横滑只发生在滚动区", () => {
+  it("滚动区自己横滑并带渐隐提示", () => {
+    const scroll = ruleBody(MOBILE, ".anynote-toolbar__scroll {");
+    expect(scroll, "缺少 .anynote-toolbar__scroll —— 常驻命令没有独立的横滑容器").not.toBeNull();
+    expect(scroll).toContain("overflow-x: auto");
+    expect(scroll).toMatch(/mask-image/);
+  });
+
+  it("「更多格式」固定在右端，有分隔线与不透明底色", () => {
+    const more = ruleBody(MOBILE, ".anynote-toolbar__more {");
+    expect(more, "缺少 .anynote-toolbar__more —— 溢出入口会跟着一起滚走").not.toBeNull();
+    expect(more).toContain("flex-shrink: 0");
+    expect(more).toMatch(/border-left/);
+    expect(more).toMatch(/background-color/);
+  });
+
+  it("工具条本身不再自己横滑，否则固定区会被一起滚走", () => {
+    const body = ruleBody(MOBILE, '.anynote-toolbar[data-variant="mobile"] {');
+    expect(body).not.toBeNull();
+    expect(body).not.toMatch(/overflow-x/);
+    expect(body).toContain("flex-wrap: nowrap");
+  });
+});
