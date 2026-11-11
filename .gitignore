@@ -102,3 +102,7 @@ pnpm-debug.log*
 .workbuddy/
 # 运维脚本暂存区：内含生产机凭据与一次性配置快照，禁止入库
 .dsh-ops/
+# 一次性调研/生成脚本与中间产物（figma 导入、pdf 等），无文档引用
+/tmp/
+# GUI 测试过程截图（浏览器走查证据，按需归档进 docs/ 后即删）
+/gui-test-screenshots/
