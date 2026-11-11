@@ -229,7 +229,10 @@ services:
       - anynote-net
 
   minio:
-    image: minio/minio:${MINIO_VERSION:-latest}
+    # 2026-09 起 MinIO 把官方镜像从 Docker Hub 与 quay.io 同时下架（pull access denied / 401），
+    # 换用 pgsty/minio（按官方 release 二进制构建，内置 curl/mc，与原镜像命令兼容）。
+    # 版本固定不用 latest（docs/minio/RUSTFS_MIGRATION_EVALUATION.md 的既定原则）。
+    image: ${MINIO_IMAGE:-pgsty/minio}:${MINIO_VERSION:-RELEASE.2026-08-04T00-00-00Z}
     container_name: anynote-minio
     command: server /data --console-address ":9001"
     environment:
@@ -257,8 +260,9 @@ services:
   # 一次性初始化：建桶 + 显式私有策略 + 分片垃圾的 ILM 兜底（docs/minio/MINIO_PLAN.md §6.2）。
   # 插件自身不建桶（全文无 bucketExists / makeBucket），缺了这一步所有 MinIO 调用都会 NoSuchBucket。
   minio-init:
-    # mc 只在 quay.io 发布（Docker Hub 的 minio/mc 已被移除，pull 会 access denied）。
-    image: ${MINIO_MC_IMAGE:-quay.io/minio/mc}:${MINIO_MC_VERSION:-latest}
+    # quay.io/minio/mc 也已于 2026-09 随 MinIO 官方镜像一起下架（匿名拉取 401）。
+    # pgsty/minio 内置 mc，直接与 minio 服务共用同一镜像，不再单拉 mc。
+    image: ${MINIO_MC_IMAGE:-pgsty/minio}:${MINIO_MC_VERSION:-RELEASE.2026-08-04T00-00-00Z}
     container_name: anynote-minio-init
     depends_on:
       minio:
