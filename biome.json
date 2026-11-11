@@ -36,5 +36,17 @@
       "openapi/specs",
       "packages/api-client/src"
     ]
-  }
+  },
+  "overrides": [
+    {
+      "include": ["apps/web/src/components/editor/core/slash-menu.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off"
+          }
+        }
+      }
+    }
+  ]
 }
