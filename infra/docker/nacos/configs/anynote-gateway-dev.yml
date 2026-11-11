@@ -117,8 +117,15 @@ security:
     type: math
   xss:
     enabled: true
+    # 整包实体转义的排除路径（按 URL 关掉过滤，优先级高于下面的字段规则）
     excludeUrls:
       - /system/notice
+    # 原样放行的字段名：Markdown 文本字段。`>` / `<` 是块语法的组成部分，
+    # 服务端转义会让引用块保存后退化成普通段落（UI 走查 E-01）。
+    # 转义责任在渲染边界（ProseMirror schema / React 文本节点）。
+    textFields:
+      - content
+      - title
   ignore:
     whites:
       - /auth/logout
