@@ -73,8 +73,8 @@ services:
       dockerfile: infra/Dockerfile.web
       target: runtime
       args:
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-        NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:-ws://localhost:1234}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://192.168.3.90:3000}
+        NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:-wss://192.168.3.90:3000/collab}
         NEXT_PUBLIC_COLLAB_NOTES: ${NEXT_PUBLIC_COLLAB_NOTES:-}
     restart: unless-stopped
     init: true
@@ -85,8 +85,8 @@ services:
     environment:
       DEPLOYMENT_ENV: production
       INTERNAL_API_URL: http://anynote-gateway:8080
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-      NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:-ws://localhost:1234}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://192.168.3.90:3000}
+      NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:-wss://192.168.3.90:3000/collab}
       NEXT_PUBLIC_COLLAB_NOTES: ${NEXT_PUBLIC_COLLAB_NOTES:-}
       COLLAB_TOKEN_SECRET: ${COLLAB_TOKEN_SECRET:-anynote-collab-dev-secret}
       TZ: Asia/Shanghai
@@ -306,7 +306,7 @@ services:
       COLLAB_PERSISTENCE_DIR: /data
       # 必须与 apps/web 的 COLLAB_TOKEN_SECRET 一致，否则所有握手都会 401
       COLLAB_TOKEN_SECRET: ${COLLAB_TOKEN_SECRET:-anynote-collab-dev-secret}
-      COLLAB_ALLOWED_ORIGINS: ${COLLAB_ALLOWED_ORIGINS:-http://localhost:3000}
+      COLLAB_ALLOWED_ORIGINS: ${COLLAB_ALLOWED_ORIGINS:-https://192.168.3.90:3000}
       # 服务端落库总开关（docs/collab-persistence）：先发前端，旧页面退场后再打开
       COLLAB_SERVER_PERSIST: ${COLLAB_SERVER_PERSIST:-false}
       NOTE_SERVICE_URL: ${NOTE_SERVICE_URL:-http://anynote-modules-note:18091}
