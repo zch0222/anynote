@@ -1,6 +1,7 @@
 import { AnynoteImage } from "@/components/editor/extensions/anynote-image";
 import { AnynoteBlockMath, AnynoteInlineMath } from "@/components/editor/extensions/anynote-math";
 import { CodeBlockShiki } from "@/components/editor/extensions/code-block-shiki";
+import { EmptyBodyHint } from "@/components/editor/extensions/empty-body-hint";
 import { SlashCommand } from "@/components/editor/extensions/slash-command";
 import { DEFAULT_PLACEHOLDER, type PresetContext } from "@/components/editor/presets/types";
 import { coreExtensions } from "@anynote/editor-core";
@@ -26,6 +27,8 @@ export function full(ctx: PresetContext): Extensions {
       },
     }),
     Placeholder.configure({ placeholder: ctx.placeholder ?? DEFAULT_PLACEHOLDER }),
+    // 「只有一个 H1、后面没有正文」的空态引导（走查 E-06）
+    EmptyBodyHint.configure({ placeholder: ctx.placeholder }),
     CharacterCount,
     SlashCommand.configure({ uploadFn: ctx.uploadFn, aiContinue: ctx.aiContinue }),
   ];

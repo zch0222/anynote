@@ -72,6 +72,18 @@
   pointer-events: none;
 }
 
+/* 新建笔记的空态引导（走查 E-06）：文档只有顶部 H1 时，在标题下方挂一条提示。
+   它是 ProseMirror 的 widget decoration——只影响绘制，不进 Markdown、不触发保存，
+   用户一敲字（文档多出段落）就自动消失。 */
+.anynote-editor__content .anynote-empty-body-hint {
+  margin-top: 0.75rem;
+  color: var(--label-tertiary);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ---------- 正文排版 ----------
    原先靠 Tailwind Typography 的 `.prose` 撑起排版，代价是 prose 会顺手接管
    代码块 / 行内代码 / 引用 / 表格的底色与边框，逼着我们在别处用更高特异度

@@ -52,24 +52,51 @@
 }
 
 /*
- * 编辑器工具条的移动端形态（M10.3 会用到）：单行横滑，不换行。
+ * 编辑器工具条的移动端形态（M10.3）：单行横滑，不换行。
  * 桌面的 .anynote-toolbar 规则不受影响——只有 data-variant="mobile" 时才生效。
+ *
+ * 「更多格式」固定在右端（2026-11-11 UI 走查 E-03）：360px 视口下 8 个 40px 常驻
+ * 按钮加起来 392px，如果溢出入口也待在滚动区里，它只会露出 16px，用户很难发现，
+ * 而它背后是代码块 / 表格 / 分割线 / 撤销等 15 个命令。现在横滑只发生在
+ * `.anynote-toolbar__scroll` 内部，右侧固定区始终完整可见。
  */
 .anynote-toolbar[data-variant="mobile"] {
   position: sticky;
   top: auto;
   bottom: 0;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
+  gap: 0;
   border-top: 1px solid var(--separator);
   border-bottom: none;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-.anynote-toolbar[data-variant="mobile"]::-webkit-scrollbar {
+/* 横向滚动区：右缘渐隐作为「还能横滑」的提示（纯 CSS 做的边缘蒙版，不额外加节点） */
+.anynote-toolbar__scroll {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+}
+
+.anynote-toolbar__scroll::-webkit-scrollbar {
   display: none;
+}
+
+/* 固定在右端的「更多」：分隔线 + 不透明底色，滚动内容从它下面干净地滑过 */
+.anynote-toolbar__more {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding-left: 4px;
+  border-left: 1px solid var(--separator);
+  background-color: var(--surface-block);
 }
 
 .anynote-toolbar[data-variant="mobile"] .anynote-toolbar__button {

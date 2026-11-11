@@ -1,5 +1,5 @@
 import type { SlashMenuListHandle, SlashMenuListProps } from "@/components/editor/core/slash-menu";
-import { SlashMenuList } from "@/components/editor/core/slash-menu";
+import { SLASH_LISTBOX_ID, SlashMenuList } from "@/components/editor/core/slash-menu";
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
 import {
   type SlashItem,
@@ -28,6 +28,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
   },
 
   addProseMirrorPlugins() {
+    const editor = this.editor;
     const items = createSlashItems({
       uploadFn: this.options.uploadFn,
       aiContinue: this.options.aiContinue,
@@ -58,20 +59,58 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
             element.style.zIndex = "60";
           };
 
+          /**
+           * 把「当前激活选项」写到编辑器上（走查 E-04）。
+           *
+           * 焦点始终留在正文里，弹层自己拿不到焦点，所以只能靠
+           * `aria-activedescendant` 告诉辅助技术当前高亮的是哪一项；
+           * `aria-controls` 指明弹层，两者都挂在 contenteditable 上。
+           */
+          const syncActiveOption = (optionId: string | null) => {
+            const dom = editor.view.dom;
+            if (optionId) {
+              dom.setAttribute("aria-activedescendant", optionId);
+            } else {
+              dom.removeAttribute("aria-activedescendant");
+            }
+          };
+
+          const clearAria = () => {
+            const dom = editor.view.dom;
+            for (const name of ["aria-activedescendant", "aria-controls", "aria-haspopup"]) {
+              dom.removeAttribute(name);
+            }
+          };
+
+          const openAria = () => {
+            const dom = editor.view.dom;
+            dom.setAttribute("aria-controls", SLASH_LISTBOX_ID);
+            dom.setAttribute("aria-haspopup", "listbox");
+          };
+
           return {
             onStart: (props) => {
               renderer = new ReactRenderer<SlashMenuListHandle, SlashMenuListProps>(SlashMenuList, {
-                props: { items: props.items, command: props.command },
+                props: {
+                  items: props.items,
+                  command: props.command,
+                  onActiveOptionChange: syncActiveOption,
+                },
                 editor: props.editor,
               });
               document.body.appendChild(renderer.element);
               place(renderer.element, props.clientRect);
+              openAria();
             },
             onUpdate: (props) => {
               if (!renderer) {
                 return;
               }
-              renderer.updateProps({ items: props.items, command: props.command });
+              renderer.updateProps({
+                items: props.items,
+                command: props.command,
+                onActiveOptionChange: syncActiveOption,
+              });
               place(renderer.element, props.clientRect);
             },
             onKeyDown: (props) => {
@@ -81,6 +120,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
               return renderer?.ref?.onKeyDown(props.event) ?? false;
             },
             onExit: () => {
+              clearAria();
               renderer?.destroy();
               renderer?.element.remove();
               renderer = null;

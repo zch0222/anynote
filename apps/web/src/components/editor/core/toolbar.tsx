@@ -1,5 +1,6 @@
 "use client";
 
+import { LinkEditor } from "@/components/editor/core/link-editor";
 import {
   MOBILE_OVERFLOW_GROUPS,
   MOBILE_PRIMARY,
@@ -116,19 +117,6 @@ function pickImage(editor: Editor) {
   input.click();
 }
 
-function applyLink(editor: Editor) {
-  const previous = editor.getAttributes("link").href as string | undefined;
-  const href = window.prompt("链接地址", previous ?? "https://");
-  if (href === null) {
-    return;
-  }
-  if (href === "") {
-    editor.chain().focus().extendMarkRange("link").unsetLink().run();
-    return;
-  }
-  editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
-}
-
 type EditorSnapshot = {
   bold: boolean;
   italic: boolean;
@@ -167,6 +155,8 @@ type ToolbarCommand = {
 function buildCommands(
   editor: Editor,
   state: EditorSnapshot,
+  /** 链接命令不再自己弹原生窗口：改用应用内链接弹层（走查 E-05）。 */
+  editLink: () => void,
 ): Record<ToolbarCommandId, ToolbarCommand> {
   const chain = () => editor.chain().focus();
   return {
@@ -240,7 +230,7 @@ function buildCommands(
       label: "链接",
       icon: <Link2 />,
       active: state.link,
-      run: () => applyLink(editor),
+      run: () => editLink(),
     },
     bulletList: {
       label: "无序列表",
@@ -348,6 +338,8 @@ function renderSlots(
  */
 export function Toolbar({ editor, variant = "full", disabledCommands }: ToolbarProps) {
   const [overflowOpen, setOverflowOpen] = useState(false);
+  /** 链接弹层：`null` 表示关闭；非空时是非 null 的初始地址（可以是空串）。 */
+  const [linkDraft, setLinkDraft] = useState<{ href: string } | null>(null);
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
@@ -390,99 +382,135 @@ export function Toolbar({ editor, variant = "full", disabledCommands }: ToolbarP
     return null;
   }
 
-  const commands = buildCommands(editor, state);
+  const commands = buildCommands(editor, state, () =>
+    setLinkDraft({ href: (editor.getAttributes("link").href as string) ?? "" }),
+  );
 
   if (variant === "mobile") {
     return (
-      <div
-        className="anynote-toolbar"
-        data-variant="mobile"
-        role="toolbar"
-        aria-label="编辑器工具栏"
-      >
-        {renderSlots(MOBILE_PRIMARY, commands, disabledCommands)}
-        <Sheet open={overflowOpen} onOpenChange={setOverflowOpen}>
-          <SheetTrigger
-            render={
-              <button
-                type="button"
-                className="anynote-toolbar__button"
-                aria-label="更多格式"
-                title="更多格式"
-              />
+      <>
+        <div
+          className="anynote-toolbar"
+          data-variant="mobile"
+          role="toolbar"
+          aria-label="编辑器工具栏"
+        >
+          {/*
+            「更多格式」固定在右端、不参与横滑（走查 E-03）：360px 下常驻命令
+            加起来已经 392px，溢出入口若也待在滚动区里只会露出 16px，用户很难发现。
+            滚动区右缘留一条渐隐，暗示“这里还能横滑”。
+          */}
+          <div className="anynote-toolbar__scroll" data-testid="editor-toolbar-scroll">
+            {renderSlots(MOBILE_PRIMARY, commands, disabledCommands)}
+          </div>
+          <div className="anynote-toolbar__more" data-testid="editor-toolbar-more">
+            <Sheet open={overflowOpen} onOpenChange={setOverflowOpen}>
+              <SheetTrigger
+                render={
+                  <button
+                    type="button"
+                    className="anynote-toolbar__button"
+                    aria-label="更多格式"
+                    title="更多格式"
+                  />
+                }
+              >
+                <MoreHorizontal />
+              </SheetTrigger>
+              <SheetContent
+                side="bottom"
+                className="max-h-[70svh] overflow-y-auto rounded-t-2xl pb-[env(safe-area-inset-bottom,0px)]"
+                data-testid="editor-more-sheet"
+              >
+                <SheetHeader>
+                  <SheetTitle>更多格式</SheetTitle>
+                </SheetHeader>
+                <div className="space-y-4 px-4 pb-4">
+                  {MOBILE_OVERFLOW_GROUPS.map((group) => (
+                    <section key={group.label} className="space-y-2">
+                      <h3 className="text-xs text-label-secondary">{group.label}</h3>
+                      <div className="grid grid-cols-4 gap-2">
+                        {group.ids.map((id) => {
+                          const command = commands[id];
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              disabled={command.disabled || disabledCommands?.includes(id)}
+                              title={
+                                disabledCommands?.includes(id) ? "协同文档暂不支持图片" : undefined
+                              }
+                              onClick={() => {
+                                setOverflowOpen(false);
+                                command.run();
+                              }}
+                              className={cn(
+                                "flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border text-xs outline-none",
+                                "disabled:pointer-events-none disabled:opacity-50",
+                                command.active && "border-primary text-accent",
+                              )}
+                            >
+                              <span className="anynote-toolbar__sheet-icon">{command.icon}</span>
+                              {command.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+        </div>
+        <LinkEditor
+          open={linkDraft !== null}
+          editor={editor}
+          initialHref={linkDraft?.href ?? ""}
+          variant="sheet"
+          onOpenChange={(open) => {
+            if (!open) {
+              setLinkDraft(null);
             }
-          >
-            <MoreHorizontal />
-          </SheetTrigger>
-          <SheetContent
-            side="bottom"
-            className="max-h-[70svh] overflow-y-auto rounded-t-2xl pb-[env(safe-area-inset-bottom,0px)]"
-            data-testid="editor-more-sheet"
-          >
-            <SheetHeader>
-              <SheetTitle>更多格式</SheetTitle>
-            </SheetHeader>
-            <div className="space-y-4 px-4 pb-4">
-              {MOBILE_OVERFLOW_GROUPS.map((group) => (
-                <section key={group.label} className="space-y-2">
-                  <h3 className="text-xs text-label-secondary">{group.label}</h3>
-                  <div className="grid grid-cols-4 gap-2">
-                    {group.ids.map((id) => {
-                      const command = commands[id];
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          disabled={command.disabled || disabledCommands?.includes(id)}
-                          title={
-                            disabledCommands?.includes(id) ? "协同文档暂不支持图片" : undefined
-                          }
-                          onClick={() => {
-                            setOverflowOpen(false);
-                            command.run();
-                          }}
-                          className={cn(
-                            "flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border text-xs outline-none",
-                            "disabled:pointer-events-none disabled:opacity-50",
-                            command.active && "border-primary text-accent",
-                          )}
-                        >
-                          <span className="anynote-toolbar__sheet-icon">{command.icon}</span>
-                          {command.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
+          }}
+        />
+      </>
     );
   }
 
   return (
-    <div
-      className="anynote-toolbar"
-      data-variant={variant}
-      role="toolbar"
-      aria-label="编辑器工具栏"
-    >
-      {renderSlots(
-        variant === "full"
-          ? FULL_LAYOUT
-          : variant === "taskDescribe"
-            ? TASK_DESCRIBE_LAYOUT
-            : MINIMAL_LAYOUT,
-        commands,
-      )}
-      <span className="anynote-toolbar__spacer" />
-      {variant === "full" ? (
-        <span className="anynote-toolbar__count" data-testid="editor-word-count">
-          {state.words} 字
-        </span>
-      ) : null}
-    </div>
+    <>
+      <div
+        className="anynote-toolbar"
+        data-variant={variant}
+        role="toolbar"
+        aria-label="编辑器工具栏"
+      >
+        {renderSlots(
+          variant === "full"
+            ? FULL_LAYOUT
+            : variant === "taskDescribe"
+              ? TASK_DESCRIBE_LAYOUT
+              : MINIMAL_LAYOUT,
+          commands,
+        )}
+        <span className="anynote-toolbar__spacer" />
+        {variant === "full" ? (
+          <span className="anynote-toolbar__count" data-testid="editor-word-count">
+            {state.words} 字
+          </span>
+        ) : null}
+      </div>
+      <LinkEditor
+        open={linkDraft !== null}
+        editor={editor}
+        initialHref={linkDraft?.href ?? ""}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLinkDraft(null);
+          }
+        }}
+      />
+    </>
   );
 }

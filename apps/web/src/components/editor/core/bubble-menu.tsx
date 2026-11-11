@@ -1,22 +1,20 @@
 "use client";
 
+import { LinkEditor } from "@/components/editor/core/link-editor";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import {
-  Bold,
-  Code,
-  Highlighter,
-  Italic,
-  Link2,
-  Sparkles,
-  Strikethrough,
-  Underline,
-} from "lucide-react";
-import { toast } from "sonner";
+import { Bold, Code, Highlighter, Italic, Link2, Strikethrough, Underline } from "lucide-react";
+import { useState } from "react";
 
-function BubbleMenuContent({ editor }: { editor: Editor }) {
+function BubbleMenuContent({
+  editor,
+  onEditLink,
+}: {
+  editor: Editor;
+  onEditLink: (href: string) => void;
+}) {
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => ({
@@ -59,23 +57,10 @@ function BubbleMenuContent({ editor }: { editor: Editor }) {
       {button(
         "链接",
         state.link,
-        () => {
-          const href = window.prompt(
-            "链接地址",
-            (editor.getAttributes("link").href as string) ?? "https://",
-          );
-          if (href === null) {
-            return;
-          }
-          if (href === "") {
-            chain().extendMarkRange("link").unsetLink().run();
-            return;
-          }
-          chain().extendMarkRange("link").setLink({ href }).run();
-        },
+        // 走查 E-05：链接编辑走应用内 Dialog，不再弹 window.prompt
+        () => onEditLink((editor.getAttributes("link").href as string) ?? ""),
         <Link2 />,
       )}
-      {button("AI 改写（M7 接入）", false, () => toast.info("AI 改写将在 M7 接入"), <Sparkles />)}
     </>
   );
 }
@@ -83,20 +68,44 @@ function BubbleMenuContent({ editor }: { editor: Editor }) {
 /**
  * 选区气泡菜单。用 `BubbleMenu` 的 React 绑定（`@tiptap/react/menus`），
  * 无需单独注册 `@tiptap/extension-bubble-menu`。
+ *
+ * 链接编辑弹层**挂在气泡菜单外面**：气泡菜单在编辑器失焦时会收起，
+ * 把 Dialog 塞进它的子节点里，点开输入框的一瞬间弹层就会连同对话框一起被卸载。
  */
 export function BubbleMenuPortal(props: { editor: Editor | null; className?: string }) {
   const { editor } = props;
+  /** 链接编辑的打开状态与「点击那一刻」的初始地址。 */
+  const [link, setLink] = useState<{ href: string } | null>(null);
+
   if (!editor || !editor.isEditable) {
     return null;
   }
+
   return (
-    <BubbleMenu
-      editor={editor}
-      className="anynote-bubble-menu"
-      options={{ placement: "top" }}
-      shouldShow={({ from, to }) => from !== to}
-    >
-      <BubbleMenuContent editor={editor} />
-    </BubbleMenu>
+    <>
+      <BubbleMenu
+        editor={editor}
+        className="anynote-bubble-menu"
+        options={{ placement: "top" }}
+        shouldShow={({ from, to }) => from !== to}
+      >
+        <BubbleMenuContent
+          editor={editor}
+          onEditLink={(href) => {
+            setLink({ href });
+          }}
+        />
+      </BubbleMenu>
+      <LinkEditor
+        open={link !== null}
+        editor={editor}
+        initialHref={link?.href ?? ""}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLink(null);
+          }
+        }}
+      />
+    </>
   );
 }

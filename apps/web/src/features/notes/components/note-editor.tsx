@@ -130,6 +130,12 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
     );
   }
 
+  /*
+   * 可移动目标 = 其它知识库。只有 1 个知识库时这一组是空的（走查 E-07）：
+   * 仍然渲染标签 + 空列表 + 两条分隔线，会让用户以为"名单没加载出来"。
+   */
+  const movableBases = (bases.data ?? []).filter((base) => base.id !== baseId);
+
   return (
     <div className="flex min-h-0 w-full flex-1">
       {/*
@@ -183,18 +189,20 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                   历史版本
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel>移动到知识库</DropdownMenuLabel>
-                {(bases.data ?? [])
-                  .filter((base) => base.id !== baseId)
-                  .map((base) => (
-                    <DropdownMenuItem
-                      key={base.id}
-                      onClick={() => void handleMove({ noteId, knowledgeBaseId: base.id })}
-                    >
-                      {base.knowledgeBaseName?.trim() || "未命名知识库"}
-                    </DropdownMenuItem>
-                  ))}
-                <DropdownMenuSeparator />
+                {movableBases.length > 0 ? (
+                  <>
+                    <DropdownMenuLabel>移动到知识库</DropdownMenuLabel>
+                    {movableBases.map((base) => (
+                      <DropdownMenuItem
+                        key={base.id}
+                        onClick={() => void handleMove({ noteId, knowledgeBaseId: base.id })}
+                      >
+                        {base.knowledgeBaseName?.trim() || "未命名知识库"}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </>
+                ) : null}
                 <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
                   <Trash2 className="size-4" aria-hidden="true" />
                   删除笔记
