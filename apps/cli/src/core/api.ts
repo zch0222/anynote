@@ -11,14 +11,15 @@ import { NetworkError, isNetworkFailure } from "./exit";
 
 /**
  * Gateway 路由前缀，与 nacos 的 anynote-gateway-dev.yml 一一对应。
- * ai 域走 `aiNio`：`/api/ai` 是 Phase 3 合并前的旧服务，已下线恒 503。
+ * ai 域走 `ai`（`/api/ai`）：M16.1 起由改名后的 anynote-ai 服务承接，
+ * 旧 `anynote-ai-nio` / `/api/aiNio/**` 路由已删除，不保留别名。
  */
 export const DOMAINS = {
   auth: "auth",
   system: "system",
   note: "note",
   file: "file",
-  ai: "aiNio",
+  ai: "ai",
   notify: "notify",
 } as const;
 

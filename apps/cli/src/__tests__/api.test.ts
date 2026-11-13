@@ -36,12 +36,12 @@ async function makeStore(
 }
 
 describe("Gateway 域前缀", () => {
-  it("各域拼到 /api/<domain>，ai 用 aiNio 而不是已下线的 ai", async () => {
+  it("各域拼到 /api/<domain>，ai 域走 /api/ai", async () => {
     const { store } = await makeStore();
     const stub = makeStubFetch([
       { method: "GET", match: "/api/note/bases/1", body: envelope({ id: 1 }) },
       { method: "GET", match: "/api/system/user/mine", body: envelope({ id: 9 }) },
-      { method: "GET", match: "/api/aiNio/chat/conversations/list", body: envelope([]) },
+      { method: "GET", match: "/api/ai/chat/conversations/list", body: envelope([]) },
     ]);
     const api = createApiClients("http://gateway.test/", createAuthFetch(store, stub.fetch));
 
@@ -55,7 +55,7 @@ describe("Gateway 域前缀", () => {
     expect(stub.calls.map((call) => new URL(call.url).pathname)).toEqual([
       "/api/note/bases/1",
       "/api/system/user/mine",
-      "/api/aiNio/chat/conversations/list",
+      "/api/ai/chat/conversations/list",
     ]);
   });
 
