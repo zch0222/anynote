@@ -1,6 +1,6 @@
 # AI 模块重构调研报告
 
-> 文档版本：v0.1 | 调研日期 2026-11-12 | 基线：`dev` @ `6365728`
+> 文档版本：v0.2 | 调研日期 2026-11-12 | 基线：`dev` @ `6365728` | 真实栈复核：2026-11-14，见 [M16.0](./AI_MILESTONES.md#m160-技术验证与拍板)
 > 关联文档：[README](./README.md) · [总体方案](./AI_REFACTOR_PLAN.md) · [知识检索方案](./KNOWLEDGE_RETRIEVAL_PLAN.md) · [里程碑](./AI_MILESTONES.md)
 > 参考：AI Agent Handbook（本机 `D:\code\ai-agent-handbook`，提交 `754ec0c`），下称「白皮书」，引用按章节号
 
@@ -8,8 +8,8 @@
 
 ## 0. 调研口径
 
-- 本报告的全部结论来自**静态阅读**代码、建表 SQL 与配置文件，**没有启动运行栈验证**。
-  §2.3 的缺陷凡是标「静态」的，实施时要先写出复现它的失败用例再改（`CLAUDE.md`「测试要求」）。
+- 本报告初版结论来自**静态阅读**代码、建表 SQL 与配置文件。2026-11-14 已在真实 dev 栈复核，逐项现象和证据等级见 [M16.0 验证记录](./AI_MILESTONES.md#m160-技术验证与拍板)。
+  §2.3 表中的「静态」保留初版核对方式，不代表复核后仍未验证；实施时仍要先写失败用例再改（`CLAUDE.md`「测试要求」）。
 - 证据格式为 `文件路径:行号`。行号对应上面的基线提交。
 - 配置里的密钥、口令一律没有抄进本文。
 
@@ -137,7 +137,7 @@ flowchart LR
 - 版本：Java 21、Spring Boot 3.3.4、Spring Cloud 2023.0.3、Spring Cloud Alibaba 2023.0.3.4、MyBatis-Plus 3.5.9
   （`services/pom.xml:35-52`、`services/bom/pom.xml:14-26`）。运行镜像是 `eclipse-temurin:21-jre-alpine`（`infra/Dockerfile.local:4`）。
 - Druid 版本有两个来源：根 pom 的属性是 1.2.15（`services/pom.xml:52`），BOM 里是 1.2.21（`services/bom/pom.xml:24`），
-  `services/ai/pom.xml` 显式写了 `${druid.version}`。本机 Maven 仓库里只解析出了 1.2.15，所以实际生效的是它。
+  `services/ai/pom.xml` 显式写了 `${druid.version}`。基线实际解析为 1.2.15；M16.0 已将根 pom 统一升到 1.2.21，并通过真实服务 actuator 确认 `dataSource` 类型为 `DruidDataSource`。
 - 本机 Maven 仓库里解析到的其他相关版本：`mysql-connector-j` 8.3.0、`tomcat-embed-core` 10.1.30、
   `spring-cloud-commons` 4.1.4（其中已经带有给 `RestClient.Builder` 做负载均衡的处理器）、
   `elasticsearch-java` 8.13.4（客户端比 8.7.0 的服务端新）。
