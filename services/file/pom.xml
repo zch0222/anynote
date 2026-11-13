@@ -70,12 +70,6 @@
             <artifactId>anynote-common-redis</artifactId>
         </dependency>
 
-        <!-- WebClient (Reactive HTTP client, only the client lib, not the WebFlux server) -->
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-webflux</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>com.anynote</groupId>
             <artifactId>anynote-common-swagger</artifactId>
