@@ -103,7 +103,7 @@ const SCENES = [
     title: "04 AI 流式 · 思考中（首 token 未到达）",
     ref: "p15-streaming.png",
     path: "/ai/chat",
-    hang: ["**/api/proxy/aiNio/**"],
+    hang: ["**/api/proxy/ai/**"],
     waitFor: '[data-testid="assistant-thinking"]',
     settle: 400,
     act: async (page) => {

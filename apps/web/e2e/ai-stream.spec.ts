@@ -3,9 +3,10 @@ import { expect, test } from "@playwright/test";
 /**
  * 关键路径 4：AI 流式。
  *
- * 成功流式路径当前被后端阻塞（M7.6 第 1 条：ai-nio servlet 栈 reactor context
- * 丢失 + LLM 上游 ai-service 未部署）。因此这条用例断言的是**前端确实发起了
- * SSE 请求并进入了明确的终态**——成功时出现回答，失败时出现错误与重试入口。
+ * 成功流式路径当前被后端阻塞（M7.6 第 1 条：`anynote-ai` servlet 栈
+ * reactor context 丢失 + LLM 上游 ai-service 未部署；改名不解除该阻塞）。
+ * 因此这条用例断言的是**前端确实发起了 SSE 请求并进入了明确的终态**——
+ * 成功时出现回答，失败时出现错误与重试入口。
  * 后端修好之后无需改用例，成功分支会自然被覆盖到。
  */
 test.describe("关键路径 4：AI 流式对话", () => {
@@ -17,7 +18,7 @@ test.describe("关键路径 4：AI 流式对话", () => {
 
     const sseRequest = page.waitForRequest(
       (request) =>
-        request.url().includes("/api/proxy/aiNio/chat/completions") && request.method() === "POST",
+        request.url().includes("/api/proxy/ai/chat/completions") && request.method() === "POST",
       { timeout: 30_000 },
     );
 
@@ -25,7 +26,7 @@ test.describe("关键路径 4：AI 流式对话", () => {
     await page.getByRole("button", { name: "发送" }).click();
 
     const request = await sseRequest;
-    expect(request.url()).toContain("/api/proxy/aiNio");
+    expect(request.url()).toContain("/api/proxy/ai");
 
     // 用户消息立刻上屏
     await expect(page.getByText("用一句话介绍 Anynote").first()).toBeVisible();

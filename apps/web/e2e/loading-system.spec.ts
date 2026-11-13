@@ -509,7 +509,7 @@ test.describe("04 AI 流式 Streaming", () => {
     await expect(composer).toBeVisible({ timeout: 30_000 });
 
     // 把 SSE 端点挂住：这正是"首 token 还没到"的真实状态
-    await page.route("**/api/proxy/aiNio/**", async () => {
+    await page.route("**/api/proxy/ai/**", async () => {
       await new Promise(() => {});
     });
 
@@ -562,7 +562,7 @@ test.describe("04 AI 流式 Streaming", () => {
      * 造一个"流已经开始"的 SSE：发一条增量后结束响应体。
      * 前端收到增量即进入 streaming 态，正是要验的那一帧。
      */
-    await page.route("**/api/proxy/aiNio/**", async (route) => {
+    await page.route("**/api/proxy/ai/**", async (route) => {
       const body = 'data: {"code":"00000","data":{"message":"正在","status":"doing"}}\n\n';
       await route.fulfill({
         status: 200,
