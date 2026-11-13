@@ -13,7 +13,7 @@
 | `services/system`   | anynote-modules-system        | 8091   | 用户、角色、权限、租户管理    |
 | `services/note`     | anynote-modules-note          | 18091  | 笔记、知识库、文档、MOOC、视频 |
 | `services/file`     | anynote-modules-file          | 8095   | 文件上传/下载（Huawei OBS/MinIO） |
-| `services/ai`       | anynote-modules-ai-nio        | 9065   | AI 对话（SSE）、RAG、Whisper、翻译 |
+| `services/ai`       | anynote-modules-ai            | 9065   | AI 对话（SSE）、RAG、Whisper、翻译 |
 | `services/notify`   | anynote-modules-notify        | 9066   | 消息通知、站内信              |
 | `services/job`      | anynote-modules-job           | 8093   | XXL-Job 任务执行              |
 | `services/manage`   | anynote-modules-manage        | 18092  | 管理后台业务逻辑              |

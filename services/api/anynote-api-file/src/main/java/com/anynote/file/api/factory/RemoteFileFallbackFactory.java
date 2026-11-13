@@ -56,6 +56,11 @@ public class RemoteFileFallbackFactory implements FallbackFactory<RemoteFileServ
             }
 
             @Override
+            public ResData<ObjectURL> getObjectUrlByObjectName(String objectName) {
+                return ResData.error(ResCode.INNER_FILE_SERVICE_ERROR);
+            }
+
+            @Override
             public ResData<OssSliceUploadTaskVO> createOssSliceUploadTask(OssSliceUploadTaskCreateDTO ossSliceUploadTaskCreateDTO) {
                 return ResData.error(ResCode.INNER_FILE_SERVICE_ERROR);
             }

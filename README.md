@@ -157,7 +157,7 @@ Claude Code / Codex 若没立刻出现，新开一个会话即可。
 
 ### 场景 A：Dev Docker 全栈（推荐日常使用）
 
-> Next.js、协同服务、9 个 Java 服务和中间件进入 Compose。Java JAR 仍需预先构建；Python AI 独立运行，由 `AI_FASTAPI_ADDRESS` 指向其内网地址。
+> Next.js、协同服务、9 个 Java 服务和中间件进入 Compose。Java JAR 仍需预先构建；Python AI 独立运行，其注册服务名由 Nacos 配置 `anynote.ai.harness.service-name` 指定。
 
 **前置**：Docker >= 24 + Compose >= 2.24.4、Maven / JDK 21。前端依赖和生产构建全部在镜像内完成。下列 shell 命令在 Linux / macOS / WSL 执行；Windows 原生 Compose 的空环境文件用 `--env-file=NUL`。
 
@@ -290,6 +290,9 @@ cd services && mvn spring-boot:run -pl gateway
 ```bash
 cd ai-service
 pip install -r requirements.txt
+# Java 侧按 Nacos 服务名访问（配置项 anynote.ai.harness.service-name，默认 anynote-ai-harness）
+NACOS_SERVICE_NAME=anynote-ai-harness \
+NACOS_SERVER_ADDRESS=127.0.0.1:8848 \
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -350,7 +353,7 @@ docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docke
 docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml run --rm nacos-init
 ```
 
-生产不发布 Nacos / Elasticsearch 等管理端口。这些中间件沿用单机可信 Docker 网络模式；不要把不可信容器加入 `anynote-net`。如有跨主机中间件或多租户运维要求，需要另外配置中间件认证与 TLS。Python AI 仍是独立服务，`AI_FASTAPI_ADDRESS` 必须指向可达的内网地址。
+生产不发布 Nacos / Elasticsearch 等管理端口。这些中间件沿用单机可信 Docker 网络模式；不要把不可信容器加入 `anynote-net`。如有跨主机中间件或多租户运维要求，需要另外配置中间件认证与 TLS。Python AI 仍是独立服务，其注册服务名由 Nacos 配置 `anynote.ai.harness.service-name` 指定，端口需在 `anynote-net` 内可达。
 
 #### C.3 构建并启动
 
@@ -426,7 +429,8 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同服务均保留命名�
 |------|--------|------|
 | `SPRING_PROFILES_ACTIVE` | `dev` | Spring Profile（`dev` / `prod`） |
 | `JAVA_OPTS` | `-Xms256m -Xmx512m` | 所有 Java 服务共享的 JVM 参数 |
-| `AI_FASTAPI_ADDRESS` | `http://host.docker.internal:8000` | Python AI 服务地址；容器内部署时改为容器名 |
+| `AI_JAVA_OPTS` | `-Xms512m -Xmx2g` | AI 服务单独的 JVM 参数（承载长连接，容量按 M16.1 验证结果） |
+| `ANYNOTE_AI_CREDENTIAL_KEY` | _(空)_ | AI 模型供应商凭据的 AES-256-GCM 主密钥（Base64 编码的 32 字节）；未配置时凭据相关端点报错 |
 | `APP_IMAGE_PREFIX` | `anynote` | Docker 镜像名前缀 |
 | `APP_IMAGE_TAG` | `local` | 生产必须显式设置发布标签 |
 | `NEXT_PUBLIC_APP_URL` | `https://192.168.3.90:3000` | 公开来源，构建时内联，生产要求 HTTPS |
@@ -517,7 +521,7 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同服务均保留命名�
 | `SYSTEM_PORT` | `8091` | 用户/权限服务 |
 | `NOTE_PORT` | `18091` | 笔记服务 |
 | `FILE_PORT` | `8095` | 文件服务 |
-| `AI_NIO_PORT` | `9065` | AI SSE 服务 |
+| `AI_PORT` | `9065` | AI 服务（SSE） |
 | `MANAGE_PORT` | `18092` | 管理后台 |
 | `NOTIFY_PORT` | `9066` | 通知服务 |
 | `JOB_PORT` | `8093` | 定时任务执行器 |

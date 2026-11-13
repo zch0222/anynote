@@ -17,6 +17,4 @@ public class ServiceNameConstants {
     public static final String NOTE_SERVICE = "anynote-note";
 
     public static final String AI_SERVICE = "anynote-ai";
-
-    public static final String AI_NIO_SERVICE = "anynote-ai-nio";
 }

@@ -25,7 +25,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotNull;
-import java.io.IOException;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
@@ -95,7 +94,7 @@ public class DocController {
 
     @PostMapping("{id}/query")
     public void ragQueryDoc(@Validated @PathVariable @NotNull(message = "文档ID不能为空") Long id,
-                                           @RequestBody DocRagQueryDTO docRagQueryDTO) throws IOException {
+                                           @RequestBody DocRagQueryDTO docRagQueryDTO) {
         docService.queryDoc(DocRagQueryParam.DocRagQueryParamBuilder()
                 .docId(id)
                 .prompt(docRagQueryDTO.getPrompt())

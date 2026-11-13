@@ -24,12 +24,6 @@ spring:
             - Path=/api/system/**
           filters:
             - StripPrefix=2
-        - id: anynote-ai-nio
-          uri: lb://anynote-ai-nio
-          predicates:
-            - Path=/api/aiNio/**
-          filters:
-            - StripPrefix=2
         - id: anynote-notify
           uri: lb://anynote-notify
           predicates:
@@ -92,7 +86,7 @@ spring:
           filters:
             - StripPrefix=1
         - id: openapi-ai
-          uri: lb://anynote-ai-nio
+          uri: lb://anynote-ai
           predicates:
             - Path=/ai/v3/api-docs
           filters:

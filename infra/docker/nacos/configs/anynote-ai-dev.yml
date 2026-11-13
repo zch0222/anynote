@@ -1,11 +1,49 @@
+server:
+  tomcat:
+    accept-count: 4096
+    max-connections: 8192
 spring:
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:anynote}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
     username: ${MYSQL_APP_USER:anynote}
     password: ${MYSQL_APP_PASSWORD:Anynote*1832}
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 5000
   redis:
     host: ${REDIS_HOST:redis}
     port: ${REDIS_PORT:6379}
     password: ${REDIS_PASSWORD:}
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    async:
+      request-timeout: 180000
 rocketmq:
   name-server: ${ROCKETMQ_NAME_SERVER:rocketmq-namesrv:9876}
+executor:
+  whisper-executor:
+    core-pool-size: 16
+    max-pool-size: 200
+    queue-capacity: 1000
+  ffmpeg-executor:
+    core-pool-size: 10
+    max-pool-size: 10
+    queue-capacity: 1000
+anynote:
+  ai:
+    harness:
+      service-name: anynote-ai-harness
+      connect-timeout: 3s
+      idle-timeout: 30s
+      total-timeout: 120s
+    run:
+      max-concurrent-per-user: 2
+      max-concurrent-total: 500
+      db-bulkhead: 20
+    models:
+      mapping-version: 1
+      logical: {}

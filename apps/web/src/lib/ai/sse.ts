@@ -68,8 +68,8 @@ export async function streamAiSse({
   onChunk,
 }: StreamAiSseOptions): Promise<void> {
   const { fetchEventSource } = await import("@microsoft/fetch-event-source");
-  // ai 域走 /api/proxy/aiNio：Gateway 上 /api/aiNio/** 才路由到 anynote-ai-nio
-  await fetchEventSource(`/api/proxy/aiNio${path}`, {
+  // ai 域走 /api/proxy/ai：M16.1 改名后 Gateway 上 /api/ai/** 才路由到 anynote-ai
+  await fetchEventSource(`/api/proxy/ai${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

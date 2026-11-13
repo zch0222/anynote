@@ -688,6 +688,7 @@ M6 开工前先按 §2 的强制配合点补齐后端契约，变更提案与核
 **后端契约/实现缺口（前端无责，需后端跟进；延续 M5.10 的挂起模式）**：
 
 1. **ai-nio SSE 全链路不可用（阻塞 M7.1 成功路径）**：`services/ai` 跑在 Servlet/Tomcat 栈，`Mono.deferContextual` 里 `ctx.get(LOGIN_USER)` 抛 `NoSuchElementException: Context is empty`（`ChatServiceImpl.java:259` 附近）——WebFlux 的 `ContextWebFilter` 上下文桥在 servlet 部署下不生效，`chat/completions`（新会话与续聊两分支都取 ctx）、`chat/conversations/list` 等所有需要登录用户的 reactive 端点全部失败（B0001 / failed 事件）。叠加 M0.1 记录的 `ai-service`（Python LLM 上游，`ANYNOTE_AI_FASTAPI_ADDRESS=http://host.docker.internal:8000`）Phase 5 之后才接，即使 context 修复流式也无可答上游。**需后端开工单**：servlet 环境的登录上下文注入 + LLM 上游部署。
+   - **✅ 2026-11-14 关闭（M16.1）**：`services/ai` 已改 Spring MVC + 虚拟线程，登录用户与令牌从请求线程显式传递，`HarnessClient` 经 Nacos 服务名调用 Python。真实栈 HTTP 验证聊天 SSE、会话落库、会话列表、Whisper 状态流均通过；本地用模拟 Harness 上游注册 `anynote-ai-harness` 完成，真实 Python/模型链路在 M16.8 复核。浏览器端成功路径在 M16.7 接新事件协议时统一跑 E2E。
 2. **`POST /moocs` 缺 `data_scope` 即失败**：`n_mooc.data_scope` 列 NOT NULL 无默认值，`MoocCreateDTO.dataScope` 可选导致缺省时 B0001。前端已补 `dataScope: 1` 规避；后端宜给列加默认或 DTO 必填。
 3. **课程条目权限规则缺失**：`GET /moocs/items/{id}` 返回「获取SysPermissionRule：n:mooc:read失败」——系统权限规则表无 `n:mooc:read` 配置（数据问题）。
 4. **PDF 上传后端链路失败**：`POST /docs/pdfs` 经 note→file Feign multipart 转存触发 fallback（「上传文档失败」），note 日志中根因被 gson 序列化 Throwable 的二次异常掩盖。与 M5.10 的图片直传 `@InnerAuth` 同族——**上传/解析链路的后端配合点未达成**。

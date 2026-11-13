@@ -199,45 +199,45 @@ flowchart LR
 
 先写失败用例（对应调研报告 §2.3 的编号）：
 
-- [ ] 第 1 条：新会话与续聊都能取到登录用户
-- [ ] 第 13 条：不在请求线程上发出的 Feign 调用带内部签名头
-- [ ] 第 14 条：流结束时的落库不在转发线程的事务里，且一定执行
+- [x] 第 1 条：新会话与续聊都能取到登录用户
+- [x] 第 13 条：不在请求线程上发出的 Feign 调用带内部签名头
+- [x] 第 14 条：流结束时的落库不在转发线程的事务里，且一定执行
 
 `services/ai`：
 
-- [ ] `pom.xml` 去掉 `spring-boot-starter-webflux` 与 `reactor-test`
-- [ ] Controller 改成同步返回值；流式端点返回 `SseEmitter`，并用注解显式声明 `text/event-stream` 的响应结构
-- [ ] Service 改成同步签名；登录用户与令牌封装成参数显式传递
-- [ ] 新增 `HarnessClient`（`RestClient`），替换 `AIFastApiChatService` 里的 `WebClient`
-- [ ] 流式转发按[总体方案 §4.4](./AI_REFACTOR_PLAN.md#44-长连接的写法) 实现：短事务开启、无事务转发、短事务落库、断线后读完上游
-- [ ] 并发限制：每用户与全局的运行数、访问数据库的并发数，各一个信号量
-- [ ] 删除 `RequiresChatConversationPermissionsAspect`，改用通用的 `@RequiresPermissions`；`RequiresWhisperTaskPermissionsAspect` 改成前置校验
-- [ ] Whisper 状态流：响应式 Redis 订阅换成监听容器加阻塞队列
-- [ ] 线程池：`ioExecutor` 换成虚拟线程执行器；删除没有注册的 `DataScopeFilter`、`RagController` 里的测试端点
-- [ ] 删除占位的 `src/test/java/Test.java`，补齐单测
+- [x] `pom.xml` 去掉 `spring-boot-starter-webflux` 与 `reactor-test`
+- [x] Controller 改成同步返回值；流式端点返回 `SseEmitter`，并用注解显式声明 `text/event-stream` 的响应结构
+- [x] Service 改成同步签名；登录用户与令牌封装成参数显式传递
+- [x] 新增 `HarnessClient`（`RestClient`），替换 `AIFastApiChatService` 里的 `WebClient`
+- [x] 流式转发按[总体方案 §4.4](./AI_REFACTOR_PLAN.md#44-长连接的写法) 实现：短事务开启、无事务转发、短事务落库、断线后读完上游
+- [x] 并发限制：每用户与全局的运行数、访问数据库的并发数，各一个信号量
+- [x] 删除 `RequiresChatConversationPermissionsAspect`，改用通用的 `@RequiresPermissions`；`RequiresWhisperTaskPermissionsAspect` 改成前置校验
+- [x] Whisper 状态流：响应式 Redis 订阅换成监听容器加阻塞队列
+- [x] 线程池：`ioExecutor` 换成虚拟线程执行器；删除没有注册的 `DataScopeFilter`、`RagController` 里的测试端点
+- [x] 删除占位的 `src/test/java/Test.java`，补齐单测
 
 连带模块：
 
-- [ ] `anynote-api-ai`：删除 `RagService`（连同它在自动配置清单里的那一行）与 webflux 依赖
-- [ ] `anynote-common-ai-fastapi`：模块删除，父 pom 与 BOM 里的声明一并去掉
-- [ ] `services/note`：`DocServiceImpl` 的 PDF 问答改为废弃，抛出带说明的业务异常；删除 `WebClientConfig` 与 webflux 依赖
-- [ ] `services/file`、`job`、`manage`：删除只为 `RagService` 注入而存在的 `WebClientConfig`
-- [ ] `anynote-common-datascope`：删除 `aspect/webflux/RequiresPermissionsAspect`
-- [ ] `anynote-common-security-servlet`：`FeignRequestInterceptor` 对所有调用加内部签名
-- [ ] `anynote-common-core`：清理 `ServletUtils` 里残留的 import
+- [x] `anynote-api-ai`：删除 `RagService`（连同它在自动配置清单里的那一行）与 webflux 依赖
+- [x] `anynote-common-ai-fastapi`：模块删除，父 pom 与 BOM 里的声明一并去掉
+- [x] `services/note`：`DocServiceImpl` 的 PDF 问答改为废弃，抛出带说明的业务异常；删除 `WebClientConfig` 与 webflux 依赖
+- [x] `services/file`、`job`、`manage`：删除只为 `RagService` 注入而存在的 `WebClientConfig`
+- [x] `anynote-common-datascope`：删除 `aspect/webflux/RequiresPermissionsAspect`
+- [x] `anynote-common-security-servlet`：`FeignRequestInterceptor` 对所有调用加内部签名
+- [x] `anynote-common-core`：清理 `ServletUtils` 里残留的 import
 
 改名（D9 通过时）：
 
-- [ ] 模块 `anynote-modules-ai-nio`、服务名 `anynote-ai-nio`、包 `com.anynote.ai.nio` 改为不带「nio」的名字
-- [ ] `ServiceNameConstants`、网关路由（**直接删除 `/api/aiNio/**`，不设别名**）、OpenAPI 聚合路由、compose、Nacos Data ID 同步
-- [ ] 新前端与 CLI 的域映射（`apps/web/src/lib/api/openapi.ts`、`apps/cli/src/core/api.ts`）切到 `/api/ai`；CLI 的生成物重新生成
-- [ ] 文档里的旧名同步：`CLAUDE.md`、`README.md`、`.claude/context/backend.md`
+- [x] 模块 `anynote-modules-ai-nio`、服务名 `anynote-ai-nio`、包 `com.anynote.ai.nio` 改为不带「nio」的名字
+- [x] `ServiceNameConstants`、网关路由（**直接删除 `/api/aiNio/**`，不设别名**）、OpenAPI 聚合路由、compose、Nacos Data ID 同步
+- [x] 新前端与 CLI 的域映射（`apps/web/src/lib/api/openapi.ts`、`apps/cli/src/core/api.ts`）切到 `/api/ai`；CLI 的生成物重新生成
+- [x] 文档里的旧名同步：`CLAUDE.md`、`README.md`、`.claude/context/backend.md`
 
 配置：
 
-- [ ] Nacos：`spring.threads.virtual.enabled`、运行与上游超时、并发限制；显式配置并实测 Druid 池上限与 `db-bulkhead` 一致
-- [ ] 按 P1：`services/ai` 增加模型供应商凭据表、AES-GCM 加解密与内部配置快照端点（先写 OpenSpec）；主密钥只走环境变量，Nacos 只放非敏感映射与版本，附安全与热更新单测
-- [ ] Python 服务名收拢到一处配置；删除 `sys_config.AI_SERVER_ADDRESS` 与 `anynote.ai-fastapi.address` 两个旧入口及文档里的引用
+- [x] Nacos：`spring.threads.virtual.enabled`、运行与上游超时、并发限制；显式配置并实测 Druid 池上限与 `db-bulkhead` 一致
+- [x] 按 P1：`services/ai` 增加模型供应商凭据表、AES-GCM 加解密与内部配置快照端点（先写 OpenSpec）；主密钥只走环境变量，Nacos 只放非敏感映射与版本，附安全与热更新单测
+- [x] Python 服务名收拢到一处配置；删除 `sys_config.AI_SERVER_ADDRESS` 与 `anynote.ai-fastapi.address` 两个旧入口及文档里的引用
 
 **验收**
 
@@ -245,6 +245,58 @@ flowchart LR
 - `FRONTEND_MILESTONES.md` M7.6 第 1 条关闭并回写
 - `pnpm openapi:generate` 输出干净并提交 baseline。线上行为不变，但生成的 spec 会变：
   流式端点的 `ServerSentEvent*` 包装 schema 由显式声明的事件 schema 取代，另有服务改名带来的差异；逐项核对差异都在预期之内
+
+### M16.1 验收记录（2026-11-14）
+
+**分支与范围**：分支 `feat/ai-java-mvc`（自 `dev` 切出，完成后 `--no-ff` 合并 `dev`）。按 2026-11-14 用户拍板执行：
+D9 改名不保留别名；PDF 问答过渡期废弃；并发超限提示、Whisper 状态流 30 分钟上限等文案均按拍板落地。
+
+**实现要点**
+
+- D9 改名：Maven artifact `anynote-modules-ai`、服务名/Nacos 注册名 `anynote-ai`、包 `com.anynote.ai`、启动类
+  `AnyNoteAIApplication`；删除 `AI_NIO_SERVICE`，三个原指向它的 Feign 客户端改用 `AI_SERVICE`；网关删除
+  `/api/aiNio/**` 路由、OpenAPI 聚合改指 `anynote-ai`；compose 服务/镜像名与 `AI_PORT` 同步，`AI_FASTAPI_ADDRESS` 删除。
+- `services/ai`：去掉 webflux/reactor-test；Controller/Service 同步化；流式端点改 `SseEmitter` 并用
+  `@ApiResponse` 显式声明事件 schema；`HarnessClient`（`@LoadBalanced RestClient`）替换 `WebClient`；
+  `ioExecutor` 改虚拟线程执行器；新增每用户/全局/数据库三个信号量与空闲看门狗；Whisper 状态流改
+  `RedisMessageListenerContainer` + 阻塞队列；登录用户与令牌通过 `AiCallContext` 显式传参。
+- 连带模块：`anynote-api-ai` 删除 `RagService` 与 webflux；`anynote-common-ai-fastapi` 模块删除；note 的 PDF 问答
+  废弃并删除 `WebClientConfig`/webflux；file/job/manage 删除 `WebClientConfig`；datascope 删除 webflux 切面；
+  `FeignRequestInterceptor` 无条件加内部签名；`ServletUtils` 清理 Reactor import。
+- P1：新增 `a_model_provider` 表与 AES-GCM 加解密、`GET /internal/v1/model-providers/snapshot`、
+  `POST /internal/v1/model-providers`、`DELETE /internal/v1/model-providers/{providerKey}`（均 `@InnerAuth`），
+  Nacos 只放 `anynote.ai.models` 非敏感映射；主密钥 `ANYNOTE_AI_CREDENTIAL_KEY` 只注入 services/ai。
+- 验证中修复的两个连带问题：
+  - `LogAspect` 不再把 `SseEmitter` 序列化进日志。改造前每条流都会打一次 `Log Response Error`（Gson 序列化
+    `Throwable#detailMessage` 失败），2000 并发一轮产生约 40 万行日志；修复后同轮日志约 4.9k 行、0 条该类错误。
+  - `HarnessClient` 复用单例 `HttpClient` 并给它的异步任务使用虚拟线程执行器；否则 JDK `HttpClient` 的默认
+    cached thread pool 会让平台线程随连接数增长（首轮 100 并发即从 140 涨到 252）。另加 30s 空闲看门狗：
+    `JdkClientHttpRequestFactory.setReadTimeout` 不能中断已阻塞的流式 body 读取，上游停发时只有看门狗能结束流。
+
+**验证结果（本机 docker dev 栈；模拟 Harness 上游注册 Nacos `anynote-ai-harness`，4→8 个实例）**
+
+| 项 | 结果 |
+|---|---|
+| 依赖面 | `mvn dependency:tree -Dincludes=org.springframework:spring-webflux` 与 `io.projectreactor:reactor-netty-http` 在 `services/ai`、`note`、`file`、`job`、`manage` 均 0 命中 |
+| 单测 | `mvn test` 31 个 reactor 模块 BUILD SUCCESS；`services/ai` 38 条（含 P1 18 条、HarnessClient 4 条、ChatServiceImpl 5 条），note 96 条 |
+| 功能（HTTP 真栈） | 12/12：会话列表、聊天 SSE 15 帧、提问/回答落库 2 条、PDF 问答废弃文案、Whisper 状态流（初始状态 + Redis 推送）、P1 凭据写/读/删（含解密） |
+| 权限错误格式 | 越权访问他人会话返回 HTTP 200 + `application/json` + `A0300`（去掉 `produces` 后不再被 SSE 内容类型卡住） |
+| 并发 | 每流 60s/5 事件/秒、300 事件。100：100/100，平台线程峰值 167；500：500/500，峰值 169；1000：998/1000，峰值 174；2000：1999/2000，峰值 173；2000 档总耗时 71.5s。失败项均为模拟上游连接被重置（`HTTP/1.1 header parser received no bytes`），无 Java 侧拒绝、无 OOM |
+| 保留堆 | 2000 档 15s 时点 `jvm.gc.live.data.size` 增量 364MB / 2000 ≈ 182KiB/连接（1000 档约 156KiB/连接），低于 200KiB 预算；该口径含残余临时对象，不是单对象精确值 |
+| 钉住 | 500 并发 + `-Djdk.tracePinnedThreads=full`：8 条记录全部是首次初始化/短读（Jackson/Spring/Kotlin 反射初始化 5 条、Tomcat 读请求体 2 条、首次事件序列化 1 条）；**稳态上游读取与稳态 SSE 写入 0 条** |
+| 故障 | 压测中途暂停上游：43.2s 收到 `failed` 帧（`出现异常请稍后重试`），助手消息落库带失败标记，上游恢复后新请求正常（名额已归还） |
+| OpenAPI | `ai.json` 差异：删除 `/rag/test`、`/rag/doc`；新增 3 个 P1 内部端点；`ServerSentEvent*` 三个 schema 替换为 `ChatCompletionsEventVO`/`WhisperEventVO`/`WhisperTaskStatusVOV1`；其余 5 份 baseline 不变 |
+| 前端/CLI | 域映射与注释切到 `/api/ai`；web 定向单测 105 条、CLI 301 条通过；浏览器 E2E 未跑（M16.7 接新事件协议时统一跑） |
+
+**环境与遗留**
+
+- 本地 dev 库缺少仓库既有迁移 `2026-09-16-sys-permission-rule-user-associated.sql`，导致所有权限规则查询报
+  `Unknown column 'is_user_associated'`（非本批引入）。已在验证环境执行该仓库迁移后继续，不涉及代码改动。
+- 容量验证临时通过 Nacos API 把 `anynote.ai.run.max-concurrent-per-user/total` 调到 2000，验证后已恢复
+  `2/500` 并重启；compose 为 AI 服务新增 `AI_JAVA_OPTS=-Xms512m -Xmx2g` 默认值。
+- 未做真实数据端到端：dev 库无慕课条目/字幕对象，视频总结未走真实数据；`POST /whisper` 需要用户自有的音频对象，
+  只做了映射单测与路径修正；真实 Python 上游与真实模型链路留 M16.8 复核。
+- 压测后堆 `used` 约 1.17GB、`gcLive` 约 680MB，未做长时间 GC/泄漏观察；M16.8 用真实上游复测时一并复核。
 
 ---
 

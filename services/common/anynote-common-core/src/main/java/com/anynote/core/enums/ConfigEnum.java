@@ -28,11 +28,6 @@ public enum ConfigEnum {
     RAG_MAX_DAY_COUNT,
 
     /**
-     * AI 服务器地址
-     */
-    AI_SERVER_ADDRESS,
-
-    /**
      * 首页展示文档ID
      */
     HOME_DOC_ID,

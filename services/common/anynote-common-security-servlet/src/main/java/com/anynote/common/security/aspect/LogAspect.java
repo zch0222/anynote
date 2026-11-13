@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Conditional;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -85,7 +86,12 @@ public class LogAspect {
         try {
             logBO.setSuccess(1);
             logBO.setTimeConsuming(System.currentTimeMillis() - startTime);
-            logBO.setResponse(new Gson().toJson(result));
+            if (result instanceof ResponseBodyEmitter) {
+                // 流式响应没有可序列化的完整结果，避免把 SseEmitter 内部状态（含异常）写进日志
+                logBO.setResponse("<streaming>");
+            } else {
+                logBO.setResponse(new Gson().toJson(result));
+            }
             printLog(logBO);
         } catch (Throwable e) {
             log.error("Log Response Error", e);

@@ -1,5 +1,5 @@
 <archetype>
-  <id>anynote-modules-ai-nio</id>
+  <id>anynote-modules-ai</id>
   <sources>
     <source>src/main/java/App.java</source>
   </sources>

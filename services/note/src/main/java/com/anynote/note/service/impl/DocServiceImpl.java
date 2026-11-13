@@ -1,11 +1,5 @@
 package com.anynote.note.service.impl;
 
-import com.alibaba.nacos.shaded.com.google.gson.Gson;
-import com.anynote.ai.api.RagService;
-import com.anynote.ai.api.RemoteRagService;
-import com.anynote.ai.api.RemoteTranslateService;
-import com.anynote.ai.api.exception.RagLimitException;
-import com.anynote.ai.api.model.bo.RagFileQueryReq;
 import com.anynote.common.redis.service.ConfigService;
 import com.anynote.common.rocketmq.callback.RocketmqSendCallbackBuilder;
 import com.anynote.common.rocketmq.properties.RocketMQProperties;
@@ -17,6 +11,7 @@ import com.anynote.core.exception.BusinessException;
 import com.anynote.core.exception.auth.TokenException;
 import com.anynote.core.exception.user.UserParamException;
 import com.anynote.core.utils.*;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.CreateResEntity;
 import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.core.web.model.bo.ResData;
@@ -38,7 +33,6 @@ import com.anynote.note.api.enums.KnowledgeBasePermissions;
 import com.anynote.note.mapper.DocMapper;
 import com.anynote.note.model.bo.*;
 import com.anynote.note.model.vo.DocListVO;
-import com.anynote.note.model.vo.DocQueryVO;
 import com.anynote.note.api.model.vo.DocVO;
 import com.anynote.note.service.DocService;
 import com.anynote.note.service.KnowledgeBaseService;
@@ -51,12 +45,8 @@ import com.github.pagehelper.PageInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.io.Writer;
 import java.util.Date;
 import java.util.List;
 
@@ -85,20 +75,7 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
     private TokenUtil tokenUtil;
 
     @Resource
-    private RemoteRagService remoteRagService;
-
-    @Resource
     private ConfigService configService;
-
-    @Resource
-    private WebClient webClient;
-
-    @Resource
-    private RemoteTranslateService remoteTranslateService;
-
-    @Resource
-    private RagService ragService;
-
 
     @Override
     @RequiresKnowledgeBasePermissions(value = KnowledgeBasePermissions.MANAGE, message = "您没有权限上传PDF文档")
@@ -265,116 +242,10 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
 
     @Override
     @RequiresDocPermissions(DocPermissions.READ)
-    public void queryDoc(DocRagQueryParam docRagQueryParam) throws IOException {
-
-        DocVO docVO = this.getDocById(docRagQueryParam);
-        HttpServletResponse response = ServletUtils.getResponse();
-        response.setHeader("Content-Type", "text/event-stream;charset=UTF-8");
-        response.setHeader("Cache-Control", "no-cache");
-        Writer writer = response.getWriter();
-        Gson gson = new Gson();
-
-        LoginUser loginUser = tokenUtil.getLoginUser();
-        if (0 != docVO.getIndexStatus()) {
-            writer.write(String.format("id: %s\nevent: message\ndata: %s\n\n", System.currentTimeMillis(),
-                    gson.toJson(ResUtil.error(DocQueryVO.builder()
-                            .status("failed")
-                            .message("文档索引未生成，请先点击上方更多生成索引")
-                            .build()))));
-            writer.flush();
-            return;
-        }
-
-        try {
-            ragService.query(loginUser.getSysUser().getId(), docRagQueryParam.getDocId(), docRagQueryParam.getConversationId(), RagFileQueryReq.builder()
-                            .file_hash(docVO.getHash())
-                            .prompt(docRagQueryParam.getPrompt())
-                            .file_name(docVO.getEnglishDocName() != null ?
-                                    docVO.getEnglishDocName().replace(" ", "_") : "doc")
-                            .author(docVO.getCreatorNickname())
-                            .category("UNKNOWN")
-                            .description("None")
-                            .build(),
-                    value -> {
-                        String resJson = null;
-                        if (value.getStatus().equals("failed")) {
-                            value.setResult("生成失败，请重试");
-                            resJson = gson.toJson(ResUtil.error(DocQueryVO.builder()
-                                    .status(value.getStatus())
-                                    .message(value.getResult())
-                                    .build()));
-                        }
-                        else {
-                            resJson = gson.toJson(ResUtil.success(DocQueryVO.builder()
-                                    .status(value.getStatus())
-                                    .message(value.getResult())
-                                    .build()));
-                        }
-                        log.info(resJson);
-                        try {
-                            writer.write(String.format("id: %s\nevent: message\ndata: %s\n\n", System.currentTimeMillis(), resJson));
-                            writer.flush();
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                        return null;
-                    });
-        } catch (RagLimitException e) {
-            writer.write(String.format("id: %s\nevent: message\ndata: %s\n\n", System.currentTimeMillis(), gson.toJson(ResUtil.success(DocQueryVO.builder()
-                    .status("failed")
-                    .message("您今日RAG使用次数已用完")
-                    .build()))));
-//            throw new BusinessException("您今日RAG使用次数已用完");
-        }
-
-//        Flux<RagFileQueryRes> resFlux = webClient.post()
-//                .uri(aiServerAddress + "/api/rag/query")
-//                .contentType(MediaType.APPLICATION_JSON)
-//                .body(BodyInserters.fromValue(gson.toJson(RagFileQueryReq.builder()
-//                        .file_hash(docVO.getHash())
-//                        .prompt(docRagQueryParam.getPrompt())
-//                        .file_name(docVO.getEnglishDocName().replace(" ", "_"))
-//                        .author(docVO.getCreatorNickname())
-//                        .category("UNKNOWN")
-//                        .description("None")
-//                        .build())))
-//                .exchangeToFlux(res -> {
-//                    if (res.statusCode().isError()) {
-//                        throw new BusinessException("Rag查询失败");
-//                    }
-//                    else {
-//                        return res.bodyToFlux(RagFileQueryRes.class);
-//                    }
-//                });
-//
-//        CountDownLatch latch = new CountDownLatch(1);
-//
-//        resFlux.subscribe(
-//                value -> {
-//                    String resJson = gson.toJson(ResUtil.success(DocQueryVO.builder()
-//                            .status(value.getStatus())
-//                            .message(value.getResult())
-//                            .build()));
-//                    log.info(resJson);
-//                    try {
-//                        writer.write(String.format("id: %s\nevent: message\ndata: %s\n\n", System.currentTimeMillis(), resJson));
-//                        writer.flush();
-//                    } catch (IOException e) {
-//                        throw new RuntimeException(e);
-//                    }
-//                },
-//                error -> {
-//                    error.printStackTrace();
-//                    latch.countDown();
-//                },
-//                latch::countDown
-//        );
-//
-//        try {
-//            latch.await();
-//        } catch (InterruptedException e) {
-//            Thread.currentThread().interrupt();
-//        }
+    public void queryDoc(DocRagQueryParam docRagQueryParam) {
+        // PDF 问答链路已废弃（M16.1）：保留权限与文档存在性校验，统一返回业务错误
+        this.getDocById(docRagQueryParam);
+        throw new BusinessException("PDF 问答功能已暂停，后续版本将恢复", ResCode.BUSINESS_ERROR);
     }
 
     @Override

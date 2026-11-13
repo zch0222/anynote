@@ -50,6 +50,15 @@ public interface RemoteFileService {
     @GetMapping(value = "{id}")
     public ResData<FilePO> getFileById(@PathVariable("id") Long id, @RequestHeader("from-source") String fromSource);
 
+    /**
+     * 按对象名获取时效访问地址。
+     *
+     * @param objectName 对象名称
+     * @return 对象的时效访问地址
+     */
+    @GetMapping("files/public/byObjectName")
+    public ResData<ObjectURL> getObjectUrlByObjectName(@RequestParam("objectName") String objectName);
+
     @PostMapping("/ossSliceUploadTasks")
     public ResData<OssSliceUploadTaskVO> createOssSliceUploadTask(@RequestBody @Validated
                                                                   OssSliceUploadTaskCreateDTO ossSliceUploadTaskCreateDTO);

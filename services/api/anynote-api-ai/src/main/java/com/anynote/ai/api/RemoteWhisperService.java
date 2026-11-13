@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 
 @FeignClient(contextId = "remoteWhisperService",
-        value = ServiceNameConstants.AI_NIO_SERVICE, fallbackFactory = RemoteTranslateFallbackFactory.class)
+        value = ServiceNameConstants.AI_SERVICE, fallbackFactory = RemoteTranslateFallbackFactory.class)
 public interface RemoteWhisperService {
 
     @PostMapping("whisper/submit")

@@ -25,7 +25,7 @@ services:
     <<: *app-dev
   anynote-modules-file:
     <<: *app-dev
-  anynote-modules-ai-nio:
+  anynote-modules-ai:
     <<: *app-dev
   anynote-modules-manage:
     <<: *app-dev

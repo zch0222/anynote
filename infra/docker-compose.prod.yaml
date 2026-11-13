@@ -72,7 +72,7 @@ services:
     <<: *java-prod
   anynote-modules-file:
     <<: *java-prod
-  anynote-modules-ai-nio:
+  anynote-modules-ai:
     <<: *java-prod
   anynote-modules-manage:
     <<: *java-prod

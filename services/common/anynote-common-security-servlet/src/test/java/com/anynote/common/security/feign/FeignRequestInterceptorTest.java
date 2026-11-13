@@ -41,4 +41,24 @@ class FeignRequestInterceptorTest {
         assertThat(HmacUtils.verify("configured-internal-secret-0123", timestamp, sign)).isTrue();
         assertThat(HmacUtils.verify(SecurityConstants.INTERNAL_SECRET, timestamp, sign)).isFalse();
     }
+
+    @Test
+    @DisplayName("无请求上下文时仍带 from-source/时间戳/签名，且被调端用同一密钥能验过")
+    void signsInternalHeadersWithoutRequestContext() {
+        // 模拟异步线程 / MQ 消费线程：RequestContextHolder 中没有请求
+        RequestContextHolder.resetRequestAttributes();
+        InternalSecretProperties properties = new InternalSecretProperties();
+        properties.setSecret("configured-internal-secret-0123");
+        RequestTemplate template = new RequestTemplate();
+
+        new FeignRequestInterceptor(properties).apply(template);
+
+        String timestamp = template.headers().get(SecurityConstants.INTERNAL_TIMESTAMP).iterator().next();
+        String sign = template.headers().get(SecurityConstants.INTERNAL_SIGN).iterator().next();
+        assertThat(template.headers().get(SecurityConstants.FROM_SOURCE)).containsExactly(SecurityConstants.INNER);
+        assertThat(HmacUtils.verify("configured-internal-secret-0123", timestamp, sign)).isTrue();
+        // 无请求上下文时没有用户身份头可透传
+        assertThat(template.headers()).doesNotContainKey(SecurityConstants.ACCESS_TOKEN);
+        assertThat(template.headers()).doesNotContainKey(SecurityConstants.DETAILS_USER_ID);
+    }
 }

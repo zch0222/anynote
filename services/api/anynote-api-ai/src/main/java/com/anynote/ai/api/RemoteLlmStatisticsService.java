@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @FeignClient(contextId = "remoteLlmStatisticsService",
-        value = ServiceNameConstants.AI_NIO_SERVICE, fallbackFactory = RemoteLlmStatisticsFallbackFactory.class)
+        value = ServiceNameConstants.AI_SERVICE, fallbackFactory = RemoteLlmStatisticsFallbackFactory.class)
 public interface RemoteLlmStatisticsService {
 
     @PostMapping("llmStatistics")
