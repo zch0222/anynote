@@ -58,17 +58,19 @@ public class FeignRequestInterceptor implements RequestInterceptor {
                 requestTemplate.header(SecurityConstants.ACCESS_TOKEN, accessToken);
             }
 
-            requestTemplate.header(SecurityConstants.FROM_SOURCE, SecurityConstants.INNER);
-            String timestamp = String.valueOf(System.currentTimeMillis());
-            requestTemplate.header(SecurityConstants.INTERNAL_TIMESTAMP, timestamp);
-            requestTemplate.header(SecurityConstants.INTERNAL_SIGN,
-                    HmacUtils.sign(internalSecretProperties.resolveSecret(), timestamp));
-
 //            String contentType = headers.get(SecurityConstants.CONTENT_TYPE);
 //            if (StringUtils.isNotEmpty(contentType)) {
 //                requestTemplate.header(SecurityConstants.CONTENT_TYPE, contentType);
 //            }
 
         }
+
+        // 内部调用签名不依赖请求线程：异步线程 / MQ 消费线程发起的 Feign 调用也必须带签名，
+        // 否则被调端 @InnerAuth 会因缺少签名头拒绝。
+        requestTemplate.header(SecurityConstants.FROM_SOURCE, SecurityConstants.INNER);
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        requestTemplate.header(SecurityConstants.INTERNAL_TIMESTAMP, timestamp);
+        requestTemplate.header(SecurityConstants.INTERNAL_SIGN,
+                HmacUtils.sign(internalSecretProperties.resolveSecret(), timestamp));
     }
 }
