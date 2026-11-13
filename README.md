@@ -720,14 +720,16 @@ node apps/web/scripts/ui-capture.mjs                 # 真实构建上截图 + �
 
 ### CI
 
-[`.github/workflows/test.yml`](.github/workflows/test.yml) 在所有 PR 与 `dev` / `main` push 上跑两个并行 job：
+GitHub Actions 的自动 `push` / `pull_request` 触发已关闭；[`.github/workflows/test.yml`](.github/workflows/test.yml) 与 [`openapi-check.yml`](.github/workflows/openapi-check.yml) 均只保留 `workflow_dispatch`，可在 GitHub Actions 页面按需手动运行。
+
+`test.yml` 的单元测试相关 job：
 
 | Job | 命令 | 说明 |
 |-----|------|------|
 | `java` | `mvn clean test` | 集成测试被自动排除，无需 docker 全栈；失败时上传 surefire 报告 |
 | `web` | `pnpm test` | vitest 跑在 jsdom 中，不依赖后端 |
 
-与 [`openapi-check.yml`](.github/workflows/openapi-check.yml) 分开：后者需要起全栈、耗时长，仅在 `services/**` 或 `openapi/**` 变更时触发。
+`openapi-check.yml` 需要起全栈、耗时长，与 `test.yml` 保持为独立的手动检查。
 
 ### 覆盖要求
 

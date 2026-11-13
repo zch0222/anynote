@@ -1,21 +1,18 @@
 name: Unit Tests
 
-# 目的：执行 CLAUDE.md「测试要求（强制）」约定的单元测试门禁。
+# 目的：提供 CLAUDE.md「测试要求（强制）」约定的手动单元测试门禁。
+# 自动 push / pull_request 触发已关闭，可在 GitHub Actions 页面按需手动运行。
 #
 # 只跑**纯单测**：Java 侧由 services/pom.xml 的 surefire `excludedGroups=integration`
 # 自动排除需要 MySQL / Redis / Nacos / RocketMQ 的 @Tag("integration") 用例；
 # 前端侧 vitest 跑在 jsdom 里，不依赖后端。因此本 workflow 不需要起 docker 全栈，
-# 与重量级的 openapi-check.yml 分开，保证 PR 上能快速反馈。
+# 与重量级的 openapi-check.yml 分开，便于按需单独运行。
 #
 # 集成测试需要中间件，暂不在 CI 跑，本地用：
 #   mvn test -pl <module> -DexcludedGroups=
 
 on:
-  pull_request:
-  push:
-    branches:
-      - dev
-      - main
+  workflow_dispatch:
 
 jobs:
   java:

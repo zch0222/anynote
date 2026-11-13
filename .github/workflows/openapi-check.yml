@@ -4,24 +4,12 @@ name: OpenAPI Drift Check
 # 是否同步更新。若 PR 没有同步更新 baseline，CI fail；提示作者本地跑 `pnpm openapi:generate`
 # 然后将 specs 一并提交。
 #
-# 触发条件：services/** 或 openapi/** 变更的 PR。中间件/前端独立变更不触发。
+# 自动 push / pull_request 触发已关闭，可在 GitHub Actions 页面按需手动运行。
 #
-# 触发逻辑参见 docs/refactor/FRONTEND_MILESTONES.md M0.4 与 openapi/WORKFLOW.md。
+# 检查逻辑参见 docs/refactor/FRONTEND_MILESTONES.md M0.4 与 openapi/WORKFLOW.md。
 
 on:
-  pull_request:
-    paths:
-      - 'services/**'
-      - 'openapi/**'
-      - 'packages/api-client/**'
-      - '.github/workflows/openapi-check.yml'
-  push:
-    branches:
-      - dev
-      - main
-    paths:
-      - 'services/**'
-      - 'openapi/**'
+  workflow_dispatch:
 
 jobs:
   openapi-drift:
