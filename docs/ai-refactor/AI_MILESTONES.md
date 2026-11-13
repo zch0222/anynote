@@ -1,7 +1,7 @@
 # AI 模块重构里程碑（M16.x）
 
 > 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-14
-> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0 技术验证完成，既有前端门禁待清零**
+> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0 已于 2026-11-14 关闭**
 > 关联文档：[调研报告](./AI_RESEARCH.md) · [总体方案](./AI_REFACTOR_PLAN.md) · [知识检索方案](./KNOWLEDGE_RETRIEVAL_PLAN.md)
 >
 > 本文是执行计划：每个里程碑的任务、验收标准与依赖。设计取舍在两份方案里，这里不重复。
@@ -52,6 +52,7 @@ flowchart LR
 - **配置**：运行时配置改 Nacos 的 Data ID（`infra/docker/nacos/configs/`），不改 `application.yml`。
 - **数据库**：迁移脚本放 `infra/sql/migrations/`，同步更新 `infra/sql/anynote.sql`，手动执行。
 - **每个里程碑结束时 `dev` 可运行**：`pnpm services:build`、`mvn test`、`pnpm test`、`pnpm typecheck` 全绿。
+- **范围边界（2026-11-14 用户确认）**：验收阻断项仅限本批引入的问题。验证时发现且确认非本批引入的问题，记录其实际状态，但不修复、不作为里程碑关闭的阻塞项；不得因此宣称全仓门禁全绿。
 
 ---
 
@@ -176,10 +177,10 @@ flowchart LR
 #### 7. 全仓门禁
 
 - `mvn test`：31 个 reactor 模块全部 SUCCESS；`pnpm services:build`：31 个模块全部 SUCCESS。两者均覆盖 Druid 1.2.21。
-- `pnpm test`：两轮全量均因 CLI 既有用例超过 5 秒而失败，失败项随运行变化。`commands.test.ts` + `skill-commands.test.ts` 单独重跑 70/70 通过，`store.test.ts` 单独重跑 13/13 通过；这是 Windows 下不稳定的既有门禁，不是本次改动引入，但**全量门禁仍按红色记录**。
-- `pnpm typecheck`：稳定失败于 3 处既有 web 契约类型错误：`use-profile.ts` 的 `/user/mine/profile`、`use-task-detail.ts` 的 `/admin/noteTasks/{id}/editHeatmap`、`profile.ts` 的 `/notes/{noteId}/collab-grant` 在本地生成类型中不存在。本次未改 web/API，不在 M16.0 越权修复。
+- **遗留问题 G1（非本次引入，后续不管）**：`pnpm test` 两轮全量均因 CLI 既有用例超过 5 秒而失败，失败项随运行变化。`commands.test.ts` + `skill-commands.test.ts` 单独重跑 70/70 通过，`store.test.ts` 单独重跑 13/13 通过。记录为 Windows 下不稳定的既有门禁，不纳入本次重构，不阻断里程碑。
+- **遗留问题 G2（非本次引入，后续不管）**：`pnpm typecheck` 稳定失败于 3 处既有 web 契约类型错误：`use-profile.ts` 的 `/user/mine/profile`、`use-task-detail.ts` 的 `/admin/noteTasks/{id}/editHeatmap`、`profile.ts` 的 `/notes/{noteId}/collab-grant` 在本地生成类型中不存在。不纳入本次重构，不阻断里程碑。
 
-**M16.0 技术验证与拍板已完成**：2026-11-14 用户确认 P1/P2 均选 A，且目前没有生产环境，生产库补查取消。本次按破坏性升级实施，不做生产迁移或旧接口兼容承诺。按仓库通用约定，里程碑仍未关闭的唯一剩余项是上述既有前端门禁；清零前不进入 M16.1–M16.3 的实施分支。
+**M16.0 已关闭（2026-11-14）**：P1/P2 均选 A；目前没有生产环境，生产库补查取消；本次按破坏性升级实施，不做生产迁移或旧接口兼容承诺。用户确认 G1/G2 均非本次引入，后续不在本次重构中处理。M16.1–M16.3 可以开工。上述两项仅保留事实记录，**不表示全仓门禁全绿**。
 
 **验收**
 

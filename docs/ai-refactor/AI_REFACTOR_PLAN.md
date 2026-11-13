@@ -1,6 +1,6 @@
 # AI 模块重构总体方案
 
-> 文档版本：v0.2（破坏性升级实施稿） | 创建 2026-11-12 | 更新 2026-11-14 | 状态：**D1–D17、P1/P2 已拍板；无生产环境；M16.0 验证记录见里程碑**
+> 文档版本：v0.2（破坏性升级实施稿） | 创建 2026-11-12 | 更新 2026-11-14 | 状态：**D1–D17、P1/P2 已拍板；无生产环境；M16.0 已关闭**
 > 关联文档：[调研报告](./AI_RESEARCH.md) · [知识检索方案](./KNOWLEDGE_RETRIEVAL_PLAN.md) · [里程碑](./AI_MILESTONES.md)
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 测试节](../../README.md#测试)、[`README.md` Git 工作流](../../README.md#git-工作流)、[`openapi/WORKFLOW.md`](../../openapi/WORKFLOW.md)
 > 参考：AI Agent Handbook（下称「白皮书」，引用按章节号，对应关系见调研报告 §5）
