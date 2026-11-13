@@ -1,7 +1,7 @@
 # AI 模块重构
 
 > 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-14
-> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0 已关闭，M16.1–M16.3 可开工**
+> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0 已关闭，M16.1 已完成（2026-11-14），M16.2–M16.3 可开工**
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 测试节](../../README.md#测试)、[`README.md` Git 工作流](../../README.md#git-工作流)、
 > [`docs/refactor/FRONTEND_MILESTONES.md`](../refactor/FRONTEND_MILESTONES.md) M7.6（AI 流式全链路的后端缺口，本方案解除）
 > 参考：AI Agent Handbook（白皮书），本机路径 `D:\code\ai-agent-handbook`，调研时的提交为 `754ec0c`
@@ -110,4 +110,5 @@ AI 相关模块（`services/ai`、`ai-service/` 以及连带的 Feign 契约与�
 
 1. ~~拍板 D1–D17~~（2026-11-14 完成）。
 2. ~~M16.0 技术验证与拍板~~（2026-11-14 已关闭）：P1 业务库加密、P2 `pdfplumber`；无生产环境，取消生产数据补查，按破坏性升级实施。非本次引入的 G1/G2 仅记录，不纳入本次重构。
-3. M16.1（Java 去 WebFlux）、M16.2（Harness 内核）、M16.3（note 知识访问层）互不依赖，可以并行开工。
+3. ~~M16.1（Java 去 WebFlux、D9 改名、P1 凭据基础设施）~~（2026-11-14 完成，验收记录见 `AI_MILESTONES.md` M16.1）。
+4. M16.2（Harness 内核）、M16.3（note 知识访问层）互不依赖，可以并行开工；真实 Python 上游与真实模型链路在 M16.8 复核。
