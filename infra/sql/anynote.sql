@@ -1104,3 +1104,29 @@ CREATE TABLE `sys_user_role` (
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2025-05-03 21:48:39
+
+--
+-- 2026-11-14 模型供应商目录 a_model_provider（M16.1 P1 决策）
+-- 建表语句已同步到 infra/sql/migrations/2026-11-14-ai-model-provider.sql。
+-- 凭据为 AES-GCM 密文，主密钥只在 services/ai 环境变量 ANYNOTE_AI_CREDENTIAL_KEY；本段可重复执行。
+--
+
+CREATE TABLE IF NOT EXISTS `a_model_provider` (
+  `id`                  bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `provider_key`        varchar(64)  NOT NULL COMMENT '供应商标识（唯一）',
+  `display_name`        varchar(128) NOT NULL COMMENT '供应商展示名',
+  `protocol`            varchar(32)  NOT NULL DEFAULT 'openai_compatible' COMMENT '协议类型，默认 openai_compatible',
+  `base_url`            varchar(512) NOT NULL COMMENT '接口基地址',
+  `api_key_cipher`      varchar(2048) NOT NULL COMMENT 'API Key 密文：Base64(iv || ciphertext || tag)，AES-GCM，iv 12 字节、tag 128 位',
+  `models`              json         NOT NULL COMMENT '模型名数组（JSON array）',
+  `data_egress_allowed` tinyint      NOT NULL DEFAULT 0 COMMENT '是否允许数据出境（0 否 1 是）',
+  `enabled`             tinyint      NOT NULL DEFAULT 1 COMMENT '是否启用（0 停用 1 启用）',
+  `version`             bigint       NOT NULL DEFAULT 1 COMMENT '版本号，每次更新 +1',
+  `create_by`           bigint unsigned NOT NULL DEFAULT 0 COMMENT '创建者',
+  `update_by`           bigint unsigned NOT NULL DEFAULT 0 COMMENT '更新者',
+  `create_time`         datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time`         datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_provider_key` (`provider_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='模型供应商目录，凭据为 AES-GCM 密文，主密钥只在 services/ai 环境变量';
