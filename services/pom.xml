@@ -49,7 +49,7 @@
         <javax.validation.version>2.0.1.Final</javax.validation.version>
         <java-jwt.version>4.4.0</java-jwt.version>
         <java.version>21</java.version>
-        <druid.version>1.2.15</druid.version>
+        <druid.version>1.2.21</druid.version>
         <mbp.version>3.5.9</mbp.version>
         <feign.form.version>3.3.0</feign.form.version>
         <feign.form.spring.version>3.3.0</feign.form.spring.version>
