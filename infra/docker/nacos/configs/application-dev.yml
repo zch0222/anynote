@@ -48,8 +48,6 @@ anynote:
   external-resources:
     allowed-domains:
       - anynote.obs.cn-east-3.myhuaweicloud.com
-  ai-fastapi:
-    address: ${AI_FASTAPI_ADDRESS:http://host.docker.internal:8000}
 
 mybatis-plus:
   configuration:
