@@ -6,8 +6,8 @@
         <artifactId>any-note</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <artifactId>anynote-modules-ai-nio</artifactId>
-    <name>anynote-modules-ai-nio</name>
+    <artifactId>anynote-modules-ai</artifactId>
+    <name>anynote-modules-ai</name>
     <dependencies>
 
         <!-- Springdoc OpenAPI（servlet） -->
@@ -31,11 +31,6 @@
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/com.alibaba/druid-spring-boot-starter -->
@@ -122,11 +117,6 @@
         </dependency>
 
         <dependency>
-            <groupId>com.anynote</groupId>
-            <artifactId>anynote-common-ai-fastapi</artifactId>
-        </dependency>
-
-        <dependency>
             <groupId>com.github.pagehelper</groupId>
             <artifactId>pagehelper-spring-boot-starter</artifactId>
         </dependency>
@@ -136,13 +126,6 @@
             <artifactId>logstash-logback-encoder</artifactId>
         </dependency>
 
-
-        <!-- ai 含 SSE / Reactor 流式逻辑，用 StepVerifier 断言 -->
-        <dependency>
-            <groupId>io.projectreactor</groupId>
-            <artifactId>reactor-test</artifactId>
-            <scope>test</scope>
-        </dependency>
 
     </dependencies>
 

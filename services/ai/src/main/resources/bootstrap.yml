@@ -6,7 +6,7 @@ spring:
   config:
     import: "optional:nacos:application-dev.yml?group=DEFAULT_GROUP&refreshEnabled=true,optional:nacos:${spring.application.name}-${spring.profiles.active}.yml?group=DEFAULT_GROUP&refreshEnabled=true"
   application:
-    name: anynote-ai-nio
+    name: anynote-ai
   profiles:
     # 环境配置
     active: dev
