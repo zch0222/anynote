@@ -5,4 +5,3 @@ com.anynote.ai.api.factory.RemoteWhisperFallbackFactory
 com.anynote.ai.api.mq.WhisperTaskMQService
 com.anynote.ai.api.factory.RemoteLlmStatisticsFallbackFactory
 com.anynote.ai.api.factory.RemoteMoocVideoFallbackFactory
-com.anynote.ai.api.RagService

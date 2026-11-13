@@ -26,11 +26,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webflux</artifactId>
-        </dependency>
-
-        <dependency>
             <groupId>com.anynote</groupId>
             <artifactId>anynote-common-redis</artifactId>
         </dependency>

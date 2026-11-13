@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import java.util.List;
 
 @FeignClient(contextId = "remoteMoocVideoSummarizeService",
-        value = ServiceNameConstants.AI_NIO_SERVICE)
+        value = ServiceNameConstants.AI_SERVICE)
 public interface RemoteMoocVideoSummarizeService {
 
     @PostMapping("/moocVideoSummarizes/getMoocVideoSummarizesByMoocItemId")
