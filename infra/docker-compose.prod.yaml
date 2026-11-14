@@ -74,6 +74,35 @@ services:
     <<: *java-prod
   anynote-modules-ai:
     <<: *java-prod
+  anynote-ai-harness:
+    <<: *prod
+    ports: !reset []
+    environment:
+      TZ: Asia/Shanghai
+      APP_PROFILE: prod
+      HOST: anynote-ai-harness
+      PORT: 8000
+      NACOS_SERVER_ADDRESS: nacos:8848
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:?请配置生产 Nacos namespace}
+      NACOS_SERVICE_NAME: anynote-ai-harness
+      NACOS_CONFIG_DATA_ID: anynote-ai-harness.yml
+      AI_SERVICE_URL: http://anynote-modules-ai:9065
+      ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:?请配置至少32字符的内部调用密钥}
+  anynote-ai-whisper:
+    <<: *prod
+    ports: !reset []
+    environment:
+      TZ: Asia/Shanghai
+      APP_PROFILE: prod
+      HOST: anynote-ai-whisper
+      PORT: 8000
+      NACOS_SERVER_ADDRESS: nacos:8848
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:?请配置生产 Nacos namespace}
+      NACOS_SERVICE_NAME: anynote-ai-whisper
+      NACOS_CONFIG_DATA_ID: anynote-ai-whisper.yml
+      REDIS_URL: redis://:${REDIS_PASSWORD:?请配置生产 Redis 密码}@redis:6379
+      DATA_PATH: /tmp/anynote-ai
+      ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:?请配置至少32字符的内部调用密钥}
   anynote-modules-manage:
     <<: *java-prod
   anynote-modules-notify:

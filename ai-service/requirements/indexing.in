@@ -1,0 +1,4 @@
+-r online.in
+elasticsearch==8.7.0
+pdfplumber==0.11.10
+pypdf==5.1.0

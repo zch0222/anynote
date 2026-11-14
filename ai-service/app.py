@@ -1,100 +1,78 @@
-from fastapi import FastAPI, HTTPException
-from core.config import HOST, TOKEN, PORT, APP_HOST
-from starlette.requests import Request
-from starlette.responses import JSONResponse
-from model.vo import ResData
-from core.logger import get_logger
-from controller.chat_controller import chat_router
-from controller.rag_controller import rag_router
-from controller.whisper_controller import whisper_router
-from init.check_data_path import check_data_path
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+"""Anynote Harness 在线进程入口。
+
+@author 称霸幼儿园
+"""
+
 from contextlib import asynccontextmanager
-from core.nacos import NacosClient
-from core.executors import executor
+
+from fastapi import FastAPI
+
+from api.errors import register_exception_handlers
+from api.health import router as health_router
+from api.runs import router as run_router
+from clients.model_provider import ModelProviderClient
+from clients.nacos import NacosManager
+from core.config import RuntimeConfigStore, Settings, get_settings
+from core.logger import configure_logging
+from harness.runtime import RunManager
+from models.router import ModelRouter
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # 定时器
-    scheduler = AsyncIOScheduler()
-    nacos_client = NacosClient()
-    nacos_client.register()
-    scheduler.add_job(nacos_client.sent_heartbeat, 'interval', seconds=10)
-    scheduler.start()
-    yield
-    scheduler.shutdown()
-    executor.shutdown(wait=True)
-    print("executor closed")
-    # Clean up the ML models and release the resources
-    # ml_models.clear()
+def create_app(
+    settings: Settings | None = None,
+    model=None,
+    providers=None,
+) -> FastAPI:
+    """创建在线 FastAPI 应用。
 
-app = FastAPI(
-    lifespan=lifespan,
-    title="Anynote AI Service",
-    version="1.0.0",
-    description="Anynote LLM/RAG/Whisper 服务接口",
-    openapi_url="/v3/api-docs",
-    docs_url="/swagger-ui.html",
-    redoc_url="/redoc",
-)
-
-app.include_router(chat_router)
-app.include_router(rag_router)
-app.include_router(whisper_router)
-
-
-
-
-
-
-# 鉴权
-# @app.middleware("http")
-# async def http_middleware(request: Request, call_next):
-#     # response = Response("Internal server error", status_code=500)
-#     if request.method == "OPTIONS":
-#         response = await call_next(request)
-#         return response
-#     try:
-#         token = request.headers["Authorization"]
-#         print(token)
-#         print(token.split()[-1])
-#         if token.split()[-1] != TOKEN:
-#             raise HTTPException(status_code=401, detail="Invalid token")
-#     except KeyError:
-#         raise HTTPException(status_code=401, detail="Missing token")
-#
-#     # 继续处理请求
-#     response = await call_next(request)
-#     return response
-
-# 全局异常处理
-@app.exception_handler(Exception)
-async def exception_handler(request: Request, exc: Exception):
-    logger = get_logger()
-    logger.exception("An error occurred while processing request")
-
-    # 检查异常是否为HTTPException
-    if isinstance(exc, HTTPException):
-        # 如果是HTTPException，返回异常指定的状态码
-        return JSONResponse(
-            status_code=exc.status_code,
-            content=ResData.error(exc.detail)
-        )
-    # 对于非HTTPException异常，返回500内部服务器错误
-    return JSONResponse(
-        status_code=500,
-        content=ResData.error("An internal server error occurred")
+    :param settings: 可替换的进程配置
+    :param model: 可替换的模型接入实现
+    :param providers: 可替换的供应商快照客户端
+    :return: FastAPI 应用
+    """
+    settings = settings or get_settings()
+    configure_logging()
+    config_store = RuntimeConfigStore(settings.runtime_defaults())
+    nacos = NacosManager(settings, config_store)
+    run_manager = RunManager(
+        settings,
+        config_store,
+        providers or ModelProviderClient(settings),
+        model or ModelRouter(),
     )
 
-def init():
-    # 检查DATA_PATH是否存在
-    check_data_path()
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        await nacos.start()
+        try:
+            yield
+        finally:
+            await run_manager.close()
+            await nacos.close()
+
+    app = FastAPI(
+        lifespan=lifespan,
+        title="Anynote AI Harness",
+        version=settings.APP_VERSION,
+        description="Anynote Harness 内部运行接口",
+        openapi_url="/v3/api-docs",
+        docs_url="/swagger-ui.html",
+        redoc_url="/redoc",
+    )
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.state.run_manager = run_manager
+    app.state.config_store = config_store
+    app.state.nacos = nacos
+    register_exception_handlers(app)
+    app.include_router(health_router)
+    app.include_router(run_router)
+    return app
+
+
+app = create_app()
 
 if __name__ == "__main__":
-    init()
-    print(HOST, APP_HOST)
-    print(TOKEN)
     import uvicorn
 
-    uvicorn.run(app="app:app", host=APP_HOST, port=PORT, workers=1)
+    settings = get_settings()
+    uvicorn.run(app="app:app", host=settings.APP_HOST, port=settings.PORT, workers=1)

@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1
+FROM python:3.12.14-slim AS base
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /app
+
+FROM base AS online-dependencies
+COPY ai-service/requirements/online-linux.lock.txt ./requirements/online-linux.lock.txt
+RUN pip install --no-cache-dir -r requirements/online-linux.lock.txt
+
+FROM online-dependencies AS online
+COPY ai-service/ ./
+ENV TIKTOKEN_CACHE_DIR=/opt/tiktoken
+RUN mkdir -p /opt/tiktoken \
+    && python -c 'import tiktoken; tiktoken.get_encoding("o200k_base")' \
+    && chmod -R a+rX /opt/tiktoken \
+    && useradd --create-home --uid 10001 anynote
+USER anynote
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+FROM online-dependencies AS test
+COPY ai-service/requirements/test-linux.lock.txt ./requirements/test-linux.lock.txt
+RUN pip install --no-cache-dir -r requirements/test-linux.lock.txt
+COPY ai-service/ ./
+ENV TIKTOKEN_CACHE_DIR=/opt/tiktoken
+RUN mkdir -p /opt/tiktoken \
+    && python -c 'import tiktoken; tiktoken.get_encoding("o200k_base")'
+CMD ["pytest"]
+
+FROM online-dependencies AS indexing-dependencies
+COPY ai-service/requirements/indexing-linux.lock.txt ./requirements/indexing-linux.lock.txt
+RUN pip install --no-cache-dir -r requirements/indexing-linux.lock.txt
+
+FROM online-dependencies AS whisper-dependencies
+COPY ai-service/requirements/whisper-linux.lock.txt ./requirements/whisper-linux.lock.txt
+RUN pip install --no-cache-dir setuptools==80.9.0 wheel==0.45.1 \
+    && pip install --no-cache-dir --no-build-isolation -r requirements/whisper-linux.lock.txt
+
+FROM whisper-dependencies AS whisper
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 anynote
+COPY ai-service/ ./
+USER anynote
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "whisper_app:app", "--host", "0.0.0.0", "--port", "8000"]

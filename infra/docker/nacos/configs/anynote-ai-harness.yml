@@ -1,0 +1,16 @@
+harness:
+  model-turns: 8
+  tool-calls: 16
+  wall-clock-s: 90
+  context-tokens: 24000
+  tool-timeout-s: 30
+  connect-timeout-s: 3
+  first-output-timeout-s: 30
+  stream-idle-timeout-s: 30
+  total-timeout-s: 120
+  heartbeat-interval-s: 5
+  history-recent-messages: 6
+  history-compaction-threshold: 8
+  large-result-chars: 2000
+  large-result-preview-chars: 500
+  model-max-attempts: 2

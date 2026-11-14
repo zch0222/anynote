@@ -1,0 +1,6 @@
+name: minimal
+version: "1"
+goal: 验证无工具 Agent 的模型循环、事件、取消与超时。
+main_model: agent_main
+compact_model: fast
+tools: []

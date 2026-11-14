@@ -14,6 +14,7 @@ PROD = {
     "MINIO_ROOT_PASSWORD": "test-only-minio",
     "XXL_JOB_ADMIN_ACCESSTOKEN": "test-only-job",
     "COLLAB_TOKEN_SECRET": "test-only-collab-secret-32-characters",
+    "ANYNOTE_INTERNAL_SECRET": "test-only-internal-secret-32-characters",
     "MINIO_VERSION": "RELEASE.test",
     "APP_IMAGE_TAG": "release-test",
     "NACOS_NAMESPACE": "production-test",
@@ -87,6 +88,24 @@ class ComposeTest(unittest.TestCase):
     def test_idea_broker_is_reachable_from_host(self):
         services = compose("docker-compose-middleware", "docker-compose.middleware-idea")
         self.assertEqual(services["rocketmq-broker"]["environment"]["ROCKETMQ_BROKER_ADVERTISE_IP"], "127.0.0.1")
+
+    def test_ai_python_runtime_isolated_and_whisper_optional(self):
+        """验证在线镜像目标、只读文件系统、Whisper 可选性与生产端口边界。"""
+        dev = compose("docker-compose", "docker-compose.dev")
+        self.assertEqual(dev["anynote-ai-harness"]["build"]["target"], "online")
+        self.assertTrue(dev["anynote-ai-harness"]["read_only"])
+        self.assertEqual(dev["anynote-ai-harness"]["restart"], "no")
+        self.assertEqual(dev["anynote-ai-whisper"]["build"]["target"], "whisper")
+        self.assertEqual(dev["anynote-ai-whisper"]["profiles"], ["whisper"])
+        self.assertEqual(
+            dev["anynote-ai-whisper"]["environment"]["NACOS_SERVICE_NAME"],
+            "anynote-ai-whisper",
+        )
+        prod = compose("docker-compose", "docker-compose.prod", extra=PROD)
+        self.assertFalse(prod["anynote-ai-harness"].get("ports"))
+        self.assertFalse(prod["anynote-ai-whisper"].get("ports"))
+        self.assertEqual(prod["anynote-ai-harness"]["environment"]["APP_PROFILE"], "prod")
+
 
 if __name__ == "__main__":
     unittest.main()

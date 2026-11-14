@@ -27,6 +27,10 @@ services:
     <<: *app-dev
   anynote-modules-ai:
     <<: *app-dev
+  anynote-ai-harness:
+    <<: *app-dev
+  anynote-ai-whisper:
+    <<: *app-dev
   anynote-modules-manage:
     <<: *app-dev
   anynote-modules-notify:

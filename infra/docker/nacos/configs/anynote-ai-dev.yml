@@ -40,6 +40,8 @@ anynote:
       connect-timeout: 3s
       idle-timeout: 30s
       total-timeout: 120s
+    whisper:
+      service-name: anynote-ai-whisper
     run:
       max-concurrent-per-user: 2
       max-concurrent-total: 500

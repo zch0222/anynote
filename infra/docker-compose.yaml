@@ -247,6 +247,94 @@ services:
     ports:
       - "127.0.0.1:${AI_PORT:-9065}:9065"
 
+  anynote-ai-harness:
+    image: ${APP_IMAGE_PREFIX:-anynote}/anynote-ai-harness:${APP_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.ai-service
+      target: online
+    restart: on-failure:5
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    environment:
+      TZ: Asia/Shanghai
+      APP_PROFILE: ${SPRING_PROFILES_ACTIVE:-dev}
+      HOST: anynote-ai-harness
+      PORT: 8000
+      NACOS_SERVER_ADDRESS: nacos:8848
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:-0587fa28-1301-43db-a7a1-599c00fc3f70}
+      NACOS_SERVICE_NAME: anynote-ai-harness
+      NACOS_CONFIG_DATA_ID: anynote-ai-harness.yml
+      AI_SERVICE_URL: http://anynote-modules-ai:9065
+      ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:-anynote-internal-secret-change-in-prod}
+    networks:
+      - anynote-net
+    depends_on:
+      nacos:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${AI_HARNESS_PORT:-8000}:8000"
+    healthcheck:
+      <<: *health-defaults
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4)"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  anynote-ai-whisper:
+    image: ${APP_IMAGE_PREFIX:-anynote}/anynote-ai-whisper:${APP_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.ai-service
+      target: whisper
+    profiles: [whisper]
+    restart: on-failure:5
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    environment:
+      TZ: Asia/Shanghai
+      APP_PROFILE: ${SPRING_PROFILES_ACTIVE:-dev}
+      HOST: anynote-ai-whisper
+      PORT: 8000
+      NACOS_SERVER_ADDRESS: nacos:8848
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:-0587fa28-1301-43db-a7a1-599c00fc3f70}
+      NACOS_SERVICE_NAME: anynote-ai-whisper
+      NACOS_CONFIG_DATA_ID: anynote-ai-whisper.yml
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+      DATA_PATH: /tmp/anynote-ai
+      ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:-anynote-internal-secret-change-in-prod}
+    networks:
+      - anynote-net
+    depends_on:
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${AI_WHISPER_PORT:-8001}:8000"
+    healthcheck:
+      <<: *health-defaults
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4)"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   anynote-modules-manage:
     <<: *app-common
     image: ${APP_IMAGE_PREFIX:-anynote}/anynote-modules-manage:${APP_IMAGE_TAG:-local}

@@ -1,0 +1,8 @@
+**
+!ai-service/
+ai-service/**/__pycache__/
+ai-service/.env
+ai-service/server.log
+ai-service/data/
+ai-service/venv/
+ai-service/.idea/
