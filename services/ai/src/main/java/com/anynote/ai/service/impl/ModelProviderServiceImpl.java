@@ -1,8 +1,10 @@
 package com.anynote.ai.service.impl;
 
 import com.anynote.ai.mapper.ModelProviderMapper;
-import com.anynote.ai.model.dto.ModelProviderUpsertDTO;
+import com.anynote.ai.model.dto.ModelProviderCreateDTO;
+import com.anynote.ai.model.dto.ModelProviderUpdateDTO;
 import com.anynote.ai.model.po.ModelProviderPO;
+import com.anynote.ai.model.vo.ModelProviderAdminVO;
 import com.anynote.ai.model.vo.ModelProviderSnapshotVO;
 import com.anynote.ai.properties.ModelCatalogProperties;
 import com.anynote.ai.security.credential.AesGcmCipher;
@@ -10,11 +12,11 @@ import com.anynote.ai.service.ModelProviderService;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.StringUtils;
 import com.anynote.core.web.enums.ResCode;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.Date;
@@ -22,21 +24,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * 模型供应商目录与凭据管理实现。
- *
- * <p>upsert 的空值语义：{@code protocol}、{@code models}、{@code dataEgressAllowed}、{@code enabled}
- * 为 {@code null}/空白时，新增按表默认值落库，更新保留数据库中的原值；{@code apiKey} 每次都由
- * 明文重新加密后写入，不存在「不更新凭据」的分支。</p>
  *
  * @author 称霸幼儿园
  */
 @Service
 public class ModelProviderServiceImpl implements ModelProviderService {
 
-    /** 新增时的默认协议。 */
     private static final String DEFAULT_PROTOCOL = "openai_compatible";
 
     private final ModelProviderMapper modelProviderMapper;
@@ -50,10 +46,10 @@ public class ModelProviderServiceImpl implements ModelProviderService {
     /**
      * 构造器注入。
      *
-     * @param modelProviderMapper      供应商目录 Mapper
-     * @param modelCatalogProperties  Nacos 逻辑模型映射配置
-     * @param aesGcmCipher            凭据加解密组件
-     * @param gson                    模型清单 JSON 序列化器
+     * @param modelProviderMapper 供应商目录 Mapper
+     * @param modelCatalogProperties Nacos 逻辑模型映射配置
+     * @param aesGcmCipher 凭据加解密组件
+     * @param gson 模型清单 JSON 序列化器
      */
     public ModelProviderServiceImpl(ModelProviderMapper modelProviderMapper,
                                     ModelCatalogProperties modelCatalogProperties,
@@ -76,7 +72,7 @@ public class ModelProviderServiceImpl implements ModelProviderService {
                 .orElse(0L);
         List<ModelProviderSnapshotVO.ProviderVO> providerVOS = providers.stream()
                 .map(this::toProviderVO)
-                .collect(Collectors.toList());
+                .toList();
         Map<String, ModelCatalogProperties.LogicalModel> logicalModels =
                 new LinkedHashMap<>(modelCatalogProperties.getLogical());
         return ModelProviderSnapshotVO.builder()
@@ -87,63 +83,100 @@ public class ModelProviderServiceImpl implements ModelProviderService {
     }
 
     @Override
-    public String upsert(ModelProviderUpsertDTO dto) {
-        String apiKeyCipher = aesGcmCipher.encrypt(dto.getApiKey());
-        Date now = new Date();
-        ModelProviderPO existing = modelProviderMapper.selectByProviderKey(dto.getProviderKey());
-        if (existing == null) {
-            modelProviderMapper.insert(ModelProviderPO.builder()
-                    .providerKey(dto.getProviderKey())
-                    .displayName(dto.getDisplayName())
-                    .protocol(StringUtils.isEmpty(dto.getProtocol()) ? DEFAULT_PROTOCOL : dto.getProtocol())
-                    .baseUrl(dto.getBaseUrl())
-                    .apiKeyCipher(apiKeyCipher)
-                    .modelsJson(dto.getModels() == null ? "[]" : gson.toJson(dto.getModels()))
-                    .dataEgressAllowed(Boolean.TRUE.equals(dto.getDataEgressAllowed()) ? 1 : 0)
-                    .enabled(Boolean.FALSE.equals(dto.getEnabled()) ? 0 : 1)
-                    .version(1L)
-                    .createBy(0L)
-                    .updateBy(0L)
-                    .createTime(now)
-                    .updateTime(now)
-                    .build());
-        } else {
-            modelProviderMapper.updateById(ModelProviderPO.builder()
-                    .id(existing.getId())
-                    .displayName(dto.getDisplayName())
-                    .protocol(StringUtils.isEmpty(dto.getProtocol()) ? existing.getProtocol() : dto.getProtocol())
-                    .baseUrl(dto.getBaseUrl())
-                    .apiKeyCipher(apiKeyCipher)
-                    .modelsJson(dto.getModels() == null ? existing.getModelsJson() : gson.toJson(dto.getModels()))
-                    .dataEgressAllowed(dto.getDataEgressAllowed() == null
-                            ? existing.getDataEgressAllowed()
-                            : (Boolean.TRUE.equals(dto.getDataEgressAllowed()) ? 1 : 0))
-                    .enabled(dto.getEnabled() == null
-                            ? existing.getEnabled()
-                            : (Boolean.FALSE.equals(dto.getEnabled()) ? 0 : 1))
-                    .version((existing.getVersion() == null ? 0L : existing.getVersion()) + 1)
-                    .updateBy(0L)
-                    .updateTime(now)
-                    .build());
-        }
-        return snapshot().getVersion();
+    public List<ModelProviderAdminVO> list() {
+        return modelProviderMapper.selectAll().stream().map(this::toAdminVO).toList();
     }
 
     @Override
-    public boolean delete(String providerKey) {
-        if (StringUtils.isEmpty(providerKey)) {
-            return false;
-        }
-        return modelProviderMapper.delete(new LambdaQueryWrapper<ModelProviderPO>()
-                .eq(ModelProviderPO::getProviderKey, providerKey)) > 0;
+    public ModelProviderAdminVO get(String providerKey) {
+        return toAdminVO(getRequired(providerKey));
     }
 
-    /**
-     * 将持久化对象转换为快照中的供应商节点，并解密 apiKey。
-     *
-     * @param provider 持久化对象
-     * @return 供应商快照节点
-     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ModelProviderAdminVO create(ModelProviderCreateDTO dto, Long operatorId) {
+        if (modelProviderMapper.selectByProviderKey(dto.getProviderKey()) != null) {
+            throw new BusinessException("供应商标识已存在", ResCode.BUSINESS_ERROR);
+        }
+        String protocol = StringUtils.isEmpty(dto.getProtocol()) ? DEFAULT_PROTOCOL : dto.getProtocol();
+        requireSupportedProtocol(protocol);
+        Date now = new Date();
+        ModelProviderPO provider = ModelProviderPO.builder()
+                .providerKey(dto.getProviderKey())
+                .displayName(dto.getDisplayName())
+                .protocol(protocol)
+                .baseUrl(dto.getBaseUrl())
+                .apiKeyCipher(aesGcmCipher.encrypt(dto.getApiKey()))
+                .modelsJson(dto.getModels() == null ? "[]" : gson.toJson(dto.getModels()))
+                .dataEgressAllowed(Boolean.TRUE.equals(dto.getDataEgressAllowed()) ? 1 : 0)
+                .enabled(Boolean.FALSE.equals(dto.getEnabled()) ? 0 : 1)
+                .version(1L)
+                .createBy(operatorId)
+                .updateBy(operatorId)
+                .createTime(now)
+                .updateTime(now)
+                .build();
+        modelProviderMapper.insert(provider);
+        return toAdminVO(provider);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ModelProviderAdminVO update(String providerKey, ModelProviderUpdateDTO dto, Long operatorId) {
+        ModelProviderPO existing = getRequired(providerKey);
+        requireSupportedProtocol(dto.getProtocol());
+        String apiKeyCipher = StringUtils.isEmpty(dto.getApiKey())
+                ? null
+                : aesGcmCipher.encrypt(dto.getApiKey());
+        ModelProviderPO provider = ModelProviderPO.builder()
+                .id(existing.getId())
+                .providerKey(existing.getProviderKey())
+                .displayName(dto.getDisplayName())
+                .protocol(dto.getProtocol())
+                .baseUrl(dto.getBaseUrl())
+                .apiKeyCipher(apiKeyCipher)
+                .modelsJson(gson.toJson(dto.getModels()))
+                .dataEgressAllowed(Boolean.TRUE.equals(dto.getDataEgressAllowed()) ? 1 : 0)
+                .enabled(Boolean.TRUE.equals(dto.getEnabled()) ? 1 : 0)
+                .version((existing.getVersion() == null ? 0L : existing.getVersion()) + 1)
+                .createBy(existing.getCreateBy())
+                .updateBy(operatorId)
+                .createTime(existing.getCreateTime())
+                .updateTime(new Date())
+                .build();
+        if (modelProviderMapper.updateById(provider) == 0) {
+            throw notFound();
+        }
+        return toAdminVO(provider);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(String providerKey) {
+        ModelProviderPO existing = getRequired(providerKey);
+        if (modelProviderMapper.deleteById(existing.getId()) == 0) {
+            throw notFound();
+        }
+    }
+
+    private ModelProviderPO getRequired(String providerKey) {
+        ModelProviderPO provider = modelProviderMapper.selectByProviderKey(providerKey);
+        if (provider == null) {
+            throw notFound();
+        }
+        return provider;
+    }
+
+    private BusinessException notFound() {
+        return new BusinessException("模型供应商不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND);
+    }
+
+    private void requireSupportedProtocol(String protocol) {
+        if (!DEFAULT_PROTOCOL.equals(protocol)) {
+            throw new BusinessException("请求参数错误", ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+    }
+
     private ModelProviderSnapshotVO.ProviderVO toProviderVO(ModelProviderPO provider) {
         return ModelProviderSnapshotVO.ProviderVO.builder()
                 .providerKey(provider.getProviderKey())
@@ -158,10 +191,31 @@ public class ModelProviderServiceImpl implements ModelProviderService {
     }
 
     /**
+     * 转换为不携带凭据的管理视图。
+     *
+     * @param provider 持久化对象
+     * @return 管理视图
+     */
+    private ModelProviderAdminVO toAdminVO(ModelProviderPO provider) {
+        return ModelProviderAdminVO.builder()
+                .providerKey(provider.getProviderKey())
+                .displayName(provider.getDisplayName())
+                .protocol(provider.getProtocol())
+                .baseUrl(provider.getBaseUrl())
+                .models(parseModels(provider))
+                .dataEgressAllowed(Integer.valueOf(1).equals(provider.getDataEgressAllowed()))
+                .enabled(Integer.valueOf(1).equals(provider.getEnabled()))
+                .version(provider.getVersion())
+                .createTime(provider.getCreateTime())
+                .updateTime(provider.getUpdateTime())
+                .build();
+    }
+
+    /**
      * 解析 models 列中的 JSON 数组字符串。
      *
      * @param provider 持久化对象
-     * @return 模型名列表，空或非法时返回空列表
+     * @return 模型名列表
      */
     private List<String> parseModels(ModelProviderPO provider) {
         String modelsJson = provider.getModelsJson();

@@ -85,7 +85,7 @@ public class ModelProviderSnapshotVO {
          * 解密后的 API Key 明文，仅内部调用方在内存中使用。
          */
         @Schema(description = "解密后的 API Key 明文，仅内部调用方使用")
-        private String apiKey;
+        private transient String apiKey;
 
         /**
          * 模型名数组。

@@ -1,37 +1,64 @@
 package com.anynote.ai.service;
 
-import com.anynote.ai.model.dto.ModelProviderUpsertDTO;
+import com.anynote.ai.model.dto.ModelProviderCreateDTO;
+import com.anynote.ai.model.dto.ModelProviderUpdateDTO;
+import com.anynote.ai.model.vo.ModelProviderAdminVO;
 import com.anynote.ai.model.vo.ModelProviderSnapshotVO;
+
+import java.util.List;
 
 /**
  * 模型供应商目录与凭据管理服务。
- *
- * <p>凭据以 AES-GCM 密文落库，快照输出时才解密；本服务不记录明文凭据。</p>
  *
  * @author 称霸幼儿园
  */
 public interface ModelProviderService {
 
     /**
-     * 生成模型供应商配置快照：全表读取、解密 apiKey、合并 Nacos 逻辑模型映射。
+     * 生成供 Python 使用的模型供应商配置快照。
      *
-     * @return 快照，版本号格式为 {@code providersVersion:mappingVersion}
+     * @return 含内部明文凭据的快照
      */
     ModelProviderSnapshotVO snapshot();
 
     /**
-     * 新增或更新供应商：按 providerKey 判断，存在则更新并把 version 加 1，否则插入 version=1。
+     * 查询全部供应商的非敏感管理视图。
      *
-     * @param dto 供应商配置，apiKey 为明文入参
-     * @return 操作完成后的快照版本号，与 {@link #snapshot()} 的 version 同源
+     * @return 供应商列表
      */
-    String upsert(ModelProviderUpsertDTO dto);
+    List<ModelProviderAdminVO> list();
 
     /**
-     * 按 providerKey 硬删除供应商。
+     * 查询单个供应商的非敏感管理视图。
      *
      * @param providerKey 供应商标识
-     * @return 删除成功返回 {@code true}；记录不存在返回 {@code false}
+     * @return 供应商管理视图
      */
-    boolean delete(String providerKey);
+    ModelProviderAdminVO get(String providerKey);
+
+    /**
+     * 新增供应商并加密保存凭据。
+     *
+     * @param dto 新增请求
+     * @param operatorId 系统管理员用户 ID
+     * @return 非敏感管理视图
+     */
+    ModelProviderAdminVO create(ModelProviderCreateDTO dto, Long operatorId);
+
+    /**
+     * 整体更新供应商，空白 API Key 保留原凭据。
+     *
+     * @param providerKey 供应商标识
+     * @param dto 整体更新请求
+     * @param operatorId 系统管理员用户 ID
+     * @return 非敏感管理视图
+     */
+    ModelProviderAdminVO update(String providerKey, ModelProviderUpdateDTO dto, Long operatorId);
+
+    /**
+     * 按供应商标识硬删除。
+     *
+     * @param providerKey 供应商标识
+     */
+    void delete(String providerKey);
 }

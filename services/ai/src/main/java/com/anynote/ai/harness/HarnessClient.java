@@ -5,6 +5,7 @@ import com.anynote.ai.harness.dto.FastApiWhisperTranscriptionDTO;
 import com.anynote.ai.harness.vo.FastApiChatCompletionsVO;
 import com.anynote.ai.harness.vo.FastApiWhisperTranscriptionVO;
 import com.anynote.ai.properties.AiHarnessProperties;
+import com.anynote.ai.properties.AiWhisperProperties;
 import com.anynote.ai.run.AiCallContext;
 import com.anynote.common.security.properties.InternalSecretProperties;
 import com.anynote.core.constant.SecurityConstants;
@@ -54,6 +55,8 @@ public class HarnessClient {
 
     private final AiHarnessProperties aiHarnessProperties;
 
+    private final AiWhisperProperties aiWhisperProperties;
+
     private final Gson gson;
 
     private final InternalSecretProperties internalSecretProperties;
@@ -64,12 +67,23 @@ public class HarnessClient {
 
     private final ScheduledExecutorService idleWatchdog;
 
+    /**
+     * 构造流式客户端。
+     *
+     * @param loadBalancedRestClientBuilder 负载均衡 RestClient 构造器
+     * @param aiHarnessProperties Harness 调用配置
+     * @param aiWhisperProperties Whisper 独立进程配置
+     * @param gson JSON 序列化器
+     * @param internalSecretProperties 内部签名密钥配置
+     */
     public HarnessClient(@LoadBalanced RestClient.Builder loadBalancedRestClientBuilder,
                          AiHarnessProperties aiHarnessProperties,
+                         AiWhisperProperties aiWhisperProperties,
                          Gson gson,
                          InternalSecretProperties internalSecretProperties) {
         this.loadBalancedRestClientBuilder = loadBalancedRestClientBuilder;
         this.aiHarnessProperties = aiHarnessProperties;
+        this.aiWhisperProperties = aiWhisperProperties;
         this.gson = gson;
         this.internalSecretProperties = internalSecretProperties;
         this.httpClientExecutor = Executors.newVirtualThreadPerTaskExecutor();
@@ -100,7 +114,7 @@ public class HarnessClient {
      */
     public void streamChat(AiCallContext context, FastApiChatCompletionsDTO request,
                            Consumer<FastApiChatCompletionsVO> consumer) {
-        streamWithRetry(CHAT_PATH, request, context, data -> consumer.accept(
+        streamWithRetry(aiHarnessProperties.getServiceName(), CHAT_PATH, request, context, data -> consumer.accept(
                 gson.fromJson(data, FastApiChatCompletionsVO.class)));
     }
 
@@ -113,35 +127,37 @@ public class HarnessClient {
      */
     public void streamTranscription(AiCallContext context, FastApiWhisperTranscriptionDTO request,
                                     Consumer<FastApiWhisperTranscriptionVO> consumer) {
-        streamWithRetry(TRANSCRIPTION_PATH, request, context, data -> consumer.accept(
+        streamWithRetry(aiWhisperProperties.getServiceName(), TRANSCRIPTION_PATH, request, context, data -> consumer.accept(
                 gson.fromJson(data, FastApiWhisperTranscriptionVO.class)));
     }
 
-    private void streamWithRetry(String path, Object request, AiCallContext context, Consumer<String> dataConsumer) {
+    private void streamWithRetry(String serviceName, String path, Object request, AiCallContext context,
+                                 Consumer<String> dataConsumer) {
         AtomicBoolean receivedEvent = new AtomicBoolean(false);
         Consumer<String> markReceived = data -> {
             receivedEvent.set(true);
             dataConsumer.accept(data);
         };
         try {
-            streamOnce(path, request, context, markReceived);
+            streamOnce(serviceName, path, request, context, markReceived);
         } catch (HarnessClientException e) {
             if (!e.isRetryable() || receivedEvent.get()) {
                 throw e;
             }
             log.warn("Harness 首次事件前调用失败，重试一次: {}", e.getMessage());
             try {
-                streamOnce(path, request, context, markReceived);
+                streamOnce(serviceName, path, request, context, markReceived);
             } catch (HarnessClientException retryError) {
                 throw new HarnessClientException("AI 服务调用失败", retryError, false);
             }
         }
     }
 
-    private void streamOnce(String path, Object request, AiCallContext context, Consumer<String> dataConsumer) {
+    private void streamOnce(String serviceName, String path, Object request, AiCallContext context,
+                            Consumer<String> dataConsumer) {
         long deadlineNanos = System.nanoTime() + aiHarnessProperties.getTotalTimeout().toNanos();
         RestClient.Builder clientBuilder = loadBalancedRestClientBuilder.clone()
-                .baseUrl("http://" + aiHarnessProperties.getServiceName());
+                .baseUrl("http://" + serviceName);
         ClientHttpRequestFactory requestFactory = buildRequestFactory();
         if (requestFactory != null) {
             clientBuilder.requestFactory(requestFactory);

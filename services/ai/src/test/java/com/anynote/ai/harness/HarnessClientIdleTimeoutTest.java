@@ -42,7 +42,8 @@ class HarnessClientIdleTimeoutTest {
             InternalSecretProperties secretProperties = new InternalSecretProperties();
             secretProperties.setSecret("test-internal-secret");
             HarnessClient harnessClient = new HarnessClient(
-                    RestClient.builder(), properties, new Gson(), secretProperties);
+                    RestClient.builder(), properties, new com.anynote.ai.properties.AiWhisperProperties(),
+                    new Gson(), secretProperties);
             LoginUser loginUser = new LoginUser();
             loginUser.setUserId(1L);
             FastApiChatCompletionsDTO request = FastApiChatCompletionsDTO.builder()

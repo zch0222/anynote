@@ -1,8 +1,11 @@
 package com.anynote.ai.harness;
 
 import com.anynote.ai.harness.dto.FastApiChatCompletionsDTO;
+import com.anynote.ai.harness.dto.FastApiWhisperTranscriptionDTO;
 import com.anynote.ai.harness.vo.FastApiChatCompletionsVO;
+import com.anynote.ai.harness.vo.FastApiWhisperTranscriptionVO;
 import com.anynote.ai.properties.AiHarnessProperties;
+import com.anynote.ai.properties.AiWhisperProperties;
 import com.anynote.ai.run.AiCallContext;
 import com.anynote.common.security.properties.InternalSecretProperties;
 import com.anynote.core.constant.SecurityConstants;
@@ -45,6 +48,8 @@ class HarnessClientTest {
 
     private AiCallContext callContext;
 
+    private AiWhisperProperties whisperProperties;
+
     @BeforeEach
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
@@ -53,7 +58,8 @@ class HarnessClientTest {
         properties.setServiceName("anynote-ai-harness");
         InternalSecretProperties secretProperties = new InternalSecretProperties();
         secretProperties.setSecret("test-internal-secret");
-        harnessClient = new HarnessClient(builder, properties, new Gson(), secretProperties) {
+        whisperProperties = new AiWhisperProperties();
+        harnessClient = new HarnessClient(builder, properties, whisperProperties, new Gson(), secretProperties) {
             @Override
             protected org.springframework.http.client.ClientHttpRequestFactory buildRequestFactory() {
                 return null;
@@ -112,6 +118,29 @@ class HarnessClientTest {
         })).isInstanceOf(HarnessClientException.class);
 
         server.verify();
+    }
+
+    @Test
+    @DisplayName("Whisper 使用独立 Nacos 服务名")
+    void whisperUsesIndependentServiceName() {
+        whisperProperties.setServiceName("anynote-ai-whisper");
+        server.expect(requestTo("http://anynote-ai-whisper/v1/audio/transcriptions"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header(SecurityConstants.FROM_SOURCE, SecurityConstants.INNER))
+                .andRespond(withSuccess(
+                        "data: {\"id\":\"t1\",\"status\":\"DONE\",\"result\":{\"text\":\"你好\"}}\n\n",
+                        MediaType.TEXT_EVENT_STREAM));
+        List<FastApiWhisperTranscriptionVO> events = new ArrayList<>();
+
+        harnessClient.streamTranscription(callContext, FastApiWhisperTranscriptionDTO.builder()
+                .fileUrl("https://example.com/audio.mp3")
+                .model("turbo")
+                .language("zh")
+                .build(), events::add);
+
+        server.verify();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0).getStatus()).isEqualTo("DONE");
     }
 
     private FastApiChatCompletionsDTO chatRequest() {
