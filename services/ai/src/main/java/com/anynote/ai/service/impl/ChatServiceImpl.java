@@ -510,17 +510,24 @@ public class ChatServiceImpl implements ChatService {
         aiRunLimiter.acquireDb();
         try {
             Date now = new Date();
-            moocVideoSummarizeService.getBaseMapper().insert(MoocVideoSummarizePO.builder()
-                    .moocId(moocVideoSummarizeDTO.getMoocId())
-                    .moocItemId(moocVideoSummarizeDTO.getMoocItemId())
-                    .content(content)
-                    .model(moocVideoSummarizeDTO.getModel())
-                    .deleted(0)
-                    .updateTime(now)
-                    .createTime(now)
-                    .updateBy(context.getUserId())
-                    .createBy(context.getUserId())
-                    .build());
+            transactionTemplate.executeWithoutResult(status -> {
+                moocVideoSummarizeService.getBaseMapper().insert(MoocVideoSummarizePO.builder()
+                        .moocId(moocVideoSummarizeDTO.getMoocId())
+                        .moocItemId(moocVideoSummarizeDTO.getMoocItemId())
+                        .content(content)
+                        .model(moocVideoSummarizeDTO.getModel())
+                        .deleted(0)
+                        .updateTime(now)
+                        .createTime(now)
+                        .updateBy(context.getUserId())
+                        .createBy(context.getUserId())
+                        .build());
+                ResData<Long> change = remoteMoocService.recordSummaryChange(
+                        moocVideoSummarizeDTO.getMoocItemId(), SecurityConstants.INNER);
+                if (change == null || change.getData() == null || !ResData.SUCCESS.equals(change.getCode())) {
+                    throw new BusinessException(ResCode.INNER_NOTE_SERVICE_ERROR);
+                }
+            });
         } catch (Exception e) {
             log.error("保存慕课视频总结失败, moocItemId={}", moocVideoSummarizeDTO.getMoocItemId(), e);
         } finally {

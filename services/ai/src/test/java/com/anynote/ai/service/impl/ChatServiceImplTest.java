@@ -4,11 +4,14 @@ import com.anynote.ai.api.model.bo.ChatConversationUpdateParam;
 import com.anynote.ai.api.model.dto.ChatCompletionsDTO;
 import com.anynote.ai.api.model.po.ChatConversation;
 import com.anynote.ai.api.model.po.ChatMessage;
+import com.anynote.ai.api.model.po.MoocVideoSummarizePO;
 import com.anynote.ai.harness.HarnessClient;
 import com.anynote.ai.harness.HarnessClientException;
 import com.anynote.ai.harness.vo.FastApiChatCompletionsVO;
 import com.anynote.ai.mapper.ChatConversationMapper;
 import com.anynote.ai.mapper.ChatMessageMapper;
+import com.anynote.ai.mapper.MoocVideoSummarizeMapper;
+import com.anynote.ai.model.dto.MoocVideoSummarizeDTO;
 import com.anynote.ai.properties.AiHarnessProperties;
 import com.anynote.ai.run.AiCallContext;
 import com.anynote.ai.run.AiRunLimiter;
@@ -47,6 +50,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -128,6 +132,8 @@ class ChatServiceImplTest {
             return null;
         }).when(transactionTemplate).executeWithoutResult(any());
         when(aiRunLimiter.tryAcquire(anyLong())).thenReturn(true);
+        when(remoteMoocService.recordSummaryChange(anyLong(), anyString()))
+                .thenReturn(ResData.success(1L));
         when(remoteSysApiStatisticsService.increaseUsage(any(), anyString()))
                 .thenReturn(ResData.success("ok"));
         doAnswer(invocation -> {
@@ -241,6 +247,24 @@ class ChatServiceImplTest {
 
         assertThat(result).isEqualTo("SUCCESS");
         verify(chatConversationService).updateById(any(ChatConversation.class));
+    }
+
+    /**
+     * 视频总结落库后登记 note 变更游标。
+     */
+    @Test
+    void persistsSummaryAndRegistersKnowledgeChange() {
+        MoocVideoSummarizeMapper mapper = mock(MoocVideoSummarizeMapper.class);
+        when(moocVideoSummarizeService.getBaseMapper()).thenReturn(mapper);
+        MoocVideoSummarizeDTO dto = new MoocVideoSummarizeDTO();
+        dto.setMoocId(2L);
+        dto.setMoocItemId(4L);
+        dto.setModel("test-model");
+
+        ReflectionTestUtils.invokeMethod(chatService, "persistMoocSummarize", context, dto, "总结");
+
+        verify(mapper).insert(any(MoocVideoSummarizePO.class));
+        verify(remoteMoocService).recordSummaryChange(4L, "inner");
     }
 
     private void stubStream(FastApiChatCompletionsVO... chunks) {
