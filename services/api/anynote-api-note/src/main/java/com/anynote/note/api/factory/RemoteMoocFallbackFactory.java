@@ -28,6 +28,11 @@ public class RemoteMoocFallbackFactory implements FallbackFactory<RemoteMoocServ
                                                                      String fromSource, String accessToken) {
                 return ResData.error(ResCode.INNER_NOTE_SERVICE_ERROR);
             }
+
+            @Override
+            public ResData<Long> recordSummaryChange(Long moocItemId, String fromSource) {
+                return ResData.error(ResCode.INNER_NOTE_SERVICE_ERROR);
+            }
         };
     }
 }

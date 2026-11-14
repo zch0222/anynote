@@ -26,4 +26,15 @@ public interface RemoteMoocService {
                                                              @RequestParam("moocId") @Validated @NotNull(message = "慕课id不能为空") Long moocId,
                                                              @RequestHeader("from-source") String fromSource,
                                                              @RequestHeader("accessToken") String accessToken);
+
+    /**
+     * 登记视频总结变更。
+     *
+     * @param moocItemId 慕课条目 id
+     * @param fromSource 内部调用标识
+     * @return 变更游标 id
+     */
+    @PostMapping("/internal/v1/knowledge/mooc-items/{moocItemId}/summary-changes")
+    ResData<Long> recordSummaryChange(@PathVariable("moocItemId") Long moocItemId,
+                                      @RequestHeader("from-source") String fromSource);
 }
