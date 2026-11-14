@@ -29,6 +29,8 @@ services:
     <<: *app-dev
   anynote-ai-harness:
     <<: *app-dev
+  anynote-ai-indexer:
+    <<: *app-dev
   anynote-ai-whisper:
     <<: *app-dev
   anynote-modules-manage:

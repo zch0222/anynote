@@ -1,0 +1,13 @@
+indexer:
+  poll-interval-s: 5
+  reconcile-interval-s: 3600
+  batch-size: 50
+  chunk-size-chars: 600
+  chunk-overlap-chars: 100
+  embedding-batch-size: 16
+  embedding-timeout-s: 30
+  pdf-parse-timeout-s: 30
+  pdf-max-memory-mb: 512
+  pdf-max-bytes: 52428800
+  es-index-replicas: 0
+  es-request-timeout-s: 15

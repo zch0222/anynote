@@ -88,6 +88,29 @@ services:
       NACOS_CONFIG_DATA_ID: anynote-ai-harness.yml
       AI_SERVICE_URL: http://anynote-modules-ai:9065
       ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:?请配置至少32字符的内部调用密钥}
+  anynote-ai-indexer:
+    <<: *prod
+    ports: !reset []
+    environment:
+      TZ: Asia/Shanghai
+      APP_PROFILE: prod
+      HOST: anynote-ai-indexer
+      PORT: 8002
+      INDEXER_HEALTH_HOST: 0.0.0.0
+      INDEXER_HEALTH_PORT: 8002
+      NACOS_SERVER_ADDRESS: nacos:8848
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:?请配置生产 Nacos namespace}
+      NACOS_SERVICE_NAME: anynote-ai-indexer
+      NACOS_CONFIG_DATA_ID: anynote-ai-indexer.yml
+      DATA_PATH: /tmp/anynote-ai
+      REDIS_URL: redis://:${REDIS_PASSWORD:?请配置生产 Redis 密码}@redis:6379
+      REDIS_WAKEUP_CHANNEL: anynote:knowledge:change
+      ES_URL: http://elasticsearch:9200
+      AI_SERVICE_URL: http://anynote-modules-ai:9065
+      NOTE_SERVICE_URL: http://anynote-modules-note:18091
+      FILE_SERVICE_URL: http://anynote-modules-file:8095
+      NOTIFY_SERVICE_URL: http://anynote-modules-notify:9066
+      ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:?请配置至少32字符的内部调用密钥}
   anynote-ai-whisper:
     <<: *prod
     ports: !reset []

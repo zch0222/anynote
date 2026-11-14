@@ -289,6 +289,59 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  anynote-ai-indexer:
+    image: ${APP_IMAGE_PREFIX:-anynote}/anynote-ai-indexer:${APP_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.ai-service
+      target: indexer
+    restart: on-failure:5
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    environment:
+      TZ: Asia/Shanghai
+      APP_PROFILE: ${SPRING_PROFILES_ACTIVE:-dev}
+      HOST: anynote-ai-indexer
+      PORT: 8002
+      INDEXER_HEALTH_HOST: 0.0.0.0
+      INDEXER_HEALTH_PORT: 8002
+      NACOS_SERVER_ADDRESS: nacos:8848
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:-0587fa28-1301-43db-a7a1-599c00fc3f70}
+      NACOS_SERVICE_NAME: anynote-ai-indexer
+      NACOS_CONFIG_DATA_ID: anynote-ai-indexer.yml
+      DATA_PATH: /tmp/anynote-ai
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+      REDIS_WAKEUP_CHANNEL: anynote:knowledge:change
+      ES_URL: http://elasticsearch:9200
+      AI_SERVICE_URL: http://anynote-modules-ai:9065
+      NOTE_SERVICE_URL: http://anynote-modules-note:18091
+      FILE_SERVICE_URL: http://anynote-modules-file:8095
+      NOTIFY_SERVICE_URL: http://anynote-modules-notify:9066
+      ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:-anynote-internal-secret-change-in-prod}
+    networks:
+      - anynote-net
+    depends_on:
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      <<: *health-defaults
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/healthz', timeout=4)"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   anynote-ai-whisper:
     image: ${APP_IMAGE_PREFIX:-anynote}/anynote-ai-whisper:${APP_IMAGE_TAG:-local}
     build:

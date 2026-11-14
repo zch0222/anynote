@@ -106,6 +106,28 @@ class ComposeTest(unittest.TestCase):
         self.assertFalse(prod["anynote-ai-whisper"].get("ports"))
         self.assertEqual(prod["anynote-ai-harness"]["environment"]["APP_PROFILE"], "prod")
 
+    def test_ai_indexer_worker_isolated_without_published_ports(self):
+        """验证索引 Worker 使用 indexer 镜像、最小权限只读且不对外暴露端口。"""
+        dev = compose("docker-compose", "docker-compose.dev")
+        indexer = dev["anynote-ai-indexer"]
+        self.assertEqual(indexer["build"]["target"], "indexer")
+        self.assertTrue(indexer["read_only"])
+        self.assertIn("no-new-privileges:true", indexer["security_opt"])
+        self.assertEqual(indexer["cap_drop"], ["ALL"])
+        self.assertEqual(indexer["restart"], "no")
+        self.assertFalse(indexer.get("ports"))
+        self.assertEqual(indexer["environment"]["NACOS_SERVICE_NAME"], "anynote-ai-indexer")
+        self.assertEqual(indexer["environment"]["NACOS_CONFIG_DATA_ID"], "anynote-ai-indexer.yml")
+        self.assertEqual(indexer["environment"]["REDIS_WAKEUP_CHANNEL"], "anynote:knowledge:change")
+
+        prod = compose("docker-compose", "docker-compose.prod", extra=PROD)
+        self.assertFalse(prod["anynote-ai-indexer"].get("ports"))
+        self.assertEqual(prod["anynote-ai-indexer"]["environment"]["APP_PROFILE"], "prod")
+        self.assertEqual(
+            prod["anynote-ai-indexer"]["environment"]["NACOS_SERVICE_NAME"],
+            "anynote-ai-indexer",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
