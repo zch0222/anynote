@@ -11,16 +11,16 @@ import { describe, expect, it } from "vitest";
  * 测试代码不进产物，所以既能比对又不会把依赖带进首屏。
  */
 describe("移动端设置分节表", () => {
-  it("与桌面 SETTINGS_SECTIONS 逐项一致", () => {
-    expect(MOBILE_SETTINGS_SECTIONS.map((item) => item.key)).toEqual(
-      SETTINGS_SECTIONS.map((item) => item.key),
-    );
-    expect(MOBILE_SETTINGS_SECTIONS.map((item) => item.label)).toEqual(
-      SETTINGS_SECTIONS.map((item) => item.label),
-    );
-  });
+	it("与桌面 SETTINGS_SECTIONS 逐项一致", () => {
+		expect(MOBILE_SETTINGS_SECTIONS.map((item) => item.key)).toEqual(
+			SETTINGS_SECTIONS.map((item) => item.key),
+		);
+		expect(MOBILE_SETTINGS_SECTIONS.map((item) => item.label)).toEqual(
+			SETTINGS_SECTIONS.map((item) => item.label),
+		);
+	});
 
-  it("顺序也一致——「我的」按这个顺序铺四行", () => {
-    expect(MOBILE_SETTINGS_SECTIONS).toHaveLength(SETTINGS_SECTIONS.length);
-  });
+	it("顺序也一致——「我的」按这个顺序铺设置行", () => {
+		expect(MOBILE_SETTINGS_SECTIONS).toHaveLength(SETTINGS_SECTIONS.length);
+	});
 });
