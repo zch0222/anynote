@@ -1,9 +1,12 @@
 package com.anynote.ai.controller;
 
+import com.anynote.ai.model.dto.EmbeddingModelConfigUpdateDTO;
 import com.anynote.ai.model.dto.ModelProviderCreateDTO;
 import com.anynote.ai.model.dto.ModelProviderUpdateDTO;
+import com.anynote.ai.model.vo.EmbeddingModelConfigVO;
 import com.anynote.ai.model.vo.ModelProviderAdminVO;
 import com.anynote.ai.security.SystemAdminGuard;
+import com.anynote.ai.service.LogicalModelService;
 import com.anynote.ai.service.ModelProviderService;
 import com.anynote.core.constant.Constants;
 import com.anynote.core.utils.ResUtil;
@@ -13,6 +16,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,16 +42,59 @@ public class ModelProviderAdminController {
 
     private final SystemAdminGuard systemAdminGuard;
 
+    private final LogicalModelService logicalModelService;
+
     /**
-     * 构造器注入。
+     * 构造器注入（兼容既有单测）。
      *
      * @param modelProviderService 模型供应商服务
      * @param systemAdminGuard 系统管理员准入组件
      */
     public ModelProviderAdminController(ModelProviderService modelProviderService,
                                         SystemAdminGuard systemAdminGuard) {
+        this(modelProviderService, systemAdminGuard, null);
+    }
+
+    /**
+     * 构造器注入。
+     *
+     * @param modelProviderService 模型供应商服务
+     * @param systemAdminGuard 系统管理员准入组件
+     * @param logicalModelService 运行时逻辑模型配置服务
+     */
+    @Autowired
+    public ModelProviderAdminController(ModelProviderService modelProviderService,
+                                        SystemAdminGuard systemAdminGuard,
+                                        LogicalModelService logicalModelService) {
         this.modelProviderService = modelProviderService;
         this.systemAdminGuard = systemAdminGuard;
+        this.logicalModelService = logicalModelService;
+    }
+
+    /**
+     * 查询运行时 Embedding 模型绑定配置。
+     *
+     * @return 当前 Embedding 模型配置
+     */
+    @Operation(summary = "查询 Embedding 模型配置")
+    @GetMapping("/logical/embedding")
+    public ResData<EmbeddingModelConfigVO> getEmbeddingConfig() {
+        systemAdminGuard.requireAdmin();
+        return ResUtil.success(logicalModelService.getEmbeddingConfig());
+    }
+
+    /**
+     * 更新运行时 Embedding 模型绑定配置。
+     *
+     * @param dto 更新请求
+     * @return 更新后的 Embedding 模型配置
+     */
+    @Operation(summary = "更新 Embedding 模型配置")
+    @PutMapping("/logical/embedding")
+    public ResData<EmbeddingModelConfigVO> updateEmbeddingConfig(
+            @Valid @RequestBody EmbeddingModelConfigUpdateDTO dto) {
+        LoginUser operator = systemAdminGuard.requireAdmin();
+        return ResUtil.success(logicalModelService.updateEmbeddingConfig(dto, operator.getUserId()));
     }
 
     /**

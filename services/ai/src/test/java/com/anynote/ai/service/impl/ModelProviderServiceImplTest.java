@@ -241,6 +241,48 @@ class ModelProviderServiceImplTest {
         assertFalse(update.toString().contains("sk-secret"));
     }
 
+    /**
+     * 快照合入数据库运行时 embedding 绑定，并在 providersVersion 大于 logicalVersion 时依然推进版本号。
+     */
+    @Test
+    @DisplayName("快照合并数据库 embedding 配置并保证联合版本号变化")
+    void snapshotMergesRuntimeEmbeddingOverrideAndAdvancesVersion() {
+        com.anynote.ai.mapper.LogicalModelConfigMapper logicalMapper =
+                org.mockito.Mockito.mock(com.anynote.ai.mapper.LogicalModelConfigMapper.class);
+        com.anynote.ai.properties.ModelCatalogProperties catalogProps =
+                new com.anynote.ai.properties.ModelCatalogProperties();
+        catalogProps.setMappingVersion(1);
+        com.anynote.ai.properties.ModelCatalogProperties.LogicalModel nacosEmbedding =
+                new com.anynote.ai.properties.ModelCatalogProperties.LogicalModel();
+        nacosEmbedding.setProvider("old-provider");
+        nacosEmbedding.setModel("old-model");
+        catalogProps.setLogical(java.util.Map.of("embedding", nacosEmbedding));
+
+        ModelProviderServiceImpl snapshotService = new ModelProviderServiceImpl(
+                modelProviderMapper, catalogProps, aesGcmCipher, new com.google.gson.Gson(), logicalMapper);
+
+        when(modelProviderMapper.selectAll()).thenReturn(List.of(
+                providerPO(1L, "openai", "sk-plain", 5L, 1)));
+        when(logicalMapper.selectByLogicalName("embedding")).thenReturn(
+                com.anynote.ai.model.po.LogicalModelConfigPO.builder()
+                        .logicalName("embedding")
+                        .providerKey("openai")
+                        .modelName("text-embedding-3-small")
+                        .dimensions(1024)
+                        .enabled(1)
+                        .version(1L)
+                        .build());
+
+        com.anynote.ai.model.vo.ModelProviderSnapshotVO snapshot = snapshotService.snapshot();
+        assertEquals("6:1", snapshot.getVersion());
+        com.anynote.ai.properties.ModelCatalogProperties.LogicalModel merged =
+                snapshot.getLogicalModels().get("embedding");
+        assertEquals("openai", merged.getProvider());
+        assertEquals("text-embedding-3-small", merged.getModel());
+        assertEquals(true, merged.getEnabled());
+        assertEquals(1024, merged.getDimensions());
+    }
+
     private ModelProviderUpdateDTO updateDTO() {
         ModelProviderUpdateDTO dto = new ModelProviderUpdateDTO();
         dto.setDisplayName("OpenAI-新");

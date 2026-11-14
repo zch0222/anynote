@@ -1,8 +1,10 @@
 package com.anynote.ai.service.impl;
 
+import com.anynote.ai.mapper.LogicalModelConfigMapper;
 import com.anynote.ai.mapper.ModelProviderMapper;
 import com.anynote.ai.model.dto.ModelProviderCreateDTO;
 import com.anynote.ai.model.dto.ModelProviderUpdateDTO;
+import com.anynote.ai.model.po.LogicalModelConfigPO;
 import com.anynote.ai.model.po.ModelProviderPO;
 import com.anynote.ai.model.vo.ModelProviderAdminVO;
 import com.anynote.ai.model.vo.ModelProviderSnapshotVO;
@@ -15,6 +17,7 @@ import com.anynote.core.web.enums.ResCode;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,8 +46,10 @@ public class ModelProviderServiceImpl implements ModelProviderService {
 
     private final Gson gson;
 
+    private final LogicalModelConfigMapper logicalModelConfigMapper;
+
     /**
-     * 构造器注入。
+     * 构造器注入（兼容既有单测）。
      *
      * @param modelProviderMapper 供应商目录 Mapper
      * @param modelCatalogProperties Nacos 逻辑模型映射配置
@@ -55,10 +60,29 @@ public class ModelProviderServiceImpl implements ModelProviderService {
                                     ModelCatalogProperties modelCatalogProperties,
                                     AesGcmCipher aesGcmCipher,
                                     Gson gson) {
+        this(modelProviderMapper, modelCatalogProperties, aesGcmCipher, gson, null);
+    }
+
+    /**
+     * 构造器注入。
+     *
+     * @param modelProviderMapper 供应商目录 Mapper
+     * @param modelCatalogProperties Nacos 逻辑模型映射配置
+     * @param aesGcmCipher 凭据加解密组件
+     * @param gson 模型清单 JSON 序列化器
+     * @param logicalModelConfigMapper 运行时逻辑模型配置 Mapper，可为空
+     */
+    @Autowired
+    public ModelProviderServiceImpl(ModelProviderMapper modelProviderMapper,
+                                    ModelCatalogProperties modelCatalogProperties,
+                                    AesGcmCipher aesGcmCipher,
+                                    Gson gson,
+                                    LogicalModelConfigMapper logicalModelConfigMapper) {
         this.modelProviderMapper = modelProviderMapper;
         this.modelCatalogProperties = modelCatalogProperties;
         this.aesGcmCipher = aesGcmCipher;
         this.gson = gson;
+        this.logicalModelConfigMapper = logicalModelConfigMapper;
     }
 
     @Override
@@ -73,10 +97,36 @@ public class ModelProviderServiceImpl implements ModelProviderService {
         List<ModelProviderSnapshotVO.ProviderVO> providerVOS = providers.stream()
                 .map(this::toProviderVO)
                 .toList();
-        Map<String, ModelCatalogProperties.LogicalModel> logicalModels =
-                new LinkedHashMap<>(modelCatalogProperties.getLogical());
+        Map<String, ModelCatalogProperties.LogicalModel> logicalModels = new LinkedHashMap<>();
+        if (modelCatalogProperties.getLogical() != null) {
+            modelCatalogProperties.getLogical().forEach((name, item) -> {
+                if (item != null) {
+                    ModelCatalogProperties.LogicalModel copy = new ModelCatalogProperties.LogicalModel();
+                    copy.setProvider(item.getProvider());
+                    copy.setModel(item.getModel());
+                    copy.setEnabled(item.getEnabled());
+                    copy.setDimensions(item.getDimensions());
+                    logicalModels.put(name, copy);
+                }
+            });
+        }
+        long logicalVersion = 0L;
+        if (logicalModelConfigMapper != null) {
+            LogicalModelConfigPO embeddingConfig = logicalModelConfigMapper
+                    .selectByLogicalName(LogicalModelServiceImpl.LOGICAL_EMBEDDING);
+            if (embeddingConfig != null) {
+                ModelCatalogProperties.LogicalModel override = new ModelCatalogProperties.LogicalModel();
+                override.setProvider(embeddingConfig.getProviderKey());
+                override.setModel(embeddingConfig.getModelName());
+                override.setEnabled(Integer.valueOf(1).equals(embeddingConfig.getEnabled()));
+                override.setDimensions(embeddingConfig.getDimensions());
+                logicalModels.put(LogicalModelServiceImpl.LOGICAL_EMBEDDING, override);
+                logicalVersion = embeddingConfig.getVersion() == null ? 0L : embeddingConfig.getVersion();
+            }
+        }
+        long combinedVersion = providersVersion + logicalVersion;
         return ModelProviderSnapshotVO.builder()
-                .version(providersVersion + ":" + modelCatalogProperties.getMappingVersion())
+                .version(combinedVersion + ":" + modelCatalogProperties.getMappingVersion())
                 .providers(providerVOS)
                 .logicalModels(logicalModels)
                 .build();

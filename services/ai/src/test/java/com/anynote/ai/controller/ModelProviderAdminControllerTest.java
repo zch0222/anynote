@@ -145,6 +145,57 @@ class ModelProviderAdminControllerTest {
         verify(modelProviderService).delete("openai");
     }
 
+    /**
+     * 运行时 Embedding 逻辑模型查询与更新接口校验系统管理员身份并传递操作人 id。
+     */
+    @Test
+    @DisplayName("Embedding 运行时配置读写接口校验管理员身份并传递操作人")
+    void logicalEmbeddingEndpointsShouldRequireAdminAndPassOperator() throws Exception {
+        com.anynote.ai.service.LogicalModelService logicalModelService =
+                org.mockito.Mockito.mock(com.anynote.ai.service.LogicalModelService.class);
+        org.springframework.test.web.servlet.MockMvc logicalMvc =
+                org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+                        new ModelProviderAdminController(modelProviderService, systemAdminGuard, logicalModelService))
+                        .build();
+
+        com.anynote.ai.model.vo.EmbeddingModelConfigVO vo = com.anynote.ai.model.vo.EmbeddingModelConfigVO.builder()
+                .logicalName("embedding")
+                .providerKey("openai")
+                .model("text-embedding-3-small")
+                .dimensions(1536)
+                .enabled(true)
+                .version(2L)
+                .build();
+        when(systemAdminGuard.requireAdmin()).thenReturn(loginUser);
+        when(loginUser.getUserId()).thenReturn(42L);
+        when(logicalModelService.getEmbeddingConfig()).thenReturn(vo);
+        when(logicalModelService.updateEmbeddingConfig(
+                any(com.anynote.ai.model.dto.EmbeddingModelConfigUpdateDTO.class), eq(42L)))
+                .thenReturn(vo);
+
+        logicalMvc.perform(get("/v1/admin/model-providers/logical/embedding"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.providerKey").value("openai"))
+                .andExpect(jsonPath("$.data.dimensions").value(1536));
+
+        logicalMvc.perform(put("/v1/admin/model-providers/logical/embedding")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "providerKey":"openai",
+                                  "model":"text-embedding-3-small",
+                                  "dimensions":1536,
+                                  "enabled":true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.model").value("text-embedding-3-small"))
+                .andExpect(jsonPath("$.data.version").value(2));
+
+        verify(logicalModelService).updateEmbeddingConfig(
+                any(com.anynote.ai.model.dto.EmbeddingModelConfigUpdateDTO.class), eq(42L));
+    }
+
     private ModelProviderAdminVO providerVO() {
         return ModelProviderAdminVO.builder()
                 .providerKey("openai")

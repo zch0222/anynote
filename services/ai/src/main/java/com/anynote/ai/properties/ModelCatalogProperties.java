@@ -48,5 +48,15 @@ public class ModelCatalogProperties {
          * 供应商侧实际模型名。
          */
         private String model;
+
+        /**
+         * 是否启用该逻辑模型；未显式配置时由消费端按默认启用处理。
+         */
+        private Boolean enabled;
+
+        /**
+         * 期望向量维度（仅向量模型使用）。
+         */
+        private Integer dimensions;
     }
 }
