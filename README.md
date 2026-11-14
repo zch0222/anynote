@@ -7,7 +7,7 @@
 | Java · Spring Boot | 21 · 3.3.4 |
 | Spring Cloud / Alibaba | 2023.0.3 / 2023.0.3.4 |
 | Next.js · React · TypeScript | 15.5 · 19 · 5 |
-| Python · FastAPI · LangChain | 3.x · 0.116 · 0.3 |
+| Python · FastAPI | 3.12.14 · 0.115.3 |
 
 ---
 
@@ -36,7 +36,7 @@ anynote/
 │   ├── api/                  Feign 接口定义
 │   ├── common/               共享库
 │   └── bom/                  Maven BOM（统一版本管理）
-├── ai-service/               Python FastAPI AI 服务（:8000）
+├── ai-service/               Python Harness（:8000）与可选 Whisper 进程（:8001）
 ├── infra/                    Docker Compose + SQL 初始化
 └── openapi/                  OpenAPI 规范与客户端生成脚本
 ```
@@ -157,7 +157,7 @@ Claude Code / Codex 若没立刻出现，新开一个会话即可。
 
 ### 场景 A：Dev Docker 全栈（推荐日常使用）
 
-> Next.js、协同服务、9 个 Java 服务和中间件进入 Compose。Java JAR 仍需预先构建；Python AI 独立运行，其注册服务名由 Nacos 配置 `anynote.ai.harness.service-name` 指定。
+> Next.js、协同服务、9 个 Java 服务、Python Harness 和中间件进入 Compose。Java JAR 仍需预先构建；Harness 注册服务名由 Nacos 配置 `anynote.ai.harness.service-name` 指定。Whisper 使用独立服务名 `anynote-ai-whisper`，仅在 `--profile whisper` 下启动。
 
 **前置**：Docker >= 24 + Compose >= 2.24.4、Maven / JDK 21。前端依赖和生产构建全部在镜像内完成。下列 shell 命令在 Linux / macOS / WSL 执行；Windows 原生 Compose 的空环境文件用 `--env-file=NUL`。
 
@@ -289,10 +289,13 @@ cd services && mvn spring-boot:run -pl gateway
 
 ```bash
 cd ai-service
-pip install -r requirements.txt
+# Windows 使用 online-windows.lock.txt；Linux/macOS 按平台重新编译 online.in 或使用对应锁文件
+pip install -r requirements/online-windows.lock.txt
 # Java 侧按 Nacos 服务名访问（配置项 anynote.ai.harness.service-name，默认 anynote-ai-harness）
 NACOS_SERVICE_NAME=anynote-ai-harness \
 NACOS_SERVER_ADDRESS=127.0.0.1:8848 \
+NACOS_NAMESPACE=0587fa28-1301-43db-a7a1-599c00fc3f70 \
+AI_SERVICE_URL=http://127.0.0.1:9065 \
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -353,7 +356,7 @@ docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docke
 docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml run --rm nacos-init
 ```
 
-生产不发布 Nacos / Elasticsearch 等管理端口。这些中间件沿用单机可信 Docker 网络模式；不要把不可信容器加入 `anynote-net`。如有跨主机中间件或多租户运维要求，需要另外配置中间件认证与 TLS。Python AI 仍是独立服务，其注册服务名由 Nacos 配置 `anynote.ai.harness.service-name` 指定，端口需在 `anynote-net` 内可达。
+生产不发布 Nacos / Elasticsearch 等管理端口，也不发布 Python Harness / Whisper 端口。这些中间件沿用单机可信 Docker 网络模式；不要把不可信容器加入 `anynote-net`。如有跨主机中间件或多租户运维要求，需要另外配置中间件认证与 TLS。Harness 的注册服务名由 Nacos 配置 `anynote.ai.harness.service-name` 指定，Whisper 为独立可选 profile。
 
 #### C.3 构建并启动
 
@@ -605,11 +608,12 @@ sh infra/tests/proxy-smoke.sh
 | 层 | 框架 | 测试位置 |
 |----|------|---------|
 | Java | JUnit 5 + Mockito + AssertJ（由 `spring-boot-starter-test` 提供） | `services/<module>/src/test/java/com/anynote/<module>/` |
-| Java（Reactive） | 额外 `reactor-test`（StepVerifier） | `gateway` / `ai` |
+| Java（Reactive） | 额外 `reactor-test`（StepVerifier） | `gateway` |
 | 前端 | Vitest + Testing Library + jsdom | `apps/web/src/**/__tests__/` 或同名 `*.test.ts(x)` |
 | 前端（构建期脚本） | Vitest（node 环境） | `apps/web/scripts/lib/__tests__/*.test.mjs` |
 | 前端（端到端） | Playwright（Chromium） | `apps/web/e2e/*.spec.ts` |
 | 协同服务 | Vitest（node 环境） | `apps/collab/src/__tests__/` |
+| Python | pytest + pytest-asyncio | `ai-service/tests/` |
 
 `spring-boot-starter-test` 在父 pom [`services/pom.xml`](services/pom.xml) 的 `<dependencies>` 中统一声明，所有模块自动继承，新增模块无需改 pom。
 
@@ -644,6 +648,10 @@ pnpm --filter web lighthouse:budget         # Lighthouse 门禁（需生产前�
 # Java 单测
 cd services && mvn clean test               # 全部模块
 cd services && mvn test -pl auth -am        # 单模块
+
+# Python（本机 Docker，镜像内使用锁文件）
+docker build -f infra/Dockerfile.ai-service --target test -t anynote-ai-test .
+docker run --rm anynote-ai-test
 
 # Java 集成测试（需先起中间件，见「场景 B」）
 cd services && mvn test -pl file -am -Dtest.excluded.groups=
@@ -753,7 +761,7 @@ Swagger UI 地址（本地启动后访问）：
 | 笔记服务 | http://localhost:18091/swagger-ui.html |
 | 文件服务 | http://localhost:8095/swagger-ui.html |
 | AI 服务 | http://localhost:9065/swagger-ui.html |
-| Python AI | http://localhost:8000/docs |
+| Python Harness | http://localhost:8000/swagger-ui.html |
 
 API 开发遵循 API-First 流程，详见 [`openapi/WORKFLOW.md`](openapi/WORKFLOW.md)。
 

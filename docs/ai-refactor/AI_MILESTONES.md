@@ -1,7 +1,7 @@
 # AI 模块重构里程碑（M16.x）
 
 > 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-14
-> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0 已于 2026-11-14 关闭**
+> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0–M16.2 已于 2026-11-14 完成**
 > 关联文档：[调研报告](./AI_RESEARCH.md) · [总体方案](./AI_REFACTOR_PLAN.md) · [知识检索方案](./KNOWLEDGE_RETRIEVAL_PLAN.md)
 >
 > 本文是执行计划：每个里程碑的任务、验收标准与依赖。设计取舍在两份方案里，这里不重复。
@@ -53,6 +53,7 @@ flowchart LR
 - **数据库**：迁移脚本放 `infra/sql/migrations/`，同步更新 `infra/sql/anynote.sql`，手动执行。
 - **每个里程碑结束时 `dev` 可运行**：`pnpm services:build`、`mvn test`、`pnpm test`、`pnpm typecheck` 全绿。
 - **范围边界（2026-11-14 用户确认）**：验收阻断项仅限本批引入的问题。验证时发现且确认非本批引入的问题，记录其实际状态，但不修复、不作为里程碑关闭的阻塞项；不得因此宣称全仓门禁全绿。
+- **破坏性升级（2026-11-14 用户再次确认）**：当前无生产环境，本里程碑及后续任务均不建设过渡期目录、旧协议适配层或兼容映射。Python 旧对话与 PDF 问答在 M16.2 直接删除；Whisper 按 D12 拆为独立进程。Java 旧对话端点仍由 M16.6 直接替换，不增加过渡适配。
 
 ---
 
@@ -302,43 +303,84 @@ D9 改名不保留别名；PDF 问答过渡期废弃；并发超限提示、Whis
 
 ## M16.2 Python 工程化与 Harness 内核
 
-**目标**：`ai-service/` 具备可测试的 Harness 内核、内部鉴权、容器化与 CI。用一个不带工具的最小 Agent 走通端到端。
+**目标**：`ai-service/` 具备可测试的 Harness 内核、内部鉴权、容器化与 CI。用一个不带工具的最小 Agent 走通端到端；系统管理员可在外部管理页面完成模型供应商 CRUD。
 
 **任务**
 
 工程化：
 
-- [ ] 固定解释器版本；依赖拆成在线、索引、Whisper 三组并生成锁文件
-- [ ] 目录按[总体方案 §5.2](./AI_REFACTOR_PLAN.md#52-目录结构) 重组；现有的对话、PDF 问答、Whisper 代码移到过渡期目录，行为不变
-- [ ] 配置收拢到 `Settings` 与 `get_settings()`，去掉模块级的全局变量；非敏感的可调项接 Nacos 配置（D4）
-- [ ] 内部签名校验的依赖项，所有内部接口挂上；删除启动时打印密钥的代码
-- [ ] Nacos：注册、心跳、关闭时注销、实例元数据带版本；`/healthz`
-- [ ] `infra/Dockerfile.ai-service`；compose 增加在线进程服务（dev 与 prod 两套覆盖文件同步）
-- [ ] `.github/workflows/test.yml` 增加 Python job
+- [x] 固定解释器版本；依赖拆成在线、索引、Whisper 三组并生成目标平台锁文件
+- [x] 目录按[总体方案 §5.2](./AI_REFACTOR_PLAN.md#52-目录结构) 重组；直接删除旧对话、PDF 问答与 LangChain/Chroma 依赖，不建设过渡期目录
+- [x] Whisper 按 D12 拆为 `anynote-ai-whisper` 独立可选进程，Java 使用独立服务名调用
+- [x] 配置收拢到 `Settings` 与 `get_settings()`，去掉模块级的全局变量；非敏感的可调项接 Nacos 配置（D4）
+- [x] 内部签名校验的依赖项，所有内部接口挂上；删除启动时打印密钥的代码
+- [x] Nacos：注册、心跳、关闭时注销、实例元数据带版本；`/healthz`
+- [x] `infra/Dockerfile.ai-service`；compose 增加在线进程与可选 Whisper 进程（dev 与 prod 两套覆盖文件同步）；indexer 仅准备依赖与镜像目标，部署留 M16.4
+- [x] `.github/workflows/test.yml` 增加 Python job
 
 Harness 内核（不依赖 FastAPI）：
 
-- [ ] 运行状态机、五阶段循环、预算、无进展检测
-- [ ] 中间件机制与挂载点
-- [ ] Context Builder、分层编译、Context Manifest、大结果外置、历史压缩
-- [ ] 工具注册表、行动面（校验、身份绑定、策略、执行、观察）、错误分类
-- [ ] 事件模型与 SSE 输出；`trace.*` 事件
-- [ ] 验证器框架（规则在 M16.6 填充）
-- [ ] 模型接入层：逻辑名目录、OpenAI 兼容适配器、四种超时、重试、用量
-- [ ] 脚本化的假模型，供内核测试使用
+- [x] 运行状态机、五阶段循环、预算、无进展检测
+- [x] 中间件机制与挂载点
+- [x] Context Builder、分层编译、Context Manifest、大结果外置、历史压缩
+- [x] 工具注册表、行动面（校验、身份绑定、策略、执行、观察）、错误分类
+- [x] 事件模型与 SSE 输出；`trace.*` 事件
+- [x] 验证器框架（规则在 M16.6 填充）
+- [x] 模型接入层：逻辑名目录、OpenAI 兼容适配器、四种超时、重试、用量
+- [x] 脚本化的假模型，供内核测试使用
 
-接口：
+运行接口：
 
-- [ ] `POST /internal/v1/runs`（事件流）、取消、健康检查
-- [ ] 一个不带工具的最小 Agent，证明循环、事件、取消、超时可用
+- [x] `POST /internal/v1/runs`（事件流）、取消、健康检查
+- [x] 一个不带工具的最小 Agent，证明循环、事件、取消、超时可用
+
+供应商管理（2026-11-14 用户追加）：
+
+- [x] 先写 OpenSpec；新增仅 `ADMIN_X` 可访问的 `/v1/admin/model-providers` 查询、新增、整体更新、删除契约
+- [x] 删除内部供应商写接口，内部仅保留 Python 快照；外部响应不返回 API Key，更新时空 Key 保留原凭据
+- [x] 桌面 `/settings/providers` 与移动端 `/m/settings/providers` 提供完整 CRUD，非管理员不显示入口
+- [x] 重新生成 `openapi/specs/ai.json` 并纳入本批改动
 
 **验收**
 
 - `pytest` 通过；内核的四类确定性测试（状态迁移、中间件顺序、预算与边界、行动面）都有用例
 - 用假模型跑通：正常完成、工具参数错误后修正、工具超时、预算耗尽、调用方取消，各自产生预期的事件序列
 - 不带内部签名的请求被拒绝
-- 容器能启动、能注册到 Nacos、关闭时注销
-- 在线进程的镜像里没有 torch
+- 在线与 Whisper 容器能启动、能注册到 Nacos、关闭时注销；在线镜像没有 torch
+- 管理员桌面与移动端 CRUD 可用，普通用户无法查询或修改，外部响应与页面均不泄露 API Key
+
+### M16.2 验收记录（2026-11-14）
+
+**分支与范围**：在当前 `dev` 开发，未新切分支。按用户最新拍板，不建设过渡期适配；Python 旧对话、PDF 与 LangChain/Chroma 直接删除，Whisper 拆为独立可选进程。新增 `ADMIN_X` 供应商外部 CRUD 与双端页面；内部供应商写接口删除，Python 在新运行开始时读取配置快照。
+
+**实现与修复要点**
+
+- Harness 内核不依赖 FastAPI，包含五阶段循环、状态机、预算、无进展检测、12 个中间件挂载点、分层 Context Manifest、历史摘要复用、大结果工作区引用、行动面、验证器及 OpenTelemetry 形态 Trace。
+- OpenAI 兼容适配器分别限制建连、首输出、流空闲与总时长；仅无输出时做有界重试。新增回归用例证明工具参数片段已经到达后也不重放请求。
+- 所有 Python 内部端点校验与 Java/协同一致的 HMAC 时间戳签名；运行端点同时要求 `accessToken`。日志、事件与 Trace 不携带用户令牌或模型 Key。
+- `infra/Dockerfile.ai-service` 提供在线、测试、索引依赖和 Whisper 目标；Nacos SDK 的日志、快照与故障转移目录都指向可写临时目录，保持在线文件系统只读。
+- 管理端新增与整体更新使用不同 DTO；更新空 Key 不覆盖凭据，外部 VO 不含凭据。请求 DTO 的 Key 排除 `toString`，内部快照的 Key 对 Gson 日志序列化不可见。
+
+| 验证 | 实际结果 |
+|---|---|
+| Python Docker 测试 | `pytest` **37/37**；覆盖状态迁移、中间件顺序/短路、预算与边界、行动面，以及正常完成、参数错误修正、工具超时、预算耗尽、取消 |
+| Java Docker 测试 | `mvn test` **30 个 reactor 模块全部 SUCCESS**；`services/ai` **45/45** |
+| Web 类型与格式 | `pnpm --filter web typecheck` 通过；本批 21 个前端文件的 Biome 检查通过 |
+| Web 本批单测 | 首轮设置/供应商定向 **57/57**；修正类型后供应商 **12/12** |
+| Web 全量单测 | 最后一轮 **2036/2040**；4 个失败为既有 token/editor 扫描超时与笔记/UI 断言，相关 4 个文件单独复跑 **58/58**。不宣称 Web 全量全绿 |
+| Compose | 新增 Python 部署用例通过；全量 5 项中 4 项通过，既有「仅 web/collab 发布端口」断言未包含现行 Gateway 回环入口，非本批问题，未修改 |
+| OpenAPI | Docker 内执行标准 `openapi/generate.sh` 成功；仅 `ai.json` 变化，共 17 条路径，新增 5 个管理员端点，内部写端点消失，其余 5 份 baseline 不变 |
+| 最小 Agent 容器 E2E | 隔离 Docker 网络 + 假供应商快照 + 假 OpenAI SSE：无签名 401；签名运行得到文本、5 tokens 与 `ANSWERED`，13 个事件序号连续，无令牌/Key 泄漏 |
+| Nacos 与容器 | Harness、Whisper 均健康启动，实例元数据 `version=1.0.0`；正常停止后各自 `hosts=[]`；在线镜像 `find_spec('torch') is None` |
+| 管理端真实栈 E2E | Playwright **4/4**：桌面和移动端管理员 CRUD、两端普通用户拒绝；普通用户直接请求列表 API 返回 `A0301`；响应与 AI 日志不含测试 API Key |
+| 体积预算 | 桌面最大 **302.0/310KB**，移动端最大 **245.5/250KB**，编辑器 **16.1/250KB**，全部通过 |
+
+**环境与限制**
+
+- 本机 dev AI 容器为 CRUD 验证注入了测试主密钥，未写入仓库；测试供应商已删除，测试账号按 E2E 既有约定保留。
+- 宿主 Nginx 当时对本机地址返回 502；未修改该非本批问题。最终 E2E 使用隔离 Web 容器连接真实 Gateway/Auth/MySQL。
+- Whisper 只验证了进程、鉴权、SRT 转换、注册与注销，未执行真实音频模型转写；真实模型与真实上游容量仍留 M16.8。Whisper 验证后保持停止，Harness、Web 和 Java AI 容器运行中。
+- 未把上述 Web/Compose 结果包装成全仓门禁全绿；既有问题按用户范围约束仅记录，不顺手修复。
 
 ---
 
@@ -517,7 +559,7 @@ Python：
 **任务**
 
 - [ ] 确认 `POST /chat/completions` 已随 M16.6 删除，并清理 `apps/web` 里残留的旧解析代码
-- [ ] 删除 `ai-service/` 过渡期目录里的旧对话与 PDF 问答代码；移除 LangChain、Chroma 等不再使用的依赖
+- [ ] 确认 M16.2 已删除旧对话、PDF 问答与 LangChain/Chroma 依赖，全仓不残留旧 Python 路由；不新增过渡期清理工作
 - [ ] 全仓确认没有 `/api/aiNio/**` 残留引用；本次不创建旧路由别名，因此不存在“再删一次别名”的任务
 - [ ] 删除 `services/note` 里已废弃的 PDF 问答端点
 - [ ] 确认 `a_rag_log` 等旧表不再写入，决定归档或保留；无生产数据，不做生产归档迁移

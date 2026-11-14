@@ -1,6 +1,6 @@
 # AI 模块重构总体方案
 
-> 文档版本：v0.2（破坏性升级实施稿） | 创建 2026-11-12 | 更新 2026-11-14 | 状态：**D1–D17、P1/P2 已拍板；无生产环境；M16.0 已关闭**
+> 文档版本：v0.2（破坏性升级实施稿） | 创建 2026-11-12 | 更新 2026-11-14 | 状态：**D1–D17、P1/P2 已拍板；无生产环境；M16.0–M16.2 已实施**
 > 关联文档：[调研报告](./AI_RESEARCH.md) · [知识检索方案](./KNOWLEDGE_RETRIEVAL_PLAN.md) · [里程碑](./AI_MILESTONES.md)
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 测试节](../../README.md#测试)、[`README.md` Git 工作流](../../README.md#git-工作流)、[`openapi/WORKFLOW.md`](../../openapi/WORKFLOW.md)
 > 参考：AI Agent Handbook（下称「白皮书」，引用按章节号，对应关系见调研报告 §5）
@@ -655,7 +655,7 @@ anynote:
 ai-service/
 ├── app.py                      在线进程入口
 ├── worker.py                   索引 worker 入口
-├── api/                        路由：运行、健康检查、索引状态、过渡期的旧端点
+├── api/                        路由：运行、健康检查、索引状态
 ├── harness/                    内核，不依赖 FastAPI
 │   ├── loop.py  state.py  budget.py  events.py  middleware.py
 │   ├── context/                builder · manifest · compaction · policy
@@ -692,7 +692,7 @@ ai-service/
 | LangGraph | 仓库已有 LangChain 0.3；自带图状态机与检查点 | 上下文是怎么拼出来的不透明，Context Manifest 难做；检查点能力一期用不上；抽象层次与白皮书的对象不对应 |
 | AgentScope（Python 版） | 白皮书用它举例，概念一一对应 | 团队没有使用经验；它的内置能力（工作区、记忆、沙箱）大部分属于本期不建设的范围 |
 
-推荐自建薄内核。LangChain 只留在过渡期的旧端点里，旧端点退役时一并移除。
+采用自建薄内核。2026-11-14 用户确认无生产环境且不建设过渡期适配，M16.2 直接删除 LangChain 与旧对话、PDF 问答端点。
 
 ### 5.5 模型接入层
 
@@ -711,6 +711,7 @@ ai-service/
   不需要重启，也不全靠环境变量。**P1 已确定**：业务库保存 AES-GCM 密文、主密钥只注入 `services/ai`，Nacos 保存非敏感配置与凭据版本；Python 通过带内部签名的配置端点取得运行时快照，不直接读业务库。
   Nacos 加密插件路线已被否决，不再投入兼容性验证。
   已经开始的运行沿用开始时的配置快照，切换只影响新运行；凭据不进入日志、Trace 或模型上下文。
+- **运行期管理（2026-11-14 用户追加）**：`ADMIN_X` 通过 `/v1/admin/model-providers` 完成查询、新增、整体更新和删除，桌面与移动端设置页均可操作；外部响应不含 API Key，更新时空 Key 保留原凭据。内部写接口删除，Python 只获取运行快照。
 
 ### 5.6 工程化补齐
 
@@ -718,7 +719,7 @@ ai-service/
 |---|---|
 | 解释器版本 | **固定 3.12**（D13，M16.0 已用 3.12.14 装齐并导入验证）。本机默认 3.14 安装现有依赖时因 `onnxruntime==1.19.2` 无 cp314 wheel 失败；3.13 同样失败。Windows 还需排除 Linux CUDA/uvloop 包并补旧源码包的构建前置，因此必须分组并生成目标平台锁文件 |
 | 依赖 | 拆成三份：在线进程（轻，不含 torch）、索引 worker（加解析库）、Whisper（torch 与模型，可选）。用锁文件固定版本 |
-| 容器化 | 新增 `infra/Dockerfile.ai-service`；compose 增加 `anynote-ai-harness` 与 `anynote-ai-indexer` 两个服务，prod 不发布端口 |
+| 容器化 | 新增 `infra/Dockerfile.ai-service`；compose 增加 `anynote-ai-harness` 与可选 `anynote-ai-whisper`，prod 不发布端口；`anynote-ai-indexer` 随 M16.4 落地 |
 | Whisper | 代码留在 `ai-service/`，但作为独立的可选进程和依赖组，不拖累在线进程的镜像大小（决策 D12） |
 | 测试 | 建立 `ai-service/tests/`；内核、检索、索引、内部签名都有 pytest 用例 |
 | CI | `.github/workflows/test.yml` 增加 Python job（现在没有） |
@@ -748,7 +749,8 @@ SQL 放 `infra/sql/migrations/`，手动执行，并同步更新 `infra/sql/anyn
 
 1. `services/ai` 的运行端点与事件协议，以及破坏性升级时删除旧端点的范围；
 2. `services/note` 新增的内部端点（检索范围、可读性、正文、变更游标、导出）；
-3. 服务改名与网关路由调整。
+3. 服务改名与网关路由调整；
+4. M16.2 系统管理员模型供应商 CRUD 与管理页面。
 
 Python 的内部接口不进网关的 OpenAPI 聚合，但同样写清请求与事件结构，并以 Pydantic 模型为准。
 
