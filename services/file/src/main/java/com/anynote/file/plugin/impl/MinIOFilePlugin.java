@@ -2,6 +2,7 @@ package com.anynote.file.plugin.impl;
 
 import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.StringUtils;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.file.api.enums.OSSSignatureType;
 import com.anynote.file.api.model.bo.FileDTO;
 import com.anynote.file.api.model.bo.MinIOSignatureData;
@@ -423,5 +424,21 @@ public class MinIOFilePlugin implements FilePlugin {
             throw new RuntimeException(e);
         }
         return sb.toString();
+    }
+
+    @Override
+    public InputStream openStream(String objectName) {
+        if (StringUtils.isEmpty(objectName) || objectName.isBlank()) {
+            throw new BusinessException("对象名称不能为空", ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+        try {
+            return this.minioClient.getObject(GetObjectArgs.builder()
+                    .bucket(this.minIOConfig.getBucketName())
+                    .object(getOriginalObjectName(objectName))
+                    .build());
+        } catch (Exception e) {
+            log.warn("读取 MinIO 对象流失败，objectName={}: {}", objectName, e.getMessage());
+            throw new BusinessException("文件对象不存在或读取失败", ResCode.BUSINESS_ERROR);
+        }
     }
 }

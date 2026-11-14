@@ -333,6 +333,24 @@ class FileServiceImplTest {
         verify(redisService).setCacheObject(anyString(), any(), eq(86400L), any());
     }
 
+    /**
+     * 内部流式读取对空对象名报错，并将合法对象名透传给当前存储插件。
+     */
+    @Test
+    @DisplayName("openContentStream 校验空对象名并委托给当前文件插件")
+    void openContentStreamValidatesAndDelegates() throws Exception {
+        BusinessException empty = assertThrows(BusinessException.class, () -> fileService.openContentStream(" "));
+        assertEquals(ResCode.USER_REQUEST_PARAM_ERROR, empty.getErrorCode());
+        assertEquals("对象名称不能为空", empty.getMessage());
+
+        java.io.ByteArrayInputStream expected = new java.io.ByteArrayInputStream("pdf-bytes".getBytes());
+        when(filePlugin.openStream("doc/1/a.pdf")).thenReturn(expected);
+
+        try (java.io.InputStream actual = fileService.openContentStream("doc/1/a.pdf")) {
+            assertEquals("pdf-bytes", new String(actual.readAllBytes()));
+        }
+    }
+
     private OssSliceUploadTaskInfo taskInfo() {
         FilePO filePO = new FilePO();
         filePO.setFileName("a.png");

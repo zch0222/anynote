@@ -151,4 +151,21 @@ class MinIOFilePluginTest {
         // 走到这里说明连接失败没有外泄
         assertTrue(true);
     }
+
+    /**
+     * openStream 对空对象名返回 A0160，对不可达或不存在的对象返回 B0001。
+     */
+    @Test
+    @DisplayName("openStream 对空对象名与不可达对象返回明确的 BusinessException")
+    void openStreamValidatesObjectNameAndWrapsFailure() {
+        MinIOFilePlugin plugin = new MinIOFilePlugin(config("http://127.0.0.1:1", "http://127.0.0.1:1"));
+
+        BusinessException empty = assertThrows(BusinessException.class, () -> plugin.openStream("  "));
+        assertEquals(com.anynote.core.web.enums.ResCode.USER_REQUEST_PARAM_ERROR, empty.getErrorCode());
+        assertEquals("对象名称不能为空", empty.getMessage());
+
+        BusinessException missing = assertThrows(BusinessException.class, () -> plugin.openStream("doc/pdf/missing.pdf"));
+        assertEquals(com.anynote.core.web.enums.ResCode.BUSINESS_ERROR, missing.getErrorCode());
+        assertEquals("文件对象不存在或读取失败", missing.getMessage());
+    }
 }

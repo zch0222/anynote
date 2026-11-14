@@ -117,4 +117,12 @@ public interface FilePlugin {
      * @return 文本文件内容
      */
     public String readTextFile(String objectName);
+
+    /**
+     * 按对象名打开原始字节流。
+     *
+     * @param objectName 对象名称
+     * @return 文件输入流，由调用方负责关闭
+     */
+    public InputStream openStream(String objectName);
 }

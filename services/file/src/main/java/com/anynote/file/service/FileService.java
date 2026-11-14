@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Set;
 
@@ -127,4 +128,12 @@ public interface FileService extends IService<FilePO> {
      * @return 文本
      */
     public String readTextFile(String objectName);
+
+    /**
+     * 按对象名打开文件内容流。
+     *
+     * @param objectName 对象名称
+     * @return 文件输入流，由调用方负责关闭
+     */
+    public InputStream openContentStream(String objectName);
 }

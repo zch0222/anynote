@@ -19,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -203,5 +204,49 @@ public class HuaweiFilePlugin implements FilePlugin {
     @Override
     public String readTextFile(String objectName) {
         return "";
+    }
+
+    @Override
+    public InputStream openStream(String objectName) {
+        if (StringUtils.isEmpty(objectName) || objectName.isBlank()) {
+            throw new BusinessException("对象名称不能为空", ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+        ObsClient obsClient = null;
+        try {
+            obsClient = this.buildObsClient();
+            ObsObject obsObject = obsClient.getObject(huaweiOBSConfig.getBucketName(),
+                    huaweiOBSConfig.getBasePath() + "/" + objectName);
+            if (obsObject == null || obsObject.getObjectContent() == null) {
+                throw new BusinessException("文件对象不存在或读取失败", ResCode.BUSINESS_ERROR);
+            }
+            ObsClient clientToClose = obsClient;
+            return new FilterInputStream(obsObject.getObjectContent()) {
+                @Override
+                public void close() throws IOException {
+                    try {
+                        super.close();
+                    } finally {
+                        clientToClose.close();
+                    }
+                }
+            };
+        } catch (BusinessException e) {
+            closeQuietly(obsClient);
+            throw e;
+        } catch (Exception e) {
+            closeQuietly(obsClient);
+            log.warn("读取华为 OBS 对象流失败，objectName={}: {}", objectName, e.getMessage());
+            throw new BusinessException("文件对象不存在或读取失败", ResCode.BUSINESS_ERROR);
+        }
+    }
+
+    private void closeQuietly(ObsClient obsClient) {
+        if (obsClient != null) {
+            try {
+                obsClient.close();
+            } catch (IOException e) {
+                log.warn("关闭 OBS 客户端失败：{}", e.getMessage());
+            }
+        }
     }
 }

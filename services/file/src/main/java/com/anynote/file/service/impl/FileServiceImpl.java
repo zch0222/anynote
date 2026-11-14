@@ -466,4 +466,12 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
     public String readTextFile(String objectName) {
         return filePluginFactory.filePlugin().readTextFile(objectName);
     }
+
+    @Override
+    public InputStream openContentStream(String objectName) {
+        if (StringUtils.isEmpty(objectName) || objectName.isBlank()) {
+            throw new BusinessException("对象名称不能为空", ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+        return filePluginFactory.filePlugin().openStream(objectName);
+    }
 }
