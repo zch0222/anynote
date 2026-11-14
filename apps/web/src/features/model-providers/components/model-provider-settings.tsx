@@ -41,6 +41,7 @@ import {
 	useModelProvidersQuery,
 	useUpdateModelProviderMutation,
 } from "../use-model-providers";
+import { EmbeddingModelSettings } from "./embedding-model-settings";
 
 export function ModelProviderSettings() {
 	const providers = useModelProvidersQuery();
@@ -101,6 +102,8 @@ export function ModelProviderSettings() {
 					/>
 				</>
 			)}
+
+			<EmbeddingModelSettings providers={providers.data ?? []} />
 
 			{formOpen ? (
 				<ProviderFormDialog

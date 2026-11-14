@@ -5,7 +5,9 @@ import { emptyProviderForm } from "../schemas";
 import {
 	useCreateModelProviderMutation,
 	useDeleteModelProviderMutation,
+	useEmbeddingConfigQuery,
 	useModelProvidersQuery,
+	useUpdateEmbeddingConfigMutation,
 	useUpdateModelProviderMutation,
 } from "../use-model-providers";
 
@@ -98,5 +100,45 @@ describe("模型供应商数据访问", () => {
 			"/v1/admin/model-providers/{providerKey}",
 			expect.objectContaining({ params: { path: { providerKey: "openai" } } }),
 		);
+	});
+
+	it("查询与保存 Embedding 运行时配置", async () => {
+		const embeddingConfig = {
+			logicalName: "embedding",
+			providerKey: "openai",
+			model: "text-embedding-3-small",
+			dimensions: 1536,
+			enabled: true,
+			version: 1,
+		};
+		api.GET.mockResolvedValue({ response: response(embeddingConfig) });
+		const { result: queryResult } = renderHookWithProviders(() =>
+			useEmbeddingConfigQuery(),
+		);
+		await waitFor(() => expect(queryResult.current.isSuccess).toBe(true));
+		expect(queryResult.current.data).toEqual(embeddingConfig);
+		expect(api.GET).toHaveBeenCalledWith(
+			"/v1/admin/model-providers/logical/embedding",
+			expect.objectContaining({ parseAs: "stream" }),
+		);
+
+		api.PUT.mockResolvedValue({ response: response(embeddingConfig) });
+		const { result: mutationResult } = renderHookWithProviders(() =>
+			useUpdateEmbeddingConfigMutation(),
+		);
+		await mutationResult.current.mutateAsync({
+			enabled: true,
+			providerKey: "openai",
+			model: "text-embedding-3-small",
+			dimensions: "",
+		});
+		expect(api.PUT.mock.calls[0]?.[0]).toBe(
+			"/v1/admin/model-providers/logical/embedding",
+		);
+		expect(api.PUT.mock.calls[0]?.[1].body).toEqual({
+			enabled: true,
+			providerKey: "openai",
+			model: "text-embedding-3-small",
+		});
 	});
 });

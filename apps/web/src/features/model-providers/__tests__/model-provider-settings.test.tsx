@@ -8,6 +8,8 @@ const hooks = vi.hoisted(() => ({
 	create: { mutateAsync: vi.fn(), isPending: false },
 	update: { mutateAsync: vi.fn(), isPending: false },
 	remove: { mutateAsync: vi.fn(), isPending: false },
+	embeddingQuery: vi.fn(),
+	embeddingUpdate: { mutateAsync: vi.fn(), isPending: false },
 }));
 
 vi.mock("../use-model-providers", () => ({
@@ -15,6 +17,8 @@ vi.mock("../use-model-providers", () => ({
 	useCreateModelProviderMutation: () => hooks.create,
 	useUpdateModelProviderMutation: () => hooks.update,
 	useDeleteModelProviderMutation: () => hooks.remove,
+	useEmbeddingConfigQuery: hooks.embeddingQuery,
+	useUpdateEmbeddingConfigMutation: () => hooks.embeddingUpdate,
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -39,6 +43,19 @@ beforeEach(() => {
 	hooks.create.mutateAsync.mockResolvedValue(provider);
 	hooks.update.mutateAsync.mockResolvedValue(provider);
 	hooks.remove.mutateAsync.mockResolvedValue(undefined);
+	hooks.embeddingQuery.mockReturnValue({
+		data: {
+			logicalName: "embedding",
+			providerKey: "openai",
+			model: "text-embedding-3-small",
+			dimensions: 1536,
+			enabled: true,
+			version: 1,
+		},
+		isPending: false,
+		isError: false,
+	});
+	hooks.embeddingUpdate.mutateAsync.mockResolvedValue({});
 });
 
 describe("模型供应商管理页面", () => {
