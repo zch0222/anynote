@@ -1,7 +1,7 @@
 # AI 模块重构里程碑（M16.x）
 
 > 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-14
-> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0–M16.2 已于 2026-11-14 完成**
+> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0–M16.3 已于 2026-11-14 完成**
 > 关联文档：[调研报告](./AI_RESEARCH.md) · [总体方案](./AI_REFACTOR_PLAN.md) · [知识检索方案](./KNOWLEDGE_RETRIEVAL_PLAN.md)
 >
 > 本文是执行计划：每个里程碑的任务、验收标准与依赖。设计取舍在两份方案里，这里不重复。
@@ -390,18 +390,18 @@ Harness 内核（不依赖 FastAPI）：
 
 **任务**
 
-- [ ] OpenSpec 提案：内部端点的路径、请求与响应
-- [ ] 用单测把现有的三套权限判定行为固定下来（笔记、资料、慕课），覆盖各角色与各权限串
-- [ ] 新增 `KnowledgeAccessService`：替指定用户判定、批量判定；现有三个判定函数改为调用它，行为不变
-- [ ] 权限矩阵用例表（JSON），Java 单测读取它
-- [ ] 按 D10、D16 落实慕课与超管的口径
-- [ ] 各实体的导出与读取：笔记、资料、慕课、条目、字幕（经 file 服务读取）、任务、知识库
-- [ ] 内部端点（全部 `@InnerAuth`）：检索范围、批量可读性、正文、目录与大纲、结构化查询、变更游标、导出、资料索引状态回写
-- [ ] 变更记录表与迁移脚本；在各写路径上与业务写入同事务地插入变更记录
+- [x] OpenSpec 提案：内部端点的路径、请求与响应
+- [x] 用单测把现有的三套权限判定行为固定下来（笔记、资料、慕课），覆盖各角色与各权限串
+- [x] 新增 `KnowledgeAccessService`：替指定用户判定、批量判定；现有三个判定函数改为调用它，行为不变
+- [x] 权限矩阵用例表（JSON），Java 单测读取它
+- [x] 按 D10、D16 落实慕课与超管的口径
+- [x] 各实体的导出与读取：笔记、资料、慕课、条目、字幕（经 file 服务读取）、任务、知识库
+- [x] 内部端点（全部 `@InnerAuth`）：检索范围、批量可读性、正文、目录与大纲、结构化查询、变更游标、导出、资料索引状态回写
+- [x] 变更记录表与迁移脚本；在各写路径上与业务写入同事务地插入变更记录
       （清单见[知识检索方案 §5.2](./KNOWLEDGE_RETRIEVAL_PLAN.md#52-变更感知)，实施时用全文搜索补全）
-- [ ] 任务提交与退回改笔记权限时记录变更
-- [ ] `DocMessageListener`：删除调用不存在端点的索引代码；「重新索引」改为插入变更记录
-- [ ] 结构化查询的命名查询与参数校验
+- [x] 任务提交与退回改笔记权限时记录变更
+- [x] `DocMessageListener`：删除调用不存在端点的索引代码；「重新索引」改为插入变更记录
+- [x] 结构化查询的命名查询与参数校验
 
 **验收**
 
@@ -410,6 +410,52 @@ Harness 内核（不依赖 FastAPI）：
 - 每一类写操作都能在变更游标里查到对应记录；事务回滚时不留记录
 - 不带内部签名访问这些端点被拒绝；带签名但不带用户令牌访问需要用户身份的端点被拒绝
 - `pnpm openapi:generate` 输出干净，baseline 已提交
+
+### M16.3 验收记录（2026-11-14）
+
+**分支与范围**：在当前 `dev` 开发，未新切分支。契约以 [OpenSpec](../../.claude/openspec/changes/2026-11-14-note-knowledge-access.md) 为准，按用户拍板：统一 `/internal/v1/knowledge`；既有详情行为不变，检索取「列表可见且详情可读」的交集；游标导出与标题/行/字幕时间范围读取，单次 20,000 字符；八类实体白名单查询另加 `MY_TASKS`；视频总结由 AI 写入后调用 note 登记，只取最新一条有效总结；错误文案按 OpenSpec §5。逐文件清单见 [`docs/changelist/2026-11-14-note-knowledge-access.md`](../changelist/2026-11-14-note-knowledge-access.md)。
+
+**实现要点**
+
+- 9 个内部端点：`scope`、`authorize`、`content`、`outline`、`query` 为 `@InnerAuth(isUser = true)`；`changes`、`export`、`docs/{id}/index-status`、`mooc-items/{moocItemId}/summary-changes` 只要内部签名。
+- `KnowledgeAccessService` 收拢笔记、资料、慕课详情权限，`getNotePermissions`、`getDocPermissions` 改为委托；慕课的 `@RequiresPermissions("n:mooc:*")` 改为 note 内的 `@RequiresMoocPermissions` 切面，不再经 HTTP 调用自身，参数上下文与错误沿用原通用切面。
+- D10/D16：检索可读要求列表可见且详情不低于 4；超管默认范围与普通成员相同，显式指定知识库或实体时才扩展；默认结构化查询按实际成员角色复核内容。慕课按实际成员关系计算，没有超管特判。
+- `n_knowledge_change` 与迁移脚本；笔记、资料、慕课、条目、字幕、任务、知识库的写路径在业务事务内登记，任务提交与退回同时登记笔记与任务；成员关系、资料索引状态回写、资料英文名翻译不登记。
+- `DocMessageListener` 删除调用不存在 RAG 端点的代码，重新索引只登记资料 `UPDATE`；新建资料直接登记 `CREATE`，不再发送旧 RAG 索引消息。
+- AI 保存视频总结时在本地短事务内插入后调用 note 登记，失败回滚本地插入；`RemoteMoocFallbackFactory` 降级返回 `INNER_NOTE_SERVICE_ERROR`。
+- 新增 SELECT 均在 `KnowledgeChangeMapper.xml` 中使用显式 `resultMap`；共享权限矩阵在 `services/note/src/test/resources/knowledge/access-matrix.json`，M16.5 的 Python 测试读取同一文件。
+
+**与方案的偏差**
+
+1. 路径以 OpenSpec 为准，为 `/internal/v1/knowledge/*`（[知识检索方案 §4.2](./KNOWLEDGE_RETRIEVAL_PLAN.md#42-note-服务新增的内部端点) 为示意的 `/inner/knowledge/*`）；另增方案 §5.2 所述的视频总结登记端点，共 9 个。
+2. 方案 §5.2 列出「任务删除」，现有代码没有任务删除端点，本批不新增。
+3. 同一慕课条目存在多条正文记录时，读取层按 `updateTime`、`id` 取最新一条；视频总结按 `createTime`、`id` 取最新有效一条。既有写入逻辑未改。
+
+**验证结果（本机 Docker）**
+
+| 验证 | 实际结果 |
+|---|---|
+| 全 reactor `mvn test` | 30 个模块全部 SUCCESS；`services/note` 230/230（含本批写路径变更用例），`services/ai` 46/46 |
+| 全 reactor `mvn clean install -DskipTests` | 30 个模块全部 SUCCESS |
+| 事务集成测试 | 1/1：真实 Spring/MySQL 下提交的变更可查、业务异常后回滚不留记录；结束后 `n_knowledge_change` 为 0 行 |
+| 权限矩阵 | 59 条用例全部通过；笔记、资料、慕课的既有判定另有单测固定 |
+| 真实栈 E2E | 通过：八类实体导出与结构化查询；`/scope` 缺内部签名、有签名缺用户令牌均被拒绝；跨用户不可读；任务提交与退回；字幕时间范围；资料索引状态回写不产生变更；重新索引；笔记、资料、慕课、条目、知识库的删除游标。E2E 在最后一次实现改动之后执行，其后只有测试新增、import 与 Javadoc 整理，未重跑 |
+| 用户令牌要求 | 单测断言五个用户端点 `isUser = true`、四个服务间端点 `isUser = false`；E2E 实测 `/scope` |
+| OpenAPI | Docker 内标准 `openapi/generate.sh`：5 份 baseline 重写后字节不变；`note.json` 写回时 Windows 绑定挂载报 `EINVAL`，改用容器内同一 `normalize-cli.mjs` 输出到临时文件比对，6 份均与工作区 baseline 一致。`note.json` 相对 `HEAD` 新增 9 个路径、28 个 schema、1 个标签，无删除与修改 |
+
+只由单测覆盖、E2E 未覆盖的写路径：直接 `POST /docs/pdfs` 创建（被下方既有缺陷先挡住）、协同写回、批量新建条目、退回时的变更断言、AI 端视频总结登记（E2E 直接调用 note 端点）。
+
+**环境与数据**
+
+- dev MySQL 已执行本批迁移，以及删除笔记所需的仓库既有迁移 `2026-09-25-note-collab-state.sql`（不涉及代码改动）。
+- 验证数据已按 26 个 `M16.3测试` 账号精确清理：MySQL 23 张表 638 行（含 `n_knowledge_change` 198 行，未整表清空）、Redis 57 个键、MinIO 14 个对象、ES `note` 索引 18 篇；M16.0/M16.1 的 13 个账号未动。临时目录 `tmp/m16-3/` 已删除。
+
+**发现但未修改的既有问题（非本批引入，按用户范围约束仅记录）**
+
+- `POST /docs/pdfs` 直接创建资料时，`n_doc.index_status` 无默认值导致既有 insert 失败。
+- MinIO 临时签名接口返回「MinIO 请走分片上传任务流程」，验证改走真实 file 上传与既有 Redis 上传缓存。
+- 资料英文名翻译的 Feign 调用失败（旧 AI 翻译端点已随 M16.2 删除），日志中出现重试。
+- 慕课条目更新可能留下多条正文记录，本批只在读取层取最新一条。
 
 ---
 
