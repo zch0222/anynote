@@ -6,6 +6,7 @@ import com.anynote.note.mapper.NoteCollabStateMapper;
 import com.anynote.note.mapper.NoteMapper;
 import com.anynote.note.mapper.NoteTextMapper;
 import com.anynote.note.model.bo.NoteDeleteParam;
+import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.note.service.NoteChangePublisher;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
@@ -29,6 +30,7 @@ import java.io.Serializable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -78,10 +80,13 @@ class NoteServiceImplDeleteNoteTest {
         ReflectionTestUtils.setField(noteService, "baseMapper", noteMapper);
         ReflectionTestUtils.setField(noteService, "noteTextMapper", noteTextMapper);
         ReflectionTestUtils.setField(noteService, "noteCollabStateMapper", noteCollabStateMapper);
+        ReflectionTestUtils.setField(noteService, "knowledgeChangeService",
+                mock(KnowledgeChangeService.class));
         ReflectionTestUtils.setField(noteService, "rocketMQTemplate", rocketMQTemplate);
         ReflectionTestUtils.setField(noteService, "rocketMQProperties", rocketMQProperties);
         ReflectionTestUtils.setField(noteService, "noteChangePublisher",
-                new NoteChangePublisher(rocketMQTemplate, rocketMQProperties, redisProvider));
+                new NoteChangePublisher(rocketMQTemplate, rocketMQProperties, redisProvider,
+                        mock(KnowledgeChangeService.class)));
         when(noteMapper.selectOne(any(Wrapper.class))).thenReturn(Note.builder().noteTextId(9001L).build());
     }
 

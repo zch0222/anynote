@@ -6,6 +6,8 @@ import com.anynote.common.rocketmq.properties.RocketMQProperties;
 import com.anynote.common.rocketmq.tags.NoteTagsEnum;
 import com.anynote.note.api.model.bo.GenerateNoteEditLogMessage;
 import com.anynote.note.api.model.po.Note;
+import com.anynote.note.enums.KnowledgeEntityType;
+import com.anynote.note.enums.KnowledgeOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.ObjectProvider;
@@ -19,7 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 笔记写入后的消息发布：ES 索引、编辑日志（RocketMQ）与协同外部写入通知（Redis）。
+ * 笔记变更记录与写入后的 ES 索引、编辑日志和协同通知。
  *
  * <p>公开编辑与协同服务写回共用这一处，保证两条写入路径发出同样的消息。
  * 当前处于事务中时，消息在事务提交之后发送，回滚的写入不会产生消息。</p>
@@ -39,12 +41,16 @@ public class NoteChangePublisher {
 
     private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
 
+    private final KnowledgeChangeService knowledgeChangeService;
+
     public NoteChangePublisher(RocketMQTemplate rocketMQTemplate,
                                RocketMQProperties rocketMQProperties,
-                               ObjectProvider<StringRedisTemplate> redisTemplateProvider) {
+                               ObjectProvider<StringRedisTemplate> redisTemplateProvider,
+                               KnowledgeChangeService knowledgeChangeService) {
         this.rocketMQTemplate = rocketMQTemplate;
         this.rocketMQProperties = rocketMQProperties;
         this.redisTemplateProvider = redisTemplateProvider;
+        this.knowledgeChangeService = knowledgeChangeService;
     }
 
     /**
@@ -56,6 +62,8 @@ public class NoteChangePublisher {
      * @param userId      编辑日志与历史记到的用户
      */
     public void publishSaved(Long noteId, Note oldNote, Note currentNote, Long userId) {
+        knowledgeChangeService.record(KnowledgeEntityType.NOTE, noteId,
+                currentNote.getKnowledgeBaseId(), KnowledgeOperation.UPDATE);
         String indexDestination = rocketMQProperties.getNoteTopic() + ":" + NoteTagsEnum.GENERATOR_NOTE_INDEX.name();
         String editLogDestination = rocketMQProperties.getNoteTopic() + ":" + NoteTagsEnum.GENERATE_NOTE_EDIT_LOG.name();
         String editLog = JSON.toJSONString(GenerateNoteEditLogMessage.builder()

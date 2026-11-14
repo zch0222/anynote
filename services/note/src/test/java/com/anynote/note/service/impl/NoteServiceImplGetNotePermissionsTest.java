@@ -83,6 +83,8 @@ class NoteServiceImplGetNotePermissionsTest {
         ReflectionTestUtils.setField(noteService, "baseMapper", noteMapper);
         ReflectionTestUtils.setField(noteService, "tokenUtil", tokenUtil);
         ReflectionTestUtils.setField(noteService, "knowledgeBaseService", knowledgeBaseService);
+        ReflectionTestUtils.setField(noteService, "knowledgeAccessService",
+                new KnowledgeAccessServiceImpl(null, null, null));
 
         when(noteMapper.selectOne(any())).thenReturn(note("76666", AUTHOR_ID));
     }

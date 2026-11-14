@@ -1,6 +1,7 @@
 package com.anynote.note.service.impl;
 
-import com.anynote.common.datascope.annotation.RequiresPermissions;
+import com.anynote.note.datascope.annotation.RequiresMoocPermissions;
+import com.anynote.note.enums.NotePermissions;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.StringUtils;
 import com.anynote.note.mapper.MoocItemMapper;
@@ -20,7 +21,7 @@ public class MoocItemServiceImpl extends ServiceImpl<MoocItemMapper, MoocItemPO>
         implements MoocItemService {
 
 
-    @RequiresPermissions(value = "n:mooc:read", paramIdName = "moocId", queryParamName = "moocItemQueryParam")
+    @RequiresMoocPermissions(value = NotePermissions.READ, paramIdName = "moocId", queryParamName = "moocItemQueryParam")
     @Override
     public MoocItemVO getMoocItemVOById(MoocItemQueryParam moocItemQueryParam) {
         MoocItemVO moocItemVO = this.baseMapper

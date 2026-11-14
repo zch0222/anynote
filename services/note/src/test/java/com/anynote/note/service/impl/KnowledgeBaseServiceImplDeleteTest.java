@@ -4,6 +4,7 @@ import com.anynote.common.security.token.TokenUtil;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.note.api.model.po.NoteKnowledgeBase;
 import com.anynote.note.mapper.KnowledgeBaseMapper;
+import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.system.api.model.bo.LoginUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,6 +21,7 @@ import java.io.Serializable;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,6 +56,8 @@ class KnowledgeBaseServiceImplDeleteTest {
         knowledgeBaseService = new KnowledgeBaseServiceImpl();
         ReflectionTestUtils.setField(knowledgeBaseService, "baseMapper", knowledgeBaseMapper);
         ReflectionTestUtils.setField(knowledgeBaseService, "tokenUtil", tokenUtil);
+        ReflectionTestUtils.setField(knowledgeBaseService, "knowledgeChangeService",
+                mock(KnowledgeChangeService.class));
         when(knowledgeBaseMapper.selectById((Serializable) BASE_ID)).thenReturn(knowledgeBase(OWNER_ID));
         when(knowledgeBaseMapper.deleteById((Serializable) BASE_ID)).thenReturn(1);
         loginAs(OWNER_ID);

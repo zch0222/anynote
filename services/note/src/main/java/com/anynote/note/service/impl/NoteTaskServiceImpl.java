@@ -110,12 +110,16 @@ public class NoteTaskServiceImpl extends ServiceImpl<NoteTaskMapper, NoteTask>
     @Resource
     private NoteOperationLogService noteOperationLogService;
 
+    @Resource
+    private KnowledgeChangeService knowledgeChangeService;
+
     /**
      * 更新笔记任务
      *
      * @param updateParam
      * @return
      */
+    @Transactional(rollbackFor = Exception.class)
     @RequiresNoteTaskPermissions(NoteTaskPermissions.MANAGE)
     @Override
     public String updateNoteTask(NoteTaskUpdateParam updateParam) {
@@ -134,6 +138,9 @@ public class NoteTaskServiceImpl extends ServiceImpl<NoteTaskMapper, NoteTask>
         if (1 != count) {
             throw new BusinessException("未知错误，请联系管理员");
         }
+        Long knowledgeBaseId = this.baseMapper.selectById(updateParam.getNoteTaskId()).getKnowledgeBaseId();
+        knowledgeChangeService.record(KnowledgeEntityType.TASK, updateParam.getNoteTaskId(),
+                knowledgeBaseId, KnowledgeOperation.UPDATE);
 
         NoteTaskOperationHistory noteTaskOperationHistory = NoteTaskOperationHistory.builder()
                 .noteTaskId(noteTask.getId())
@@ -207,6 +214,8 @@ public class NoteTaskServiceImpl extends ServiceImpl<NoteTaskMapper, NoteTask>
         noteTask.setCreateTime(date);
         noteTask.setUpdateTime(date);
         this.baseMapper.insert(noteTask);
+        knowledgeChangeService.record(KnowledgeEntityType.TASK, noteTask.getId(),
+                noteTask.getKnowledgeBaseId(), KnowledgeOperation.CREATE);
 
         NoteTaskOperationHistory noteTaskOperationHistory = NoteTaskOperationHistory.builder()
                 .noteTaskId(noteTask.getId())
@@ -408,6 +417,10 @@ public class NoteTaskServiceImpl extends ServiceImpl<NoteTaskMapper, NoteTask>
         // 修改用户任务提交状态
         userNoteTask.setStatus(UserNoteTaskStatus.SUBMITTED.getValue());
         userNoteTaskMapper.update(userNoteTask, userNoteTaskLambdaQueryWrapper);
+        knowledgeChangeService.record(KnowledgeEntityType.NOTE, submitParam.getId(),
+                noteInfo.getKnowledgeBaseId(), KnowledgeOperation.UPDATE);
+        knowledgeChangeService.record(KnowledgeEntityType.TASK, submitParam.getTaskId(),
+                noteTaskInfo.getKnowledgeBaseId(), KnowledgeOperation.UPDATE);
 
         // 添加任务操作记录
         String destination = rocketMQProperties.getNoteTaskTopic() + ":" + NoteTaskTagsEnum.INSERT_HISTORY.name();
@@ -642,6 +655,11 @@ public class NoteTaskServiceImpl extends ServiceImpl<NoteTaskMapper, NoteTask>
 
         // 更新状态为已退回
         userNoteTaskMapper.update(userNoteTask, userNoteTaskLambdaQueryWrapper);
+        NoteTask currentTask = this.baseMapper.selectById(noteTaskSubmissionRecord.getNoteTaskId());
+        knowledgeChangeService.record(KnowledgeEntityType.NOTE, noteTaskSubmissionRecord.getNoteId(),
+                currentTask.getKnowledgeBaseId(), KnowledgeOperation.UPDATE);
+        knowledgeChangeService.record(KnowledgeEntityType.TASK, noteTaskSubmissionRecord.getNoteTaskId(),
+                currentTask.getKnowledgeBaseId(), KnowledgeOperation.UPDATE);
 
         // 插入历史日志
         String destination = rocketMQProperties.getNoteTaskTopic() + ":" + NoteTaskTagsEnum.INSERT_HISTORY.name();

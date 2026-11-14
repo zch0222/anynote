@@ -13,6 +13,7 @@ import com.anynote.note.model.bo.NoteUpdateParam;
 import com.anynote.note.model.dto.NoteEditDTO;
 import com.anynote.note.model.vo.NoteSaveResultVO;
 import com.anynote.note.service.KnowledgeBaseService;
+import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.note.service.NoteChangePublisher;
 import com.anynote.system.api.model.bo.LoginUser;
 import com.anynote.system.api.model.po.SysUser;
@@ -39,6 +40,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -93,7 +95,8 @@ class NoteServiceImplEditNoteTest {
         ReflectionTestUtils.setField(noteService, "rocketMQProperties", rocketMQProperties);
         when(redisProvider.getIfAvailable()).thenReturn(stringRedisTemplate);
         ReflectionTestUtils.setField(noteService, "noteChangePublisher",
-                new NoteChangePublisher(rocketMQTemplate, rocketMQProperties, redisProvider));
+                new NoteChangePublisher(rocketMQTemplate, rocketMQProperties, redisProvider,
+                        mock(KnowledgeChangeService.class)));
 
         SysUser sysUser = new SysUser();
         sysUser.setId(USER_ID);

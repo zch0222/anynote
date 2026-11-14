@@ -13,7 +13,6 @@ import com.anynote.ai.api.model.dto.GetMoocVideoSummarizesByMoocIdDTO;
 import com.anynote.ai.api.model.dto.WhisperDTO;
 import com.anynote.ai.api.model.po.MoocVideoSummarizePO;
 import com.anynote.ai.api.model.vo.WhisperSubmitVO;
-import com.anynote.common.datascope.annotation.RequiresPermissions;
 import com.anynote.common.datascope.constants.PermissionConstants;
 import com.anynote.common.elasticsearch.constant.ElasticsearchIndexConstants;
 import com.anynote.common.elasticsearch.model.EsNoteIndex;
@@ -42,6 +41,10 @@ import com.anynote.note.api.model.vo.MoocVideoItemInfoVO;
 import com.anynote.note.constant.MoocItemType;
 import com.anynote.note.datascope.annotation.KnowledgeBaseDataScope;
 import com.anynote.note.datascope.annotation.RequiresKnowledgeBasePermissions;
+import com.anynote.note.datascope.annotation.RequiresMoocPermissions;
+import com.anynote.note.enums.KnowledgeEntityType;
+import com.anynote.note.enums.KnowledgeOperation;
+import com.anynote.note.enums.NotePermissions;
 import com.anynote.note.mapper.MoocMapper;
 import com.anynote.note.model.bo.*;
 import com.anynote.note.model.po.MoocItemPO;
@@ -49,6 +52,7 @@ import com.anynote.note.model.po.MoocItemTextPO;
 import com.anynote.note.model.po.MoocPO;
 import com.anynote.note.model.po.MoocVideoItemInfoPO;
 import com.anynote.note.model.vo.*;
+import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.note.service.MoocItemService;
 import com.anynote.note.service.MoocItemTextService;
 import com.anynote.note.service.MoocService;
@@ -104,7 +108,10 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
     @Autowired
     private RemoteMoocVideoSummarizeService remoteMoocVideoSummarizeService;
 
-    @RequiresPermissions(value = "n:mooc:read", paramIdName = "moocId", queryParamName = "moocQueryParam")
+    @Resource
+    private KnowledgeChangeService knowledgeChangeService;
+
+    @RequiresMoocPermissions(value = NotePermissions.READ, paramIdName = "moocId", queryParamName = "moocQueryParam")
     @Override
     public MoocVO getMoocById(MoocQueryParam moocQueryParam) {
         MoocVO moocVO = this.baseMapper.selectMoocById(moocQueryParam.getMoocId());
@@ -112,6 +119,7 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
         return moocVO;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @RequiresKnowledgeBasePermissions(value = KnowledgeBasePermissions.MANAGE,
             message = "没有权限创建慕课")
     @Override
@@ -132,12 +140,16 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                 .createTime(now)
                 .build();
         this.save(moocPO);
+        knowledgeChangeService.record(KnowledgeEntityType.MOOC, moocPO.getId(),
+                moocPO.getKnowledgeBaseId(), KnowledgeOperation.CREATE);
         return moocPO.getId();
     }
 
-    @RequiresPermissions(value = "n:mooc:update", paramIdName = "moocId", queryParamName = "moocUpdateParam")
+    @Transactional(rollbackFor = Exception.class)
+    @RequiresMoocPermissions(value = NotePermissions.EDIT, paramIdName = "moocId", queryParamName = "moocUpdateParam")
     @Override
     public String updateMooc(MoocUpdateParam moocUpdateParam) {
+        MoocPO current = this.baseMapper.selectById(moocUpdateParam.getMoocId());
         MoocPO moocPO = MoocPO.builder()
                 .id(moocUpdateParam.getMoocId())
                 .title(moocUpdateParam.getTitle())
@@ -151,6 +163,10 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
         if (!res) {
             throw new BusinessException("更新失败");
         }
+        Long knowledgeBaseId = moocUpdateParam.getKnowledgeBaseId() == null
+                ? current.getKnowledgeBaseId() : moocUpdateParam.getKnowledgeBaseId();
+        knowledgeChangeService.record(KnowledgeEntityType.MOOC, moocUpdateParam.getMoocId(),
+                knowledgeBaseId, KnowledgeOperation.UPDATE);
         return Constants.SUCCESS_RES;
     }
 
@@ -177,7 +193,7 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                         FileSources.MOOC_COVER.getValue())), "慕课封面上传任务创建失败");
     }
 
-    @RequiresPermissions(value = "n:mooc:update", paramIdName = "moocId", queryParamName = "moocItemCreateParam")
+    @RequiresMoocPermissions(value = NotePermissions.EDIT, paramIdName = "moocId", queryParamName = "moocItemCreateParam")
     @Transactional(rollbackFor = Exception.class)
     @Override
     public String createItems(MoocItemCreateParam moocItemCreateParam) {
@@ -240,11 +256,16 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                 throw new BusinessException("保存Item Text失败");
             }
         }
+        Long knowledgeBaseId = this.baseMapper.selectById(moocItemCreateParam.getMoocId()).getKnowledgeBaseId();
+        for (MoocItemPO item : moocItemPOS) {
+            knowledgeChangeService.record(KnowledgeEntityType.MOOC_ITEM, item.getId(),
+                    knowledgeBaseId, KnowledgeOperation.CREATE);
+        }
         return Constants.SUCCESS_RES;
     }
 
     @Transactional(rollbackFor = Exception.class)
-    @RequiresPermissions(value = "n:mooc:update", paramIdName = "moocId", queryParamName = "moocItemUpdateParam")
+    @RequiresMoocPermissions(value = NotePermissions.EDIT, paramIdName = "moocId", queryParamName = "moocItemUpdateParam")
     @Override
     public String updateMoocItem(MoocItemUpdateParam moocItemUpdateParam) {
         MoocItemPO moocItemPO = MoocItemPO.builder()
@@ -269,10 +290,13 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                 throw new BusinessException("慕课Item Text保存失败");
             }
         }
+        Long knowledgeBaseId = this.baseMapper.selectById(moocItemUpdateParam.getMoocId()).getKnowledgeBaseId();
+        knowledgeChangeService.record(KnowledgeEntityType.MOOC_ITEM, moocItemUpdateParam.getMoocItemId(),
+                knowledgeBaseId, KnowledgeOperation.UPDATE);
         return Constants.SUCCESS_RES;
     }
 
-    @RequiresPermissions(value = "n:mooc:read", paramIdName = "moocId", queryParamName = "moocItemQueryParam")
+    @RequiresMoocPermissions(value = NotePermissions.READ, paramIdName = "moocId", queryParamName = "moocItemQueryParam")
     @Override
     public PageBean<MoocItemListVO> getMoocItemList(MoocItemQueryParam moocItemQueryParam) {
         PageHelper.startPage(moocItemQueryParam.getPage(), moocItemQueryParam.getPageSize())
@@ -294,7 +318,7 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                 .build();
     }
 
-    @RequiresPermissions(value = "n:mooc:update", paramIdName = "moocId", queryParamName = "moocVideoCreateParam")
+    @RequiresMoocPermissions(value = NotePermissions.EDIT, paramIdName = "moocId", queryParamName = "moocVideoCreateParam")
     @Override
     public OssSliceUploadTaskVO createMoocVideoUploadTask(MoocVideoCreateParam moocVideoCreateParam) {
         LoginUser loginUser = tokenUtil.getLoginUser();
@@ -304,7 +328,7 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                         FileSources.MOOC_COVER.getValue())), "慕课视频上传任务创建失败");
     }
 
-    @RequiresPermissions(value = "n:mooc:update", paramIdName = "moocId", queryParamName = "moocItemAsrParam")
+    @RequiresMoocPermissions(value = NotePermissions.EDIT, paramIdName = "moocId", queryParamName = "moocItemAsrParam")
     @Override
     public MoocItemAsrVO moocItemAsr(MoocItemAsrParam moocItemAsrParam) {
         LoginUser loginUser = tokenUtil.getLoginUser();
@@ -336,6 +360,7 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                 .build();
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public String updateAsrInfo(MoocAsrInfoUpdateDTO moocAsrInfoUpdateDTO) {
         MoocAsrTaskInfo moocAsrTaskInfo = redisService
@@ -349,10 +374,13 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
             throw new BusinessException(StringUtils.format("更新 moocVideoItemInfo，moocItemId={}失败",
                     moocAsrTaskInfo.getMoocItemId()));
         }
+        Long knowledgeBaseId = this.baseMapper.selectById(moocAsrTaskInfo.getMoocId()).getKnowledgeBaseId();
+        knowledgeChangeService.record(KnowledgeEntityType.TRANSCRIPT, moocAsrTaskInfo.getMoocItemId(),
+                knowledgeBaseId, KnowledgeOperation.UPDATE);
         return Constants.SUCCESS_RES;
     }
 
-    @RequiresPermissions(value = "n:mooc:read", paramIdName = "moocId", queryParamName = "moocItemQueryParam")
+    @RequiresMoocPermissions(value = NotePermissions.READ, paramIdName = "moocId", queryParamName = "moocItemQueryParam")
     @Override
     public MoocAsrTaskInfo getMoocAsrTaskInfo(MoocItemQueryParam moocItemQueryParam) {
         return redisService
@@ -361,7 +389,7 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                         moocItemQueryParam.getMoocItemId()));
     }
 
-    @RequiresPermissions(value = "n:mooc:read", paramIdName = "moocId", queryParamName = "moocItemQueryParam")
+    @RequiresMoocPermissions(value = NotePermissions.READ, paramIdName = "moocId", queryParamName = "moocItemQueryParam")
     @Override
     public MoocVideoItemInfoVO getMoocVideoItemInfo(MoocItemQueryParam moocItemQueryParam) {
         MoocVideoItemInfoPO moocVideoItemInfoPO = moocVideoItemInfoService
@@ -381,17 +409,21 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                 .build();
     }
 
-    @RequiresPermissions(value = "n:mooc:manage", paramIdName = "moocId", queryParamName = "moocParam")
+    @Transactional(rollbackFor = Exception.class)
+    @RequiresMoocPermissions(value = NotePermissions.MANAGE, paramIdName = "moocId", queryParamName = "moocParam")
     @Override
     public String deleteMooc(MoocParam moocParam) {
+        MoocPO mooc = this.baseMapper.selectById(moocParam.getMoocId());
         boolean res = this.removeById(moocParam.getMoocId());
         if (!res) {
             throw new BusinessException("删除慕课失败");
         }
+        knowledgeChangeService.record(KnowledgeEntityType.MOOC, moocParam.getMoocId(),
+                mooc.getKnowledgeBaseId(), KnowledgeOperation.DELETE);
         return Constants.SUCCESS_RES;
     }
 
-    @RequiresPermissions(value = "n:mooc:manage", paramIdName = "moocId", queryParamName = "moocItemBatchDeleteItemParam")
+    @RequiresMoocPermissions(value = NotePermissions.MANAGE, paramIdName = "moocId", queryParamName = "moocItemBatchDeleteItemParam")
     @Transactional(rollbackFor = Exception.class)
     @Override
     public String batchDeleteMoocItems(MoocItemBatchDeleteItemParam moocItemBatchDeleteItemParam) {
@@ -428,7 +460,14 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                         .collect(Collectors.toList()));
             }
         }
-        moocItemService.removeByIds(deleteItemsIds);
+        boolean removed = moocItemService.removeByIds(deleteItemsIds);
+        if (removed) {
+            Long knowledgeBaseId = this.baseMapper.selectById(moocItemBatchDeleteItemParam.getMoocId()).getKnowledgeBaseId();
+            for (Long itemId : deleteItemsIds) {
+                knowledgeChangeService.record(KnowledgeEntityType.MOOC_ITEM, itemId,
+                        knowledgeBaseId, KnowledgeOperation.DELETE);
+            }
+        }
         return Constants.SUCCESS_RES;
     }
 
@@ -476,6 +515,9 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
                     .build();
             moocVideoItemInfoService.save(moocVideoItemInfoPO);
         }
+        Long knowledgeBaseId = this.baseMapper.selectById(moocItemCreateParam.getMoocId()).getKnowledgeBaseId();
+        knowledgeChangeService.record(KnowledgeEntityType.MOOC_ITEM, moocItemPO.getId(),
+                knowledgeBaseId, KnowledgeOperation.CREATE);
         return moocItemPO.getId();
 //        return null;
     }
@@ -527,7 +569,7 @@ public class MoocServiceImpl extends ServiceImpl<MoocMapper, MoocPO>
         return this.baseMapper.selectMoocIds(userId);
     }
 
-    @RequiresPermissions(value = "n:mooc:read", paramIdName = "moocId", queryParamName = "moocItemQueryParam")
+    @RequiresMoocPermissions(value = NotePermissions.READ, paramIdName = "moocId", queryParamName = "moocItemQueryParam")
     @Override
     public List<MoocVideoSummarizePO> getMoocVideoSummarize(MoocItemQueryParam moocItemQueryParam) {
         log.info(moocItemQueryParam.getMoocItemId().toString());

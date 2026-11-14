@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.anynote.note.mapper.KnowledgeChangeMapper">
+    <resultMap id="KnowledgeChangeResultMap" type="com.anynote.note.model.po.KnowledgeChangePO">
+        <id property="id" column="id"/>
+        <result property="entityType" column="entity_type"/>
+        <result property="entityId" column="entity_id"/>
+        <result property="knowledgeBaseId" column="knowledge_base_id"/>
+        <result property="operation" column="operation"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <select id="selectAfter" resultMap="KnowledgeChangeResultMap">
+        SELECT id, entity_type, entity_id, knowledge_base_id, operation, create_time
+        FROM n_knowledge_change
+        WHERE id &gt; #{afterId}
+        ORDER BY id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectLatest" resultMap="KnowledgeChangeResultMap">
+        SELECT id, entity_type, entity_id, knowledge_base_id, operation, create_time
+        FROM n_knowledge_change
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+</mapper>

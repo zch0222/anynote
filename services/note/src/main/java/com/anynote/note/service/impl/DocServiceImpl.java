@@ -28,6 +28,8 @@ import com.anynote.note.datascope.annotation.RequiresKnowledgeBasePermissions;
 import com.anynote.note.datascope.aspect.RequiresDocPermissionsAspect;
 import com.anynote.note.enums.DocIndexStatus;
 import com.anynote.note.enums.DocPermissions;
+import com.anynote.note.enums.KnowledgeEntityType;
+import com.anynote.note.enums.KnowledgeOperation;
 import com.anynote.note.enums.DocType;
 import com.anynote.note.api.enums.KnowledgeBasePermissions;
 import com.anynote.note.mapper.DocMapper;
@@ -35,6 +37,8 @@ import com.anynote.note.model.bo.*;
 import com.anynote.note.model.vo.DocListVO;
 import com.anynote.note.api.model.vo.DocVO;
 import com.anynote.note.service.DocService;
+import com.anynote.note.service.KnowledgeAccessService;
+import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.note.service.KnowledgeBaseService;
 import com.anynote.system.api.model.bo.LoginUser;
 import com.anynote.system.api.model.po.SysUser;
@@ -45,6 +49,7 @@ import com.github.pagehelper.PageInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
 import java.util.Date;
@@ -77,7 +82,14 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
     @Resource
     private ConfigService configService;
 
+    @Resource
+    private KnowledgeAccessService knowledgeAccessService;
+
+    @Resource
+    private KnowledgeChangeService knowledgeChangeService;
+
     @Override
+    @Transactional(rollbackFor = Exception.class)
     @RequiresKnowledgeBasePermissions(value = KnowledgeBasePermissions.MANAGE, message = "您没有权限上传PDF文档")
     public CreateResEntity createPDF(PDFCreateParam pdfCreateParam) {
         Date date = new Date();
@@ -100,6 +112,8 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
                 .updateTime(date)
                 .build();
         this.baseMapper.insert(doc);
+        knowledgeChangeService.record(KnowledgeEntityType.DOC, doc.getId(),
+                doc.getKnowledgeBaseId(), KnowledgeOperation.CREATE);
 
         return CreateResEntity.builder()
                 .id(doc.getId())
@@ -120,6 +134,7 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
                         .build()), "上传文档失败");
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @RequiresKnowledgeBasePermissions(value = KnowledgeBasePermissions.MANAGE, message = "没有权限进行上传")
     @Override
     public CreateResEntity completeDocUpload(DocCreateParam docCreateParam) {
@@ -145,10 +160,8 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
                 .updateTime(date)
                 .build();
         this.baseMapper.insert(doc);
-
-        // 异步建立索引
-        String destination = rocketMQProperties.getDocTopic() + ":" + DocTagsEnum.RAG_INDEX.name();
-        rocketMQTemplate.asyncSend(destination, doc.getId(), RocketmqSendCallbackBuilder.commonCallback());
+        knowledgeChangeService.record(KnowledgeEntityType.DOC, doc.getId(),
+                doc.getKnowledgeBaseId(), KnowledgeOperation.CREATE);
 
         String translateDocNameDestination = rocketMQProperties.getDocTopic() + ":" +
                 DocTagsEnum.TRANSLATE_DOC_NAME_TO_ENGLISH.name();
@@ -193,38 +206,10 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
             throw new UserParamException("文档不存在");
         }
 
-        if (loginUser == null) {
-            return DocPermissions.parse(Integer.parseInt(doc.getPermissions().substring(4, 5)));
-        }
-
-        if (SysUser.isAdminX(loginUser.getSysUser().getRole())) {
-            return DocPermissions.MANAGE;
-        }
-
-
-        int permission = 0;
-        if (loginUser.getUserId().equals(doc.getCreateBy())) {
-            permission = Integer.parseInt(doc.getPermissions().substring(0, 1));
-        }
-
-        Integer knowledgeBasePermissions = knowledgeBaseService.getUserKnowledgeBasePermissions(loginUser.getUserId(),
-                doc.getKnowledgeBaseId());
-
-
-        // 如果是知识库管理员
-        if ( StringUtils.isNotNull(knowledgeBasePermissions) &&
-                KnowledgeBasePermissions.MANAGE.getValue() == knowledgeBasePermissions) {
-            int knowledgeBaseManagePermission = Integer.parseInt(doc.getPermissions().substring(1, 2));
-            permission =  Math.max(permission, knowledgeBaseManagePermission);
-        }
-        else if (StringUtils.isNotNull(knowledgeBasePermissions) && KnowledgeBasePermissions.NO.getValue() != knowledgeBasePermissions) {
-            int knowledgeBaseMemberPermission = Integer.parseInt(doc.getPermissions().substring(2, 3));
-            permission = Math.max(permission, knowledgeBaseMemberPermission);
-        }
-
-        permission = Math.max(permission, Integer.parseInt(doc.getPermissions().substring(3, 4)));
-
-        return DocPermissions.parse(permission);
+        Integer knowledgeBasePermissions = loginUser == null ? null
+                : knowledgeBaseService.getUserKnowledgeBasePermissions(loginUser.getUserId(), doc.getKnowledgeBaseId());
+        return DocPermissions.parse(knowledgeAccessService.computeContentPermission(loginUser,
+                KnowledgeEntityType.DOC, doc.getCreateBy(), doc.getPermissions(), knowledgeBasePermissions));
     }
 
     @Override
@@ -263,12 +248,16 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
     }
 
     @RequiresDocPermissions(DocPermissions.MANAGE)
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public String deleteDoc(DocDeleteParam param) {
+        Doc doc = this.baseMapper.selectById(param.getDocId());
         int count = this.baseMapper.deleteById(param.getDocId());
         if (1 != count) {
             throw new BusinessException("删除失败");
         }
+        knowledgeChangeService.record(KnowledgeEntityType.DOC, param.getDocId(),
+                doc.getKnowledgeBaseId(), KnowledgeOperation.DELETE);
         return "SUCCESS";
     }
 

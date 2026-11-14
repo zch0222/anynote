@@ -1,19 +1,14 @@
 package com.anynote.note.listener;
 
-import com.anynote.ai.api.RemoteRagService;
 import com.anynote.ai.api.RemoteTranslateService;
-import com.anynote.ai.api.model.bo.RagFileIndexReq;
 import com.anynote.ai.api.model.dto.TranslateTextDTO;
 import com.anynote.common.rocketmq.tags.DocTagsEnum;
-import com.anynote.common.rocketmq.tags.NoteTagsEnum;
-import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.RemoteResDataUtil;
-import com.anynote.file.api.RemoteFileService;
-import com.anynote.file.api.model.po.FilePO;
 import com.anynote.note.api.model.po.Doc;
-import com.anynote.note.enums.DocIndexStatus;
-import com.anynote.note.enums.DocType;
+import com.anynote.note.enums.KnowledgeEntityType;
+import com.anynote.note.enums.KnowledgeOperation;
 import com.anynote.note.service.DocService;
+import com.anynote.note.service.KnowledgeChangeService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
@@ -21,10 +16,14 @@ import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.Resource;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 资料消息监听器。
+ *
+ * @author 称霸幼儿园
+ */
 @Component
 @Slf4j
 @RocketMQMessageListener(topic = "${anynote.data.rocketmq.doc-topic}",
@@ -32,48 +31,38 @@ import java.util.List;
 public class DocMessageListener implements RocketMQListener<MessageExt> {
 
     @Resource
-    private RemoteRagService remoteRagService;
-
-    @Resource
-    private RemoteFileService remoteFileService;
-
-    @Resource
     private DocService docService;
 
     @Resource
     private RemoteTranslateService remoteTranslateService;
 
+    @Resource
+    private KnowledgeChangeService knowledgeChangeService;
 
     @Override
     public void onMessage(MessageExt messageExt) {
         DocTagsEnum docTagsEnum = DocTagsEnum.valueOf(messageExt.getTags());
         if (DocTagsEnum.RAG_INDEX.equals(docTagsEnum)) {
             Long docId = Long.valueOf(new String(messageExt.getBody()));
-            log.info("建立文档RAG索引, 文档ID: " + docId);
+            log.info("登记文档重新索引变更, 文档ID: {}", docId);
             indexDoc(docId);
         }
-        else if (DocTagsEnum.TRANSLATE_DOC_NAME_TO_ENGLISH.equals(DocTagsEnum.valueOf(messageExt.getTags()))) {
+        else if (DocTagsEnum.TRANSLATE_DOC_NAME_TO_ENGLISH.equals(docTagsEnum)) {
             Long docId = Long.valueOf(new String(messageExt.getBody()));
-            log.info("翻译文档名称为英文，文档ID: " + docId);
+            log.info("翻译文档名称为英文，文档ID: {}", docId);
             translateDocName2English(docId);
         }
     }
 
+    /**
+     * 登记资料重新索引变更。
+     *
+     * @param docId 资料 id
+     */
     private void indexDoc(Long docId) {
         Doc doc = docService.getBaseMapper().selectById(docId);
-        doc.setIndexStatus(DocIndexStatus.INDEXING.getValue());
-        docService.getBaseMapper().updateById(doc);
-        FilePO filePO = RemoteResDataUtil.getResData(remoteFileService.getFileById(doc.getFileId(), "inner"),
-                "获取文件信息失败");
-        try {
-            RemoteResDataUtil.getResData(remoteRagService.indexFile(RagFileIndexReq.builder()
-                    .file_path(filePO.getUrl()).build(), "inner"), "索引建立失败");
-            doc.setIndexStatus(DocIndexStatus.INDEXED.getValue());
-        } catch (Exception e) {
-            log.error("建立索引失败");
-            doc.setIndexStatus(DocIndexStatus.FAILED.getValue());
-        }
-        docService.getBaseMapper().updateById(doc);
+        knowledgeChangeService.record(KnowledgeEntityType.DOC, docId,
+                doc.getKnowledgeBaseId(), KnowledgeOperation.UPDATE);
     }
 
     private void translateDocName2English(Long docId) {

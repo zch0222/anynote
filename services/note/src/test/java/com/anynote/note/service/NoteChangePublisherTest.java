@@ -2,6 +2,8 @@ package com.anynote.note.service;
 
 import com.anynote.common.rocketmq.properties.RocketMQProperties;
 import com.anynote.note.api.model.po.Note;
+import com.anynote.note.enums.KnowledgeEntityType;
+import com.anynote.note.enums.KnowledgeOperation;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,13 +51,17 @@ class NoteChangePublisherTest {
     @Mock
     private StringRedisTemplate stringRedisTemplate;
 
+    @Mock
+    private KnowledgeChangeService knowledgeChangeService;
+
     private NoteChangePublisher publisher;
 
     @BeforeEach
     void setUp() {
         when(rocketMQProperties.getNoteTopic()).thenReturn("note-topic");
         when(redisProvider.getIfAvailable()).thenReturn(stringRedisTemplate);
-        publisher = new NoteChangePublisher(rocketMQTemplate, rocketMQProperties, redisProvider);
+        publisher = new NoteChangePublisher(rocketMQTemplate, rocketMQProperties, redisProvider,
+                knowledgeChangeService);
     }
 
     @AfterEach
@@ -76,6 +82,7 @@ class NoteChangePublisherTest {
 
         verify(rocketMQTemplate).asyncSend(eq("note-topic:GENERATOR_NOTE_INDEX"), eq(1L), any());
         verify(rocketMQTemplate).asyncSend(eq("note-topic:GENERATE_NOTE_EDIT_LOG"), anyString(), any());
+        verify(knowledgeChangeService).record(KnowledgeEntityType.NOTE, 1L, null, KnowledgeOperation.UPDATE);
     }
 
     @Test

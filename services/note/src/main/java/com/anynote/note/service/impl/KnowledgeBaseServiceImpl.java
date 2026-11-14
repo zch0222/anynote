@@ -20,6 +20,8 @@ import com.anynote.file.api.model.po.FilePO;
 import com.anynote.note.api.model.po.NoteTask;
 import com.anynote.note.api.model.po.UserKnowledgeBase;
 import com.anynote.note.api.model.po.UserNoteTask;
+import com.anynote.note.enums.KnowledgeEntityType;
+import com.anynote.note.enums.KnowledgeOperation;
 import com.anynote.note.enums.NoteTaskPermissions;
 import com.anynote.note.mapper.UserKnowledgeBaseMapper;
 import com.anynote.note.model.bo.*;
@@ -40,6 +42,7 @@ import com.anynote.note.mapper.KnowledgeBaseMapper;
 import com.anynote.note.model.dto.KnowledgeBaseImportUserVO;
 import com.anynote.note.api.model.dto.NoteKnowledgeBaseDTO;
 import com.anynote.note.service.KnowledgeBaseService;
+import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.system.api.model.bo.LoginUser;
 import com.anynote.system.api.model.dto.ImportFailUser;
 import com.anynote.system.api.model.dto.KnowledgeBaseUserImportDTO;
@@ -76,6 +79,9 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, N
 
     @Autowired
     private UserKnowledgeBaseMapper userKnowledgeBaseMapper;
+
+    @Autowired
+    private KnowledgeChangeService knowledgeChangeService;
 
     @Resource
     private RemoteUserService remoteUserService;
@@ -195,6 +201,8 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, N
                         .userId(loginUser.getSysUser().getId())
                         .permissions(1)
                 .build());
+        knowledgeChangeService.record(KnowledgeEntityType.KNOWLEDGE_BASE, noteKnowledgeBase.getId(),
+                noteKnowledgeBase.getId(), KnowledgeOperation.CREATE);
         return CreateKnowledgeBaseVO.builder()
                 .id(noteKnowledgeBase.getId())
                 .build();
@@ -502,6 +510,7 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, N
         return this.baseMapper.selectUserKnowledgeBasePermissionsByNoteId(userId, noteId);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @RequiresKnowledgeBasePermissions(value = KnowledgeBasePermissions.MANAGE, message = "没有权限更新知识库信息")
     @Override
     public String updateKnowledgeBase(KnowledgeBaseUpdateParam updateParam) {
@@ -515,6 +524,8 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, N
         if (1 != count) {
             throw new BusinessException("更新知识库失败，请联系管理员");
         }
+        knowledgeChangeService.record(KnowledgeEntityType.KNOWLEDGE_BASE, updateParam.getId(),
+                updateParam.getId(), KnowledgeOperation.UPDATE);
         return Constants.SUCCESS_RES;
     }
 
@@ -582,5 +593,6 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, N
         if (res != 1) {
             throw new BusinessException("删除知识库失败");
         }
+        knowledgeChangeService.record(KnowledgeEntityType.KNOWLEDGE_BASE, id, id, KnowledgeOperation.DELETE);
     }
 }

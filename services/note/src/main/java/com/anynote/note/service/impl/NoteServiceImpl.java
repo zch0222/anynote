@@ -36,6 +36,8 @@ import com.anynote.note.datascope.annotation.RequiresKnowledgeBasePermissions;
 import com.anynote.note.datascope.annotation.RequiresNotePermissions;
 import com.anynote.note.datascope.aspect.RequiresNotePermissionsAspect;
 import com.anynote.note.api.enums.KnowledgeBasePermissions;
+import com.anynote.note.enums.KnowledgeEntityType;
+import com.anynote.note.enums.KnowledgeOperation;
 import com.anynote.note.enums.NoteFileType;
 import com.anynote.note.enums.NotePermissions;
 import com.anynote.note.mapper.NoteCollabStateMapper;
@@ -46,6 +48,8 @@ import com.anynote.note.model.dto.NoteSearchDTO;
 import com.anynote.note.model.vo.CollabGrantVO;
 import com.anynote.note.model.vo.NoteListVO;
 import com.anynote.note.model.vo.NoteSaveResultVO;
+import com.anynote.note.service.KnowledgeAccessService;
+import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.note.service.KnowledgeBaseService;
 import com.anynote.note.service.NoteChangePublisher;
 import com.anynote.note.service.NoteImageService;
@@ -111,6 +115,12 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
 
     @Autowired
     private NoteCollabStateMapper noteCollabStateMapper;
+
+    @Autowired
+    private KnowledgeAccessService knowledgeAccessService;
+
+    @Autowired
+    private KnowledgeChangeService knowledgeChangeService;
 
 
     @Override
@@ -200,6 +210,8 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
 
 
         this.baseMapper.insert(note);
+        knowledgeChangeService.record(KnowledgeEntityType.NOTE, note.getId(),
+                note.getKnowledgeBaseId(), KnowledgeOperation.CREATE);
         String destination = rocketMQProperties.getNoteTopic() +  ":" + NoteTagsEnum.GENERATOR_NOTE_INDEX.name();
         rocketMQTemplate.asyncSend(destination, note.getId(), RocketmqSendCallbackBuilder.commonCallback());
         return note.getId();
@@ -231,12 +243,14 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
         LambdaQueryWrapper<Note> noteLambdaQueryWrapper = new LambdaQueryWrapper<>();
         noteLambdaQueryWrapper
                 .eq(Note::getId, param.getId())
-                .select(Note::getNoteTextId);
+                .select(Note::getNoteTextId, Note::getKnowledgeBaseId);
         Note noteInfo = this.baseMapper.selectOne(noteLambdaQueryWrapper);
         this.baseMapper.deleteById(param.getId());
         noteTextMapper.deleteById(noteInfo.getNoteTextId());
         // 协同状态随笔记一起删除；在线的协同房间收到通知后回读发现笔记已删除，会断开连接
         noteCollabStateMapper.deleteByNoteId(param.getId());
+        knowledgeChangeService.record(KnowledgeEntityType.NOTE, param.getId(),
+                noteInfo.getKnowledgeBaseId(), KnowledgeOperation.DELETE);
         noteChangePublisher.publishExternalUpdate(param.getId(), null);
 
         String destination = rocketMQProperties.getNoteTopic() + ":" + NoteTagsEnum.DELETE_NOTE_INDEX.name();
@@ -477,37 +491,10 @@ public class NoteServiceImpl extends ServiceImpl<NoteMapper, Note>
             throw new UserParamException("笔记不存在", ResCode.INVALID_USER_INPUT_NOT_FOUND);
         }
         LoginUser loginUser = tokenUtil.getLoginUser();
-        SysUser sysUser = loginUser.getSysUser();
-
-        if (SysUser.isAdminX(loginUser.getSysUser().getRole())) {
-            return NotePermissions.MANAGE;
-        }
-
-        Integer knowledgeBasePermissions = knowledgeBaseService.getUserKnowledgeBasePermissionsByNoteId(sysUser.getId(), noteId);
-        // 笔记所有者
-        if (noteInfo.getCreateBy().equals(sysUser.getId())) {
-            return this.permissionCompute(Integer.parseInt(noteInfo.getPermissions().substring(0, 1)));
-        }
-        // 非知识库成员
-        if (StringUtils.isNull(knowledgeBasePermissions)) {
-            return this.permissionCompute(Integer.parseInt(noteInfo.getPermissions().substring(3, 4)));
-        }
-        // 知识库管理员
-        else if (KnowledgeBasePermissions.MANAGE.getValue() == knowledgeBasePermissions) {
-            return this.permissionCompute(Integer.parseInt(noteInfo.getPermissions().substring(1, 2)));
-        }
-        // 知识库中有编辑权限的用户
-        else if (KnowledgeBasePermissions.EDIT.getValue() == knowledgeBasePermissions) {
-            return this.permissionCompute(Integer.parseInt(noteInfo.getPermissions().substring(2, 3)));
-        }
-        // 知识库中有阅读权限的用户
-        else if (KnowledgeBasePermissions.READ.getValue() == knowledgeBasePermissions) {
-            NotePermissions notePermissions = this.permissionCompute(Integer.parseInt(noteInfo.getPermissions().substring(2, 3)));
-            if (NotePermissions.NO.getValue() < notePermissions.getValue()) {
-                return NotePermissions.READ;
-            }
-        }
-        return NotePermissions.NO;
+        Integer knowledgeBasePermissions = knowledgeBaseService.getUserKnowledgeBasePermissionsByNoteId(
+                loginUser.getUserId(), noteId);
+        return this.permissionCompute(knowledgeAccessService.computeContentPermission(loginUser,
+                KnowledgeEntityType.NOTE, noteInfo.getCreateBy(), noteInfo.getPermissions(), knowledgeBasePermissions));
     }
 
     /**

@@ -89,6 +89,8 @@ class NoteServiceImplCollabGrantTest {
         ReflectionTestUtils.setField(noteService, "baseMapper", noteMapper);
         ReflectionTestUtils.setField(noteService, "tokenUtil", tokenUtil);
         ReflectionTestUtils.setField(noteService, "knowledgeBaseService", knowledgeBaseService);
+        ReflectionTestUtils.setField(noteService, "knowledgeAccessService",
+                new KnowledgeAccessServiceImpl(null, null, null));
         when(noteMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(grantRow("76666", AUTHOR_ID));
     }
 

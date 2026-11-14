@@ -13,6 +13,7 @@ import com.anynote.note.model.dto.CollabSnapshotSaveDTO;
 import com.anynote.note.model.po.NoteCollabState;
 import com.anynote.note.model.vo.CollabSnapshotVO;
 import com.anynote.note.model.vo.NoteSaveResultVO;
+import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.note.service.NoteChangePublisher;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +47,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -98,7 +100,8 @@ class NoteCollabServiceImplTest {
         ReflectionTestUtils.setField(service, "noteMapper", noteMapper);
         ReflectionTestUtils.setField(service, "noteCollabStateMapper", noteCollabStateMapper);
         ReflectionTestUtils.setField(service, "noteChangePublisher",
-                new NoteChangePublisher(rocketMQTemplate, rocketMQProperties, redisProvider));
+                new NoteChangePublisher(rocketMQTemplate, rocketMQProperties, redisProvider,
+                        mock(KnowledgeChangeService.class)));
         fixClock(BASE_TIME + 60_000L);
 
         when(noteMapper.selectNoteById(any(NoteQueryParam.class))).thenReturn(existingNote(UPDATER_ID));
