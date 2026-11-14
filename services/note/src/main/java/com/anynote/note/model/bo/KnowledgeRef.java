@@ -53,6 +53,26 @@ public class KnowledgeRef {
     }
 
     /**
+     * 解析复合引用字符串，支持 {@code note:1} 与 {@code mooc_item:5#transcript} 形式。
+     *
+     * @param combinedRef 复合引用字符串
+     * @return 知识实体引用
+     */
+    public static KnowledgeRef parseCombined(String combinedRef) {
+        if (combinedRef == null || combinedRef.isBlank()) {
+            throw invalid();
+        }
+        int hashIndex = combinedRef.indexOf('#');
+        if (hashIndex < 0) {
+            return parse(combinedRef, null);
+        }
+        if (hashIndex == 0 || hashIndex != combinedRef.lastIndexOf('#') || hashIndex == combinedRef.length() - 1) {
+            throw invalid();
+        }
+        return parse(combinedRef.substring(0, hashIndex), combinedRef.substring(hashIndex + 1));
+    }
+
+    /**
      * 创建指定类型的引用。
      *
      * @param type 实体类型

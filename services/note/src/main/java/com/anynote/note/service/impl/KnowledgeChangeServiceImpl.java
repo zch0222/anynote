@@ -1,7 +1,9 @@
 package com.anynote.note.service.impl;
 
+import com.alibaba.fastjson2.JSON;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.core.web.enums.ResCode;
+import com.anynote.note.api.model.dto.KnowledgeChangeRecordDTO;
 import com.anynote.note.api.model.po.Doc;
 import com.anynote.note.constant.KnowledgeErrorConstants;
 import com.anynote.note.enums.DocIndexStatus;
@@ -16,33 +18,66 @@ import com.anynote.note.model.po.MoocItemPO;
 import com.anynote.note.model.po.MoocPO;
 import com.anynote.note.model.vo.KnowledgeChangePageVO;
 import com.anynote.note.service.KnowledgeChangeService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * 知识变更记录实现。
  *
  * @author 称霸幼儿园
  */
+@Slf4j
 @Service
 public class KnowledgeChangeServiceImpl implements KnowledgeChangeService {
+
+    /**
+     * Redis 索引增量唤醒频道。
+     */
+    public static final String CHANGE_WAKEUP_CHANNEL = "anynote:knowledge:change";
 
     private final KnowledgeChangeMapper knowledgeChangeMapper;
     private final DocMapper docMapper;
     private final MoocItemMapper moocItemMapper;
     private final MoocMapper moocMapper;
+    private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
 
     /**
-     * 构造知识变更服务。
+     * 构造知识变更服务（无 Redis 唤醒提供者，用于兼容既有单元测试）。
      */
     public KnowledgeChangeServiceImpl(KnowledgeChangeMapper knowledgeChangeMapper, DocMapper docMapper,
                                       MoocItemMapper moocItemMapper, MoocMapper moocMapper) {
+        this(knowledgeChangeMapper, docMapper, moocItemMapper, moocMapper, null);
+    }
+
+    /**
+     * 构造知识变更服务。
+     *
+     * @param knowledgeChangeMapper 知识变更 Mapper
+     * @param docMapper 资料 Mapper
+     * @param moocItemMapper 慕课条目 Mapper
+     * @param moocMapper 慕课 Mapper
+     * @param redisTemplateProvider Redis 模板延迟提供者，可为空
+     */
+    @Autowired
+    public KnowledgeChangeServiceImpl(KnowledgeChangeMapper knowledgeChangeMapper, DocMapper docMapper,
+                                      MoocItemMapper moocItemMapper, MoocMapper moocMapper,
+                                      ObjectProvider<StringRedisTemplate> redisTemplateProvider) {
         this.knowledgeChangeMapper = knowledgeChangeMapper;
         this.docMapper = docMapper;
         this.moocItemMapper = moocItemMapper;
         this.moocMapper = moocMapper;
+        this.redisTemplateProvider = redisTemplateProvider;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -62,7 +97,19 @@ public class KnowledgeChangeServiceImpl implements KnowledgeChangeService {
         if (inserted != 1) {
             throw new BusinessException(ResCode.BUSINESS_ERROR);
         }
+        publishWakeupAfterCommit(change);
         return change.getId();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public Long record(KnowledgeChangeRecordDTO request) {
+        if (request == null || request.getKnowledgeBaseId() != null && request.getKnowledgeBaseId() < 0) {
+            throw new BusinessException(KnowledgeErrorConstants.INVALID_ENTITY, ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+        KnowledgeEntityType entityType = KnowledgeEntityType.parse(request.getEntityType());
+        KnowledgeOperation operation = parseOperation(request.getOperation());
+        return record(entityType, request.getEntityId(), request.getKnowledgeBaseId(), operation);
     }
 
     @Override
@@ -89,7 +136,7 @@ public class KnowledgeChangeServiceImpl implements KnowledgeChangeService {
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void updateDocIndexStatus(Long docId, Integer status) {
-        if (status == null || DocIndexStatus.values().length <= status || status < 0) {
+        if (!DocIndexStatus.contains(status)) {
             throw new BusinessException(KnowledgeErrorConstants.INVALID_INDEX_STATUS,
                     ResCode.USER_REQUEST_PARAM_ERROR);
         }
@@ -117,6 +164,50 @@ public class KnowledgeChangeServiceImpl implements KnowledgeChangeService {
             throw notReadable();
         }
         return record(KnowledgeEntityType.SUMMARY, moocItemId, mooc.getKnowledgeBaseId(), KnowledgeOperation.UPDATE);
+    }
+
+    private KnowledgeOperation parseOperation(String value) {
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(KnowledgeErrorConstants.INVALID_ENTITY, ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+        try {
+            return KnowledgeOperation.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(KnowledgeErrorConstants.INVALID_ENTITY, ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+    }
+
+    private void publishWakeupAfterCommit(KnowledgeChangePO change) {
+        Runnable action = () -> {
+            if (redisTemplateProvider == null) {
+                return;
+            }
+            StringRedisTemplate redisTemplate = redisTemplateProvider.getIfAvailable();
+            if (redisTemplate == null) {
+                return;
+            }
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("id", change.getId());
+            payload.put("entityType", change.getEntityType());
+            payload.put("entityId", change.getEntityId());
+            payload.put("kbId", change.getKnowledgeBaseId());
+            payload.put("operation", change.getOperation());
+            try {
+                redisTemplate.convertAndSend(CHANGE_WAKEUP_CHANNEL, JSON.toJSONString(payload));
+            } catch (RuntimeException e) {
+                log.warn("知识变更 {} 发布 Redis 唤醒失败，将由定时轮询兜底: {}", change.getId(), e.getMessage());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+            return;
+        }
+        action.run();
     }
 
     private KnowledgeChangePageVO.Change change(KnowledgeChangePO po) {

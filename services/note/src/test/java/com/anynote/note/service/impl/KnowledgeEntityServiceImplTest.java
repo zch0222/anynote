@@ -2,6 +2,7 @@ package com.anynote.note.service.impl;
 
 import com.anynote.ai.api.RemoteMoocVideoSummarizeService;
 import com.anynote.ai.api.model.po.MoocVideoSummarizePO;
+import com.anynote.core.exception.BusinessException;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.file.api.RemoteFileService;
 import com.anynote.file.api.model.po.FilePO;
@@ -25,6 +26,7 @@ import com.anynote.note.model.po.MoocItemPO;
 import com.anynote.note.model.po.MoocItemTextPO;
 import com.anynote.note.model.po.MoocPO;
 import com.anynote.note.model.po.MoocVideoItemInfoPO;
+import com.anynote.note.model.vo.KnowledgeDocumentBatchVO;
 import com.anynote.note.model.vo.KnowledgeExportVO;
 import com.anynote.note.model.vo.KnowledgeSourceDocumentVO;
 import com.anynote.system.api.model.bo.LoginUser;
@@ -42,8 +44,10 @@ import org.mockito.quality.Strictness;
 
 import java.util.Date;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -263,6 +267,45 @@ class KnowledgeEntityServiceImplTest {
         assertThat(page.getDocuments()).isEmpty();
         assertThat(page.isHasMore()).isTrue();
         assertThat(page.getNextAfterId()).isEqualTo(4L);
+    }
+
+    /**
+     * 按复合引用批量读取源文档，去重并返回缺失引用列表；超过 100 条拒绝请求。
+     */
+    @Test
+    void getsDocumentsInBatchAndReportsMissingRefs() {
+        Note found = note(1L);
+        when(noteMapper.selectById(1L)).thenReturn(found);
+        NoteText text = new NoteText();
+        text.setId(found.getNoteTextId());
+        text.setContent("正文1");
+        when(noteTextMapper.selectById(found.getNoteTextId())).thenReturn(text);
+
+        videoItem(4L, 2L);
+        when(videoInfoMapper.selectOne(any())).thenReturn(MoocVideoItemInfoPO.builder()
+                .moocItemId(4L).srtObjectName("srt/a.srt").build());
+        when(fileService.readTextFile(anyString(), anyString())).thenReturn(ResData.success("字幕正文"));
+
+        KnowledgeDocumentBatchVO batch = service.getBatch(
+                List.of("note:1", "note:1", "mooc_item:4#transcript", "note:999"), true);
+        assertThat(batch.getDocuments()).hasSize(2);
+        assertThat(batch.getDocuments().get(0).getRef()).isEqualTo("note:1");
+        assertThat(batch.getDocuments().get(1).getRef()).isEqualTo("mooc_item:4");
+        assertThat(batch.getDocuments().get(1).getSubtype()).isEqualTo("transcript");
+        assertThat(batch.getMissingRefs()).containsExactly("note:999");
+
+        List<String> oversized = IntStream.rangeClosed(1, 101).mapToObj(i -> "note:" + i).toList();
+        assertThatThrownBy(() -> service.getBatch(oversized, true))
+                .isInstanceOf(BusinessException.class).hasMessage("单次请求数量超出限制");
+    }
+
+    /**
+     * 笔记服务拒绝导出由通知服务管理的 notice 实体。
+     */
+    @Test
+    void rejectsNoticeExportInNoteService() {
+        assertThatThrownBy(() -> service.export("notice", null, 0L, 10))
+                .isInstanceOf(BusinessException.class).hasMessage("知识实体参数不合法");
     }
 
     private Note note(Long id) {

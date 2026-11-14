@@ -1,6 +1,7 @@
 package com.anynote.note.service.impl;
 
 import com.anynote.core.exception.BusinessException;
+import com.anynote.note.api.model.dto.KnowledgeChangeRecordDTO;
 import com.anynote.note.api.model.po.Doc;
 import com.anynote.note.enums.DocIndexStatus;
 import com.anynote.note.enums.KnowledgeEntityType;
@@ -13,13 +14,14 @@ import com.anynote.note.model.po.KnowledgeChangePO;
 import com.anynote.note.model.po.MoocItemPO;
 import com.anynote.note.model.po.MoocPO;
 import com.anynote.note.model.vo.KnowledgeChangePageVO;
-import com.anynote.note.service.KnowledgeChangeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.Date;
 import java.util.List;
@@ -27,7 +29,11 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -95,7 +101,7 @@ class KnowledgeChangeServiceImplTest {
     }
 
     /**
-     * 索引状态接受既有四种值，其余值使用确认的错误文案。
+     * 索引状态接受 0..4 五种值（含 UNEXTRACTABLE），其余值使用确认的错误文案。
      */
     @Test
     void validatesIndexStatus() {
@@ -103,8 +109,64 @@ class KnowledgeChangeServiceImplTest {
         service.updateDocIndexStatus(1L, DocIndexStatus.INDEXED.getValue());
         verify(docMapper).updateById(argThat((Doc doc) -> doc.getIndexStatus() == 0));
 
-        assertThatThrownBy(() -> service.updateDocIndexStatus(1L, 4))
+        service.updateDocIndexStatus(1L, DocIndexStatus.UNEXTRACTABLE.getValue());
+        verify(docMapper).updateById(argThat((Doc doc) -> doc.getIndexStatus() == 4));
+
+        assertThatThrownBy(() -> service.updateDocIndexStatus(1L, 5))
                 .isInstanceOf(BusinessException.class).hasMessage("资料索引状态不合法");
+    }
+
+    /**
+     * 登记外部知识变更请求支持 notice 类型，并对非法类型或操作抛出统一业务异常。
+     */
+    @Test
+    void recordsExternalNoticeChangeRequest() {
+        when(changeMapper.insert(any(KnowledgeChangePO.class))).thenAnswer(invocation -> {
+            invocation.getArgument(0, KnowledgeChangePO.class).setId(12L);
+            return 1;
+        });
+
+        Long id = service.record(KnowledgeChangeRecordDTO.builder()
+                .entityType("notice")
+                .entityId(8L)
+                .knowledgeBaseId(3L)
+                .operation("CREATE")
+                .build());
+        assertThat(id).isEqualTo(12L);
+        verify(changeMapper).insert(argThat((KnowledgeChangePO change) ->
+                "notice".equals(change.getEntityType()) && change.getEntityId() == 8L
+                        && change.getKnowledgeBaseId() == 3L && "CREATE".equals(change.getOperation())));
+
+        assertThatThrownBy(() -> service.record(KnowledgeChangeRecordDTO.builder()
+                .entityType("notice").entityId(8L).knowledgeBaseId(3L).operation("INVALID").build()))
+                .isInstanceOf(BusinessException.class).hasMessage("知识实体参数不合法");
+    }
+
+    /**
+     * 插入知识变更后尽力发布 Redis 唤醒消息，Redis 异常不影响落库结果。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void publishesRedisWakeupBestEffortAfterRecord() {
+        ObjectProvider<StringRedisTemplate> provider = mock(ObjectProvider.class);
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        when(provider.getIfAvailable()).thenReturn(redisTemplate);
+        KnowledgeChangeServiceImpl wakeupService = new KnowledgeChangeServiceImpl(
+                changeMapper, docMapper, itemMapper, moocMapper, provider);
+
+        when(changeMapper.insert(any(KnowledgeChangePO.class))).thenAnswer(invocation -> {
+            invocation.getArgument(0, KnowledgeChangePO.class).setId(15L);
+            return 1;
+        });
+
+        Long id = wakeupService.record(KnowledgeEntityType.NOTE, 3L, 2L, KnowledgeOperation.UPDATE);
+        assertThat(id).isEqualTo(15L);
+        verify(redisTemplate).convertAndSend(eq(KnowledgeChangeServiceImpl.CHANGE_WAKEUP_CHANNEL), anyString());
+
+        doThrow(new RuntimeException("redis down"))
+                .when(redisTemplate).convertAndSend(eq(KnowledgeChangeServiceImpl.CHANGE_WAKEUP_CHANNEL), anyString());
+        assertThat(wakeupService.record(KnowledgeEntityType.NOTE, 4L, 2L, KnowledgeOperation.DELETE))
+                .isEqualTo(15L);
     }
 
     /**

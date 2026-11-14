@@ -85,10 +85,10 @@ class KnowledgeQueryServiceImplTest {
     }
 
     /**
-     * 八种实体都通过同一白名单查询入口返回结构化行。
+     * 八种笔记所属实体都通过同一白名单查询入口返回结构化行，notice 与超限 indexStatus 被拒绝。
      */
     @ParameterizedTest
-    @EnumSource(KnowledgeEntityType.class)
+    @EnumSource(value = KnowledgeEntityType.class, mode = EnumSource.Mode.EXCLUDE, names = "NOTICE")
     void queriesEveryEntityType(KnowledgeEntityType type) {
         KnowledgeSourceDocumentVO document = document(type, 3L, "标题", new Date(1000L));
         when(entityService.page(anyString(), anyLong(), anyLong(), eq(200), anyBoolean()))
@@ -101,6 +101,26 @@ class KnowledgeQueryServiceImplTest {
         assertThat(result.getRows()).hasSize(1);
         assertThat(result.getRows().get(0).getEntityType()).isEqualTo(type.getValue());
         assertThat(result.getCount()).isEqualTo(1L);
+    }
+
+    /**
+     * 资料索引状态支持 0..4（含 UNEXTRACTABLE），且拒绝 notice 与越界状态。
+     */
+    @Test
+    void acceptsUnextractableDocFilterAndRejectsNoticeQuery() {
+        when(entityService.page(eq("doc"), anyLong(), anyLong(), eq(200), eq(false)))
+                .thenReturn(KnowledgeExportVO.builder().documents(List.of()).hasMore(false).build());
+        KnowledgeQueryDTO docQuery = request("doc");
+        docQuery.setFilters(Map.of("indexStatus", 4));
+        assertThat(service.query(user, docQuery).getRows()).isEmpty();
+
+        KnowledgeQueryDTO invalidDocQuery = request("doc");
+        invalidDocQuery.setFilters(Map.of("indexStatus", 5));
+        assertThatThrownBy(() -> service.query(user, invalidDocQuery))
+                .isInstanceOf(BusinessException.class).hasMessage("结构化查询参数不合法");
+
+        assertThatThrownBy(() -> service.query(user, request("notice")))
+                .isInstanceOf(BusinessException.class).hasMessage("结构化查询参数不合法");
     }
 
     /**

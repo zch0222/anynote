@@ -87,6 +87,9 @@ public class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
             throw invalidQuery();
         }
         KnowledgeEntityType type = KnowledgeEntityType.parse(request.getEntity());
+        if (type == KnowledgeEntityType.NOTICE) {
+            throw invalidQuery();
+        }
         KnowledgeQueryName queryName = KnowledgeQueryName.parse(request.getQueryName());
         if (queryName != null && type != KnowledgeEntityType.TASK) {
             throw invalidQuery();
@@ -205,7 +208,7 @@ public class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
             case "type" -> requireRange(integer(value), 0, 1);
             case "status" -> requireRange(integer(value), 0, 1);
             case "dataScope" -> requireRange(integer(value), 1, 3);
-            case "indexStatus" -> requireRange(integer(value), 0, 3);
+            case "indexStatus" -> requireRange(integer(value), 0, 4);
             case "moocItemType" -> requireRange(integer(value), 0, 2);
             case "moocId" -> {
                 if (integer(value) <= 0) {

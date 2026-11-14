@@ -31,6 +31,7 @@ import com.anynote.note.model.po.MoocItemPO;
 import com.anynote.note.model.po.MoocItemTextPO;
 import com.anynote.note.model.po.MoocPO;
 import com.anynote.note.model.po.MoocVideoItemInfoPO;
+import com.anynote.note.model.vo.KnowledgeDocumentBatchVO;
 import com.anynote.note.model.vo.KnowledgeExportVO;
 import com.anynote.note.model.vo.KnowledgeSourceDocumentVO;
 import com.anynote.note.service.KnowledgeEntityService;
@@ -47,9 +48,11 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -110,6 +113,7 @@ public class KnowledgeEntityServiceImpl implements KnowledgeEntityService {
             case TRANSCRIPT -> transcript(ref.getId(), includeBody);
             case SUMMARY -> summary(ref.getId(), includeBody);
             case TASK -> task(ref.getId(), includeBody);
+            case NOTICE -> null;
         };
     }
 
@@ -132,6 +136,8 @@ public class KnowledgeEntityServiceImpl implements KnowledgeEntityService {
             case MOOC_ITEM -> moocItemPage(kbId, cursor, limit, null);
             case TRANSCRIPT, SUMMARY -> moocItemPage(kbId, cursor, limit, MoocItemType.VIDEO);
             case TASK -> page(noteTaskMapper, NoteTask::getId, NoteTask::getKnowledgeBaseId, null, kbId, cursor, limit);
+            case NOTICE -> throw new BusinessException(KnowledgeErrorConstants.INVALID_ENTITY,
+                    ResCode.USER_REQUEST_PARAM_ERROR);
         };
         boolean hasMore = scanned.size() > limit;
         List<?> current = new ArrayList<>(scanned.subList(0, Math.min(scanned.size(), limit)));
@@ -148,6 +154,36 @@ public class KnowledgeEntityServiceImpl implements KnowledgeEntityService {
                 .documents(documents)
                 .nextAfterId(nextAfterId)
                 .hasMore(hasMore)
+                .build();
+    }
+
+    @Override
+    public KnowledgeDocumentBatchVO getBatch(List<String> refs, boolean includeBody) {
+        if (refs == null || refs.isEmpty()) {
+            throw new BusinessException(KnowledgeErrorConstants.INVALID_ENTITY, ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+        if (refs.size() > 100) {
+            throw new BusinessException(KnowledgeErrorConstants.TOO_MANY, ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+        List<KnowledgeSourceDocumentVO> documents = new ArrayList<>();
+        List<String> missingRefs = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (String rawRef : refs) {
+            KnowledgeRef parsed = KnowledgeRef.parseCombined(rawRef);
+            String dedupKey = parsed.ref() + (parsed.subtype() == null ? "" : "#" + parsed.subtype());
+            if (!seen.add(dedupKey)) {
+                continue;
+            }
+            KnowledgeSourceDocumentVO document = get(parsed, includeBody);
+            if (document == null) {
+                missingRefs.add(rawRef);
+            } else {
+                documents.add(document);
+            }
+        }
+        return KnowledgeDocumentBatchVO.builder()
+                .documents(documents)
+                .missingRefs(missingRefs)
                 .build();
     }
 

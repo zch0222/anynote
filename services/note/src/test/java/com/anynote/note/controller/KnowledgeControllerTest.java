@@ -6,6 +6,7 @@ import com.anynote.note.model.vo.KnowledgeAuthorizationItemVO;
 import com.anynote.note.model.vo.KnowledgeAuthorizationVO;
 import com.anynote.note.model.vo.KnowledgeChangePageVO;
 import com.anynote.note.model.vo.KnowledgeContentVO;
+import com.anynote.note.model.vo.KnowledgeDocumentBatchVO;
 import com.anynote.note.model.vo.KnowledgeExportVO;
 import com.anynote.note.model.vo.KnowledgeOutlineVO;
 import com.anynote.note.model.vo.KnowledgeQueryVO;
@@ -133,6 +134,17 @@ class KnowledgeControllerTest {
         when(changeService.recordSummaryChange(4L)).thenReturn(9L);
         mockMvc.perform(post("/internal/v1/knowledge/mooc-items/4/summary-changes"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data").value(9L));
+
+        when(entityService.getBatch(List.of("note:1", "note:9"), true)).thenReturn(
+                KnowledgeDocumentBatchVO.builder().documents(List.of()).missingRefs(List.of("note:9")).build());
+        mockMvc.perform(post("/internal/v1/knowledge/documents/batch").contentType("application/json")
+                        .content("{\"refs\":[\"note:1\",\"note:9\"],\"includeBody\":true}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.missingRefs[0]").value("note:9"));
+
+        when(changeService.record(any())).thenReturn(15L);
+        mockMvc.perform(post("/internal/v1/knowledge/changes").contentType("application/json")
+                        .content("{\"entityType\":\"notice\",\"entityId\":8,\"knowledgeBaseId\":2,\"operation\":\"CREATE\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data").value(15L));
     }
 
     /**
@@ -145,7 +157,8 @@ class KnowledgeControllerTest {
             assertThat(annotation).isNotNull();
             assertThat(annotation.isUser()).isTrue();
         }
-        for (String method : List.of("changes", "export", "updateDocIndexStatus", "recordSummaryChange")) {
+        for (String method : List.of("changes", "export", "updateDocIndexStatus",
+                "getBatch", "recordChange", "recordSummaryChange")) {
             InnerAuth annotation = findMethod(method).getAnnotation(InnerAuth.class);
             assertThat(annotation).isNotNull();
             assertThat(annotation.isUser()).isFalse();

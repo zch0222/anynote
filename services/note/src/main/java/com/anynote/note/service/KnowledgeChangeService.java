@@ -1,5 +1,6 @@
 package com.anynote.note.service;
 
+import com.anynote.note.api.model.dto.KnowledgeChangeRecordDTO;
 import com.anynote.note.enums.KnowledgeEntityType;
 import com.anynote.note.enums.KnowledgeOperation;
 import com.anynote.note.model.vo.KnowledgeChangePageVO;
@@ -21,6 +22,14 @@ public interface KnowledgeChangeService {
      * @return 变更游标 id
      */
     Long record(KnowledgeEntityType entityType, Long entityId, Long knowledgeBaseId, KnowledgeOperation operation);
+
+    /**
+     * 校验外部参数并在事务中插入变更记录。
+     *
+     * @param request 变更记录参数
+     * @return 变更游标 id
+     */
+    Long record(KnowledgeChangeRecordDTO request);
 
     /**
      * 按游标读取变更。

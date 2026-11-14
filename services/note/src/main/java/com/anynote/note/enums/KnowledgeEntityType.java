@@ -19,7 +19,8 @@ public enum KnowledgeEntityType {
     MOOC_ITEM("mooc_item", "mooc_item"),
     TRANSCRIPT("transcript", "mooc_item"),
     SUMMARY("summary", "mooc_item"),
-    TASK("task", "task");
+    TASK("task", "task"),
+    NOTICE("notice", "notice");
 
     private final String value;
     private final String refPrefix;

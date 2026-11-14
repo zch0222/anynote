@@ -6,9 +6,11 @@ import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.ResUtil;
 import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.ResData;
+import com.anynote.note.api.model.dto.KnowledgeChangeRecordDTO;
 import com.anynote.note.constant.KnowledgeErrorConstants;
 import com.anynote.note.model.dto.KnowledgeAuthorizeDTO;
 import com.anynote.note.model.dto.KnowledgeContentDTO;
+import com.anynote.note.model.dto.KnowledgeDocumentBatchDTO;
 import com.anynote.note.model.dto.KnowledgeExportDTO;
 import com.anynote.note.model.dto.KnowledgeIndexStatusDTO;
 import com.anynote.note.model.dto.KnowledgeOutlineDTO;
@@ -17,6 +19,7 @@ import com.anynote.note.model.dto.KnowledgeScopeDTO;
 import com.anynote.note.model.vo.KnowledgeAuthorizationVO;
 import com.anynote.note.model.vo.KnowledgeChangePageVO;
 import com.anynote.note.model.vo.KnowledgeContentVO;
+import com.anynote.note.model.vo.KnowledgeDocumentBatchVO;
 import com.anynote.note.model.vo.KnowledgeExportVO;
 import com.anynote.note.model.vo.KnowledgeOutlineVO;
 import com.anynote.note.model.vo.KnowledgeQueryVO;
@@ -201,6 +204,36 @@ public class KnowledgeController {
             @RequestBody KnowledgeIndexStatusDTO request) {
         knowledgeChangeService.updateDocIndexStatus(id, request == null ? null : request.getStatus());
         return ResUtil.success("SUCCESS");
+    }
+
+    /**
+     * 按引用批量读取知识源文档。
+     *
+     * @param request 引用列表与是否读取正文开关
+     * @return 命中的源文档与缺失引用列表
+     */
+    @InnerAuth
+    @Operation(summary = "批量读取知识源文档", description = "按实体引用批量返回权威源文档，最多100条")
+    @PostMapping("/documents/batch")
+    public ResData<KnowledgeDocumentBatchVO> getBatch(@RequestBody KnowledgeDocumentBatchDTO request) {
+        if (request == null) {
+            throw invalidEntity();
+        }
+        boolean includeBody = request.getIncludeBody() == null || request.getIncludeBody();
+        return ResUtil.success(knowledgeEntityService.getBatch(request.getRefs(), includeBody));
+    }
+
+    /**
+     * 登记内部知识变更记录。
+     *
+     * @param request 变更参数
+     * @return 变更游标 id
+     */
+    @InnerAuth
+    @Operation(summary = "登记知识变更记录", description = "向统一知识变更游标追加一条变更记录")
+    @PostMapping("/changes")
+    public ResData<Long> recordChange(@RequestBody KnowledgeChangeRecordDTO request) {
+        return ResUtil.success(knowledgeChangeService.record(request));
     }
 
     /**

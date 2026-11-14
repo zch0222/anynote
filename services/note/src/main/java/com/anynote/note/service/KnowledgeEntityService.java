@@ -1,8 +1,11 @@
 package com.anynote.note.service;
 
 import com.anynote.note.model.bo.KnowledgeRef;
+import com.anynote.note.model.vo.KnowledgeDocumentBatchVO;
 import com.anynote.note.model.vo.KnowledgeExportVO;
 import com.anynote.note.model.vo.KnowledgeSourceDocumentVO;
+
+import java.util.List;
 
 /**
  * 知识权威实体读取与导出。
@@ -42,4 +45,13 @@ public interface KnowledgeEntityService {
      * @return 源文档分页结果
      */
     KnowledgeExportVO page(String entityType, Long kbId, Long afterId, int limit, boolean includeBody);
+
+    /**
+     * 按引用列表批量读取源文档。
+     *
+     * @param refs 复合引用列表
+     * @param includeBody 是否包含正文
+     * @return 命中源文档与缺失引用列表
+     */
+    KnowledgeDocumentBatchVO getBatch(List<String> refs, boolean includeBody);
 }
