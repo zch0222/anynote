@@ -1,7 +1,7 @@
 # AI 模块重构里程碑（M16.x）
 
-> 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-14
-> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0–M16.3 已于 2026-11-14 完成**
+> 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-15
+> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0–M16.4 已于 2026-11-15 完成**
 > 关联文档：[调研报告](./AI_RESEARCH.md) · [总体方案](./AI_REFACTOR_PLAN.md) · [知识检索方案](./KNOWLEDGE_RETRIEVAL_PLAN.md)
 >
 > 本文是执行计划：每个里程碑的任务、验收标准与依赖。设计取舍在两份方案里，这里不重复。
@@ -465,18 +465,18 @@ Harness 内核（不依赖 FastAPI）：
 
 **任务**
 
-- [ ] 索引 worker 入口与部署（compose 服务、环境契约里的网络与文件系统限制）
-- [ ] note 内部端点的客户端（带内部签名）
-- [ ] 适配器与源文档模型；第一批：知识库、笔记、资料
-- [ ] 解析：Markdown、PDF（子进程，限制内存与时间）、SRT、纯文本
-- [ ] 切分：按结构、带标题路径、不重叠
-- [ ] Elasticsearch：三个索引的 mapping、版本化索引名与别名、批量写入
-- [ ] 向量计算（可关闭）；嵌入模型与切分规则的版本记入 `kn_meta`
-- [ ] 增量：按游标拉取、版本比对（正文与元数据分开）、删除与权限收紧的处理
-- [ ] 水位与索引延迟指标；资料索引状态回写
-- [ ] 全量重建命令；按知识库的核对任务
-- [ ] 第二批适配器：慕课、条目、字幕、视频总结、任务
-- [ ] 第三批（D11 通过时）：知识库通知，含 notify 服务的内部导出端点
+- [x] 索引 worker 入口与部署（compose 服务、环境契约里的网络与文件系统限制）
+- [x] note 内部端点的客户端（带内部签名）
+- [x] 适配器与源文档模型；第一批：知识库、笔记、资料
+- [x] 解析：Markdown、PDF（子进程，限制内存与时间）、SRT、纯文本
+- [x] 切分：按结构、带标题路径、不重叠
+- [x] Elasticsearch：三个索引的 mapping、版本化索引名与别名、批量写入
+- [x] 向量计算（可关闭）；嵌入模型与切分规则的版本记入 `kn_meta`
+- [x] 增量：按游标拉取、版本比对（正文与元数据分开）、删除与权限收紧的处理
+- [x] 水位与索引延迟指标；资料索引状态回写
+- [x] 全量重建命令；按知识库的核对任务
+- [x] 第二批适配器：慕课、条目、字幕、视频总结、任务
+- [x] 第三批（D11 通过时）：知识库通知，含 notify 服务的内部导出端点
 
 **验收**
 
@@ -486,6 +486,43 @@ Harness 内核（不依赖 FastAPI）：
 - 删除一个实体后，它的片段在索引里不再可被召回
 - 关闭向量计算时管线照常完成
 - 扫描版 PDF 被标记为无法提取文本，状态回写正确
+
+**完成时间**：2026-11-15（详见 `.claude/openspec/changes/2026-11-15-indexing-pipeline.md`、`.claude/openspec/changes/2026-11-15-ai-logical-model-config.md` 与 `docs/changelist/2026-11-15-indexing-pipeline.md`）
+
+**执行结果**
+
+- **部署与入口（`ai-service/worker.py` + `infra/`）**：新增 CLI `run` / `rebuild` / `reconcile [--kb-id ID]`；`run` 模式启动容器内网只读 HTTP `/healthz` 探针（端口 `8002`、不映射宿主机端口）、订阅 Redis `anynote:knowledge:change` 唤醒通道并结合定时游标轮询；`anynote-ai-indexer` 使用独立 Dockerfile stage `indexer`、`read_only: true`、`cap_drop: [ALL]`、`no-new-privileges: true` 及 `Nacos` 配置 `anynote-ai-indexer.yml`。
+- **后端内部契约与运行时 Embedding 配置（`services/{note,file,notify,ai}` + `services/api/anynote-api-note`）**：
+  - `services/note`：`DocIndexStatus` 新增 `UNEXTRACTABLE(4)`；`KnowledgeEntityType` 新增 `NOTICE`；`KnowledgeChangeServiceImpl.record()` 事务提交后发布 Redis 唤醒；新增 `@InnerAuth POST /internal/v1/knowledge/documents/batch` 与 `POST /internal/v1/knowledge/changes`。
+  - `services/file`：新增 `InternalFileController`（`@InnerAuth GET /internal/v1/files/content` 流式下载对象内容，兼容 MinIO 与华为 OBS）。
+  - `services/notify`：新增 `InternalNoticeController`（`POST /internal/v1/notices/{export,batch}`，关联 `ntc_knowledge_base_notice` 导出/批量查询 `type = 1 AND status = 0 AND is_delete = 0` 的有效知识库通知），`NoticeServiceImpl.publishNotice()` 提交后尽力登记 `NOTICE CREATE`；新建 SQL 均显式使用 `<resultMap>`。
+  - `services/ai` & `apps/web`：新增表 `a_logical_model` 与 `GET/PUT /v1/admin/model-providers/logical/embedding`，支持管理员在运行时校验并绑定 `dataEgressAllowed=true` 的供应商、模型名与向量维度（`1..2048`），前端模型供应商设置页同步提供 `EmbeddingModelSettings` 配置卡片。
+- **解析、切分、ES 与索引管线（`ai-service/indexing/`）**：
+  - 支持 9 类源实体（第一批 `kb` / `note` / `doc`，第二批 `mooc` / `mooc_item` / `transcript` / `summary` / `task`，第三批 `notice`）；同一 `ref` 下的 `mooc_item`、`transcript`、`summary` 通过 `canonical_key`（`{ref}#{subtype}` / `item_key`）隔离存储，避免互相覆盖。
+  - PDF 使用子进程运行 `pdfplumber` 并限制 512MB 内存与超时，无文本判定为 `UNEXTRACTABLE(4)` 并回写 `n_doc.index_status`；切分器按结构与标题路径切分且不重叠。
+  - ES 版本化索引 `kn_item_v{N}` / `kn_chunk_v{N}` 通过 alias `kn_item` / `kn_chunk` 访问，`kn_meta` 持久化激活版本、模型与维度以及增量游标；运行时模型或维度与激活索引不一致时拒绝混写并提示执行 `rebuild`（`/healthz` 返回 `503`）。
+
+**与方案的偏差**
+
+1. Embedding 运行时配置扩展（`a_logical_model` 表、管理员 API 与前端卡片）为确认需求后在原计划基础上新增；未配置激活 Embedding 时按无向量模式运行。
+2. ES 镜像未内置 `analysis-ik`，当前映射使用 ES 8.7 内置 `cjk` 分析器；版本元数据直接保存在未带版本后缀的 `kn_meta` 索引中（`active`、`cursor` 文档），`kn_item` 与 `kn_chunk` 使用带版本号的物理索引与别名。
+3. 本机真实栈已完整验证增量、Redis 唤醒、元数据仅变更跳过向量重算、`rebuild`、`reconcile`、扫描版 PDF 回写与 9 类实体检索；未额外构建独立离线评测语料集。
+
+**验证结果（本机 Docker）**
+
+| 验证 | 实际结果 |
+|---|---|
+| `ai-service` 单测 | 56/56 通过（`anynote/ai-service-test:local` `pytest -v`，1 warning） |
+| 后端 Maven 单测 | 受影响与依赖模块 22/22 `BUILD SUCCESS`（`note` 235、`file` 26、`ai` 51、`notify` 5、其余共 104，合计 421/421 通过；默认排除 `@Tag("integration")`） |
+| 前端 Vitest / TS / Biome lint | 169 个测试文件 / 2047 条用例全绿、`tsc --noEmit` 通过、`model-providers` 目录 11 个文件 `biome check --formatter-enabled=false` 通过 |
+| Compose 回归测试 | `infra/tests/test_compose.py` 5/6 通过（`test_ai_indexer_worker_isolated_without_published_ports` 通过；1 项既有失败见下） |
+| OpenAPI 一致性 | 在线 Gateway 6 份 spec 经 `normalize-cli.mjs` 与工作区 baseline 字节一致 |
+| 真实栈全链路 E2E | 全流程通过（权限/出境校验、9 类实体批量导出与检索、文本/扫描 PDF 回写、仅改标题跳过重嵌、删除清理、变更 Embedding 维度触发版本守卫、`rebuild` 与 `reconcile` 对账）；执行于最后两笔前端 a11y/import 小修及测试数据清理前 |
+
+**发现但未修改的既有问题（按范围约束仅记录）**
+
+- `infra/tests/test_compose.py` 的 `test_production_only_publishes_frontend_and_collab` 仍断言仅暴露 `{"anynote-web", "anynote-collab"}`，与 `docker-compose.prod.yaml` 已放开 `anynote-gateway` 的现状不一致。
+- `apps/web` 中资料状态常量 `DOC_INDEXED` 为 `1`（与后端 `DocIndexStatus.INDEXED(0)` 不一致）；全仓 `apps/web/src` 原有文件使用 Tab 缩进，与根 `biome.json` 的 2 空格规则存在既有格式差异。
 
 ---
 

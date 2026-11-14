@@ -1,7 +1,7 @@
 # AI 模块重构
 
-> 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-14
-> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0–M16.3 已完成（2026-11-14），M16.4 可开工**
+> 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-15
+> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0–M16.4 已完成（2026-11-15），M16.5 可开工**
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 测试节](../../README.md#测试)、[`README.md` Git 工作流](../../README.md#git-工作流)、
 > [`docs/refactor/FRONTEND_MILESTONES.md`](../refactor/FRONTEND_MILESTONES.md) M7.6（AI 流式全链路的后端缺口，本方案解除）
 > 参考：AI Agent Handbook（白皮书），本机路径 `D:\code\ai-agent-handbook`，调研时的提交为 `754ec0c`
