@@ -3,12 +3,16 @@ package com.anynote.notify.service.impl;
 import com.anynote.common.redis.constant.RedisChannel;
 import com.anynote.common.redis.model.bo.RedisMessage;
 import com.anynote.common.redis.service.RedisService;
+import com.anynote.core.constant.SecurityConstants;
 import com.anynote.core.constant.SpringWebfluxContextConstants;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.RemoteResDataUtil;
 import com.anynote.core.utils.StringUtils;
 import com.anynote.core.web.model.bo.PageBean;
+import com.anynote.core.web.model.bo.ResData;
 import com.anynote.note.api.RemoteKnowledgeBaseService;
+import com.anynote.note.api.RemoteKnowledgeService;
+import com.anynote.note.api.model.dto.KnowledgeChangeRecordDTO;
 import com.anynote.note.api.model.dto.NoteKnowledgeBaseDTO;
 import com.anynote.note.api.model.po.NoteKnowledgeBase;
 import com.anynote.notify.api.enmus.NoticeType;
@@ -30,9 +34,12 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.google.gson.Gson;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -62,6 +69,9 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice> impleme
 
     @Resource
     private RemoteKnowledgeBaseService remoteKnowledgeBaseService;
+
+    @Autowired(required = false)
+    private RemoteKnowledgeService remoteKnowledgeService;
 
 
     @Transactional(rollbackFor = Exception.class)
@@ -121,7 +131,43 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice> impleme
         userNoticeService.saveBatch(userNoticeList);
         // 发送消息
         redisService.batchPublish(messageList);
+        if (NoticeType.KNOWLEDGE_BASE.getType() == noticePublishParam.getType()) {
+            recordKnowledgeNoticeChangeAfterCommit(notice.getId(), noticePublishParam.getKnowledgeBaseId());
+        }
         return notice.getId();
+    }
+
+    private void recordKnowledgeNoticeChangeAfterCommit(Long noticeId, Long knowledgeBaseId) {
+        Runnable action = () -> {
+            if (remoteKnowledgeService == null || noticeId == null || noticeId <= 0) {
+                return;
+            }
+            try {
+                ResData<Long> response = remoteKnowledgeService.recordChange(
+                        KnowledgeChangeRecordDTO.builder()
+                                .entityType("notice")
+                                .entityId(noticeId)
+                                .knowledgeBaseId(knowledgeBaseId)
+                                .operation("CREATE")
+                                .build(),
+                        SecurityConstants.INNER);
+                if (response == null || !ResData.SUCCESS.equals(response.getCode())) {
+                    log.warn("知识库通知 {} 登记知识变更返回失败: {}", noticeId, response == null ? "null" : response.getMsg());
+                }
+            } catch (Exception e) {
+                log.warn("知识库通知 {} 登记知识变更失败，将由全量对账兜底: {}", noticeId, e.getMessage());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+            return;
+        }
+        action.run();
     }
 
     @Override
