@@ -43,6 +43,32 @@ class HarnessRuntimeSettings(BaseModel):
     )
 
 
+class IndexerRuntimeSettings(BaseModel):
+    """索引管线热更新配置。
+
+    @author 称霸幼儿园
+    """
+
+    poll_interval_s: float = Field(default=5.0, gt=0, le=300)
+    reconcile_interval_s: float = Field(default=3600.0, ge=0, le=86400)
+    batch_size: int = Field(default=50, ge=1, le=200)
+    chunk_size_chars: int = Field(default=600, ge=100, le=4000)
+    chunk_overlap_chars: int = Field(default=100, ge=0, le=1000)
+    embedding_batch_size: int = Field(default=16, ge=1, le=128)
+    embedding_timeout_s: float = Field(default=30.0, gt=0, le=300)
+    pdf_parse_timeout_s: float = Field(default=30.0, gt=0, le=300)
+    pdf_max_memory_mb: int = Field(default=512, ge=64, le=4096)
+    pdf_max_bytes: int = Field(default=50 * 1024 * 1024, ge=1024, le=500 * 1024 * 1024)
+    es_index_replicas: int = Field(default=0, ge=0, le=5)
+    es_request_timeout_s: float = Field(default=15.0, gt=0, le=120)
+
+    model_config = ConfigDict(
+        alias_generator=_kebab_case,
+        populate_by_name=True,
+        protected_namespaces=(),
+    )
+
+
 class RuntimeSettings(BaseModel):
     """Nacos 下发的非敏感运行配置。
 
@@ -50,6 +76,7 @@ class RuntimeSettings(BaseModel):
     """
 
     harness: HarnessRuntimeSettings = HarnessRuntimeSettings()
+    indexer: IndexerRuntimeSettings = IndexerRuntimeSettings()
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -68,12 +95,21 @@ class Settings(BaseSettings):
     DATA_PATH: str = "/tmp/anynote-ai"
     ANYNOTE_INTERNAL_SECRET: SecretStr = SecretStr("anynote-internal-secret-change-in-prod")
     AI_SERVICE_URL: str = "http://anynote-modules-ai:9065"
+    NOTE_SERVICE_URL: str = "http://anynote-modules-note:18091"
+    FILE_SERVICE_URL: str = "http://anynote-modules-file:8095"
+    NOTIFY_SERVICE_URL: str = "http://anynote-modules-notify:9066"
+    ES_URL: str = "http://elasticsearch:9200"
+    ES_USERNAME: str = ""
+    ES_PASSWORD: str = ""
+    REDIS_URL: str = "redis://localhost:6379"
+    REDIS_WAKEUP_CHANNEL: str = "anynote:knowledge:change"
+    INDEXER_HEALTH_HOST: str = "0.0.0.0"
+    INDEXER_HEALTH_PORT: int = 8002
     NACOS_SERVER_ADDRESS: str = ""
     NACOS_NAMESPACE: str = ""
     NACOS_SERVICE_NAME: str = "anynote-ai-harness"
     NACOS_CONFIG_GROUP: str = "DEFAULT_GROUP"
     NACOS_CONFIG_DATA_ID: str = "anynote-ai-harness.yml"
-    REDIS_URL: str = "redis://localhost:6379"
     WHISPER_MODEL: str = "turbo"
     RUN_TERMINAL_TTL_S: float = 300.0
 

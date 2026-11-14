@@ -48,8 +48,10 @@ class LogicalModelMapping(BaseModel):
     @author 称霸幼儿园
     """
 
-    provider: str
-    model: str
+    provider: str = ""
+    model: str = ""
+    enabled: bool | None = None
+    dimensions: int | None = None
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -66,24 +68,47 @@ class ModelCatalogSnapshot(BaseModel):
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-    def resolve(self, logical_name: str, contains_knowledge: bool) -> tuple[ProviderSnapshot, str]:
+    def resolve(
+        self,
+        logical_name: str,
+        contains_knowledge: bool,
+        require_listed_model: bool = True,
+    ) -> tuple[ProviderSnapshot, str]:
         """解析逻辑名并检查启停、模型清单与数据出域标注。
 
         :param logical_name: 逻辑模型名
         :param contains_knowledge: 本次调用是否包含知识库内容
+        :param require_listed_model: 是否要求模型名在供应商预声明列表中
         :return: 供应商配置与实际模型名
         """
         mapping = self.logical_models.get(logical_name)
-        if mapping is None:
+        if mapping is None or mapping.enabled is False:
             raise ModelConfigurationError()
         provider = next(
             (item for item in self.providers if item.provider_key == mapping.provider),
             None,
         )
-        if provider is None or not provider.enabled or mapping.model not in provider.models:
+        if provider is None or not provider.enabled or not mapping.model.strip():
+            raise ModelConfigurationError()
+        if require_listed_model and mapping.model not in provider.models:
             raise ModelConfigurationError()
         if contains_knowledge and not provider.data_egress_allowed:
+            if logical_name == "embedding":
+                raise ModelConfigurationError("模型供应商未允许数据出境，拒绝发送知识内容进行向量化")
             raise ModelConfigurationError()
         if provider.protocol != "openai_compatible":
             raise ModelConfigurationError()
-        return provider, mapping.model
+        return provider, mapping.model.strip()
+
+    def resolve_embedding(self) -> tuple[ProviderSnapshot, str, int | None] | None:
+        """解析 Embedding 运行时逻辑模型配置。
+
+        :return: 启用时返回（供应商, 模型名, 指定维度），关闭或未配置时返回 None
+        """
+        mapping = self.logical_models.get("embedding")
+        if mapping is None or mapping.enabled is False:
+            return None
+        if mapping.enabled is None and (not mapping.provider.strip() or not mapping.model.strip()):
+            return None
+        provider, model = self.resolve("embedding", True, require_listed_model=False)
+        return provider, model, mapping.dimensions

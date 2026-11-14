@@ -14,7 +14,7 @@ import httpx
 from core.config import HarnessRuntimeSettings
 from core.errors import MODEL_TIMEOUT_MESSAGE, MODEL_UNAVAILABLE_MESSAGE
 from harness.models import ModelChunk, TokenUsage, ToolCall
-from models.catalog import ModelCatalogSnapshot, ModelError, ProviderSnapshot
+from models.catalog import ModelCatalogSnapshot, ModelConfigurationError, ModelError, ProviderSnapshot
 
 
 class ModelTimeoutError(ModelError):
@@ -196,6 +196,64 @@ class OpenAICompatibleAdapter:
             usage=usage or TokenUsage(),
             finish=True,
         )
+
+    async def embed(
+        self,
+        snapshot: ModelCatalogSnapshot,
+        texts: list[str],
+        timeout_s: float = 30.0,
+    ) -> list[list[float]] | None:
+        """调用 OpenAI 兼容 embeddings 接口生成向量。
+
+        :param snapshot: 当前模型目录快照
+        :param texts: 待向量化文本列表
+        :param timeout_s: 请求超时秒数
+        :return: 向量列表；当 Embedding 未启用时返回 None
+        """
+        resolved = snapshot.resolve_embedding()
+        if resolved is None:
+            return None
+        if not texts:
+            return []
+        provider, model, expected_dims = resolved
+        body: dict[str, Any] = {"model": model, "input": texts}
+        if expected_dims is not None:
+            body["dimensions"] = expected_dims
+        url = f"{provider.base_url.rstrip('/')}/embeddings"
+        headers = {
+            "Authorization": f"Bearer {provider.api_key.get_secret_value()}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with self._client_factory(timeout=timeout_s) as client:
+                response = await client.post(url, headers=headers, json=body)
+        except httpx.ConnectTimeout as error:
+            raise ModelTimeoutError("CONNECT", retryable=True) from error
+        except httpx.TimeoutException as error:
+            raise ModelTimeoutError("TOTAL", retryable=True) from error
+        except (httpx.NetworkError, httpx.RemoteProtocolError) as error:
+            raise ModelServiceError(retryable=True) from error
+        except httpx.HTTPError as error:
+            raise ModelServiceError(retryable=False) from error
+
+        if response.status_code >= 500 or response.status_code == 429:
+            raise ModelServiceError(retryable=True)
+        if response.status_code != 200:
+            raise ModelServiceError(retryable=False)
+
+        try:
+            payload = response.json()
+            items = sorted(payload["data"], key=lambda entry: int(entry.get("index", 0)))
+            vectors = [[float(v) for v in entry["embedding"]] for entry in items]
+        except (ValueError, KeyError, TypeError) as error:
+            raise ModelServiceError(retryable=False) from error
+
+        if len(vectors) != len(texts):
+            raise ModelServiceError(retryable=False)
+        for vector in vectors:
+            if not vector or (expected_dims is not None and len(vector) != expected_dims):
+                raise ModelConfigurationError()
+        return vectors
 
     async def _wait(
         self,
