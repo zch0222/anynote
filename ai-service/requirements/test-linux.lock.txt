@@ -12,6 +12,10 @@ anyio==4.16.0
     # via
     #   httpx
     #   starlette
+argon2-cffi==25.1.0
+    # via minio
+argon2-cffi-bindings==26.2.0
+    # via argon2-cffi
 attrs==26.1.0
     # via aiohttp
 certifi==2026.10.23
@@ -19,9 +23,12 @@ certifi==2026.10.23
     #   elastic-transport
     #   httpcore
     #   httpx
+    #   minio
     #   requests
 cffi==2.1.1
-    # via cryptography
+    # via
+    #   argon2-cffi-bindings
+    #   cryptography
 charset-normalizer==3.5.2
     # via
     #   pdfminer-six
@@ -58,6 +65,8 @@ idna==3.20
     #   yarl
 iniconfig==2.3.1
     # via pytest
+minio==7.2.15
+    # via -r requirements/test.in
 multidict==7.2.1
     # via
     #   aiohttp
@@ -80,6 +89,8 @@ propcache==0.5.4
     #   yarl
 pycparser==3.12
     # via cffi
+pycryptodome==4.4.0
+    # via minio
 pydantic==2.9.2
     # via
     #   -r requirements/online.in
@@ -89,6 +100,8 @@ pydantic-core==2.23.4
     # via pydantic
 pydantic-settings==2.6.0
     # via -r requirements/online.in
+pymysql==1.1.2
+    # via -r requirements/test.in
 pypdf==5.1.0
     # via -r requirements/indexing.in
 pypdfium2==5.15.2
@@ -121,11 +134,13 @@ typing-extensions==4.16.0
     #   aiosignal
     #   anyio
     #   fastapi
+    #   minio
     #   pydantic
     #   pydantic-core
 urllib3==2.8.0
     # via
     #   elastic-transport
+    #   minio
     #   requests
 uvicorn==0.32.0
     # via -r requirements/online.in

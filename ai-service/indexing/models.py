@@ -4,7 +4,7 @@
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
@@ -206,6 +206,10 @@ class ParsedSection(BaseModel):
     page_no: int | None = None
     start_ms: int | None = None
     end_ms: int | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+    section_start_line: int | None = None
+    block_type: Literal["paragraph", "list", "image", "code", "table"] = "paragraph"
 
 
 class ParsedDocument(BaseModel):
@@ -239,6 +243,8 @@ class ChunkPayload(BaseModel):
     page_no: int | None = None
     start_ms: int | None = None
     end_ms: int | None = None
+    start_line: int | None = None
+    end_line: int | None = None
     authority: str = "original"
     content_version: str = ""
     meta_version: str = ""

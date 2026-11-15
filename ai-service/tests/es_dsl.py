@@ -27,11 +27,16 @@ def evaluate(query: dict[str, Any], document: dict[str, Any]) -> bool:
             minimum = body.get("minimum_should_match", 1)
             return sum(1 for item in should if evaluate(item, document)) >= minimum
         return True
+    if kind == "multi_match":
+        text = str(body["query"])
+        return any(text in str(document.get(name.split("^")[0]) or "") for name in body["fields"])
     (field, value), = body.items()
     actual = document.get(field)
     values = actual if isinstance(actual, list) else [actual]
     if kind == "term":
         return value in values
+    if kind == "match_phrase":
+        return str(value) in str(actual or "")
     if kind == "terms":
         return any(item in value for item in values)
     if kind == "regexp":

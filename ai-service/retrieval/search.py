@@ -72,7 +72,7 @@ class SearchOutcome:
 
 
 def locator_from_chunks(chunks: list[ChunkHit], section_path: str | None) -> dict[str, Any]:
-    """由连续片段生成定位符：片段序号、标题路径、页码与时间范围。
+    """由连续片段生成片段序号、标题路径、源行号、页码与时间范围。
 
     :param chunks: 按序号排列的片段
     :param section_path: 命中片段的标题路径
@@ -82,6 +82,8 @@ def locator_from_chunks(chunks: list[ChunkHit], section_path: str | None) -> dic
     pages = [chunk.page_no for chunk in chunks if chunk.page_no is not None]
     starts = [chunk.start_ms for chunk in chunks if chunk.start_ms is not None]
     ends = [chunk.end_ms for chunk in chunks if chunk.end_ms is not None]
+    start_lines = [chunk.start_line for chunk in chunks if chunk.start_line is not None]
+    end_lines = [chunk.end_line for chunk in chunks if chunk.end_line is not None]
     locator = {
         "chunkStart": min(indexes) if indexes else None,
         "chunkEnd": max(indexes) if indexes else None,
@@ -90,6 +92,8 @@ def locator_from_chunks(chunks: list[ChunkHit], section_path: str | None) -> dic
         "pageEnd": max(pages) if pages else None,
         "startMs": min(starts) if starts else None,
         "endMs": max(ends) if ends else None,
+        "startLine": min(start_lines) if start_lines else None,
+        "endLine": max(end_lines) if end_lines else None,
     }
     return {key: value for key, value in locator.items() if value is not None}
 

@@ -240,6 +240,8 @@ class ChunkHit:
     page_no: int | None = None
     start_ms: int | None = None
     end_ms: int | None = None
+    start_line: int | None = None
+    end_line: int | None = None
     authority: str = "original"
     content_version: str = ""
     highlight: str | None = None

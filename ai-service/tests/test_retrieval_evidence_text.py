@@ -66,6 +66,19 @@ def test_locator_from_chunks_spans_pages_and_drops_empty():
     assert locator == {"chunkStart": 1, "chunkEnd": 2, "sectionPath": "第一章", "pageStart": 3, "pageEnd": 4}
 
 
+def test_locator_from_chunks_spans_source_lines():
+    """连续片段定位符覆盖源行号范围并忽略空值。
+
+    @author 称霸幼儿园
+    """
+    first = _chunk(0, "第一段")
+    first.start_line, first.end_line = 3, 7
+    last = _chunk(1, "第二段")
+    last.start_line, last.end_line = 10, 15
+    locator = locator_from_chunks([last, _chunk(2, "无行号"), first], "第一章")
+    assert locator == {"chunkStart": 0, "chunkEnd": 2, "sectionPath": "第一章", "startLine": 3, "endLine": 15}
+
+
 def test_utf16_length_counts_java_chars():
     """续读偏移按 Java 字符计数，补充平面字符算 2。"""
     assert utf16_length("中文") == 2

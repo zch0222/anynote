@@ -8,8 +8,14 @@ import io
 import pytest
 from pypdf import PdfReader, PdfWriter
 
-from indexing.chunking import chunk_sections
-from indexing.es_store import INDEX_SCHEMA_VERSION, ElasticsearchKnowledgeStore, _build_chunk_mappings, _build_item_mappings
+from indexing.chunking import CHUNKER_VERSION, chunk_sections
+from indexing.es_store import (
+    EMBEDDING_PROFILE_VERSION,
+    INDEX_SCHEMA_VERSION,
+    ElasticsearchKnowledgeStore,
+    _build_chunk_mappings,
+    _build_item_mappings,
+)
 from indexing.models import IndexVersionConflictError, ParsedSection, SourceAcl, SourceDocument
 from indexing.outline import build_outline, build_summary, replace_summary_title
 from indexing.parsers.pdf import (
@@ -148,23 +154,37 @@ def test_real_pdf_bookmarks_become_heading_tree():
 
 
 def test_mappings_include_outline_summary_and_task_members():
-    """schema 2 的映射包含大纲、摘要与任务成员字段。"""
+    """schema 3 保留大纲、摘要与任务成员并补可读状态和源行号。
+
+    @author 称霸幼儿园
+    """
     item = _build_item_mappings()["properties"]
     chunk = _build_chunk_mappings(None)["properties"]
     assert item["outline"]["analyzer"] == "cjk" and item["summary"]["analyzer"] == "cjk"
     assert item["task_member_ids"] == {"type": "long"}
     assert chunk["task_member_ids"] == {"type": "long"}
-    assert INDEX_SCHEMA_VERSION == 2
+    assert item["readable"] == chunk["readable"] == {"type": "boolean"}
+    assert chunk["start_line"] == chunk["end_line"] == {"type": "integer"}
+    assert INDEX_SCHEMA_VERSION == 3
 
 
 class _FakeIndices:
+    def __init__(self, active):
+        self._active = active
+
     async def exists(self, index):
         return True
+
+    async def get_alias(self, name):
+        """返回与当前激活快照一致的测试别名目标。"""
+        field = "item_index" if name == "kn_item" else "chunk_index"
+        target = self._active.get(field)
+        return {target: {"aliases": {name: {}}}} if target else {}
 
 
 class _FakeEs:
     def __init__(self, active: dict, stored_summary: str | None = None):
-        self.indices = _FakeIndices()
+        self.indices = _FakeIndices(active)
         self._active = active
         self._stored = stored_summary
         self.updates: list[dict] = []
@@ -180,26 +200,45 @@ class _FakeEs:
 
     async def update_by_query(self, index, query, script, conflicts, refresh):
         self.scripts.append(script)
+        return {"failures": [], "version_conflicts": 0, "timed_out": False}
 
 
 async def test_old_schema_requires_rebuild():
-    """激活索引没有 schema 版本或版本不同时拒绝写入并提示重建。"""
+    """激活索引缺少版本字段或规则版本不匹配时拒绝写入。
+
+    @author 称霸幼儿园
+    """
     store = ElasticsearchKnowledgeStore(_FakeEs({"version": 1, "item_index": "kn_item_v1",
                                                  "chunk_index": "kn_chunk_v1"}))  # type: ignore[arg-type]
     with pytest.raises(IndexVersionConflictError):
         await store.ensure_active_indices(None, None)
-    current = ElasticsearchKnowledgeStore(_FakeEs({"version": 2, "schema_version": INDEX_SCHEMA_VERSION,
-                                                   "item_index": "kn_item_v2", "chunk_index": "kn_chunk_v2"}))  # type: ignore[arg-type]
+    active = {"version": 2, "schema_version": INDEX_SCHEMA_VERSION,
+              "chunker_version": CHUNKER_VERSION, "embedding_profile_version": EMBEDDING_PROFILE_VERSION,
+              "item_index": "kn_item_v2", "chunk_index": "kn_chunk_v2"}
+    for field, value in (("schema_version", 2), ("chunker_version", "old"),
+                         ("embedding_profile_version", "old")):
+        incompatible = ElasticsearchKnowledgeStore(_FakeEs({**active, field: value}))  # type: ignore[arg-type]
+        with pytest.raises(IndexVersionConflictError):
+            await incompatible.ensure_active_indices(None, None)
+    current = ElasticsearchKnowledgeStore(_FakeEs(active))  # type: ignore[arg-type]
     assert await current.ensure_active_indices(None, None) == ("kn_item_v2", "kn_chunk_v2")
 
 
 async def test_metadata_only_update_writes_task_members_and_retitles_summary():
-    """只改元数据时同步任务成员并替换摘要首行标题。"""
+    """元数据写入同步任务成员和摘要，并在完成后恢复可读状态。
+
+    @author 称霸幼儿园
+    """
     client = _FakeEs({}, stored_summary="旧标题\n正文开头")
     store = ElasticsearchKnowledgeStore(client)  # type: ignore[arg-type]
     document = SourceDocument(ref="task:4", entityType="task", entityId=4, kbId=1, title="新标题",
                               acl=SourceAcl(createBy=7, taskMemberIds=[8, 9]), metaVersion="m2")
     await store.update_metadata_only("kn_item_v2", "kn_chunk_v2", document)
-    assert client.updates[0]["task_member_ids"] == [8, 9]
-    assert client.updates[0]["summary"] == "新标题\n正文开头"
-    assert client.scripts[0]["params"]["task_member_ids"] == [8, 9]
+    item_metadata = next(update for update in client.updates if "task_member_ids" in update)
+    chunk_metadata = next(script["params"] for script in client.scripts if "task_member_ids" in script["params"])
+    assert item_metadata["task_member_ids"] == chunk_metadata["task_member_ids"] == [8, 9]
+    assert item_metadata["summary"] == "新标题\n正文开头"
+    assert chunk_metadata["create_by"] == 7
+    assert chunk_metadata["meta_version"] == "m2"
+    assert [update["readable"] for update in client.updates if "readable" in update] == [False, True]
+    assert [script["params"]["value"] for script in client.scripts if "value" in script["params"]] == [False, True]

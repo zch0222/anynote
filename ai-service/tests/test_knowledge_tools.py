@@ -117,6 +117,33 @@ async def test_search_uses_semantic_channel_when_index_matches_model():
     assert result.diagnostics["channels"]["semantic"] == 1
 
 
+async def test_search_disables_semantic_with_retained_index_vectors():
+    """关闭嵌入后停止语义检索并保留第二段权限确认。
+
+    @author 称霸幼儿园
+    """
+    client = FakeKnowledgeClient()
+    client.allow("note:1")
+    index = FakeIndexReader()
+    index.embedding = ("emb", 3)
+    index.lexical_hits = [chunk("note:1", 0), chunk("note:2", 0, "无权内容")]
+    embedder = FakeEmbedder()
+    registry, _store = make_toolkit(client, index, embedder)
+    disabled = snapshot(embedding=True)
+    disabled.logical_models["embedding"].enabled = False
+
+    result = await _call(registry, make_tool_run(snap=disabled), "kb_search",
+                         {"query": "什么是倒排索引的基本原理", "mode": "semantic"})
+
+    assert result.status == ActionStatus.SUCCESS
+    assert embedder.calls == 0
+    assert not any(name == "semantic" for name, _args in index.calls)
+    assert result.diagnostics["semantic"] == "disabled"
+    assert result.diagnostics["dropped"] == 1
+    assert [item["ref"] for item in _payload(result)["results"]] == ["note:1"]
+    assert SEMANTIC_UNAVAILABLE_MESSAGE not in _payload(result)["notices"]
+
+
 async def test_search_falls_back_to_lexical_when_embedding_fails():
     """嵌入服务出错时只走全文并提示语义检索暂不可用。"""
     client = FakeKnowledgeClient()

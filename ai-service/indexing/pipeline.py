@@ -4,6 +4,7 @@
 """
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from clients.file import FileClient
 from clients.knowledge import KnowledgeClient
@@ -12,8 +13,8 @@ from clients.notify import NotifyClient
 from core.config import IndexerRuntimeSettings, RuntimeConfigStore, Settings
 from core.logger import get_logger
 from indexing.adapters import KnowledgeSourceAdapter
-from indexing.chunking import ChunkDraft, chunk_sections
-from indexing.es_store import ElasticsearchKnowledgeStore, _format_datetime
+from indexing.chunking import CHUNKER_VERSION, ChunkDraft, chunk_sections
+from indexing.es_store import EMBEDDING_PROFILE_VERSION, ElasticsearchKnowledgeStore, _format_datetime
 from indexing.models import (
     DOC_STATUS_FAILED,
     DOC_STATUS_INDEXED,
@@ -55,9 +56,67 @@ class IndexingPipeline:
         self._store = es_store
         self._logger = get_logger(__name__)
 
+    async def watermark(self) -> dict:
+        """返回供内部健康探针读取的索引水位和规则版本。"""
+        state = await self._store.get_watermark()
+        return {
+            "processed_cursor": int(state.get("cursor") or 0),
+            "latest_cursor": int(state.get("latest_cursor") or 0),
+            "lag_records": int(state.get("lag_records") or 0),
+            "last_processed_at": state.get("last_processed_at"),
+            "last_success_at": state.get("last_success_at"),
+            "last_error_type": state.get("last_error_type"),
+            "chunker_version": CHUNKER_VERSION,
+            "embedding_profile_version": EMBEDDING_PROFILE_VERSION,
+        }
+
     @property
     def _runtime(self) -> IndexerRuntimeSettings:
         return self._runtime_store.get().indexer
+
+    async def _existing_items(
+        self,
+        item_idx: str,
+        chunk_idx: str,
+        keys: list[str],
+        require_embeddings: bool,
+    ) -> dict[str, dict]:
+        """读取条目并独立核对片段代际、数量、版本和向量覆盖。"""
+        items = await self._store.get_existing_items(item_idx, keys)
+        chunks = await self._store.get_chunk_signatures(chunk_idx, keys)
+        vector_keys = [(key, str(item.get("generation") or "")) for key, item in items.items()]
+        vectors = await self._store.get_vector_counts(chunk_idx, vector_keys) if require_embeddings else {}
+        for key, item in items.items():
+            item["complete"] = await self._store.is_item_complete(
+                item,
+                chunks.get(key),
+                vectors.get((key, str(item.get("generation") or ""))),
+                require_embeddings,
+            )
+        return items
+
+    async def _verify_source_documents(
+        self,
+        item_idx: str,
+        chunk_idx: str,
+        expected: dict[str, tuple[str, str]],
+        require_embeddings: bool,
+        kb_id: int | None = None,
+    ) -> None:
+        """独立读取 ES 核对源集合、双版本及每个条目的完整性。"""
+        await self._store.refresh_indices(item_idx, chunk_idx)
+        signatures = await self._store.list_item_signatures(item_idx, kb_id=kb_id)
+        if signatures != expected:
+            raise RuntimeError("Elasticsearch 源文档集合或版本核对失败")
+        keys = list(expected)
+        for start in range(0, len(keys), self._runtime.batch_size):
+            batch = keys[start : start + self._runtime.batch_size]
+            items = await self._existing_items(item_idx, chunk_idx, batch, require_embeddings)
+            if any(not items.get(key, {}).get("complete") for key in batch):
+                raise RuntimeError("Elasticsearch 片段完整性核对失败")
+        chunk_keys = set(await self._store.get_chunk_signatures(chunk_idx, kb_id=kb_id))
+        if chunk_keys - set(expected):
+            raise RuntimeError("Elasticsearch 孤儿片段核对失败")
 
     async def _resolve_embedding_profile(
         self,
@@ -83,13 +142,23 @@ class IndexingPipeline:
         snapshot: ModelCatalogSnapshot,
         drafts: list[ChunkDraft],
         resolved_model: str | None,
+        title: str = "",
     ) -> tuple[list[list[float]] | None, int | None]:
+        """按标题、完整章节路径和正文批量生成向量。
+
+        :param drafts: 有序分块内容
+        :param title: 源条目标题
+        :return: 向量列表及推断维度，停用时返回两个 None
+        """
         if resolved_model is None or not drafts:
             return None, None
         batch_size = self._runtime.embedding_batch_size
         vectors: list[list[float]] = []
         for start in range(0, len(drafts), batch_size):
-            batch_texts = [draft.content for draft in drafts[start : start + batch_size]]
+            batch_texts = [
+                f"标题：{title}\n标题路径：{draft.section_path or ''}\n正文：{draft.content}"
+                for draft in drafts[start : start + batch_size]
+            ]
             part = await self._model_adapter.embed(
                 snapshot,
                 batch_texts,
@@ -127,6 +196,8 @@ class IndexingPipeline:
                     page_no=draft.page_no,
                     start_ms=draft.start_ms,
                     end_ms=draft.end_ms,
+                    start_line=draft.start_line,
+                    end_line=draft.end_line,
                     authority=doc.authority,
                     content_version=doc.content_version or "",
                     meta_version=doc.meta_version or "",
@@ -151,18 +222,28 @@ class IndexingPipeline:
         existing_map: dict[str, dict] | None,
         delete_existing_chunks: bool,
         ensure_active_on_embed: bool,
+        publish_source_status: bool = True,
     ) -> str:
+        """写入单条源文档及分片，并按选项回写资料成功状态。
+
+        :param doc: 待索引的权威源文档
+        :param publish_source_status: 是否立即回写资料成功状态
+        :return: 索引处理结果类型
+        """
         existing = existing_map.get(doc.canonical_key) if existing_map is not None else None
         if existing is not None:
             same_content = (existing.get("content_version") or "") == (doc.content_version or "")
             same_meta = (existing.get("meta_version") or "") == (doc.meta_version or "")
-            if same_content and same_meta and existing.get("index_status") == DOC_STATUS_INDEXED:
-                if doc.entity_type == "doc" and doc.attributes.get("indexStatus") != DOC_STATUS_INDEXED:
-                    await self._knowledge.update_doc_index_status(doc.entity_id, DOC_STATUS_INDEXED)
+            same_title = (existing.get("title") or "") == (doc.title or "")
+            complete = existing.get("complete") is True
+            if same_content and same_meta and same_title and complete and existing.get("index_status") in (DOC_STATUS_INDEXED, DOC_STATUS_UNEXTRACTABLE):
+                status = existing["index_status"]
+                if publish_source_status and doc.entity_type == "doc" and doc.attributes.get("indexStatus") != status:
+                    await self._knowledge.update_doc_index_status(doc.entity_id, status)
                 return "skipped"
-            if same_content and existing.get("index_status") == DOC_STATUS_INDEXED:
+            if same_content and same_title and complete and existing.get("index_status") == DOC_STATUS_INDEXED:
                 await self._store.update_metadata_only(item_idx, chunk_idx, doc)
-                if doc.entity_type == "doc" and doc.attributes.get("indexStatus") != DOC_STATUS_INDEXED:
+                if publish_source_status and doc.entity_type == "doc" and doc.attributes.get("indexStatus") != DOC_STATUS_INDEXED:
                     await self._knowledge.update_doc_index_status(doc.entity_id, DOC_STATUS_INDEXED)
                 return "meta_updated"
 
@@ -172,7 +253,7 @@ class IndexingPipeline:
             self._logger.error("解析 PDF 失败 ref=%s: %s", doc.ref, error)
             if doc.entity_type == "doc":
                 await self._knowledge.update_doc_index_status(doc.entity_id, DOC_STATUS_FAILED)
-            return "failed"
+            raise
 
         if parsed.unextractable:
             self._logger.warning("%s ref=%s", SCANNED_PDF_MESSAGE, doc.ref)
@@ -185,7 +266,7 @@ class IndexingPipeline:
                 delete_existing_chunks=delete_existing_chunks,
                 summary=build_summary(doc.title, [], self._runtime.summary_body_chars),
             )
-            if doc.entity_type == "doc":
+            if publish_source_status and doc.entity_type == "doc":
                 await self._knowledge.update_doc_index_status(doc.entity_id, DOC_STATUS_UNEXTRACTABLE)
             return "unextractable"
 
@@ -193,7 +274,7 @@ class IndexingPipeline:
             parsed.sections,
             chunk_size_chars=self._runtime.chunk_size_chars,
         )
-        vectors, inferred_dims = await self._embed_drafts(snapshot, drafts, emb_model)
+        vectors, inferred_dims = await self._embed_drafts(snapshot, drafts, emb_model, doc.title or "")
         effective_dims = emb_dims if emb_dims is not None else inferred_dims
         if ensure_active_on_embed:
             item_idx, chunk_idx = await self._store.ensure_active_indices(emb_model, effective_dims)
@@ -208,7 +289,7 @@ class IndexingPipeline:
             outline=build_outline(parsed.sections),
             summary=build_summary(doc.title, parsed.sections, self._runtime.summary_body_chars),
         )
-        if doc.entity_type == "doc":
+        if publish_source_status and doc.entity_type == "doc":
             await self._knowledge.update_doc_index_status(doc.entity_id, DOC_STATUS_INDEXED)
         return "indexed"
 
@@ -241,6 +322,34 @@ class IndexingPipeline:
 
         :return: 本轮处理的变更记录总数
         """
+        previous = await self._store.get_watermark()
+        cursor = await self._store.get_cursor()
+        self._latest_cursor = max(cursor, int(previous.get("latest_cursor") or 0))
+        try:
+            page = await self._knowledge.changes(after_id=cursor, limit=1)
+            self._latest_cursor = page.latest_cursor
+            processed = await self._consume_incremental()
+        except Exception as error:
+            await self._store.save_watermark(
+                self._latest_cursor,
+                await self._store.get_cursor(),
+                datetime.now(UTC).isoformat(),
+                previous.get("last_success_at"),
+                type(error).__name__,
+            )
+            raise
+        now = datetime.now(UTC).isoformat()
+        await self._store.save_watermark(
+            self._latest_cursor,
+            await self._store.get_cursor(),
+            now,
+            now,
+            None,
+        )
+        return processed
+
+    async def _consume_incremental(self) -> int:
+        """按页完成索引刷新后提交游标，失败保留上一成功页水位。"""
         snapshot = await self._model_providers.snapshot()
         emb_model, emb_dims = await self._resolve_embedding_profile(snapshot, probe_if_missing_dims=False)
         item_idx, chunk_idx = await self._store.ensure_active_indices(emb_model, emb_dims)
@@ -251,6 +360,7 @@ class IndexingPipeline:
 
         while True:
             page = await self._knowledge.changes(after_id=cursor, limit=self._runtime.batch_size)
+            self._latest_cursor = page.latest_cursor
             if not page.changes:
                 break
 
@@ -258,9 +368,11 @@ class IndexingPipeline:
             if upsert_refs:
                 docs, missing_refs = await self._adapter.fetch_by_refs(upsert_refs)
                 delete_refs.extend(missing_refs)
-                existing_map = await self._store.get_existing_items(
+                existing_map = await self._existing_items(
                     item_idx,
+                    chunk_idx,
                     [doc.canonical_key for doc in docs],
+                    emb_model is not None,
                 )
                 for doc in docs:
                     outcome = await self._index_document(
@@ -286,6 +398,8 @@ class IndexingPipeline:
 
             processed += len(page.changes)
             cursor = page.next_cursor
+            if mutated:
+                await self._store.refresh_indices(item_idx, chunk_idx)
             await self._store.save_cursor(cursor)
 
         if mutated:
@@ -304,33 +418,82 @@ class IndexingPipeline:
         emb_model, emb_dims = await self._resolve_embedding_profile(snapshot, probe_if_missing_dims=True)
         active = await self._store.get_active_meta()
         next_version = (int(active["version"]) + 1) if active else 1
-        new_item_idx, new_chunk_idx = await self._store.create_versioned_indices(next_version, emb_dims)
-
+        new_item_idx, new_chunk_idx = await self._store.create_versioned_indices(
+            next_version,
+            emb_dims,
+            attempt_id=uuid4().hex,
+        )
         total_docs = 0
-        async for docs in self._adapter.iter_export(page_size=self._runtime.batch_size):
-            for doc in docs:
-                await self._index_document(
-                    doc=doc,
-                    snapshot=snapshot,
-                    item_idx=new_item_idx,
-                    chunk_idx=new_chunk_idx,
-                    emb_model=emb_model,
-                    emb_dims=emb_dims,
-                    existing_map=None,
-                    delete_existing_chunks=False,
-                    ensure_active_on_embed=False,
-                )
-                total_docs += 1
-
-        await self._store.refresh_indices(new_item_idx, new_chunk_idx)
-        await self._store.swap_aliases(next_version, emb_model, emb_dims)
-        await self._store.save_cursor(start_cursor)
+        stats = {"attempted": 0, "succeeded": 0, "failed": 0, "unextractable": 0}
+        expected: dict[str, tuple[str, str]] = {}
+        pending_statuses: list[tuple[int, int]] = []
+        try:
+            async for docs in self._adapter.iter_export(page_size=self._runtime.batch_size):
+                for doc in docs:
+                    stats["attempted"] += 1
+                    outcome = await self._index_document(
+                        doc=doc,
+                        snapshot=snapshot,
+                        item_idx=new_item_idx,
+                        chunk_idx=new_chunk_idx,
+                        emb_model=emb_model,
+                        emb_dims=emb_dims,
+                        existing_map=None,
+                        delete_existing_chunks=False,
+                        ensure_active_on_embed=False,
+                        publish_source_status=False,
+                    )
+                    if outcome == "unextractable":
+                        stats["unextractable"] += 1
+                    else:
+                        stats["succeeded"] += 1
+                    total_docs += 1
+                    expected[doc.canonical_key] = (doc.content_version or "", doc.meta_version or "")
+                    if doc.entity_type == "doc":
+                        status = DOC_STATUS_UNEXTRACTABLE if outcome == "unextractable" else DOC_STATUS_INDEXED
+                        pending_statuses.append((doc.entity_id, status))
+            await self._verify_source_documents(
+                new_item_idx,
+                new_chunk_idx,
+                expected,
+                emb_model is not None,
+            )
+        except Exception:
+            stats["failed"] += 1
+            self._logger.error("全量索引重建失败 stats=%s", stats)
+            await self._store.delete_versioned_indices(new_item_idx, new_chunk_idx)
+            raise
+        try:
+            await self._store.swap_aliases(
+                next_version,
+                emb_model,
+                emb_dims,
+                item_idx=new_item_idx,
+                chunk_idx=new_chunk_idx,
+            )
+        except Exception:
+            current = await self._store.get_active_meta()
+            if current is None or current.get("item_index") != new_item_idx:
+                await self._store.delete_versioned_indices(new_item_idx, new_chunk_idx)
+            raise
+        latest = await self._knowledge.changes(after_id=start_cursor, limit=1)
+        completed_at = datetime.now(UTC).isoformat()
+        await self._store.save_watermark(
+            latest_cursor=latest.latest_cursor,
+            processed_cursor=start_cursor,
+            last_processed_at=completed_at,
+            last_success_at=completed_at,
+            last_error_type=None,
+        )
+        for doc_id, status in pending_statuses:
+            await self._knowledge.update_doc_index_status(doc_id, status)
         self._logger.info(
-            "全量索引重建完成 version=v%d docs=%d model=%s dims=%s",
+            "全量索引重建完成 version=v%d docs=%d model=%s dims=%s stats=%s",
             next_version,
             total_docs,
             emb_model or "disabled",
             emb_dims,
+            stats,
         )
         return total_docs
 
@@ -343,7 +506,9 @@ class IndexingPipeline:
         snapshot = await self._model_providers.snapshot()
         emb_model, emb_dims = await self._resolve_embedding_profile(snapshot, probe_if_missing_dims=True)
         item_idx, chunk_idx = await self._store.ensure_active_indices(emb_model, emb_dims)
+        await self._store.refresh_indices(item_idx, chunk_idx)
         existing_sigs = await self._store.list_item_signatures(item_idx, kb_id=kb_id)
+        existing_chunk_keys = set(await self._store.get_chunk_signatures(chunk_idx, kb_id=kb_id))
 
         stats = {
             "indexed": 0,
@@ -354,11 +519,18 @@ class IndexingPipeline:
             "failed": 0,
         }
         seen_refs: set[str] = set()
+        expected: dict[str, tuple[str, str]] = {}
 
         async for docs in self._adapter.iter_export(kb_id=kb_id, page_size=self._runtime.batch_size):
-            existing_map = await self._store.get_existing_items(item_idx, [doc.canonical_key for doc in docs])
+            existing_map = await self._existing_items(
+                item_idx,
+                chunk_idx,
+                [doc.canonical_key for doc in docs],
+                emb_model is not None,
+            )
             for doc in docs:
                 seen_refs.add(doc.canonical_key)
+                expected[doc.canonical_key] = (doc.content_version or "", doc.meta_version or "")
                 outcome = await self._index_document(
                     doc=doc,
                     snapshot=snapshot,
@@ -372,10 +544,10 @@ class IndexingPipeline:
                 )
                 stats[outcome] = stats.get(outcome, 0) + 1
 
-        orphan_refs = [ref for ref in existing_sigs if ref not in seen_refs]
+        orphan_refs = sorted((set(existing_sigs) | existing_chunk_keys) - seen_refs)
         if orphan_refs:
             await self._store.delete_refs(item_idx, chunk_idx, orphan_refs)
             stats["deleted"] = len(orphan_refs)
 
-        await self._store.refresh_indices(item_idx, chunk_idx)
+        await self._verify_source_documents(item_idx, chunk_idx, expected, emb_model is not None, kb_id)
         return stats

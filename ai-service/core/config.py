@@ -49,7 +49,7 @@ class IndexerRuntimeSettings(BaseModel):
     @author 称霸幼儿园
     """
 
-    poll_interval_s: float = Field(default=5.0, gt=0, le=300)
+    poll_interval_s: float = Field(default=3.0, gt=0, le=300)
     reconcile_interval_s: float = Field(default=3600.0, ge=0, le=86400)
     batch_size: int = Field(default=50, ge=1, le=200)
     chunk_size_chars: int = Field(default=600, ge=100, le=4000)

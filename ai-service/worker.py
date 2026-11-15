@@ -8,7 +8,7 @@ import asyncio
 import json
 import signal
 import sys
-from contextlib import suppress
+from contextlib import AsyncExitStack, suppress
 
 import redis.asyncio as aioredis
 
@@ -41,9 +41,16 @@ class HealthProbeServer:
     @author 称霸幼儿园
     """
 
-    def __init__(self, host: str, port: int):
+    def __init__(self, host: str, port: int, pipeline: IndexingPipeline | None = None):
+        """配置探针地址与可选索引水位来源。
+
+        :param host: 内网监听地址
+        :param port: 监听端口
+        :param pipeline: 提供水位快照的索引管线
+        """
         self._host = host
         self._port = port
+        self._pipeline = pipeline
         self._server: asyncio.AbstractServer | None = None
         self.healthy = True
 
@@ -73,6 +80,7 @@ class HealthProbeServer:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
+        """处理健康请求并返回已筛选的索引水位。"""
         try:
             raw_line = await asyncio.wait_for(reader.readline(), timeout=2.0)
             parts = raw_line.decode("ascii", errors="ignore").split()
@@ -80,12 +88,26 @@ class HealthProbeServer:
             if path.split("?")[0] != "/healthz":
                 status_line = "404 Not Found"
                 body = json.dumps({"status": "not_found"}).encode()
-            elif self.healthy:
-                status_line = "200 OK"
-                body = json.dumps({"status": "ok"}).encode()
             else:
-                status_line = "503 Service Unavailable"
-                body = json.dumps({"status": "unhealthy"}).encode()
+                healthy = self.healthy
+                payload: dict = {"status": "ok" if healthy else "unhealthy"}
+                if self._pipeline is not None:
+                    try:
+                        watermark = await self._pipeline.watermark()
+                        allowed_fields = (
+                            "processed_cursor", "latest_cursor", "lag_records",
+                            "last_processed_at", "last_success_at", "last_error_type",
+                            "chunker_version", "embedding_profile_version",
+                        )
+                        payload["watermark"] = {
+                            key: watermark.get(key) for key in allowed_fields
+                        }
+                    except Exception as error:
+                        healthy = False
+                        payload["status"] = "unhealthy"
+                        payload["watermark"] = {"last_error_type": type(error).__name__}
+                status_line = "200 OK" if healthy else "503 Service Unavailable"
+                body = json.dumps(payload).encode()
             response = (
                 f"HTTP/1.1 {status_line}\r\n"
                 f"Content-Type: application/json\r\n"
@@ -102,7 +124,7 @@ class HealthProbeServer:
                 await writer.wait_closed()
 
 
-def build_pipeline(
+async def build_pipeline(
     settings: Settings,
     runtime_store: RuntimeConfigStore,
 ) -> tuple[IndexingPipeline, ElasticsearchKnowledgeStore]:
@@ -114,18 +136,22 @@ def build_pipeline(
     """
     runtime = runtime_store.get().indexer
     es_client = build_es_client(settings, runtime)
-    es_store = ElasticsearchKnowledgeStore(es_client, replicas=runtime.es_index_replicas)
-    pipeline = IndexingPipeline(
-        settings=settings,
-        runtime_store=runtime_store,
-        model_provider_client=ModelProviderClient(settings),
-        model_adapter=OpenAICompatibleAdapter(),
-        knowledge_client=KnowledgeClient(settings),
-        file_client=FileClient(settings),
-        notify_client=NotifyClient(settings),
-        es_store=es_store,
-    )
-    return pipeline, es_store
+    try:
+        es_store = ElasticsearchKnowledgeStore(es_client, replicas=runtime.es_index_replicas)
+        pipeline = IndexingPipeline(
+            settings=settings,
+            runtime_store=runtime_store,
+            model_provider_client=ModelProviderClient(settings),
+            model_adapter=OpenAICompatibleAdapter(),
+            knowledge_client=KnowledgeClient(settings),
+            file_client=FileClient(settings),
+            notify_client=NotifyClient(settings),
+            es_store=es_store,
+        )
+        return pipeline, es_store
+    except BaseException:
+        await es_client.close()
+        raise
 
 
 async def _redis_wakeup_listener(
@@ -166,7 +192,6 @@ async def run_daemon(
     settings: Settings,
     runtime_store: RuntimeConfigStore,
     pipeline: IndexingPipeline,
-    nacos: NacosManager,
     probe: HealthProbeServer,
     stop_event: asyncio.Event | None = None,
 ) -> None:
@@ -175,7 +200,6 @@ async def run_daemon(
     :param settings: 进程配置
     :param runtime_store: 运行时配置容器
     :param pipeline: 索引管线实例
-    :param nacos: Nacos 管理器
     :param probe: 内网健康探针
     :param stop_event: 可选停止信号，主要用于测试可控退出
     """
@@ -189,20 +213,20 @@ async def run_daemon(
         with suppress(NotImplementedError):
             loop.add_signal_handler(sig, stop.set)
 
-    await nacos.start()
-    await probe.start()
-    listener_task = asyncio.create_task(
-        _redis_wakeup_listener(
-            settings.REDIS_URL,
-            settings.REDIS_WAKEUP_CHANNEL,
-            wakeup,
-            stop,
-            logger,
-        )
-    )
+    listener_task: asyncio.Task | None = None
     last_reconcile = loop.time()
 
     try:
+        await probe.start()
+        listener_task = asyncio.create_task(
+            _redis_wakeup_listener(
+                settings.REDIS_URL,
+                settings.REDIS_WAKEUP_CHANNEL,
+                wakeup,
+                stop,
+                logger,
+            )
+        )
         while not stop.is_set():
             if wakeup.is_set():
                 wakeup.clear()
@@ -237,11 +261,11 @@ async def run_daemon(
                     with suppress(asyncio.CancelledError):
                         await task
     finally:
-        listener_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await listener_task
+        if listener_task is not None:
+            listener_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await listener_task
         await probe.close()
-        await nacos.close()
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -270,30 +294,23 @@ async def execute_command(args: argparse.Namespace, settings: Settings | None = 
     validate_internal_secret(cfg)
     runtime_store = RuntimeConfigStore(cfg.runtime_defaults())
     nacos = NacosManager(cfg, runtime_store)
-    pipeline, es_store = build_pipeline(cfg, runtime_store)
-    probe = HealthProbeServer(cfg.INDEXER_HEALTH_HOST, cfg.INDEXER_HEALTH_PORT)
 
-    try:
+    async with AsyncExitStack() as resources:
+        resources.push_async_callback(nacos.close)
+        await nacos.start()
+        pipeline, es_store = await build_pipeline(cfg, runtime_store)
+        resources.push_async_callback(es_store.close)
         if args.command == "run":
-            await run_daemon(cfg, runtime_store, pipeline, nacos, probe)
+            probe = HealthProbeServer(cfg.INDEXER_HEALTH_HOST, cfg.INDEXER_HEALTH_PORT, pipeline)
+            await run_daemon(cfg, runtime_store, pipeline, probe)
             return 0
         if args.command == "rebuild":
-            await nacos.start()
-            try:
-                await pipeline.run_rebuild()
-            finally:
-                await nacos.close()
+            await pipeline.run_rebuild()
             return 0
         if args.command == "reconcile":
-            await nacos.start()
-            try:
-                await pipeline.run_reconcile(kb_id=args.kb_id)
-            finally:
-                await nacos.close()
+            await pipeline.run_reconcile(kb_id=args.kb_id)
             return 0
         return 2
-    finally:
-        await es_store.close()
 
 
 def main(argv: list[str] | None = None) -> int:

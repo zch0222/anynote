@@ -13,6 +13,7 @@ from retrieval.models import ChunkHit
 CHUNK_SOURCE = [
     "item_key", "ref", "entity_type", "subtype", "kb_id", "title", "chunk_index", "content",
     "section_path", "page_no", "start_ms", "end_ms", "authority", "content_version",
+    "start_line", "end_line",
 ]
 ITEM_SOURCE = ["item_key", "ref", "entity_type", "subtype", "kb_id", "title", "authority",
                "content_version", "parent_ref", "summary"]
@@ -35,10 +36,22 @@ def _hit(source: dict[str, Any], highlight: dict[str, Any] | None = None) -> Chu
         page_no=source.get("page_no"),
         start_ms=source.get("start_ms"),
         end_ms=source.get("end_ms"),
+        start_line=source.get("start_line"),
+        end_line=source.get("end_line"),
         authority=str(source.get("authority") or "original"),
         content_version=str(source.get("content_version") or ""),
         highlight=fragments[0] if fragments else None,
     )
+
+
+def _readable_filters(filters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """补充索引记录可读状态过滤条件。
+
+    :param filters: 调用方的过滤条件
+    :return: 含可读状态的过滤条件
+    @author 称霸幼儿园
+    """
+    return [{"term": {"readable": True}}, *filters]
 
 
 class KnowledgeIndexReader:
@@ -91,7 +104,7 @@ class KnowledgeIndexReader:
         must.extend({"match_phrase": {"content": phrase}} for phrase in phrases)
         response = await self._client.search(
             index=CHUNK_ALIAS,
-            query={"bool": {"must": must, "filter": filters}},
+            query={"bool": {"must": must, "filter": _readable_filters(filters)}},
             size=size,
             _source=CHUNK_SOURCE,
             highlight={"fields": {"content": {"fragment_size": 150, "number_of_fragments": 1}}},
@@ -113,7 +126,7 @@ class KnowledgeIndexReader:
                 "query_vector": vector,
                 "k": size,
                 "num_candidates": size * 2,
-                "filter": {"bool": {"filter": filters}},
+                "filter": {"bool": {"filter": _readable_filters(filters)}},
             },
             size=size,
             _source=CHUNK_SOURCE,
@@ -141,7 +154,7 @@ class KnowledgeIndexReader:
                             }
                         }
                     ],
-                    "filter": filters,
+                    "filter": _readable_filters(filters),
                 }
             },
             size=size,
@@ -177,7 +190,7 @@ class KnowledgeIndexReader:
         ]
         response = await self._client.search(
             index=CHUNK_ALIAS,
-            query={"bool": {"should": should, "minimum_should_match": 1}},
+            query={"bool": {"should": should, "minimum_should_match": 1, "filter": _readable_filters([])}},
             size=len(positions) * (2 * window + 1),
             _source=CHUNK_SOURCE,
         )
@@ -201,7 +214,7 @@ class KnowledgeIndexReader:
         :param end_page: 结束页（含）
         :return: 按序号升序的片段
         """
-        filters: list[dict[str, Any]] = [{"term": {"item_key": item_key}}]
+        filters = _readable_filters([{"term": {"item_key": item_key}}])
         if start_page is not None or end_page is not None:
             page_range: dict[str, int] = {}
             if start_page is not None:
@@ -240,7 +253,7 @@ class KnowledgeIndexReader:
             return set()
         response = await self._client.search(
             index=ITEM_ALIAS,
-            query={"bool": {"filter": [{"terms": {"item_key": list(item_keys)}}, *filters]}},
+            query={"bool": {"filter": _readable_filters([{"terms": {"item_key": list(item_keys)}}, *filters])}},
             size=len(item_keys),
             _source=["item_key"],
         )
@@ -254,7 +267,7 @@ class KnowledgeIndexReader:
         """
         response = await self._client.search(
             index=ITEM_ALIAS,
-            query={"term": {"item_key": item_key}},
+            query={"bool": {"filter": _readable_filters([{"term": {"item_key": item_key}}])}},
             size=1,
             _source=["parent_ref"],
         )
@@ -271,7 +284,8 @@ class KnowledgeIndexReader:
         """
         response = await self._client.search(
             index=CHUNK_ALIAS,
-            query={"bool": {"must": [{"match_phrase": {"content": pattern}}], "filter": filters}},
+            query={"bool": {"must": [{"match_phrase": {"content": pattern}}],
+                            "filter": _readable_filters(filters)}},
             collapse={"field": "item_key"},
             size=limit,
             _source=["item_key"],

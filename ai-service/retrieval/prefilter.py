@@ -71,6 +71,7 @@ def build_prefilter(scope: KnowledgeScope, run_scope: RunScope | None) -> list[d
     :return: 放入 bool.filter 的条件列表
     """
     filters: list[dict[str, Any]] = [
+        {"term": {"readable": True}},
         {"bool": {"must_not": [{"terms": {"entity_type": list(EXCLUDED_ENTITY_TYPES)}}]}},
     ]
     narrowing = build_narrowing_filter(run_scope)

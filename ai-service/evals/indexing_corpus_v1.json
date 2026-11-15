@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "M16.4 indexing acceptance corpus",
+  "requiredEntityTypes": ["kb", "note", "doc", "mooc", "mooc_item", "transcript", "summary", "task", "notice"],
+  "markdown": {"codeLines": 100, "tableRows": 20},
+  "subtitle": "1\n00:00:01,000 --> 00:00:03,000\n倒排索引将词项映射到文档列表。\n\n2\n00:00:04,000 --> 00:00:06,000\n标题路径保留父级检索上下文。\n\n3\n00:10:01,000 --> 00:10:03,000\n跨长时段字幕必须形成独立片段。",
+  "summary": "# 视频总结\n倒排索引按词项组织文档列表，标题路径为检索提供上下文。",
+  "pdfKinds": ["text", "scanned", "columns"]
+}
