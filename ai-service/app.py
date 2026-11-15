@@ -10,12 +10,17 @@ from fastapi import FastAPI
 from api.errors import register_exception_handlers
 from api.health import router as health_router
 from api.runs import router as run_router
+from clients.knowledge import KnowledgeClient
 from clients.model_provider import ModelProviderClient
 from clients.nacos import NacosManager
 from core.config import RuntimeConfigStore, Settings, get_settings
 from core.logger import configure_logging
 from harness.runtime import RunManager
+from indexing.es_store import build_es_client
+from models.openai_compatible import OpenAICompatibleAdapter
 from models.router import ModelRouter
+from retrieval.index_reader import KnowledgeIndexReader
+from retrieval.search import HybridSearcher
 
 
 def create_app(
@@ -34,11 +39,17 @@ def create_app(
     configure_logging()
     config_store = RuntimeConfigStore(settings.runtime_defaults())
     nacos = NacosManager(settings, config_store)
+    adapter = OpenAICompatibleAdapter()
+    index_client = build_es_client(settings, config_store.get().indexer)
     run_manager = RunManager(
         settings,
         config_store,
         providers or ModelProviderClient(settings),
-        model or ModelRouter(),
+        model or ModelRouter(adapter),
+        knowledge=KnowledgeClient(settings),
+        index=KnowledgeIndexReader(index_client),
+        searcher=HybridSearcher(adapter),
+        index_client=index_client,
     )
 
     @asynccontextmanager

@@ -6,6 +6,8 @@
 import asyncio
 import time
 
+from agents.knowledge_retrieval.agent import AgentFinishArgs, finish_tool_definition
+from agents.knowledge_retrieval.response import validate_answer
 from core.errors import BUDGET_EXHAUSTED_MESSAGE, INTERNAL_ERROR_MESSAGE, RUN_CANCELLED_MESSAGE
 from core.logger import get_logger
 from harness.action.plane import ActionPlane, FatalActionError
@@ -23,7 +25,7 @@ from harness.middleware import (
 from harness.models import RunContext, RunOutcome, RunState, TokenUsage, ToolExchange
 from harness.state import RunStateMachine
 from harness.trace.middleware import TraceMiddleware
-from harness.verify.framework import VerifierFramework
+from harness.verify.framework import VerificationIssue, VerificationReport, VerifierFramework
 from models.base import ChatModel
 from models.catalog import ModelError
 
@@ -63,9 +65,16 @@ class Harness:
                 *self._custom_middlewares,
                 NoProgressMiddleware(),
                 TraceMiddleware(events),
-            ]
+            ],
+            events=events,
         )
+        signal_attempts = 0
         try:
+            pre_run_error = None
+            try:
+                decision = await chain.invoke(Hook.BEFORE_RUN, context)
+            except Exception as error:
+                pre_run_error = error
             await events.emit(
                 "run.started",
                 {
@@ -73,9 +82,11 @@ class Harness:
                     "agentVersion": context.agent.version,
                     "model": context.request.model or context.agent.main_model,
                     "scope": context.request.scope.model_dump(by_alias=True) if context.request.scope else None,
+                    "scopeSummary": context.scope_summary,
                 },
             )
-            decision = await chain.invoke(Hook.BEFORE_RUN, context)
+            if pre_run_error is not None:
+                raise pre_run_error
             if self._short_circuited(decision):
                 await self._finish_short_circuit(context, events, machine, chain, decision)
                 return
@@ -87,6 +98,8 @@ class Harness:
                     await self._finish_short_circuit(context, events, machine, chain, decision)
                     return
                 tools = [] if context.force_finish else self._registry.definitions(context.agent.tools)
+                if context.agent.terminal_tool:
+                    tools.append(finish_tool_definition())
                 prepared = await self._builder.build(context, tools)
                 decision = await chain.invoke(Hook.AFTER_PREPARE, context, prepared)
                 if self._short_circuited(decision):
@@ -100,7 +113,7 @@ class Harness:
                     await self._finish_short_circuit(context, events, machine, chain, decision)
                     return
                 context.model_turns += 1
-                calls, turn_usage = await self._call_model(context, events, prepared)
+                calls, turn_usage, finish_signal = await self._call_model(context, events, prepared)
                 await self._add_usage(context, events, turn_usage)
                 await chain.invoke(
                     Hook.AFTER_MODEL,
@@ -127,6 +140,74 @@ class Harness:
                     context.error_category = "NO_PROGRESS"
                     context.error_message = BUDGET_EXHAUSTED_MESSAGE
                     await self._fail(context, events, machine, chain)
+                    return
+                if context.agent.terminal_tool:
+                    if finish_signal is None:
+                        if signal_attempts == 0:
+                            signal_attempts += 1
+                            context.hints.append("未收到结构化终态，请使用 agent_finish 提交结果。")
+                            continue
+                        context.error_category = "VALIDATION_FAILED"
+                        context.error_message = INTERNAL_ERROR_MESSAGE
+                        await self._fail(context, events, machine, chain)
+                        return
+                    await self._transition(context, events, machine, chain, RunState.VERIFYING)
+                    decision = await chain.invoke(Hook.BEFORE_VERIFY, context)
+                    if self._short_circuited(decision):
+                        await self._finish_short_circuit(context, events, machine, chain, decision)
+                        return
+                    validated = validate_answer(
+                        context.answer,
+                        finish_signal,
+                        context.workspace.evidence,
+                        context.scope_summary,
+                    )
+                    base_report = self._verifier.verify(context)
+                    report = VerificationReport(
+                        issues=[
+                            *base_report.issues,
+                            *(VerificationIssue(code, code) for code in validated.issues),
+                        ]
+                    )
+                    await chain.invoke(Hook.AFTER_VERIFY, context, report)
+                    if not report.passed:
+                        if context.verification_attempts == 0:
+                            context.verification_attempts += 1
+                            context.hints.append(
+                                "引用或终态验证未通过: "
+                                + ",".join(issue.code for issue in report.issues)
+                            )
+                            context.answer = ""
+                            await self._transition(context, events, machine, chain, RunState.RUNNING)
+                            continue
+                        context.error_category = "VALIDATION_FAILED"
+                        context.error_message = INTERNAL_ERROR_MESSAGE
+                        await self._fail(context, events, machine, chain)
+                        return
+                    context.answer = validated.answer
+                    context.outcome = validated.outcome
+                    for index, item, snippet in validated.citations:
+                        await events.emit(
+                            "citation",
+                            {
+                                "index": index,
+                                "evidenceId": item.evidence_id,
+                                "sourceType": item.source_type,
+                                "sourceId": item.source_id,
+                                "title": item.title,
+                                "locator": item.locator,
+                                "snippet": snippet,
+                                "stale": item.stale,
+                                "authority": item.authority,
+                                "kbId": item.kb_id,
+                                "kbName": item.kb_name,
+                                "permissionBasis": item.permission_basis,
+                            },
+                        )
+                    if context.answer:
+                        await events.emit("text.delta", {"delta": context.answer})
+                    await self._transition(context, events, machine, chain, RunState.COMPLETED)
+                    await self._finish(context, events)
                     return
                 await self._transition(context, events, machine, chain, RunState.VERIFYING)
                 decision = await chain.invoke(Hook.BEFORE_VERIFY, context)
@@ -188,6 +269,9 @@ class Harness:
     async def _call_model(self, context: RunContext, events: EventBus, prepared):
         calls = []
         usage = TokenUsage()
+        buffered_text = []
+        finish_signal = None
+        structured = context.agent.terminal_tool is not None
         async for chunk in self._model.stream(
             context.request.model or context.agent.main_model,
             context.model_snapshot,
@@ -198,13 +282,26 @@ class Harness:
         ):
             self._check_cancelled(context)
             if chunk.text_delta:
-                context.answer += chunk.text_delta
-                await events.emit("text.delta", {"delta": chunk.text_delta})
+                if structured:
+                    buffered_text.append(chunk.text_delta)
+                else:
+                    context.answer += chunk.text_delta
+                    await events.emit("text.delta", {"delta": chunk.text_delta})
             if chunk.usage:
                 usage = usage.plus(chunk.usage)
             if chunk.tool_calls:
-                calls.extend(chunk.tool_calls)
-        return calls, usage
+                for call in chunk.tool_calls:
+                    if structured and call.name == context.agent.terminal_tool:
+                        if finish_signal is not None or calls:
+                            raise ValueError("Agent finish signal must be the only terminal tool call")
+                        finish_signal = AgentFinishArgs.model_validate(call.arguments)
+                    else:
+                        if finish_signal is not None:
+                            raise ValueError("Agent finish signal cannot be combined with another tool call")
+                        calls.append(call)
+        if structured:
+            context.answer = "".join(buffered_text) if finish_signal is not None else ""
+        return calls, usage, finish_signal
 
     async def _act(self, context: RunContext, events: EventBus, calls):
         specs = [self._registry.get(call.name) for call in calls]

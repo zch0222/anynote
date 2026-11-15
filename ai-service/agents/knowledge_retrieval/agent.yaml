@@ -1,0 +1,14 @@
+name: knowledge-retrieval
+version: "1"
+goal: 基于用户可访问的知识证据回答问题。
+main_model: agent_main
+compact_model: fast
+tools:
+  - kb_list
+  - kb_outline
+  - kb_search
+  - kb_grep
+  - kb_read
+  - kb_query
+  - kb_related
+terminal_tool: agent_finish

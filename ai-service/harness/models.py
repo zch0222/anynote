@@ -91,7 +91,7 @@ class RunRequest(BaseModel):
 
     run_id: str = Field(min_length=1, max_length=128)
     input: str = Field(min_length=1)
-    agent: Literal["minimal"] = "minimal"
+    agent: Literal["minimal", "knowledge-retrieval"] = "minimal"
     conversation_id: str | int | None = None
     history: list[ChatMessage] = Field(default_factory=list)
     scope: RunScope | None = None
@@ -262,6 +262,8 @@ class AgentDefinition(BaseModel):
     main_model: str = "agent_main"
     compact_model: str = "fast"
     tools: list[str] = Field(default_factory=list)
+    terminal_tool: str | None = None
+    context_policy: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -340,6 +342,7 @@ class RunContext:
     outcome: RunOutcome | None = None
     error_category: str | None = None
     error_message: str | None = None
+    scope_summary: str | None = None
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     action_signatures: list[str] = field(default_factory=list)
     evidence_fingerprints: list[str] = field(default_factory=list)

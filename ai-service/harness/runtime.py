@@ -7,14 +7,23 @@ import asyncio
 import time
 from dataclasses import dataclass
 
-from agents.minimal.agent import load_minimal_agent
+from elasticsearch import AsyncElasticsearch
+
+from agents import load_agent
+from clients.knowledge import KnowledgeClient
 from clients.model_provider import ModelProviderClient
 from core.config import RuntimeConfigStore, Settings
 from core.errors import RUN_CANCELLED_MESSAGE, RUN_NOT_FOUND_MESSAGE, ApiError
 from harness.events import EventBus
+from harness.action.registry import ToolRegistry
 from harness.loop import Harness
 from harness.models import RunContext, RunOutcome, RunRequest, RunState
 from models.base import ChatModel
+from retrieval.index_reader import KnowledgeIndexReader
+from retrieval.search import HybridSearcher
+from retrieval.session import RetrievalSessionMiddleware, RetrievalSessionStore
+from tools.knowledge import register_knowledge_tools
+from tools.knowledge.common import KnowledgeToolContext
 
 
 @dataclass
@@ -39,11 +48,27 @@ class RunManager:
         config_store: RuntimeConfigStore,
         providers: ModelProviderClient,
         model: ChatModel,
+        knowledge: KnowledgeClient | None = None,
+        index: KnowledgeIndexReader | None = None,
+        searcher: HybridSearcher | None = None,
+        index_client: AsyncElasticsearch | None = None,
     ):
         self._settings = settings
         self._config_store = config_store
         self._providers = providers
-        self._harness = Harness(model)
+        self._retrieval_store = RetrievalSessionStore(knowledge, index) if knowledge is not None else None
+        self._index_client = index_client
+        self._registry = ToolRegistry()
+        self._middlewares = []
+        if self._retrieval_store is not None and searcher is not None:
+            register_knowledge_tools(
+                self._registry,
+                KnowledgeToolContext(store=self._retrieval_store, searcher=searcher),
+            )
+            self._middlewares.append(
+                RetrievalSessionMiddleware(self._retrieval_store, self._registry.get("kb_search"))
+            )
+        self._harness = Harness(model, registry=self._registry, middlewares=self._middlewares)
         self._sessions: dict[str, RunSession] = {}
 
     async def create(self, request: RunRequest, access_token: str) -> RunSession:
@@ -56,11 +81,15 @@ class RunManager:
         self._purge_finished()
         if request.run_id in self._sessions:
             raise ApiError(400, "A0160", "请求参数错误")
+        if request.agent == "knowledge-retrieval" and (
+            self._retrieval_store is None or not self._middlewares
+        ):
+            raise ApiError(503, "A0503", "服务暂时不可用，请稍后重试")
         snapshot = await self._providers.snapshot()
         runtime = self._config_store.get().harness
         context = RunContext(
             request=request,
-            agent=load_minimal_agent(),
+            agent=load_agent(request.agent),
             runtime=runtime,
             model_snapshot=snapshot,
             access_token=access_token,
@@ -118,6 +147,8 @@ class RunManager:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._sessions.clear()
+        if self._index_client is not None:
+            await self._index_client.close()
 
     async def _execute(self, session: RunSession) -> None:
         try:

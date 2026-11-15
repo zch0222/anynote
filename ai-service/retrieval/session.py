@@ -3,6 +3,8 @@
 @author 称霸幼儿园
 """
 
+import asyncio
+import time
 from collections.abc import Awaitable
 from typing import Any, TypeVar
 
@@ -13,8 +15,9 @@ from clients.knowledge import KnowledgeClient
 from core.logger import get_logger
 from harness.action.plane import FatalActionError, ToolExecutionError
 from harness.action.policy import BoundAction
+from harness.action.registry import ToolSpec
 from harness.middleware import HarnessMiddleware, Hook, MiddlewareContext, MiddlewareDecision
-from harness.models import ActionErrorCategory, RunScope
+from harness.models import ActionErrorCategory, RunContext, RunScope
 from models.catalog import ModelCatalogSnapshot
 from retrieval.evidence import EvidenceRegistry
 from retrieval.index_reader import KnowledgeIndexReader
@@ -57,6 +60,7 @@ class RetrievalSession:
         self.index = index
         self.evidence = EvidenceRegistry()
         self._scope: KnowledgeScope | None = None
+        self.prefetched = False
         self._logger = get_logger(__name__)
 
     @property
@@ -227,6 +231,25 @@ class RetrievalSessionStore:
             self._sessions[action.run_id] = session
         return session
 
+    def for_run(self, run: RunContext) -> RetrievalSession:
+        """取得或创建运行级检索会话。
+
+        :param run: 当前运行上下文
+        :return: 检索会话
+        """
+        session = self._sessions.get(run.run_id)
+        if session is None:
+            session = RetrievalSession(
+                run_id=run.run_id,
+                access_token=run.access_token,
+                run_scope=run.request.scope,
+                snapshot=run.model_snapshot,
+                knowledge=self._knowledge,
+                index=self._index,
+            )
+            self._sessions[run.run_id] = session
+        return session
+
     def release(self, run_id: str) -> None:
         """释放运行的会话。
 
@@ -239,20 +262,123 @@ class RetrievalSessionStore:
 
 
 class RetrievalSessionMiddleware(HarnessMiddleware):
-    """运行结束时释放检索会话。
+    """准备权限范围、首轮检索并管理检索会话生命周期。
 
     @author 称霸幼儿园
     """
 
-    def __init__(self, store: RetrievalSessionStore):
+    def __init__(self, store: RetrievalSessionStore, prefetch_tool: ToolSpec | None = None):
         self._store = store
+        self._prefetch_tool = prefetch_tool
 
     async def handle(self, context: MiddlewareContext) -> MiddlewareDecision:
-        """在 AFTER_RUN 释放会话，其余挂载点放行。
+        """准备权限范围、预取首轮证据并在运行结束时释放会话。
 
         :param context: 中间件输入
         :return: 放行决定
         """
+        run = context.run
+        if run.agent.name != "knowledge-retrieval":
+            if context.hook == Hook.AFTER_RUN:
+                self._store.release(run.run_id)
+            return MiddlewareDecision()
+
+        if context.hook == Hook.BEFORE_RUN:
+            session = self._store.for_run(run)
+            try:
+                scope = await session.scope()
+            except Exception:
+                run.scope_summary = self._scope_summary(run.request.scope, None)
+                raise
+            run.scope_summary = self._scope_summary(run.request.scope, scope)
+        elif context.hook == Hook.BEFORE_PREPARE and self._prefetch_tool is not None:
+            session = self._store.for_run(run)
+            if not session.prefetched:
+                session.prefetched = True
+                await self._prefetch(context)
         if context.hook == Hook.AFTER_RUN:
             self._store.release(context.run.run_id)
         return MiddlewareDecision()
+
+    async def _prefetch(self, context: MiddlewareContext) -> None:
+        """以原始问题执行一次检索并写入证据工作区。
+
+        :param context: Harness 挂载点输入
+        """
+        from tools.knowledge.args import KbSearchArgs
+
+        started = time.monotonic()
+        call_id = f"prefetch-{context.run.run_id}"
+        if context.events is not None:
+            await context.events.emit(
+                "tool.started",
+                {
+                    "callId": call_id,
+                    "name": self._prefetch_tool.name,
+                    "summary": self._prefetch_tool.summary,
+                },
+            )
+        try:
+            arguments = KbSearchArgs(query=context.run.request.input)
+            action = BoundAction(
+                run_id=context.run.run_id,
+                agent_version=context.run.agent.version,
+                access_token=context.run.access_token,
+                tool=self._prefetch_tool,
+                arguments=arguments,
+                scope=context.run.request.scope,
+                model_snapshot=context.run.model_snapshot,
+            )
+            output = await asyncio.wait_for(
+                self._prefetch_tool.handler(arguments, action),
+                timeout=context.run.runtime.tool_timeout_s,
+            )
+            context.run.workspace.add_evidence(output.evidence or [])
+            result = {
+                "callId": call_id,
+                "name": self._prefetch_tool.name,
+                "status": "PARTIAL" if output.partial else "SUCCESS",
+                "hitCount": len(output.evidence or []),
+                "durationMs": int((time.monotonic() - started) * 1000),
+                "errorCategory": None,
+                "retryable": False,
+            }
+        except ToolExecutionError as error:
+            context.run.hints.append(f"首轮检索未完成：{error}")
+            result = {
+                "callId": call_id,
+                "name": self._prefetch_tool.name,
+                "status": "FAILED",
+                "hitCount": 0,
+                "durationMs": int((time.monotonic() - started) * 1000),
+                "errorCategory": error.category.value,
+                "retryable": error.retryable,
+            }
+        except TimeoutError:
+            context.run.hints.append("首轮检索未完成：TOOL_TIMEOUT")
+            result = {
+                "callId": call_id,
+                "name": self._prefetch_tool.name,
+                "status": "FAILED",
+                "hitCount": 0,
+                "durationMs": int((time.monotonic() - started) * 1000),
+                "errorCategory": ActionErrorCategory.TOOL_TIMEOUT.value,
+                "retryable": True,
+            }
+        if context.events is not None:
+            await context.events.emit("tool.finished", result)
+
+    @staticmethod
+    def _scope_summary(run_scope: RunScope | None, scope: KnowledgeScope | None) -> str:
+        """生成只含本次范围名称与实体标识的摘要。
+
+        :param run_scope: 请求中的检索范围
+        :param scope: note 权限确认后的范围
+        :return: 检索范围摘要
+        """
+        if run_scope is None or run_scope.is_default:
+            return "默认范围"
+        names = {item.kb_id: item.name for item in scope.knowledge_bases} if scope is not None else {}
+        values = [names.get(kb_id) or str(kb_id) for kb_id in run_scope.knowledge_base_ids]
+        values.extend(run_scope.refs)
+        return "、".join(dict.fromkeys(values)) or "默认范围"

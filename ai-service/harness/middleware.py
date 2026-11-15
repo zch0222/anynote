@@ -70,6 +70,7 @@ class MiddlewareContext:
     run: RunContext
     hook: Hook
     payload: Any = None
+    events: Any = None
 
 
 class HarnessMiddleware:
@@ -93,8 +94,9 @@ class MiddlewareChain:
     @author 称霸幼儿园
     """
 
-    def __init__(self, middlewares: list[HarnessMiddleware] | None = None):
+    def __init__(self, middlewares: list[HarnessMiddleware] | None = None, events: Any = None):
         self._middlewares = middlewares or []
+        self._events = events
 
     async def invoke(
         self,
@@ -111,7 +113,7 @@ class MiddlewareChain:
         """
         combined = MiddlewareDecision(payload=payload)
         for middleware in self._middlewares:
-            context = MiddlewareContext(run=run, hook=hook, payload=combined.payload)
+            context = MiddlewareContext(run=run, hook=hook, payload=combined.payload, events=self._events)
             decision = await middleware.handle(context)
             if decision.type == DecisionType.MODIFY:
                 combined.type = DecisionType.MODIFY

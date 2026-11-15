@@ -89,7 +89,7 @@ class ContextBuilder:
         :return: 编译后的上下文
         """
         additional_usage = TokenUsage()
-        history = list(run.history)
+        history = list(run.history) if run.agent.context_policy.get("history_enabled", True) else []
         if len(history) > run.runtime.history_compaction_threshold:
             split = len(history) - run.runtime.history_recent_messages
             summary, additional_usage = await self._compactor.compact(run, history[:split])
@@ -134,6 +134,7 @@ class ContextBuilder:
         runtime = {
             "date": datetime.now(UTC).date().isoformat(),
             "scope": run.request.scope.model_dump(by_alias=True) if run.request.scope else None,
+            "contextPolicy": run.agent.context_policy,
             "modelTurnsRemaining": max(0, run.runtime.model_turns - run.model_turns),
             "toolCallsRemaining": max(0, run.runtime.tool_calls - run.tool_calls),
             "hints": run.hints,

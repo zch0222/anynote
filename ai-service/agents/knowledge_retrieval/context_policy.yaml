@@ -1,0 +1,5 @@
+history_enabled: true
+evidence_trust_level: UNTRUSTED_CONTENT
+evidence_id_prefix: E
+citation_style: numeric-brackets
+max_clarification_questions: 1

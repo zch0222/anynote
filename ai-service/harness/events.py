@@ -39,6 +39,7 @@ class EventBus:
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=256)
         self._sequence = 0
         self._closed = False
+        self._started = False
 
     async def emit(self, event_type: str, data: dict[str, Any] | None = None) -> RunEvent:
         """生成并发布事件。
@@ -56,6 +57,8 @@ class EventBus:
             data=data or {},
         )
         if not self._closed:
+            if event_type != "heartbeat":
+                self._started = True
             await self._queue.put(event)
         return event
 
@@ -74,7 +77,8 @@ class EventBus:
                     timeout=self._heartbeat_interval_s,
                 )
             except TimeoutError:
-                await self.emit("heartbeat")
+                if self._started:
+                    await self.emit("heartbeat")
                 continue
             if event is None:
                 break
