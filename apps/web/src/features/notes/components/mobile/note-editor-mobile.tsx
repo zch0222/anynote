@@ -1,7 +1,6 @@
 "use client";
 
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
-import type { AiContinueFn } from "@/components/editor/presets/types";
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
 import { EditorSkeleton } from "@/components/loading/skeletons";
@@ -13,7 +12,6 @@ import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { useMoveNoteMutation } from "@/features/notes/use-move-note";
 import { useNoteEditorSession } from "@/features/notes/use-note-editor-session";
-import { continueWriting } from "@/lib/ai/sse";
 import { formatRelativeTime } from "@/lib/format-time";
 import { mobileNoteHistoryHref } from "@/lib/mobile/hrefs";
 import { FolderInput, History, MoreHorizontal, Trash2 } from "lucide-react";
@@ -54,17 +52,6 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
     confirmLeave,
   } = session;
   const { flush, resolveConflict, retry, status, lastSavedAt, conflict, failure } = save;
-
-  const handleAiContinue = useCallback<AiContinueFn>(
-    async ({ contextTail, signal, onDelta, onError }) => {
-      try {
-        await continueWriting({ contextTail, signal, onDelta });
-      } catch (error) {
-        onError?.(error);
-      }
-    },
-    [],
-  );
 
   const handleMove = useCallback(
     async (targetBaseId: number) => {
@@ -258,7 +245,6 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
             editable={collab.editable}
             onChange={handleContentChange}
             onReady={handleEditorReady}
-            aiContinue={handleAiContinue}
             uploadFn={uploadFn}
             fill
             className="min-h-0 flex-1"

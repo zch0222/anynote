@@ -1,6 +1,6 @@
 "use client";
 
-import { streamAiSse } from "@/lib/ai/sse";
+import { streamAiSse, toAiRunErrorMessage } from "@/lib/ai/sse";
 import { type StoreApi, type UseBoundStore, create } from "zustand";
 import type { ChatMessage } from "./schemas";
 
@@ -21,6 +21,9 @@ export type StreamMessage = {
   content: string;
   /** 助手消息仍在接收增量。 */
   streaming?: boolean;
+  runId?: string | null;
+  citations?: Array<Record<string, unknown>>;
+  outcome?: string | null;
 };
 
 export type ChatSession = {
@@ -36,7 +39,7 @@ export type SendArgs = {
   prompt: string;
   /** 已有会话 id；新会话不传，完成后经 onConversationCreated 回填。 */
   conversationId?: number;
-  /** 传入时走文档 RAG 端点（/rag/query/docs/v1）。 */
+  /** 传入时走单资料范围的 Agent 运行端点。 */
   docId?: number;
   model?: string;
   /** 新会话首条消息收到 conversationId 时回调（页面据此回填路由）。 */
@@ -80,10 +83,18 @@ function abortError(error: unknown): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : "AI 请求失败，请稍后重试";
+  return toAiRunErrorMessage(error instanceof Error ? error.message : null);
 }
 
-const controllers = new Map<string, AbortController>();
+type ActiveRun = {
+  key: string;
+  controller: AbortController;
+  runId: string | null;
+  cancelRequested: boolean;
+  cancellationSent: boolean;
+};
+
+const controllers = new Map<string, ActiveRun>();
 
 type ChatStreamStore = UseBoundStore<StoreApi<ChatStreamState>>;
 
@@ -101,13 +112,22 @@ function ensureChatStreamStore(): ChatStreamStore {
         if (get().sessions[args.key]?.status === "streaming") {
           return;
         }
+        const controller = new AbortController();
+        const activeRun: ActiveRun = {
+          key: args.key,
+          controller,
+          runId: null,
+          cancelRequested: false,
+          cancellationSent: false,
+        };
+        controllers.set(args.key, activeRun);
         const assistantId = messageId();
         set((current) => {
-          const session = current.sessions[args.key] ?? EMPTY_SESSION;
+          const session = current.sessions[activeRun.key] ?? EMPTY_SESSION;
           return {
             sessions: {
               ...current.sessions,
-              [args.key]: {
+              [activeRun.key]: {
                 ...session,
                 messages: [
                   ...session.messages,
@@ -121,35 +141,61 @@ function ensureChatStreamStore(): ChatStreamStore {
           };
         });
 
-        const controller = new AbortController();
-        controllers.set(args.key, controller);
-
         let failed = false;
+        let finished = false;
         try {
           await streamAiSse({
-            path: args.docId ? "/rag/query/docs/v1" : "/chat/completions",
-            body: {
-              prompt: args.prompt,
-              ...(args.docId ? { docId: args.docId } : {}),
-              ...(args.conversationId ? { conversationId: args.conversationId } : {}),
-              ...(args.model ? { model: args.model } : {}),
-            },
+            path: args.docId ? "/rag/query/docs/v1" : "/v1/agent/runs",
+            body: args.docId
+              ? {
+                  prompt: args.prompt,
+                  docId: args.docId,
+                  ...(args.conversationId ? { conversationId: args.conversationId } : {}),
+                  ...(args.model ? { model: args.model } : {}),
+                }
+              : {
+                  input: args.prompt,
+                  agent: "knowledge-retrieval",
+                  ...(args.conversationId ? { conversationId: args.conversationId } : {}),
+                  ...(args.model ? { model: args.model } : {}),
+                },
             signal: controller.signal,
-            onChunk: (chunk) => {
-              if (chunk.status === "failed") {
-                failed = true;
+            onEvent: (event) => {
+              if (event.type === "run.started") {
+                const active = controllers.get(activeRun.key);
+                if (active) {
+                  active.runId = event.runId;
+                  if (typeof event.data.conversationId === "number" && !get().sessions[activeRun.key]?.conversationId) {
+                    const conversationId = event.data.conversationId;
+                    set((current) => {
+                      const session = current.sessions[activeRun.key];
+                      return session
+                        ? {
+                            sessions: {
+                              ...current.sessions,
+                              [activeRun.key]: { ...session, conversationId },
+                            },
+                          }
+                        : current;
+                    });
+                    args.onConversationCreated?.(conversationId);
+                  }
+                  if (active.cancelRequested) {
+                    sendCancellation(active);
+                  }
+                }
               }
-              if (chunk.message) {
-                const delta = chunk.message;
+              if (event.type === "text.delta" && typeof event.data.delta === "string") {
+                const delta = event.data.delta;
                 set((current) => {
-                  const session = current.sessions[args.key];
+                  const session = current.sessions[activeRun.key];
                   if (!session) {
                     return current;
                   }
                   return {
                     sessions: {
                       ...current.sessions,
-                      [args.key]: {
+                      [activeRun.key]: {
                         ...session,
                         messages: session.messages.map((message) =>
                           message.id === assistantId
@@ -161,54 +207,94 @@ function ensureChatStreamStore(): ChatStreamStore {
                   };
                 });
               }
-              if (chunk.conversationId && !get().sessions[args.key]?.conversationId) {
-                const conversationId = chunk.conversationId;
-                set((current) => {
-                  const session = current.sessions[args.key];
-                  if (!session) {
-                    return current;
-                  }
-                  return {
-                    sessions: {
-                      ...current.sessions,
-                      [args.key]: { ...session, conversationId },
-                    },
-                  };
-                });
-                args.onConversationCreated?.(conversationId);
+              if (event.type === "error") {
+                const category = event.data.category;
+                if (category !== "CANCELLED") {
+                  failed = true;
+                  set((current) => {
+                    const session = current.sessions[activeRun.key];
+                    return session
+                      ? {
+                          sessions: {
+                            ...current.sessions,
+                            [activeRun.key]: {
+                              ...session,
+                              error: toAiRunErrorMessage(event.data.message),
+                            },
+                          },
+                        }
+                      : current;
+                  });
+                }
+              }
+              if (event.type === "run.finished") {
+                finished = true;
+                if (event.data.outcome === "FAILED") {
+                  failed = true;
+                  set((current) => {
+                    const session = current.sessions[activeRun.key];
+                    return session && !session.error
+                      ? {
+                          sessions: {
+                            ...current.sessions,
+                            [activeRun.key]: {
+                              ...session,
+                              error: toAiRunErrorMessage(null),
+                            },
+                          },
+                        }
+                      : current;
+                  });
+                }
               }
             },
           });
+          if (!finished) {
+            failed = true;
+            set((current) => {
+              const session = current.sessions[activeRun.key];
+              return session && !session.error
+                ? {
+                    sessions: {
+                      ...current.sessions,
+                      [activeRun.key]: { ...session, error: toAiRunErrorMessage(null) },
+                    },
+                  }
+                : current;
+            });
+          }
         } catch (error) {
           failed = !abortError(error);
           if (failed) {
             set((current) => {
-              const session = current.sessions[args.key];
+              const session = current.sessions[activeRun.key];
               if (!session) {
                 return current;
               }
               return {
                 sessions: {
                   ...current.sessions,
-                  [args.key]: { ...session, error: errorMessage(error) },
+                  [activeRun.key]: { ...session, error: errorMessage(error) },
                 },
               };
             });
           }
         } finally {
-          controllers.delete(args.key);
+          if (controllers.get(activeRun.key) === activeRun) {
+            controllers.delete(activeRun.key);
+          }
           set((current) => {
-            const session = current.sessions[args.key];
+            const session = current.sessions[activeRun.key];
             if (!session) {
               return current;
             }
             return {
               sessions: {
                 ...current.sessions,
-                [args.key]: {
+                [activeRun.key]: {
                   ...session,
-                  // 后端 failed 收尾事件不带错误文案时补默认提示，保证 UI 有错误块可渲染
-                  error: failed && !session.error ? "AI 服务返回失败，请稍后重试" : session.error,
+                  // 终态事件未提供错误说明时使用已确认的运行失败文案。
+                  error: failed && !session.error ? toAiRunErrorMessage(null) : session.error,
                   status: failed ? "error" : "idle",
                   messages: session.messages.map((message) =>
                     message.streaming ? { ...message, streaming: false } : message,
@@ -222,7 +308,14 @@ function ensureChatStreamStore(): ChatStreamStore {
       },
 
       abort: (key) => {
-        controllers.get(key)?.abort();
+        const active = controllers.get(key);
+        if (!active) {
+          return;
+        }
+        active.cancelRequested = true;
+        if (active.runId) {
+          sendCancellation(active);
+        }
       },
 
       hydrate: (key, messages, conversationId) => {
@@ -241,6 +334,9 @@ function ensureChatStreamStore(): ChatStreamStore {
                     id: String(message.id ?? messageId()),
                     role: message.role as 0 | 1,
                     content: message.content ?? "",
+                    ...(message.runId ? { runId: message.runId } : {}),
+                    citations: message.citations ?? [],
+                    ...(message.outcome ? { outcome: message.outcome } : {}),
                   })),
                 status: "idle",
                 error: null,
@@ -255,6 +351,12 @@ function ensureChatStreamStore(): ChatStreamStore {
         if (from === to) {
           return;
         }
+        const active = controllers.get(from);
+        if (active) {
+          controllers.delete(from);
+          active.key = to;
+          controllers.set(to, active);
+        }
         set((current) => {
           const session = current.sessions[from];
           if (!session) {
@@ -268,7 +370,7 @@ function ensureChatStreamStore(): ChatStreamStore {
       },
 
       clear: (key) => {
-        controllers.get(key)?.abort();
+        get().abort(key);
         set((current) => {
           if (!(key in current.sessions)) {
             return current;
@@ -284,6 +386,26 @@ function ensureChatStreamStore(): ChatStreamStore {
 }
 
 export const useChatStreamStore: ChatStreamStore = ensureChatStreamStore();
+
+function sendCancellation(active: ActiveRun): void {
+  if (!active.runId || active.cancellationSent) {
+    return;
+  }
+  active.cancellationSent = true;
+  void cancelAgentRun(active.runId).catch(() => {
+    active.cancellationSent = false;
+  });
+}
+
+async function cancelAgentRun(runId: string): Promise<void> {
+  const { aiApi } = await import("@/lib/api/openapi");
+  const result = await aiApi.POST("/v1/agent/runs/{runId}/cancel", {
+    params: { path: { runId } },
+  });
+  if (result.error) {
+    throw new Error("Agent run cancellation failed");
+  }
+}
 
 /** 订阅单个会话（不存在的 key 返回稳定的空会话，避免无限重渲染）。 */
 export function useChatSession(key: string): ChatSession {

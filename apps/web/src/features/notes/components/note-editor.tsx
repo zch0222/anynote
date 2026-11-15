@@ -1,7 +1,6 @@
 "use client";
 
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
-import type { AiContinueFn } from "@/components/editor/presets/types";
 import { noteHistoryHref } from "@/components/layout/navigation";
 import { EditorSkeleton } from "@/components/loading/skeletons";
 import { ConflictDialog } from "@/components/note/conflict-dialog";
@@ -63,20 +62,6 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   const { flush, resolveConflict, retry, status, lastSavedAt, conflict, failure } = save;
   /** 删除确认框。 */
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  // Slash 菜单「AI 续写」：流式增量写回编辑器里的 aiBlock 节点（引用须稳定，否则编辑器会重建）
-  const handleAiContinue = useCallback<AiContinueFn>(
-    async ({ contextTail, signal, onDelta, onError }) => {
-      try {
-        // SSE 消费层只在真的用到「AI 续写」时才加载，静态引入会压进编辑器首屏
-        const { continueWriting } = await import("@/lib/ai/sse");
-        await continueWriting({ contextTail, signal, onDelta });
-      } catch (error) {
-        onError?.(error);
-      }
-    },
-    [],
-  );
 
   async function handleDelete() {
     try {
@@ -295,7 +280,6 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
                   editable={collab.editable}
                   onChange={handleContentChange}
                   onReady={handleEditorReady}
-                  aiContinue={handleAiContinue}
                   uploadFn={uploadFn}
                   // 设计稿的桌面编辑器没有常驻工具条（移动端才有，见 note-editor-mobile）
                   toolbar="none"

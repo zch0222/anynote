@@ -35,6 +35,20 @@ export const chatMessageSchema = z.object({
   role: z.number().nullish(),
   orderIndex: z.number().nullish(),
   createTime: z.string().nullish(),
+  runId: z.string().nullish(),
+  citations: z
+    .union([z.string(), z.array(z.record(z.string(), z.unknown()))])
+    .nullish()
+    .transform((value) => {
+      if (typeof value !== "string") return value ?? [];
+      try {
+        const parsed: unknown = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }),
+  outcome: z.string().nullish(),
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 

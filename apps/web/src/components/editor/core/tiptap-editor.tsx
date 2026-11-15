@@ -4,7 +4,6 @@ import { BubbleMenuPortal } from "@/components/editor/core/bubble-menu";
 import { Toolbar, type ToolbarVariant } from "@/components/editor/core/toolbar";
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
 import {
-  type AiContinueFn,
   type CollaborationBinding,
   type PresetName,
   presets,
@@ -28,8 +27,6 @@ export type TiptapEditorProps = {
   placeholder?: string;
   /** 图片上传实现；不传时图片相关入口会提示未配置。 */
   uploadFn?: UploadFn;
-  /** 「AI 续写」实现；不传时 slash 菜单对应项提示未接入。 */
-  aiContinue?: AiContinueFn;
   /**
    * 协同绑定（配合 `preset="collaborative"`）。传了之后正文的唯一真相是 Y.Doc，
    * `value` 不再作为初始内容、也不再受控回灌。
@@ -81,7 +78,6 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
     editable = true,
     placeholder,
     uploadFn,
-    aiContinue,
     collaboration,
     onReady,
     toolbar,
@@ -113,7 +109,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
 
   const editor = useEditor(
     {
-      extensions: presets[preset]({ uploadFn, aiContinue, placeholder, collaboration }),
+      extensions: presets[preset]({ uploadFn, placeholder, collaboration }),
       ...(isCollaborative ? {} : { content: value }),
       editable: effectiveEditable,
       immediatelyRender: false,
@@ -141,7 +137,7 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
         },
       },
     },
-    [preset, placeholder, uploadFn, aiContinue, collaboration],
+    [preset, placeholder, uploadFn, collaboration],
   );
 
   // 外部 value 变化（如切换示例内容）时同步进编辑器，避免覆盖用户正在输入的内容。

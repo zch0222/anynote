@@ -1,12 +1,11 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { DEFAULT_AI_MODEL, loadPreferredModel } from "@/features/ai/model-options";
 import { NEW_CONVERSATION_KEY, aiQueryKeys } from "@/features/ai/query-keys";
 import { type SendArgs, useChatSession, useChatStreamStore } from "@/features/ai/use-chat-stream";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { ChatInput } from "./chat-input";
 import { MessageItem } from "./message-item";
 
@@ -36,11 +35,6 @@ export function ChatPanel({
   const send = useChatStreamStore((state) => state.send);
   const abort = useChatStreamStore((state) => state.abort);
   const queryClient = useQueryClient();
-  const [model, setModel] = useState<string>(DEFAULT_AI_MODEL);
-
-  useEffect(() => {
-    setModel(loadPreferredModel());
-  }, []);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -76,7 +70,6 @@ export function ChatPanel({
       if (conversationId > 0) {
         args.conversationId = conversationId;
       }
-      args.model = model;
       stickToBottomRef.current = true;
       void send(args);
     },
@@ -84,7 +77,6 @@ export function ChatPanel({
       sessionKey,
       docId,
       session.conversationId,
-      model,
       send,
       onConversationCreated,
       onSettled,

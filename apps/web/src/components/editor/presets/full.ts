@@ -30,6 +30,6 @@ export function full(ctx: PresetContext): Extensions {
     // 「只有一个 H1、后面没有正文」的空态引导（走查 E-06）
     EmptyBodyHint.configure({ placeholder: ctx.placeholder }),
     CharacterCount,
-    SlashCommand.configure({ uploadFn: ctx.uploadFn, aiContinue: ctx.aiContinue }),
+    SlashCommand.configure({ uploadFn: ctx.uploadFn }),
   ];
 }

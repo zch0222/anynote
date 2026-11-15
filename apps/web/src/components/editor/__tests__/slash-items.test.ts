@@ -39,6 +39,10 @@ describe("Slash 菜单命令清单", () => {
     expect(filterSlashItems(items, "   ")).toHaveLength(items.length);
   });
 
+  it("不再提供 AI 续写入口", () => {
+    expect(filterSlashItems(items, "AI 续写")).toEqual([]);
+  });
+
   it("按中文标题过滤", () => {
     const result = filterSlashItems(items, "表格");
     expect(result.map((item) => item.title)).toEqual(["表格"]);
