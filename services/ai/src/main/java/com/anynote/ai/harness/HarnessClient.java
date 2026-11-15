@@ -1,9 +1,12 @@
 package com.anynote.ai.harness;
 
 import com.anynote.ai.harness.dto.FastApiChatCompletionsDTO;
+import com.anynote.ai.harness.dto.HarnessRunCancelDTO;
 import com.anynote.ai.harness.dto.FastApiWhisperTranscriptionDTO;
 import com.anynote.ai.harness.vo.FastApiChatCompletionsVO;
 import com.anynote.ai.harness.vo.FastApiWhisperTranscriptionVO;
+import com.anynote.ai.model.dto.HarnessRunRequestDTO;
+import com.anynote.ai.model.vo.AgentRunEventVO;
 import com.anynote.ai.properties.AiHarnessProperties;
 import com.anynote.ai.properties.AiWhisperProperties;
 import com.anynote.ai.run.AiCallContext;
@@ -50,6 +53,8 @@ public class HarnessClient {
     private static final String CHAT_PATH = "/v1/chat/completions";
 
     private static final String TRANSCRIPTION_PATH = "/v1/audio/transcriptions";
+
+    private static final String AGENT_RUN_PATH = "/internal/v1/runs";
 
     private final RestClient.Builder loadBalancedRestClientBuilder;
 
@@ -129,6 +134,45 @@ public class HarnessClient {
                                     Consumer<FastApiWhisperTranscriptionVO> consumer) {
         streamWithRetry(aiWhisperProperties.getServiceName(), TRANSCRIPTION_PATH, request, context, data -> consumer.accept(
                 gson.fromJson(data, FastApiWhisperTranscriptionVO.class)));
+    }
+
+    /**
+     * 流式调用 Python Agent 运行端点。
+     *
+     * @param context 调用身份上下文
+     * @param request Agent 运行请求
+     * @param consumer 运行事件回调
+     */
+    public void streamAgentRun(AiCallContext context, HarnessRunRequestDTO request,
+                               Consumer<AgentRunEventVO> consumer) {
+        streamWithRetry(aiHarnessProperties.getServiceName(), AGENT_RUN_PATH, request, context,
+                data -> consumer.accept(gson.fromJson(data, AgentRunEventVO.class)));
+    }
+
+    /**
+     * 请求 Python Harness 取消指定运行。
+     *
+     * @param context 调用身份上下文
+     * @param runId 运行标识
+     * @return 上游取消结果
+     */
+    public HarnessRunCancelDTO cancelAgentRun(AiCallContext context, String runId) {
+        try {
+            String response = loadBalancedRestClientBuilder.clone()
+                    .baseUrl("http://" + aiHarnessProperties.getServiceName())
+                    .build()
+                    .post()
+                    .uri(AGENT_RUN_PATH + "/{runId}/cancel", runId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .headers(headers -> applyHeaders(headers, context))
+                    .retrieve()
+                    .body(String.class);
+            com.google.gson.JsonObject envelope = com.google.gson.JsonParser.parseString(response)
+                    .getAsJsonObject();
+            return gson.fromJson(envelope.getAsJsonObject("data"), HarnessRunCancelDTO.class);
+        } catch (Exception error) {
+            throw new HarnessClientException("AI 服务调用失败", error, true);
+        }
     }
 
     private void streamWithRetry(String serviceName, String path, Object request, AiCallContext context,

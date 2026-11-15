@@ -4,6 +4,15 @@ import com.anynote.ai.properties.AiRunProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -60,5 +69,57 @@ class AiRunLimiterTest {
         limiter.releaseDb();
         limiter.acquireDb();
         limiter.releaseDb();
+    }
+
+    /**
+     * 并发释放与重新占用时，同一用户的活跃运行数仍受上限约束。
+     */
+    @Test
+    @DisplayName("同用户并发释放与占用不突破用户上限")
+    void doesNotRemoveCounterWhileAnotherRunIsActive() throws Exception {
+        AiRunProperties properties = new AiRunProperties();
+        properties.setMaxConcurrentPerUser(1);
+        properties.setMaxConcurrentTotal(20);
+        properties.setDbBulkhead(1);
+        AiRunLimiter limiter = new AiRunLimiter(properties);
+        int workers = 8;
+        int iterations = 5_000;
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger active = new AtomicInteger();
+        AtomicInteger maximum = new AtomicInteger();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        ExecutorService executor = Executors.newFixedThreadPool(workers);
+        List<Future<?>> futures = new ArrayList<>();
+        try {
+            for (int worker = 0; worker < workers; worker++) {
+                futures.add(executor.submit(() -> {
+                    start.await();
+                    for (int iteration = 0; iteration < iterations; iteration++) {
+                        if (!limiter.tryAcquire(1L)) {
+                            Thread.yield();
+                            continue;
+                        }
+                        int current = active.incrementAndGet();
+                        maximum.accumulateAndGet(current, Math::max);
+                        if (current > 1) {
+                            failure.compareAndSet(null, new AssertionError("per-user limit exceeded"));
+                        }
+                        Thread.yield();
+                        active.decrementAndGet();
+                        limiter.release(1L);
+                    }
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<?> future : futures) {
+                future.get();
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(failure.get()).isNull();
+        assertThat(maximum.get()).isLessThanOrEqualTo(1);
     }
 }

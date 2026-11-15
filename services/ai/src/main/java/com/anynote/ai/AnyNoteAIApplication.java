@@ -14,7 +14,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @MapperScan({"com.anynote.common.datascope.mapper", "com.anynote.ai.mapper"})
 @EnableDiscoveryClient
 
-//@EnableScheduling
+@EnableScheduling
 public class AnyNoteAIApplication {
 
     public static void main(String[] args) {

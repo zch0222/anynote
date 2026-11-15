@@ -3,13 +3,13 @@ package com.anynote.ai.controller;
 import com.anynote.ai.api.model.bo.ChatConversationDeleteParam;
 import com.anynote.ai.api.model.bo.ChatConversationQueryParam;
 import com.anynote.ai.api.model.bo.ChatConversationUpdateParam;
-import com.anynote.ai.api.model.dto.ChatCompletionsDTO;
 import com.anynote.ai.api.model.dto.ChatConversationListDTO;
 import com.anynote.ai.api.model.dto.ChatConversationUpdateDTO;
 import com.anynote.ai.model.dto.MoocVideoSummarizeDTO;
 import com.anynote.ai.model.dto.NoteTaskSubmissionAnalyzeDTO;
 import com.anynote.ai.model.vo.ChatCompletionsEventVO;
 import com.anynote.ai.model.vo.ChatConversationInfoVO;
+import com.anynote.ai.model.vo.ChatConversationDetailVO;
 import com.anynote.ai.model.vo.ChatConversationVO;
 import com.anynote.ai.run.AiCallContext;
 import com.anynote.ai.service.ChatService;
@@ -17,7 +17,6 @@ import com.anynote.common.security.token.AccessTokenProvider;
 import com.anynote.common.security.token.TokenUtil;
 import com.anynote.core.constant.Constants;
 import com.anynote.core.utils.ResUtil;
-import com.anynote.core.utils.StringUtils;
 import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.core.web.model.bo.ResData;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +25,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
+import com.google.gson.Gson;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -54,6 +54,9 @@ public class ChatController {
     @Resource
     private AccessTokenProvider accessTokenProvider;
 
+    @Resource
+    private Gson gson;
+
     @DeleteMapping("conversations/{id}")
     public ResData<String> deleteConversation(@PathVariable("id") Long id) {
         chatService.deleteChatConversationById(ChatConversationDeleteParam.builder()
@@ -71,10 +74,11 @@ public class ChatController {
 
     @Operation(summary = "根据id获取对话")
     @GetMapping(path = "conversations/{id}")
-    public ResData<ChatConversationVO> getChatConversationById(@PathVariable("id") Long id) {
-        return ResUtil.success(chatService.getChatConversationById(ChatConversationQueryParam.builder()
+    public ResData<ChatConversationDetailVO> getChatConversationById(@PathVariable("id") Long id) {
+        ChatConversationVO conversation = chatService.getChatConversationById(ChatConversationQueryParam.builder()
                 .conversationId(id)
-                .build()));
+                .build());
+        return ResUtil.success(ChatConversationDetailVO.from(conversation, gson));
     }
 
     @Operation(summary = "更新对话")
@@ -86,39 +90,6 @@ public class ChatController {
                 .conversationId(id)
                 .title(chatConversationUpdateDTO.getTitle())
                 .build(), currentContext()));
-    }
-
-    /**
-     * AI 助手问答接口，按 conversationId 是否为空选择新会话或已有会话。
-     *
-     * @param chatCompletionsDTO 问答请求
-     * @return SSE 事件流
-     */
-    @Operation(summary = "AI助手问答（SSE流式）")
-    @PostMapping(path = "completions")
-    @ApiResponse(responseCode = "200", description = "SSE 事件流",
-            content = @Content(mediaType = MediaType.TEXT_EVENT_STREAM_VALUE,
-                    schema = @Schema(implementation = ChatCompletionsEventVO.class)))
-    public SseEmitter chatCompletions(@Valid @RequestBody ChatCompletionsDTO chatCompletionsDTO) {
-        AiCallContext context = currentContext();
-        if (StringUtils.isNotNull(chatCompletionsDTO.getConversationId())) {
-            return chatService.authedChatCompletions(chatCompletionsDTO, context);
-        }
-        return chatService.chatCompletions(chatCompletionsDTO, context);
-    }
-
-    /**
-     * 无会话流式问答。
-     *
-     * @param chatCompletionsDTO 问答请求
-     * @return SSE 事件流
-     */
-    @PostMapping(path = "completions/noConversation")
-    @ApiResponse(responseCode = "200", description = "SSE 事件流",
-            content = @Content(mediaType = MediaType.TEXT_EVENT_STREAM_VALUE,
-                    schema = @Schema(implementation = ChatCompletionsEventVO.class)))
-    public SseEmitter chatCompletionsNoConversation(@Valid @RequestBody ChatCompletionsDTO chatCompletionsDTO) {
-        return chatService.chatNoConversationCompletions(chatCompletionsDTO, currentContext());
     }
 
     /**

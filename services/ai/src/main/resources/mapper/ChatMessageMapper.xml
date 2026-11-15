@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.anynote.ai.mapper.ChatMessageMapper">
+
+    <resultMap id="ChatMessageResultMap" type="com.anynote.ai.api.model.po.ChatMessage">
+        <id property="id" column="id" />
+        <result property="conversationId" column="conversation_id" />
+        <result property="orderIndex" column="order_index" />
+        <result property="content" column="content" />
+        <result property="runId" column="run_id" />
+        <result property="citations" column="citations" />
+        <result property="outcome" column="outcome" />
+        <result property="role" column="role" />
+        <result property="type" column="type" />
+        <result property="docId" column="doc_id" />
+        <result property="deleted" column="is_delete" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
+        <result property="remark" column="remark" />
+    </resultMap>
+
+    <sql id="BaseColumnList">
+        id, conversation_id, order_index, content, run_id, citations, outcome,
+        role, type, doc_id, is_delete, create_by, create_time, update_by, update_time, remark
+    </sql>
+
+    <select id="selectConversationMessages" resultMap="ChatMessageResultMap">
+        SELECT <include refid="BaseColumnList" />
+        FROM a_chat_message
+        WHERE conversation_id = #{conversationId} AND is_delete = 0
+        ORDER BY order_index ASC
+    </select>
+
+    <select id="selectAssistantByRunId" resultMap="ChatMessageResultMap">
+        SELECT <include refid="BaseColumnList" />
+        FROM a_chat_message
+        WHERE run_id = #{runId} AND role = 1 AND is_delete = 0
+        ORDER BY order_index DESC
+        LIMIT 1
+    </select>
+
+</mapper>

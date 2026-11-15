@@ -1,9 +1,12 @@
 package com.anynote.ai.harness;
 
 import com.anynote.ai.harness.dto.FastApiChatCompletionsDTO;
+import com.anynote.ai.harness.dto.HarnessRunCancelDTO;
 import com.anynote.ai.harness.dto.FastApiWhisperTranscriptionDTO;
 import com.anynote.ai.harness.vo.FastApiChatCompletionsVO;
 import com.anynote.ai.harness.vo.FastApiWhisperTranscriptionVO;
+import com.anynote.ai.model.dto.HarnessRunRequestDTO;
+import com.anynote.ai.model.vo.AgentRunEventVO;
 import com.anynote.ai.properties.AiHarnessProperties;
 import com.anynote.ai.properties.AiWhisperProperties;
 import com.anynote.ai.run.AiCallContext;
@@ -141,6 +144,54 @@ class HarnessClientTest {
         server.verify();
         assertThat(events).hasSize(1);
         assertThat(events.get(0).getStatus()).isEqualTo("DONE");
+    }
+
+    /**
+     * 运行端点以统一事件信封解析 Harness SSE。
+     */
+    @Test
+    @DisplayName("解析 Agent 运行事件信封")
+    void parsesAgentRunEventEnvelope() {
+        server.expect(requestTo("http://anynote-ai-harness/internal/v1/runs"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header(SecurityConstants.FROM_SOURCE, SecurityConstants.INNER))
+                .andRespond(withSuccess("id: 1\nevent: run.started\ndata: "
+                        + "{\"seq\":1,\"runId\":\"run-1\",\"ts\":\"2026-11-15T00:00:00Z\","
+                        + "\"type\":\"run.started\",\"data\":{\"agent\":\"knowledge-retrieval\"}}\n\n",
+                        MediaType.TEXT_EVENT_STREAM));
+        List<AgentRunEventVO> events = new ArrayList<>();
+
+        harnessClient.streamAgentRun(callContext, HarnessRunRequestDTO.builder()
+                .runId("run-1")
+                .input("问题")
+                .agent("knowledge-retrieval")
+                .build(), events::add);
+
+        server.verify();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0).getRunId()).isEqualTo("run-1");
+        assertThat(events.get(0).getType()).isEqualTo("run.started");
+    }
+
+    /**
+     * 取消端点解析统一响应信封中的运行状态。
+     */
+    @Test
+    @DisplayName("转发 Agent 运行取消请求")
+    void sendsAgentRunCancellation() {
+        server.expect(requestTo("http://anynote-ai-harness/internal/v1/runs/run-1/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header(SecurityConstants.FROM_SOURCE, SecurityConstants.INNER))
+                .andExpect(header(SecurityConstants.ACCESS_TOKEN, "user-access-token"))
+                .andRespond(withSuccess("{\"code\":\"00000\",\"data\":{\"runId\":\"run-1\","
+                        + "\"accepted\":true,\"state\":\"CANCELLED\"}}", MediaType.APPLICATION_JSON));
+
+        HarnessRunCancelDTO result = harnessClient.cancelAgentRun(callContext, "run-1");
+
+        server.verify();
+        assertThat(result.getRunId()).isEqualTo("run-1");
+        assertThat(result.isAccepted()).isTrue();
+        assertThat(result.getState()).isEqualTo("CANCELLED");
     }
 
     private FastApiChatCompletionsDTO chatRequest() {

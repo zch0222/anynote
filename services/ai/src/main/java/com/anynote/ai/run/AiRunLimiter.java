@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AI 运行的并发限制：每用户运行数、全局运行数与数据库访问数各一个信号量。
@@ -21,7 +21,7 @@ public class AiRunLimiter {
 
     private final Semaphore dbPermits;
 
-    private final ConcurrentHashMap<Long, AtomicInteger> userRuns = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, Integer> userRuns = new ConcurrentHashMap<>();
 
     public AiRunLimiter(AiRunProperties aiRunProperties) {
         this.aiRunProperties = aiRunProperties;
@@ -37,18 +37,20 @@ public class AiRunLimiter {
      */
     public boolean tryAcquire(Long userId) {
         Long key = userId == null ? -1L : userId;
-        AtomicInteger counter = userRuns.computeIfAbsent(key, k -> new AtomicInteger());
-        while (true) {
-            int current = counter.get();
-            if (current >= aiRunProperties.getMaxConcurrentPerUser()) {
-                return false;
+        AtomicBoolean acquired = new AtomicBoolean();
+        userRuns.compute(key, (ignored, current) -> {
+            int count = current == null ? 0 : current;
+            if (count >= aiRunProperties.getMaxConcurrentPerUser()) {
+                return current;
             }
-            if (counter.compareAndSet(current, current + 1)) {
-                break;
-            }
+            acquired.set(true);
+            return count + 1;
+        });
+        if (!acquired.get()) {
+            return false;
         }
         if (!totalPermits.tryAcquire()) {
-            releaseUserCounter(key, counter);
+            decrementUserCount(key);
             return false;
         }
         return true;
@@ -61,18 +63,18 @@ public class AiRunLimiter {
      */
     public void release(Long userId) {
         Long key = userId == null ? -1L : userId;
-        AtomicInteger counter = userRuns.get(key);
-        if (counter != null) {
-            releaseUserCounter(key, counter);
+        if (decrementUserCount(key)) {
+            totalPermits.release();
         }
-        totalPermits.release();
     }
 
-    private void releaseUserCounter(Long key, AtomicInteger counter) {
-        int remaining = counter.decrementAndGet();
-        if (remaining <= 0) {
-            userRuns.remove(key, counter);
-        }
+    private boolean decrementUserCount(Long key) {
+        AtomicBoolean released = new AtomicBoolean();
+        userRuns.computeIfPresent(key, (ignored, current) -> {
+            released.set(true);
+            return current <= 1 ? null : current - 1;
+        });
+        return released.get();
     }
 
     /**
