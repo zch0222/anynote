@@ -1,7 +1,7 @@
 # AI 模块重构
 
 > 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-15
-> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0–M16.5 已完成（2026-11-15），M16.6 可开工**
+> 状态：**D1–D17、P1/P2 均已拍板；无生产环境；M16.0–M16.3、M16.5 的完成记录保留；M16.4 已重开修复并等待最终验收，M16.6 的索引依赖尚未关闭**
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 测试节](../../README.md#测试)、[`README.md` Git 工作流](../../README.md#git-工作流)、
 > [`docs/refactor/FRONTEND_MILESTONES.md`](../refactor/FRONTEND_MILESTONES.md) M7.6（AI 流式全链路的后端缺口，本方案解除）
 > 参考：AI Agent Handbook（白皮书），本机路径 `D:\code\ai-agent-handbook`，调研时的提交为 `754ec0c`
@@ -53,6 +53,9 @@ AI 相关模块（`services/ai`、`ai-service/` 以及连带的 Feign 契约与�
 | [AI_REFACTOR_PLAN.md](./AI_REFACTOR_PLAN.md) | **总体方案**：三段架构、Harness 的八类构建对象、Java 去 WebFlux 与虚拟线程、Python 技术栈与接入方式、数据与契约变更、安全、风险 |
 | [KNOWLEDGE_RETRIEVAL_PLAN.md](./KNOWLEDGE_RETRIEVAL_PLAN.md) | **知识检索方案**：语料模型、两段式权限、索引管线、七种检索通道、工具清单、证据与引用、评测 |
 | [AI_MILESTONES.md](./AI_MILESTONES.md) | **执行计划**：M16.0 – M16.9 的任务清单、验收标准、依赖关系与粗估工期 |
+| [M16_4_ACCEPTANCE_AUDIT.md](./M16_4_ACCEPTANCE_AUDIT.md) | **失败验收报告**：M16.4 的独立核对、故障证据与 F01–F10 修复要求，保留历史 |
+| [M16_4_REPAIR_ACCEPTANCE.md](./M16_4_REPAIR_ACCEPTANCE.md) | **修复验收记录**：本次最终代码的可重跑命令、固定九类与时延结果、原始输出、清理及真实语义未覆盖项 |
+| [索引完整性修复契约](../../.claude/openspec/changes/2026-11-15-indexing-integrity-repair.md) | **已确认契约**：写入/对账完整性、版本重建、向量开关、结构切分、水位和用户可见说明 |
 
 阅读顺序：本页 → AI_RESEARCH → AI_REFACTOR_PLAN → KNOWLEDGE_RETRIEVAL_PLAN → AI_MILESTONES。
 
@@ -113,6 +116,6 @@ AI 相关模块（`services/ai`、`ai-service/` 以及连带的 Feign 契约与�
 3. ~~M16.1（Java 去 WebFlux、D9 改名、P1 凭据基础设施）~~（2026-11-14 完成，验收记录见 `AI_MILESTONES.md` M16.1）。
 4. ~~M16.2（Harness 内核、供应商管理）~~（2026-11-14 完成，验收记录见 `AI_MILESTONES.md` M16.2）。
 5. ~~M16.3（note 知识访问层）~~（2026-11-14 完成，验收记录见 `AI_MILESTONES.md` M16.3）。
-6. ~~M16.4（索引管线）~~（2026-11-15 完成，验收记录见 `AI_MILESTONES.md` M16.4）。
+6. **M16.4（索引管线）已重开修复**：原完成记录的缺口见 [独立失败报告](./M16_4_ACCEPTANCE_AUDIT.md)，按[修复契约](../../.claude/openspec/changes/2026-11-15-indexing-integrity-repair.md)实施；固定九类、故障路径与时延已通过，真实语义评测未执行，详见 [新验收记录](./M16_4_REPAIR_ACCEPTANCE.md)。
 7. ~~M16.5（检索通道与七个工具）~~（2026-11-15 完成，验收记录见 `AI_MILESTONES.md` M16.5；检索参数管理页面待补）。
-8. M16.6（知识检索 Agent 与运行端点）可以开工；真实 Python 上游与真实模型链路在 M16.8 复核。
+8. M16.6（知识检索 Agent 与运行端点）的索引前置验收尚未关闭；在 M16.4 最终验收完成后确认依赖就绪，真实 Python 上游与真实模型链路仍在 M16.8 复核。
