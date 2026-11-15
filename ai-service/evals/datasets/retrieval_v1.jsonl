@@ -1,0 +1,24 @@
+{"id": "kw-inverted", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "倒排索引", "expected": ["a_inverted"], "forbidden": ["b_secret", "b_words"]}
+{"id": "quote-meeting", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "“先落库再转发”", "expected": ["a_meeting"], "forbidden": ["b_secret", "b_words"]}
+{"id": "code-deploy", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "docker compose --env-file", "expected": ["a_deploy"], "forbidden": ["b_secret", "b_words"]}
+{"id": "number-order", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "AN-202611-0042", "expected": ["a_order"], "forbidden": ["b_secret", "b_words"]}
+{"id": "number-port", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "18091 端口", "expected": ["a_deploy"], "forbidden": ["b_secret", "b_words"]}
+{"id": "concept-index", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "正排索引和倒排索引有什么区别", "expected": ["a_inverted"], "forbidden": ["b_secret", "b_words"]}
+{"id": "concept-cache", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "Cache-Aside 过期时间", "expected": ["a_cache"], "forbidden": ["b_secret", "b_words"]}
+{"id": "concept-permission", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "五位权限串的各个位", "expected": ["a_permission"], "forbidden": ["b_secret", "b_words"]}
+{"id": "concept-review", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "线性代数什么时候复习", "expected": ["a_review"], "forbidden": ["b_secret", "b_words"]}
+{"id": "side-travel", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "出门要带护照吗", "expected": ["a_travel"], "forbidden": ["b_secret", "b_words"]}
+{"id": "side-reading", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "没有银弹", "expected": ["a_reading"], "forbidden": ["b_secret", "b_words"]}
+{"id": "task-alice", "scenario": "keyword", "persona": "alice", "tool": "kb_search", "input": "复习总结 提交", "expected": ["a_task"], "forbidden": ["b_secret", "b_words"]}
+{"id": "scope-side-only", "scenario": "no_answer", "persona": "alice", "tool": "kb_search", "input": "倒排索引", "scope": {"knowledgeBaseIds": ["kb_side"]}, "expected": [], "forbidden": ["a_inverted", "b_secret", "b_words"]}
+{"id": "no-answer", "scenario": "no_answer", "persona": "alice", "tool": "kb_search", "input": "量子纠缠的实验装置", "expected": [], "forbidden": ["b_secret", "b_words"]}
+{"id": "synonym-index", "scenario": "synonym", "persona": "alice", "tool": "kb_search", "input": "把词语对应到文章集合的那种数据结构", "expected": ["a_inverted"], "forbidden": ["b_secret", "b_words"]}
+{"id": "neg-bob-inverted", "scenario": "permission_negative", "persona": "bob", "tool": "kb_search", "input": "倒排索引", "expected": [], "forbidden": ["a_inverted", "a_deploy", "a_order", "a_review", "a_meeting", "a_cache", "a_permission", "a_travel", "a_reading"]}
+{"id": "neg-bob-travel", "scenario": "permission_negative", "persona": "bob", "tool": "kb_search", "input": "护照", "expected": [], "forbidden": ["a_travel", "a_reading"]}
+{"id": "neg-bob-meeting", "scenario": "permission_negative", "persona": "bob", "tool": "kb_search", "input": "“先落库再转发”", "expected": [], "forbidden": ["a_meeting"]}
+{"id": "neg-alice-secret", "scenario": "permission_negative", "persona": "alice", "tool": "kb_search", "input": "青蛙跳水", "expected": [], "forbidden": ["b_secret", "b_words"]}
+{"id": "own-bob-secret", "scenario": "keyword", "persona": "bob", "tool": "kb_search", "input": "青蛙跳水", "expected": ["b_secret"], "forbidden": ["a_inverted", "a_meeting", "a_travel"]}
+{"id": "own-bob-words", "scenario": "keyword", "persona": "bob", "tool": "kb_search", "input": "背单词", "expected": ["b_words"], "forbidden": ["a_review", "a_travel"]}
+{"id": "task-bob", "scenario": "keyword", "persona": "bob", "tool": "kb_search", "input": "复习总结", "expected": ["a_task"], "forbidden": ["a_review", "a_inverted"]}
+{"id": "count-alice-notes", "scenario": "list_count", "persona": "alice", "tool": "kb_query", "arguments": {"entity": "note", "kb_ids": ["kb_main"], "with_count": true}, "expectedCount": 7, "forbidden": ["b_secret", "b_words"]}
+{"id": "count-bob-notes", "scenario": "list_count", "persona": "bob", "tool": "kb_query", "arguments": {"entity": "note", "kb_ids": ["kb_main"], "with_count": true}, "expectedCount": 2, "forbidden": ["a_inverted", "a_deploy", "a_order", "a_review", "a_meeting", "a_cache", "a_permission"]}

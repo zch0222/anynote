@@ -6,6 +6,7 @@
 import asyncio
 import hashlib
 import json
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -13,7 +14,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 from core.config import HarnessRuntimeSettings
@@ -48,6 +49,40 @@ class ChatMessage(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
+SCOPE_REF_PATTERN = re.compile(r"^(kb|note|doc|mooc|mooc_item|task):[1-9]\d*$")
+
+
+class RunScope(BaseModel):
+    """一次运行的检索范围：两个列表都为空是默认范围，非空时只能收窄。
+
+    @author 称霸幼儿园
+    """
+
+    knowledge_base_ids: list[int] = Field(default_factory=list)
+    refs: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    @field_validator("knowledge_base_ids")
+    @classmethod
+    def _positive_ids(cls, value: list[int]) -> list[int]:
+        if any(item <= 0 for item in value):
+            raise ValueError("knowledgeBaseIds must be positive")
+        return list(dict.fromkeys(value))
+
+    @field_validator("refs")
+    @classmethod
+    def _valid_refs(cls, value: list[str]) -> list[str]:
+        if any(not SCOPE_REF_PATTERN.match(item) for item in value):
+            raise ValueError("refs must be entity refs")
+        return list(dict.fromkeys(value))
+
+    @property
+    def is_default(self) -> bool:
+        """返回是否为默认范围。"""
+        return not self.knowledge_base_ids and not self.refs
+
+
 class RunRequest(BaseModel):
     """内部运行请求。
 
@@ -59,7 +94,7 @@ class RunRequest(BaseModel):
     agent: Literal["minimal"] = "minimal"
     conversation_id: str | int | None = None
     history: list[ChatMessage] = Field(default_factory=list)
-    scope: dict[str, Any] | None = None
+    scope: RunScope | None = None
     model: str | None = None
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
@@ -137,6 +172,11 @@ class EvidenceItem(BaseModel):
     selected_reason: str | None = None
     title: str | None = None
     locator: dict[str, Any] | None = None
+    kb_id: int | None = None
+    kb_name: str | None = None
+    authority: str | None = None
+    stale: bool = False
+    retrieval: dict[str, Any] | None = None
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -172,6 +212,7 @@ class ActionResult(BaseModel):
     duration_ms: int = 0
     action_key: str = Field(default="", exclude=True)
     evidence: list[EvidenceItem] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -191,6 +232,19 @@ class Observation(BaseModel):
     retryable: bool = False
     duration_ms: int = 0
     action_key: str = Field(default="", exclude=True)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class ToolExchange(BaseModel):
+    """一轮模型发起的工具调用及其观察结果。
+
+    @author 称霸幼儿园
+    """
+
+    calls: list[ToolCall] = Field(default_factory=list)
+    observations: list[Observation] = Field(default_factory=list)
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -274,6 +328,7 @@ class RunContext:
     state: RunState = RunState.CREATED
     history: list[ChatMessage] = field(default_factory=list)
     observations: list[Observation] = field(default_factory=list)
+    tool_exchanges: list[ToolExchange] = field(default_factory=list)
     workspace: RunWorkspace = field(default_factory=RunWorkspace)
     usage: TokenUsage = field(default_factory=TokenUsage)
     model_turns: int = 0

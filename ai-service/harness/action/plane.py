@@ -35,6 +35,17 @@ class ToolExecutionError(RuntimeError):
         self.retryable = retryable
 
 
+class FatalActionError(RuntimeError):
+    """不可降级的工具错误，行动面不吞掉，由循环直接结束运行。
+
+    @author 称霸幼儿园
+    """
+
+    def __init__(self, category: str, message: str = ""):
+        super().__init__(message)
+        self.category = category
+
+
 class ActionPlane:
     """统一执行模型发起的工具请求。
 
@@ -68,6 +79,8 @@ class ActionPlane:
             access_token=run.access_token,
             tool=spec,
             arguments=arguments,
+            scope=run.request.scope,
+            model_snapshot=run.model_snapshot,
         )
         policy = self._policy.evaluate(run, action)
         if not policy.allowed:
@@ -87,6 +100,7 @@ class ActionPlane:
                 duration_ms=self._duration(started),
                 action_key=self._key(call),
                 evidence=output.evidence or [],
+                diagnostics=output.diagnostics or {},
             )
         except TimeoutError:
             return self._failure(call, ActionErrorCategory.TOOL_TIMEOUT, started, retryable=True)
@@ -94,7 +108,7 @@ class ActionPlane:
             result = self._failure(call, error.category, started, retryable=error.retryable)
             result.content = str(error)
             return result
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, FatalActionError):
             raise
         except Exception:
             return self._failure(call, ActionErrorCategory.INTERNAL, started)
@@ -122,6 +136,7 @@ class ActionPlane:
             retryable=result.retryable,
             duration_ms=result.duration_ms,
             action_key=result.action_key,
+            diagnostics=result.diagnostics,
         )
         run.observations.append(observation)
         return observation

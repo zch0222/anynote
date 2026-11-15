@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from harness.action.registry import ToolSpec
-from harness.models import RunContext
+from harness.models import RunContext, RunScope
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,8 @@ class BoundAction:
     access_token: str = field(repr=False)
     tool: ToolSpec
     arguments: Any
+    scope: RunScope | None = None
+    model_snapshot: Any = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)

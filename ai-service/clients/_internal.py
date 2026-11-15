@@ -18,10 +18,11 @@ class InternalServiceError(RuntimeError):
     @author 称霸幼儿园
     """
 
-    def __init__(self, service: str, message: str):
+    def __init__(self, service: str, message: str, code: str | None = None):
         super().__init__(f"{service}: {message}")
         self.service = service
         self.message = message
+        self.code = code
 
 
 def internal_headers(settings: Settings) -> dict[str, str]:
@@ -54,5 +55,6 @@ def unwrap_res_data(response: httpx.Response, service: str) -> Any:
         raise InternalServiceError(service, "响应不是合法 JSON") from error
     if not isinstance(envelope, dict) or envelope.get("code") != "00000":
         msg = envelope.get("msg", "未知错误") if isinstance(envelope, dict) else "响应格式错误"
-        raise InternalServiceError(service, str(msg))
+        code = envelope.get("code") if isinstance(envelope, dict) else None
+        raise InternalServiceError(service, str(msg), str(code) if code is not None else None)
     return envelope.get("data")

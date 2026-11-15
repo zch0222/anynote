@@ -12,6 +12,16 @@ from indexing.models import (
     KnowledgeDocumentBatch,
     KnowledgeExportPage,
 )
+from retrieval.models import (
+    AuthorizationItem,
+    ContentResult,
+    KnowledgeScope,
+    OutlineResult,
+    QueryResult,
+    StatsResult,
+)
+
+SERVICE_NAME = "anynote-note"
 
 
 class KnowledgeClient:
@@ -105,6 +115,98 @@ class KnowledgeClient:
             documents.extend(page.documents)
             missing_refs.extend(page.missing_refs)
         return KnowledgeDocumentBatch(documents=documents, missing_refs=missing_refs)
+
+    async def scope(
+        self,
+        access_token: str,
+        knowledge_base_ids: list[int] | None = None,
+        refs: list[str] | None = None,
+    ) -> KnowledgeScope:
+        """以用户身份获取检索范围。
+
+        :param access_token: 当前运行的用户令牌
+        :param knowledge_base_ids: 显式知识库，为空表示默认范围
+        :param refs: 显式实体引用
+        :return: 检索范围
+        """
+        payload = {"knowledgeBaseIds": knowledge_base_ids or None, "refs": refs or None}
+        data = await self._post_user("/internal/v1/knowledge/scope", access_token, payload)
+        return KnowledgeScope.model_validate(data)
+
+    async def authorize(self, access_token: str, items: list[tuple[str, str | None]]) -> list[AuthorizationItem]:
+        """以用户身份批量确认可读性，单批不超过 100 条。
+
+        :param access_token: 当前运行的用户令牌
+        :param items: （基础引用, 附属类型）列表
+        :return: 与输入同序的结果
+        """
+        if not items:
+            return []
+        payload = {"items": [{"ref": ref, "subtype": subtype} for ref, subtype in items]}
+        data = await self._post_user("/internal/v1/knowledge/authorize", access_token, payload)
+        return [AuthorizationItem.model_validate(item) for item in (data or {}).get("items") or []]
+
+    async def content(self, access_token: str, request: dict) -> ContentResult:
+        """以用户身份读取正文片段。
+
+        :param access_token: 当前运行的用户令牌
+        :param request: `/content` 请求体（ref、subtype、heading、行或时间范围、offset）
+        :return: 正文片段
+        """
+        data = await self._post_user("/internal/v1/knowledge/content", access_token, request)
+        return ContentResult.model_validate(data)
+
+    async def outline(
+        self,
+        access_token: str,
+        ref: str,
+        parent_id: int | None = None,
+        page_num: int = 1,
+        page_size: int = 50,
+    ) -> OutlineResult:
+        """以用户身份读取目录或大纲。
+
+        :param access_token: 当前运行的用户令牌
+        :param ref: 知识库、慕课、笔记或文档类条目引用
+        :param parent_id: 慕课下的上级条目 id
+        :param page_num: 页码，从 1 开始
+        :param page_size: 每页条数（1–100）
+        :return: 分页目录
+        """
+        payload = {"ref": ref, "parentId": parent_id, "pageNum": page_num, "pageSize": page_size}
+        data = await self._post_user("/internal/v1/knowledge/outline", access_token, payload)
+        return OutlineResult.model_validate(data)
+
+    async def query(self, access_token: str, request: dict) -> QueryResult:
+        """以用户身份执行白名单结构化查询。
+
+        :param access_token: 当前运行的用户令牌
+        :param request: `/query` 请求体
+        :return: 结果行与计数
+        """
+        data = await self._post_user("/internal/v1/knowledge/query", access_token, request)
+        return QueryResult.model_validate(data)
+
+    async def stats(self, access_token: str, knowledge_base_ids: list[int] | None = None) -> StatsResult:
+        """以用户身份统计各知识库的直属可读内容。
+
+        :param access_token: 当前运行的用户令牌
+        :param knowledge_base_ids: 显式知识库，为空表示默认范围
+        :return: 各知识库计数
+        """
+        payload = {"knowledgeBaseIds": knowledge_base_ids or None}
+        data = await self._post_user("/internal/v1/knowledge/stats", access_token, payload)
+        return StatsResult.model_validate(data)
+
+    async def _post_user(self, path: str, access_token: str, payload: dict):
+        headers = internal_headers(self._settings)
+        headers["accessToken"] = access_token
+        try:
+            async with self._client_factory(timeout=self._timeout_s) as client:
+                response = await client.post(f"{self._base_url}{path}", json=payload, headers=headers)
+        except httpx.HTTPError as error:
+            raise InternalServiceError(SERVICE_NAME, type(error).__name__) from error
+        return unwrap_res_data(response, SERVICE_NAME)
 
     async def update_doc_index_status(self, doc_id: int, status: int) -> None:
         """回写资料索引状态。

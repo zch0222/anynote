@@ -19,6 +19,7 @@ class ToolOutput:
     content: str
     evidence: list[EvidenceItem] | None = None
     partial: bool = False
+    diagnostics: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

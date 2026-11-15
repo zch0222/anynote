@@ -33,7 +33,9 @@ cryptography==50.0.2
 elastic-transport==8.19.0
     # via elasticsearch
 elasticsearch==8.7.0
-    # via -r requirements/indexing.in
+    # via
+    #   -r requirements/indexing.in
+    #   -r requirements/online.in
 fastapi==0.115.3
     # via -r requirements/online.in
 frozenlist==1.8.0

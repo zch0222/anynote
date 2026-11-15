@@ -48,6 +48,7 @@ class TraceMiddleware(HarnessMiddleware):
                     "status": item.status.value,
                     "errorCategory": item.error_category.value if item.error_category else None,
                     "durationMs": item.duration_ms,
+                    "diagnostics": item.diagnostics,
                 }
                 for item in context.payload or []
             ]

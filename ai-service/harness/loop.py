@@ -8,7 +8,7 @@ import time
 
 from core.errors import BUDGET_EXHAUSTED_MESSAGE, INTERNAL_ERROR_MESSAGE, RUN_CANCELLED_MESSAGE
 from core.logger import get_logger
-from harness.action.plane import ActionPlane
+from harness.action.plane import ActionPlane, FatalActionError
 from harness.action.registry import ToolRegistry
 from harness.budget import BudgetMiddleware, NoProgressMiddleware
 from harness.context.builder import ContextBuilder
@@ -20,7 +20,7 @@ from harness.middleware import (
     MiddlewareChain,
     MiddlewareDecision,
 )
-from harness.models import RunContext, RunOutcome, RunState, TokenUsage
+from harness.models import RunContext, RunOutcome, RunState, TokenUsage, ToolExchange
 from harness.state import RunStateMachine
 from harness.trace.middleware import TraceMiddleware
 from harness.verify.framework import VerifierFramework
@@ -72,7 +72,7 @@ class Harness:
                     "agent": context.agent.name,
                     "agentVersion": context.agent.version,
                     "model": context.request.model or context.agent.main_model,
-                    "scope": context.request.scope,
+                    "scope": context.request.scope.model_dump(by_alias=True) if context.request.scope else None,
                 },
             )
             decision = await chain.invoke(Hook.BEFORE_RUN, context)
@@ -168,6 +168,10 @@ class Harness:
             context.error_category = error.category
             context.error_message = error.message
             await self._fail(context, events, machine, chain)
+        except FatalActionError as error:
+            context.error_category = error.category
+            context.error_message = INTERNAL_ERROR_MESSAGE
+            await self._fail(context, events, machine, chain)
         except Exception as error:
             self._logger.error(
                 "Harness 运行异常 runId=%s type=%s",
@@ -190,7 +194,7 @@ class Harness:
             prepared.messages,
             prepared.tools,
             context.runtime,
-            bool(context.request.scope or context.workspace.evidence),
+            bool(context.request.scope or context.workspace.evidence or context.tool_exchanges),
         ):
             self._check_cancelled(context)
             if chunk.text_delta:
@@ -233,6 +237,7 @@ class Harness:
                     "retryable": result.retryable,
                 },
             )
+        context.tool_exchanges.append(ToolExchange(calls=list(calls), observations=observations))
         return observations
 
     async def _add_usage(self, context: RunContext, events: EventBus, usage: TokenUsage) -> None:

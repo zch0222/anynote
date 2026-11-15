@@ -14,7 +14,7 @@ import tiktoken
 from harness.context.compaction import HistoryCompactor
 from harness.context.manifest import ContextManifest, ManifestEntry
 from harness.context.policy import EVIDENCE_BEGIN, EVIDENCE_END, PLATFORM_RULES
-from harness.models import ChatMessage, RunContext, TokenUsage
+from harness.models import ChatMessage, RunContext, TokenUsage, ToolExchange
 from models.base import ChatModel
 
 
@@ -111,13 +111,16 @@ class ContextBuilder:
         )
         fixed_tokens = sum(self._counter.count(item.content) for item in high)
         remaining = max(0, run.runtime.context_tokens - fixed_tokens)
+        exchange_messages, exchange_layers = self._exchange_messages(run.tool_exchanges, remaining // 2)
+        remaining = max(0, remaining - sum(self._counter.count(item.content) for item in exchange_layers))
         history_budget = remaining * 3 // 10
         evidence_budget = remaining - history_budget
         selected_history = self._fit_layers(history_layers, history_budget, reverse=True)
         selected_evidence = self._fit_layers(evidence_layers, evidence_budget)
         selected_history.reverse()
-        selected = [*high, *selected_history, *selected_evidence]
+        selected = [*high, *selected_history, *selected_evidence, *exchange_layers]
         messages = self._compile_messages(high, selected_history, selected_evidence)
+        messages.extend(exchange_messages)
         token_count = self._counter.count(json.dumps(messages, ensure_ascii=False))
         manifest = ContextManifest(
             run_id=run.run_id,
@@ -130,7 +133,7 @@ class ContextBuilder:
     def _fixed_layers(self, run: RunContext, tools: list[dict[str, Any]]) -> list[_Layer]:
         runtime = {
             "date": datetime.now(UTC).date().isoformat(),
-            "scope": run.request.scope,
+            "scope": run.request.scope.model_dump(by_alias=True) if run.request.scope else None,
             "modelTurnsRemaining": max(0, run.runtime.model_turns - run.model_turns),
             "toolCallsRemaining": max(0, run.runtime.tool_calls - run.tool_calls),
             "hints": run.hints,
@@ -174,6 +177,94 @@ class ContextBuilder:
             transform=transform,
             permission_basis=item.permission_basis,
         )
+
+    def _exchange_messages(
+        self,
+        exchanges: list[ToolExchange],
+        budget: int,
+    ) -> tuple[list[dict[str, Any]], list[_Layer]]:
+        """把本次运行的工具交互编译为 assistant tool_calls 与 tool 消息。
+
+        预算不足时从最早一轮开始截断 tool 消息内容，调用与结果始终成对保留。
+
+        :param exchanges: 按轮记录的工具交互
+        :param budget: 工具交互可用的 token 预算
+        :return: 消息列表与对应的清单层
+        """
+        call_layers: list[_Layer] = []
+        result_entries: list[tuple[str, str, str, str]] = []
+        for exchange in exchanges:
+            for call in exchange.calls:
+                call_layers.append(
+                    _Layer(
+                        scope="run",
+                        source_type="tool_call",
+                        source_id=call.call_id,
+                        content=json.dumps(call.arguments, ensure_ascii=False, sort_keys=True),
+                        trust_level="SYSTEM_GENERATED",
+                        version="1",
+                        selected_reason=f"模型发起的工具调用 {call.name}",
+                    )
+                )
+                observation = next(
+                    (item for item in exchange.observations if item.call_id == call.call_id),
+                    None,
+                )
+                content = observation.content if observation else ""
+                if observation and observation.result_ref:
+                    content = f"{content}\n完整结果引用: {observation.result_ref}"
+                result_entries.append((call.call_id, call.name, content, "ORIGINAL"))
+        call_tokens = sum(self._counter.count(item.content) for item in call_layers)
+        overflow = sum(self._counter.count(item[2]) for item in result_entries) - max(0, budget - call_tokens)
+        fitted: list[tuple[str, str, str, str]] = []
+        for call_id, name, content, transform in result_entries:
+            if overflow > 0:
+                tokens = self._counter.count(content)
+                kept = self._truncate(content, max(0, tokens - overflow))
+                overflow -= tokens - self._counter.count(kept)
+                if kept != content:
+                    content, transform = kept, "TRUNCATED"
+            fitted.append((call_id, name, content, transform))
+        results = {call_id: (name, content, transform) for call_id, name, content, transform in fitted}
+        messages: list[dict[str, Any]] = []
+        layers: list[_Layer] = []
+        for exchange in exchanges:
+            if not exchange.calls:
+                continue
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": call.call_id,
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.arguments, ensure_ascii=False),
+                            },
+                        }
+                        for call in exchange.calls
+                    ],
+                }
+            )
+            for call in exchange.calls:
+                name, content, transform = results[call.call_id]
+                wrapped = f"{EVIDENCE_BEGIN}\n{content}\n{EVIDENCE_END}"
+                messages.append({"role": "tool", "tool_call_id": call.call_id, "content": wrapped})
+                layers.append(
+                    _Layer(
+                        scope="run",
+                        source_type="tool_result",
+                        source_id=call.call_id,
+                        content=wrapped,
+                        trust_level="UNTRUSTED_CONTENT",
+                        version="1",
+                        selected_reason=f"工具 {name} 的观察",
+                        transform=transform,
+                    )
+                )
+        return messages, [*call_layers, *layers]
 
     def _fit_layers(self, layers: list[_Layer], budget: int, reverse: bool = False) -> list[_Layer]:
         selected = []

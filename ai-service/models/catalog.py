@@ -3,10 +3,13 @@
 @author 称霸幼儿园
 """
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 from pydantic.alias_generators import to_camel
 
 from core.errors import MODEL_UNAVAILABLE_MESSAGE
+from retrieval.settings import RetrievalSettings
 
 
 class ModelError(RuntimeError):
@@ -65,8 +68,14 @@ class ModelCatalogSnapshot(BaseModel):
     version: str
     providers: list[ProviderSnapshot] = Field(default_factory=list)
     logical_models: dict[str, LogicalModelMapping] = Field(default_factory=dict)
+    retrieval: RetrievalSettings = Field(default_factory=RetrievalSettings)
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    @field_validator("retrieval", mode="before")
+    @classmethod
+    def _default_retrieval(cls, value: Any) -> Any:
+        return {} if value is None else value
 
     def resolve(
         self,

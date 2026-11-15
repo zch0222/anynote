@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "personas": ["alice", "bob"],
+  "knowledgeBases": [
+    {"key": "kb_main", "owner": "alice", "name": "评测库甲", "members": [{"persona": "bob", "permissions": 2}]},
+    {"key": "kb_side", "owner": "alice", "name": "评测库乙", "members": []}
+  ],
+  "notes": [
+    {"key": "a_inverted", "kb": "kb_main", "author": "alice", "title": "倒排索引笔记",
+     "content": "# 倒排索引\n倒排索引把每个词项映射到包含它的文档列表，查询时先查词典再合并倒排表。\n\n## 与正排索引的区别\n正排索引按文档逐条存储词项，适合按文档取回全文；倒排索引适合按词查找文档。"},
+    {"key": "a_deploy", "kb": "kb_main", "author": "alice", "title": "部署手册",
+     "content": "# 本地部署\n开发环境启动命令：`docker compose --env-file=/dev/null up -d`。\n\n## 端口\nnote 服务监听 18091 端口，网关监听 8080 端口。"},
+    {"key": "a_order", "kb": "kb_main", "author": "alice", "title": "订单编号规则",
+     "content": "# 订单编号\n订单号格式为 AN-202611-0042：前缀 AN，中间是年月，最后是四位流水号。"},
+    {"key": "a_review", "kb": "kb_main", "author": "alice", "title": "期末复习计划",
+     "content": "# 复习安排\n第三周复习线性代数的矩阵与行列式。\n第四周复习概率论的条件概率与贝叶斯公式。"},
+    {"key": "a_meeting", "kb": "kb_main", "author": "alice", "title": "流式改造会议纪要",
+     "content": "# 结论\n会议确定长连接的处理原则是先落库再转发，断线后继续读完上游。"},
+    {"key": "a_cache", "kb": "kb_main", "author": "alice", "title": "缓存策略说明",
+     "content": "# 缓存\nRedis 缓存采用旁路模式 Cache-Aside，读取未命中时回源数据库，过期时间设为 300 秒。"},
+    {"key": "a_permission", "kb": "kb_main", "author": "alice", "title": "权限串设计",
+     "content": "# 五位权限串\n五位权限串依次是作者位、管理员位、成员位、其他用户位和匿名位，每一位取 0、4、6 或 7。"},
+    {"key": "a_travel", "kb": "kb_side", "author": "alice", "title": "旅行清单",
+     "content": "# 出门清单\n护照、充电器和雨伞必须带上。"},
+    {"key": "a_reading", "kb": "kb_side", "author": "alice", "title": "人月神话读书笔记",
+     "content": "# 要点\n书中提出没有银弹：不存在能让软件生产率提升一个数量级的单一技术。"},
+    {"key": "b_secret", "kb": "kb_main", "author": "bob", "title": "我的暗号记录",
+     "content": "# 暗号\n我和朋友约定的暗号是青蛙跳水。"},
+    {"key": "b_words", "kb": "kb_main", "author": "bob", "title": "单词学习计划",
+     "content": "# 计划\n每天背 30 个英语单词，周末复习一遍。"}
+  ],
+  "tasks": [
+    {"key": "a_task", "kb": "kb_main", "owner": "alice", "name": "提交复习总结",
+     "describe": "请在周五前提交本周的复习总结。"}
+  ]
+}
