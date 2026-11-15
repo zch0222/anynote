@@ -127,9 +127,16 @@ function EmbeddingConfigForm({
 					onChange={(event) => set("enabled", event.target.checked)}
 					className="size-4 accent-accent"
 					data-testid="embedding-enabled-input"
+					aria-describedby="embedding-toggle-description"
 				/>
 				启用向量索引
 			</label>
+			<p
+				id="embedding-toggle-description"
+				className="text-footnote text-label-secondary"
+			>
+				关闭后将停用语义检索和向量计算；已有向量保留，重新启用后执行索引对账补齐。
+			</p>
 
 			<div className="grid gap-4 sm:grid-cols-2">
 				<div className="space-y-1.5">

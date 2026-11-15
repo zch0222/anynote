@@ -67,6 +67,19 @@ beforeEach(() => {
 });
 
 describe("Embedding 模型设置卡片", () => {
+	/**
+	 * 验证关闭与重新启用向量索引的说明。
+	 * @author 称霸幼儿园
+	 */
+	it("展示已确认的向量关闭与重新启用说明", () => {
+		renderWithProviders(<EmbeddingModelSettings providers={providers} />);
+		expect(
+			screen.getByText(
+				"关闭后将停用语义检索和向量计算；已有向量保留，重新启用后执行索引对账补齐。",
+			),
+		).toBeInTheDocument();
+	});
+
 	it("支持从供应商列表选择、手动输入模型名并保存", async () => {
 		renderWithProviders(<EmbeddingModelSettings providers={providers} />);
 		expect(screen.getByText("向量索引模型（Embedding）")).toBeInTheDocument();
