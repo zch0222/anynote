@@ -14,8 +14,10 @@ import com.anynote.note.api.model.po.Note;
 import com.anynote.note.api.model.po.NoteKnowledgeBase;
 import com.anynote.note.api.model.po.NoteTask;
 import com.anynote.note.api.model.po.NoteText;
+import com.anynote.note.api.model.po.UserNoteTask;
 import com.anynote.note.constant.KnowledgeErrorConstants;
 import com.anynote.note.constant.MoocItemType;
+import com.anynote.note.enums.NoteTaskPermissions;
 import com.anynote.note.enums.KnowledgeEntityType;
 import com.anynote.note.mapper.DocMapper;
 import com.anynote.note.mapper.KnowledgeBaseMapper;
@@ -26,6 +28,7 @@ import com.anynote.note.mapper.MoocVideoItemInfoMapper;
 import com.anynote.note.mapper.NoteMapper;
 import com.anynote.note.mapper.NoteTaskMapper;
 import com.anynote.note.mapper.NoteTextMapper;
+import com.anynote.note.mapper.UserNoteTaskMapper;
 import com.anynote.note.model.bo.KnowledgeRef;
 import com.anynote.note.model.po.MoocItemPO;
 import com.anynote.note.model.po.MoocItemTextPO;
@@ -72,6 +75,7 @@ public class KnowledgeEntityServiceImpl implements KnowledgeEntityService {
     private final MoocItemTextMapper moocItemTextMapper;
     private final MoocVideoItemInfoMapper moocVideoItemInfoMapper;
     private final NoteTaskMapper noteTaskMapper;
+    private final UserNoteTaskMapper userNoteTaskMapper;
     private final RemoteFileService remoteFileService;
     private final RemoteMoocVideoSummarizeService remoteMoocVideoSummarizeService;
 
@@ -87,6 +91,7 @@ public class KnowledgeEntityServiceImpl implements KnowledgeEntityService {
                                       MoocItemTextMapper moocItemTextMapper,
                                       MoocVideoItemInfoMapper moocVideoItemInfoMapper,
                                       NoteTaskMapper noteTaskMapper,
+                                      UserNoteTaskMapper userNoteTaskMapper,
                                       RemoteFileService remoteFileService,
                                       RemoteMoocVideoSummarizeService remoteMoocVideoSummarizeService) {
         this.knowledgeBaseMapper = knowledgeBaseMapper;
@@ -98,6 +103,7 @@ public class KnowledgeEntityServiceImpl implements KnowledgeEntityService {
         this.moocItemTextMapper = moocItemTextMapper;
         this.moocVideoItemInfoMapper = moocVideoItemInfoMapper;
         this.noteTaskMapper = noteTaskMapper;
+        this.userNoteTaskMapper = userNoteTaskMapper;
         this.remoteFileService = remoteFileService;
         this.remoteMoocVideoSummarizeService = remoteMoocVideoSummarizeService;
     }
@@ -416,7 +422,10 @@ public class KnowledgeEntityServiceImpl implements KnowledgeEntityService {
                 .title(task.getTaskName())
                 .format("plain")
                 .body(includeBody ? body : null)
-                .acl(acl(task.getCreateBy(), null, null))
+                .acl(KnowledgeSourceDocumentVO.Acl.builder()
+                        .createBy(task.getCreateBy())
+                        .taskMemberIds(taskMemberIds(id))
+                        .build())
                 .authority("original")
                 .contentVersion(includeBody ? sha256(body) : null)
                 .attributes(attributes("status", task.getStatus(), "startTime", task.getStartTime(),
@@ -525,6 +534,28 @@ public class KnowledgeEntityServiceImpl implements KnowledgeEntityService {
         return attributes;
     }
 
+    /**
+     * 读取任务的有效成员（管理或提交权限），升序去重。
+     *
+     * @param taskId 任务 id
+     * @return 成员用户 id 列表
+     */
+    private List<Long> taskMemberIds(Long taskId) {
+        List<UserNoteTask> rows = userNoteTaskMapper.selectList(new LambdaQueryWrapper<UserNoteTask>()
+                .eq(UserNoteTask::getNoteTaskId, taskId)
+                .in(UserNoteTask::getPermissions, NoteTaskPermissions.MANAGE.getValue(),
+                        NoteTaskPermissions.SUBMIT.getValue()));
+        if (rows == null) {
+            return List.of();
+        }
+        return rows.stream()
+                .map(UserNoteTask::getUserId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
     private KnowledgeSourceDocumentVO.Acl acl(Long createBy, String permissions, Integer dataScope) {
         return KnowledgeSourceDocumentVO.Acl.builder()
                 .createBy(createBy)
@@ -545,6 +576,8 @@ public class KnowledgeEntityServiceImpl implements KnowledgeEntityService {
                 + lengthPrefixed(acl == null ? null : acl.getCreateBy())
                 + lengthPrefixed(acl == null ? null : acl.getPermissions())
                 + lengthPrefixed(acl == null ? null : acl.getDataScope())
+                + lengthPrefixed(acl == null || acl.getTaskMemberIds() == null ? null
+                        : acl.getTaskMemberIds().toString())
                 + lengthPrefixed(metadataAttributes(document.getAttributes()));
         document.setMetaVersion(sha256(canonical));
         return document;

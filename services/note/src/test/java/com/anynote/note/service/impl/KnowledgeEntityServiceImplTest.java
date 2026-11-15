@@ -11,6 +11,7 @@ import com.anynote.note.api.model.po.Note;
 import com.anynote.note.api.model.po.NoteKnowledgeBase;
 import com.anynote.note.api.model.po.NoteTask;
 import com.anynote.note.api.model.po.NoteText;
+import com.anynote.note.api.model.po.UserNoteTask;
 import com.anynote.note.enums.KnowledgeEntityType;
 import com.anynote.note.mapper.DocMapper;
 import com.anynote.note.mapper.KnowledgeBaseMapper;
@@ -21,6 +22,7 @@ import com.anynote.note.mapper.MoocVideoItemInfoMapper;
 import com.anynote.note.mapper.NoteMapper;
 import com.anynote.note.mapper.NoteTaskMapper;
 import com.anynote.note.mapper.NoteTextMapper;
+import com.anynote.note.mapper.UserNoteTaskMapper;
 import com.anynote.note.model.bo.KnowledgeRef;
 import com.anynote.note.model.po.MoocItemPO;
 import com.anynote.note.model.po.MoocItemTextPO;
@@ -72,6 +74,7 @@ class KnowledgeEntityServiceImplTest {
     @Mock private MoocItemTextMapper itemTextMapper;
     @Mock private MoocVideoItemInfoMapper videoInfoMapper;
     @Mock private NoteTaskMapper taskMapper;
+    @Mock private UserNoteTaskMapper userTaskMapper;
     @Mock private RemoteFileService fileService;
     @Mock private RemoteMoocVideoSummarizeService summarizeService;
 
@@ -80,7 +83,7 @@ class KnowledgeEntityServiceImplTest {
     @BeforeAll
     static void initTableInfo() {
         Class<?>[] types = {NoteKnowledgeBase.class, Note.class, Doc.class, MoocPO.class, MoocItemPO.class,
-                MoocItemTextPO.class, MoocVideoItemInfoPO.class, NoteTask.class};
+                MoocItemTextPO.class, MoocVideoItemInfoPO.class, NoteTask.class, UserNoteTask.class};
         for (Class<?> type : types) {
             if (TableInfoHelper.getTableInfo(type) == null) {
                 TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""), type);
@@ -91,7 +94,8 @@ class KnowledgeEntityServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new KnowledgeEntityServiceImpl(knowledgeBaseMapper, noteMapper, noteTextMapper, docMapper,
-                moocMapper, itemMapper, itemTextMapper, videoInfoMapper, taskMapper, fileService, summarizeService);
+                moocMapper, itemMapper, itemTextMapper, videoInfoMapper, taskMapper, userTaskMapper, fileService,
+                summarizeService);
     }
 
     /**
@@ -228,6 +232,42 @@ class KnowledgeEntityServiceImplTest {
                 .isEqualTo("库描述");
         assertThat(service.get(KnowledgeRef.of(KnowledgeEntityType.MOOC, 2L), true).getBody()).isEqualTo("课描述");
         assertThat(service.get(KnowledgeRef.of(KnowledgeEntityType.TASK, 3L), true).getBody()).isEqualTo("任务描述");
+    }
+
+    /**
+     * 任务 ACL 携带升序去重的有效成员，成员变化只改变元数据版本。
+     */
+    @Test
+    void readsTaskMembersIntoAclAndMetaVersion() {
+        when(taskMapper.selectById(3L)).thenReturn(NoteTask.builder().id(3L).taskName("任务")
+                .taskDescribe("任务描述").knowledgeBaseId(1L).build());
+        when(userTaskMapper.selectList(any())).thenReturn(List.of(
+                UserNoteTask.builder().userId(9L).noteTaskId(3L).permissions(2).build(),
+                UserNoteTask.builder().userId(8L).noteTaskId(3L).permissions(1).build(),
+                UserNoteTask.builder().userId(9L).noteTaskId(3L).permissions(2).build()));
+
+        KnowledgeSourceDocumentVO first = service.get(KnowledgeRef.of(KnowledgeEntityType.TASK, 3L), true);
+        assertThat(first.getAcl().getTaskMemberIds()).containsExactly(8L, 9L);
+
+        when(userTaskMapper.selectList(any())).thenReturn(List.of(
+                UserNoteTask.builder().userId(8L).noteTaskId(3L).permissions(1).build()));
+        KnowledgeSourceDocumentVO second = service.get(KnowledgeRef.of(KnowledgeEntityType.TASK, 3L), true);
+        assertThat(second.getAcl().getTaskMemberIds()).containsExactly(8L);
+        assertThat(second.getContentVersion()).isEqualTo(first.getContentVersion());
+        assertThat(second.getMetaVersion()).isNotEqualTo(first.getMetaVersion());
+    }
+
+    /**
+     * 非任务实体不填写任务成员。
+     */
+    @Test
+    void leavesTaskMembersEmptyForOtherEntities() {
+        when(knowledgeBaseMapper.selectById(1L)).thenReturn(NoteKnowledgeBase.builder().id(1L)
+                .name("库").detail("库描述").status(0).build());
+
+        KnowledgeSourceDocumentVO document = service.get(KnowledgeRef.of(KnowledgeEntityType.KNOWLEDGE_BASE, 1L),
+                true);
+        assertThat(document.getAcl() == null || document.getAcl().getTaskMemberIds() == null).isTrue();
     }
 
     /**

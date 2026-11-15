@@ -11,6 +11,7 @@ import com.anynote.note.model.vo.KnowledgeExportVO;
 import com.anynote.note.model.vo.KnowledgeOutlineVO;
 import com.anynote.note.model.vo.KnowledgeQueryVO;
 import com.anynote.note.model.vo.KnowledgeScopeVO;
+import com.anynote.note.model.vo.KnowledgeStatsVO;
 import com.anynote.note.service.KnowledgeAccessService;
 import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.note.service.KnowledgeContentService;
@@ -30,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -76,7 +78,7 @@ class KnowledgeControllerTest {
     }
 
     /**
-     * 五个用户端点返回统一成功信封并传递登录身份。
+     * 六个用户端点返回统一成功信封并传递登录身份。
      */
     @Test
     void userEndpointsReturnSuccess() throws Exception {
@@ -109,6 +111,12 @@ class KnowledgeControllerTest {
         mockMvc.perform(post("/internal/v1/knowledge/query").contentType("application/json")
                         .content("{\"entity\":\"note\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.count").value(0L));
+
+        when(queryService.stats(eq(loginUser), any())).thenReturn(KnowledgeStatsVO.builder()
+                .knowledgeBases(List.of(KnowledgeStatsVO.KnowledgeBaseStats.builder().kbId(1L).name("库").role("READ")
+                        .counts(Map.of("note", 2L)).build())).build());
+        mockMvc.perform(post("/internal/v1/knowledge/stats").contentType("application/json").content("{}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.knowledgeBases[0].counts.note").value(2L));
     }
 
     /**
@@ -148,11 +156,11 @@ class KnowledgeControllerTest {
     }
 
     /**
-     * 所有端点都有内部签名，五个用户端点额外要求用户令牌。
+     * 所有端点都有内部签名，六个用户端点额外要求用户令牌。
      */
     @Test
     void declaresInnerAuthRequirements() throws NoSuchMethodException {
-        for (String method : List.of("scope", "authorize", "content", "outline", "query")) {
+        for (String method : List.of("scope", "authorize", "content", "outline", "query", "stats")) {
             InnerAuth annotation = findMethod(method).getAnnotation(InnerAuth.class);
             assertThat(annotation).isNotNull();
             assertThat(annotation.isUser()).isTrue();

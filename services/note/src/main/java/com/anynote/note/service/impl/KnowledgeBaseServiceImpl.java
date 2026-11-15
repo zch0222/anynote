@@ -457,6 +457,8 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, N
                 log.error("管理任务失败");
                 e.printStackTrace();
             }
+            knowledgeChangeService.record(KnowledgeEntityType.TASK, noteTask.getId(),
+                    noteTask.getKnowledgeBaseId(), KnowledgeOperation.UPDATE);
         }
     }
 

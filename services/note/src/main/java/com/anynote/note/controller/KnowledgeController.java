@@ -16,6 +16,7 @@ import com.anynote.note.model.dto.KnowledgeIndexStatusDTO;
 import com.anynote.note.model.dto.KnowledgeOutlineDTO;
 import com.anynote.note.model.dto.KnowledgeQueryDTO;
 import com.anynote.note.model.dto.KnowledgeScopeDTO;
+import com.anynote.note.model.dto.KnowledgeStatsDTO;
 import com.anynote.note.model.vo.KnowledgeAuthorizationVO;
 import com.anynote.note.model.vo.KnowledgeChangePageVO;
 import com.anynote.note.model.vo.KnowledgeContentVO;
@@ -24,6 +25,7 @@ import com.anynote.note.model.vo.KnowledgeExportVO;
 import com.anynote.note.model.vo.KnowledgeOutlineVO;
 import com.anynote.note.model.vo.KnowledgeQueryVO;
 import com.anynote.note.model.vo.KnowledgeScopeVO;
+import com.anynote.note.model.vo.KnowledgeStatsVO;
 import com.anynote.note.service.KnowledgeAccessService;
 import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.note.service.KnowledgeContentService;
@@ -90,6 +92,19 @@ public class KnowledgeController {
     @PostMapping("/scope")
     public ResData<KnowledgeScopeVO> scope(@RequestBody(required = false) KnowledgeScopeDTO request) {
         return ResUtil.success(knowledgeAccessService.scope(tokenUtil.getLoginUser(), request));
+    }
+
+    /**
+     * 统计检索范围内各知识库的直属可读内容。
+     *
+     * @param request 显式知识库范围，可为空
+     * @return 各知识库的计数与最近更新时间
+     */
+    @InnerAuth(isUser = true)
+    @Operation(summary = "统计知识库内容", description = "返回检索范围内各知识库的笔记、资料、慕课与任务的可读数量")
+    @PostMapping("/stats")
+    public ResData<KnowledgeStatsVO> stats(@RequestBody(required = false) KnowledgeStatsDTO request) {
+        return ResUtil.success(knowledgeQueryService.stats(tokenUtil.getLoginUser(), request));
     }
 
     /**

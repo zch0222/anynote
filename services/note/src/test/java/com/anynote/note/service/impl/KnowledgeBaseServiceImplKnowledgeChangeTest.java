@@ -3,6 +3,7 @@ package com.anynote.note.service.impl;
 import com.anynote.common.security.token.TokenUtil;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.note.api.model.po.NoteKnowledgeBase;
+import com.anynote.note.api.model.po.NoteTask;
 import com.anynote.note.api.model.po.UserKnowledgeBase;
 import com.anynote.note.enums.KnowledgeEntityType;
 import com.anynote.note.enums.KnowledgeOperation;
@@ -11,6 +12,7 @@ import com.anynote.note.mapper.UserKnowledgeBaseMapper;
 import com.anynote.note.model.bo.KnowledgeBaseUpdateParam;
 import com.anynote.note.model.dto.CreateKnowledgeBaeDTO;
 import com.anynote.note.service.KnowledgeChangeService;
+import com.anynote.note.service.NoteTaskService;
 import com.anynote.system.api.model.bo.LoginUser;
 import com.anynote.system.api.model.po.SysUser;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +25,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.Serializable;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -47,6 +50,7 @@ class KnowledgeBaseServiceImplKnowledgeChangeTest {
     @Mock private UserKnowledgeBaseMapper userKnowledgeBaseMapper;
     @Mock private TokenUtil tokenUtil;
     @Mock private KnowledgeChangeService changeService;
+    @Mock private NoteTaskService noteTaskService;
 
     private KnowledgeBaseServiceImpl service;
 
@@ -57,6 +61,7 @@ class KnowledgeBaseServiceImplKnowledgeChangeTest {
         ReflectionTestUtils.setField(service, "userKnowledgeBaseMapper", userKnowledgeBaseMapper);
         ReflectionTestUtils.setField(service, "tokenUtil", tokenUtil);
         ReflectionTestUtils.setField(service, "knowledgeChangeService", changeService);
+        ReflectionTestUtils.setField(service, "noteTaskService", noteTaskService);
         SysUser sysUser = new SysUser();
         sysUser.setId(USER_ID);
         LoginUser loginUser = new LoginUser();
@@ -125,6 +130,23 @@ class KnowledgeBaseServiceImplKnowledgeChangeTest {
 
         verify(changeService).record(KnowledgeEntityType.KNOWLEDGE_BASE, BASE_ID, BASE_ID,
                 KnowledgeOperation.DELETE);
+    }
+
+    /**
+     * 新成员加入知识库后，为库内每个任务补成员并各记录一条 TASK UPDATE。
+     */
+    @Test
+    void addUserRecordsTaskUpdatePerTask() {
+        when(userKnowledgeBaseMapper.insert(any(UserKnowledgeBase.class))).thenReturn(1);
+        when(noteTaskService.getNoteTasksByKnowledgeBaseId(BASE_ID)).thenReturn(List.of(
+                NoteTask.builder().id(11L).knowledgeBaseId(BASE_ID).build(),
+                NoteTask.builder().id(12L).knowledgeBaseId(BASE_ID).build()));
+
+        service.addUserToKnowledgeBase(UserKnowledgeBase.builder().userId(9L).knowledgeBaseId(BASE_ID)
+                .permissions(3).build());
+
+        verify(changeService).record(KnowledgeEntityType.TASK, 11L, BASE_ID, KnowledgeOperation.UPDATE);
+        verify(changeService).record(KnowledgeEntityType.TASK, 12L, BASE_ID, KnowledgeOperation.UPDATE);
     }
 
     private KnowledgeBaseUpdateParam updateParam() {

@@ -14,10 +14,12 @@ import com.anynote.note.mapper.UserNoteTaskMapper;
 import com.anynote.note.model.bo.KnowledgeRef;
 import com.anynote.note.model.dto.KnowledgeQueryDTO;
 import com.anynote.note.model.dto.KnowledgeScopeDTO;
+import com.anynote.note.model.dto.KnowledgeStatsDTO;
 import com.anynote.note.model.vo.KnowledgeExportVO;
 import com.anynote.note.model.vo.KnowledgeQueryVO;
 import com.anynote.note.model.vo.KnowledgeScopeVO;
 import com.anynote.note.model.vo.KnowledgeSourceDocumentVO;
+import com.anynote.note.model.vo.KnowledgeStatsVO;
 import com.anynote.note.service.KnowledgeAccessService;
 import com.anynote.note.service.KnowledgeEntityService;
 import com.anynote.note.service.KnowledgeQueryService;
@@ -62,6 +64,8 @@ public class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
             KnowledgeEntityType.MOOC_ITEM, Set.of("moocId", "parentId", "moocItemType"),
             KnowledgeEntityType.TASK, Set.of("status"));
     private static final Set<String> MY_TASK_FILTERS = Set.of("submissionStatus", "deadlineAfter", "deadlineBefore");
+    private static final List<KnowledgeEntityType> STATS_TYPES = List.of(KnowledgeEntityType.NOTE,
+            KnowledgeEntityType.DOC, KnowledgeEntityType.MOOC, KnowledgeEntityType.TASK);
 
     private final KnowledgeEntityService knowledgeEntityService;
     private final KnowledgeAccessService knowledgeAccessService;
@@ -139,6 +143,40 @@ public class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
                 .build();
     }
 
+    @Override
+    public KnowledgeStatsVO stats(LoginUser loginUser, KnowledgeStatsDTO request) {
+        KnowledgeScopeDTO scopeRequest = new KnowledgeScopeDTO();
+        scopeRequest.setKnowledgeBaseIds(request == null ? null : request.getKnowledgeBaseIds());
+        KnowledgeScopeVO scope = knowledgeAccessService.scope(loginUser, scopeRequest);
+        LoginUser permissionUser = scope.isDefaultScope() && scope.isAdmin() ? asOrdinaryUser(loginUser) : loginUser;
+        List<KnowledgeStatsVO.KnowledgeBaseStats> knowledgeBases = new ArrayList<>();
+        for (KnowledgeScopeVO.KnowledgeBase knowledgeBase : scope.getKnowledgeBases()) {
+            Map<String, Long> counts = new LinkedHashMap<>();
+            Date latestUpdateTime = null;
+            for (KnowledgeEntityType type : STATS_TYPES) {
+                long count = 0L;
+                for (KnowledgeSourceDocumentVO document : loadKnowledgeBaseDocuments(type,
+                        knowledgeBase.getKbId()).values()) {
+                    if (!knowledgeAccessService.isReadable(permissionUser,
+                            KnowledgeRef.of(type, document.getEntityId()))) {
+                        continue;
+                    }
+                    count++;
+                    latestUpdateTime = later(latestUpdateTime, document.getSourceUpdatedAt());
+                }
+                counts.put(type.getValue(), count);
+            }
+            knowledgeBases.add(KnowledgeStatsVO.KnowledgeBaseStats.builder()
+                    .kbId(knowledgeBase.getKbId())
+                    .name(knowledgeBase.getName())
+                    .role(knowledgeBase.getRole())
+                    .counts(counts)
+                    .latestUpdateTime(latestUpdateTime)
+                    .build());
+        }
+        return KnowledgeStatsVO.builder().knowledgeBases(knowledgeBases).build();
+    }
+
     private List<KnowledgeSourceDocumentVO> loadDocuments(KnowledgeEntityType type, KnowledgeScopeVO scope) {
         Set<Long> kbIds = new LinkedHashSet<>();
         for (KnowledgeScopeVO.KnowledgeBase knowledgeBase : scope.getKnowledgeBases()) {
@@ -149,19 +187,39 @@ public class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
         }
         Map<String, KnowledgeSourceDocumentVO> documents = new LinkedHashMap<>();
         for (Long kbId : kbIds) {
-            long afterId = 0L;
-            while (true) {
-                KnowledgeExportVO page = knowledgeEntityService.page(type.getValue(), kbId, afterId, 200, false);
-                for (KnowledgeSourceDocumentVO document : page.getDocuments()) {
-                    documents.put(document.getEntityType() + ":" + document.getEntityId(), document);
-                }
-                if (!page.isHasMore() || page.getNextAfterId() == null) {
-                    break;
-                }
-                afterId = page.getNextAfterId();
-            }
+            documents.putAll(loadKnowledgeBaseDocuments(type, kbId));
         }
         return new ArrayList<>(documents.values());
+    }
+
+    /**
+     * 分页读取单个知识库内某类实体的全部元数据。
+     *
+     * @param type 实体类型
+     * @param kbId 知识库 id，未归档笔记为 0
+     * @return 以类型与 id 为键的元数据
+     */
+    private Map<String, KnowledgeSourceDocumentVO> loadKnowledgeBaseDocuments(KnowledgeEntityType type, Long kbId) {
+        Map<String, KnowledgeSourceDocumentVO> documents = new LinkedHashMap<>();
+        long afterId = 0L;
+        while (true) {
+            KnowledgeExportVO page = knowledgeEntityService.page(type.getValue(), kbId, afterId, 200, false);
+            for (KnowledgeSourceDocumentVO document : page.getDocuments()) {
+                documents.put(document.getEntityType() + ":" + document.getEntityId(), document);
+            }
+            if (!page.isHasMore() || page.getNextAfterId() == null) {
+                break;
+            }
+            afterId = page.getNextAfterId();
+        }
+        return documents;
+    }
+
+    private Date later(Date current, Date candidate) {
+        if (candidate == null) {
+            return current;
+        }
+        return current == null || candidate.after(current) ? candidate : current;
     }
 
     private void validateFilters(KnowledgeEntityType type, KnowledgeQueryName queryName, Map<String, Object> filters) {

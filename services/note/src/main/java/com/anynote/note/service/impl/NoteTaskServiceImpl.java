@@ -291,6 +291,8 @@ public class NoteTaskServiceImpl extends ServiceImpl<NoteTaskMapper, NoteTask>
                         .build();
                 noteTaskOperationHistoryService.asyncSaveNoteTaskOperationHistory(addUserNoteTaskOperationHistory);
             }
+            knowledgeChangeService.record(KnowledgeEntityType.TASK, noteTask.getId(),
+                    noteTask.getKnowledgeBaseId(), KnowledgeOperation.UPDATE);
             rocketMQTemplate.asyncSend(rocketMQProperties.getNoteTopic() + ":" + NoteTagsEnum.NOTE_TASK_CREATED.name(),
                     new Gson().toJson(NoteTaskCreatedMessageBody.builder()
                             .noteTaskId(noteTask.getId())

@@ -8,10 +8,12 @@ import com.anynote.note.mapper.NoteTaskSubmissionRecordMapper;
 import com.anynote.note.mapper.UserNoteTaskMapper;
 import com.anynote.note.model.bo.KnowledgeRef;
 import com.anynote.note.model.dto.KnowledgeQueryDTO;
+import com.anynote.note.model.dto.KnowledgeStatsDTO;
 import com.anynote.note.model.vo.KnowledgeExportVO;
 import com.anynote.note.model.vo.KnowledgeQueryVO;
 import com.anynote.note.model.vo.KnowledgeScopeVO;
 import com.anynote.note.model.vo.KnowledgeSourceDocumentVO;
+import com.anynote.note.model.vo.KnowledgeStatsVO;
 import com.anynote.note.service.KnowledgeAccessService;
 import com.anynote.note.service.KnowledgeEntityService;
 import com.anynote.system.api.model.bo.LoginUser;
@@ -42,6 +44,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -216,6 +219,73 @@ class KnowledgeQueryServiceImplTest {
 
         assertThat(service.query(user, request("note")).getRows()).isEmpty();
         verify(accessService).isReadable(argThat(login ->
+                login.getSysUser() != null && "COMMON".equals(login.getSysUser().getRole().getRoleKey())), any());
+    }
+
+    /**
+     * 统计按范围内知识库逐个计数四类直属内容，只计可读条目并取最晚更新时间。
+     */
+    @Test
+    void statsCountsReadableDirectContentPerKnowledgeBase() {
+        when(accessService.scope(any(), any())).thenReturn(KnowledgeScopeVO.builder()
+                .userId(7L).defaultScope(true)
+                .knowledgeBases(List.of(KnowledgeScopeVO.KnowledgeBase.builder().kbId(1L).name("库")
+                        .role("EDIT").build())).build());
+        when(entityService.page(anyString(), anyLong(), anyLong(), eq(200), eq(false)))
+                .thenReturn(KnowledgeExportVO.builder().documents(List.of()).hasMore(false).build());
+        when(entityService.page(eq("note"), eq(1L), eq(0L), eq(200), eq(false)))
+                .thenReturn(KnowledgeExportVO.builder().documents(List.of(
+                        document(KnowledgeEntityType.NOTE, 1L, "可读", new Date(1000L)),
+                        document(KnowledgeEntityType.NOTE, 2L, "无权", new Date(9000L)))).hasMore(false).build());
+        when(entityService.page(eq("task"), eq(1L), eq(0L), eq(200), eq(false)))
+                .thenReturn(KnowledgeExportVO.builder().documents(List.of(
+                        document(KnowledgeEntityType.TASK, 3L, "任务", new Date(3000L)))).hasMore(false).build());
+        when(accessService.isReadable(any(), any())).thenAnswer(invocation ->
+                invocation.getArgument(1, KnowledgeRef.class).getId() != 2L);
+
+        KnowledgeStatsVO result = service.stats(user, new KnowledgeStatsDTO());
+
+        assertThat(result.getKnowledgeBases()).hasSize(1);
+        KnowledgeStatsVO.KnowledgeBaseStats knowledgeBase = result.getKnowledgeBases().get(0);
+        assertThat(knowledgeBase.getName()).isEqualTo("库");
+        assertThat(knowledgeBase.getRole()).isEqualTo("EDIT");
+        assertThat(knowledgeBase.getCounts()).containsExactly(Map.entry("note", 1L), Map.entry("doc", 0L),
+                Map.entry("mooc", 0L), Map.entry("task", 1L));
+        assertThat(knowledgeBase.getLatestUpdateTime()).isEqualTo(new Date(3000L));
+        verify(entityService, never()).page(eq("note"), eq(0L), anyLong(), eq(200), anyBoolean());
+    }
+
+    /**
+     * 统计无可读条目时最近更新时间为空，显式范围原样传给检索范围。
+     */
+    @Test
+    void statsPassesExplicitScopeAndLeavesEmptyTimeNull() {
+        when(entityService.page(anyString(), anyLong(), anyLong(), eq(200), eq(false)))
+                .thenReturn(KnowledgeExportVO.builder().documents(List.of()).hasMore(false).build());
+        KnowledgeStatsDTO request = new KnowledgeStatsDTO();
+        request.setKnowledgeBaseIds(List.of(1L));
+
+        KnowledgeStatsVO result = service.stats(user, request);
+
+        assertThat(result.getKnowledgeBases().get(0).getLatestUpdateTime()).isNull();
+        verify(accessService).scope(eq(user), argThat(scope -> List.of(1L).equals(scope.getKnowledgeBaseIds())));
+    }
+
+    /**
+     * 超管默认范围的统计按普通成员身份判定可读性。
+     */
+    @Test
+    void statsAdminDefaultScopeUsesOrdinaryMembership() {
+        when(accessService.scope(any(), any())).thenReturn(KnowledgeScopeVO.builder()
+                .admin(true).defaultScope(true)
+                .knowledgeBases(List.of(KnowledgeScopeVO.KnowledgeBase.builder().kbId(1L).build())).build());
+        when(entityService.page(anyString(), anyLong(), anyLong(), eq(200), eq(false)))
+                .thenReturn(KnowledgeExportVO.builder().documents(List.of(
+                        document(KnowledgeEntityType.NOTE, 1L, "笔记", new Date(1000L)))).hasMore(false).build());
+
+        service.stats(user, null);
+
+        verify(accessService, atLeastOnce()).isReadable(argThat(login ->
                 login.getSysUser() != null && "COMMON".equals(login.getSysUser().getRole().getRoleKey())), any());
     }
 

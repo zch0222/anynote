@@ -19,10 +19,12 @@ import com.anynote.note.model.bo.SubmissionReturnParam;
 import com.anynote.note.model.bo.NoteTaskSubmitParam;
 import com.anynote.note.model.bo.NoteTaskUpdateParam;
 import com.anynote.note.model.dto.NoteTaskSubmissionRecordCreateDTO;
+import com.anynote.note.service.KnowledgeBaseService;
 import com.anynote.note.service.KnowledgeChangeService;
 import com.anynote.note.service.NoteHistoryService;
 import com.anynote.note.service.NoteOperationLogService;
 import com.anynote.note.service.NoteService;
+import com.anynote.note.service.NoteTaskOperationHistoryService;
 import com.anynote.note.service.NoteTaskSubmissionRecordService;
 import com.anynote.system.api.model.bo.LoginUser;
 import com.anynote.system.api.model.po.SysUser;
@@ -34,6 +36,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -42,8 +46,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Date;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -69,6 +76,8 @@ class NoteTaskServiceImplKnowledgeChangeTest {
     @Mock private RocketMQTemplate rocketMQTemplate;
     @Mock private RocketMQProperties rocketMQProperties;
     @Mock private ThreadPoolTaskExecutor asyncExecutor;
+    @Mock private KnowledgeBaseService knowledgeBaseService;
+    @Mock private NoteTaskOperationHistoryService operationHistoryService;
 
     private NoteTaskServiceImpl service;
 
@@ -96,6 +105,8 @@ class NoteTaskServiceImplKnowledgeChangeTest {
         ReflectionTestUtils.setField(service, "rocketMQTemplate", rocketMQTemplate);
         ReflectionTestUtils.setField(service, "rocketMQProperties", rocketMQProperties);
         ReflectionTestUtils.setField(service, "asyncExecutor", asyncExecutor);
+        ReflectionTestUtils.setField(service, "knowledgeBaseService", knowledgeBaseService);
+        ReflectionTestUtils.setField(service, "noteTaskOperationHistoryService", operationHistoryService);
         when(submissionService.getBaseMapper()).thenReturn(submissionMapper);
         when(noteService.getBaseMapper()).thenReturn(noteMapper);
         when(rocketMQProperties.getNoteTaskTopic()).thenReturn("task-topic");
@@ -123,6 +134,33 @@ class NoteTaskServiceImplKnowledgeChangeTest {
         service.createNoteTask(param);
 
         verify(changeService).record(KnowledgeEntityType.TASK, 4L, 1L, KnowledgeOperation.CREATE);
+    }
+
+    /**
+     * 新建任务的异步成员插入全部完成后记录一次 TASK UPDATE。
+     */
+    @Test
+    void asyncMemberInsertionRecordsTaskUpdateAfterInserts() {
+        when(taskMapper.insert(any(NoteTask.class))).thenAnswer(invocation -> {
+            NoteTask task = invocation.getArgument(0, NoteTask.class);
+            task.setId(4L);
+            return 1;
+        });
+        when(rocketMQProperties.getNoteTopic()).thenReturn("note-topic");
+        when(knowledgeBaseService.getAllMemberKnowledgeBaseUserId(1L)).thenReturn(List.of(9L));
+        when(knowledgeBaseService.getAllKnowledgeBaseManagerId(1L)).thenReturn(List.of(8L));
+        NoteTaskCreateParam param = new NoteTaskCreateParam();
+        param.setId(1L);
+        param.setTaskName("任务");
+
+        service.createNoteTask(param);
+        ArgumentCaptor<Runnable> captor = ArgumentCaptor.forClass(Runnable.class);
+        verify(asyncExecutor).submit(captor.capture());
+        captor.getValue().run();
+
+        InOrder order = inOrder(userTaskMapper, changeService);
+        order.verify(userTaskMapper, times(2)).insert(any(UserNoteTask.class));
+        order.verify(changeService).record(KnowledgeEntityType.TASK, 4L, 1L, KnowledgeOperation.UPDATE);
     }
 
     /**

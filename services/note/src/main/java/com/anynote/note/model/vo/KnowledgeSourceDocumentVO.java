@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -52,5 +53,7 @@ public class KnowledgeSourceDocumentVO {
         private Long createBy;
         private String permissions;
         private Integer dataScope;
+        @Schema(description = "任务成员用户 id（仅任务实体，含管理与提交权限）")
+        private List<Long> taskMemberIds;
     }
 }
