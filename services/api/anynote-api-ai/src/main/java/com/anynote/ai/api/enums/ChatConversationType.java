@@ -4,7 +4,9 @@ public enum ChatConversationType {
 
     RAG(0),
 
-    CHAT(1);
+    CHAT(1),
+
+    KNOWLEDGE_RETRIEVAL(2);
 
     private final int value;
 

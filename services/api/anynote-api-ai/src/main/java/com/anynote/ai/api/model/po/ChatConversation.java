@@ -9,7 +9,11 @@ import lombok.*;
 import java.util.Date;
 import java.util.Map;
 
-
+/**
+ * AI 会话持久化实体。
+ *
+ * @author 称霸幼儿园
+ */
 @Data
 @TableName("a_chat_conversation")
 @EqualsAndHashCode(callSuper = true)
@@ -37,6 +41,11 @@ public class ChatConversation extends BaseEntity {
     private Long docId;
 
     /**
+     * JSON 格式的知识检索范围。
+     */
+    private String scope;
+
+    /**
      * 知识库id
      */
     private Long knowledgeBaseId;
@@ -56,12 +65,13 @@ public class ChatConversation extends BaseEntity {
     @Builder
     public ChatConversation(Long id, String title, Integer type, Long docId, Long knowledgeBaseId, Integer deleted,
                             Long createBy, Date createTime, Long updateBy, Date updateTime, String permissions,
-                            String remark, Map<String, Object> params) {
+                            String scope, String remark, Map<String, Object> params) {
         super(createBy, createTime, updateBy, updateTime, remark, params);
         this.id = id;
         this.title = title;
         this.type = type;
         this.docId = docId;
+        this.scope = scope;
         this.knowledgeBaseId = knowledgeBaseId;
         this.deleted = deleted;
         this.permissions = permissions;
