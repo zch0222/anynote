@@ -132,6 +132,8 @@ class InMemoryEsStore:
         chunks,
         index_status: int = DOC_STATUS_INDEXED,
         delete_existing_chunks: bool = True,
+        outline: str = "",
+        summary: str = "",
     ) -> None:
         key = document.canonical_key
         if delete_existing_chunks:
@@ -152,6 +154,9 @@ class InMemoryEsStore:
             "meta_version": document.meta_version or "",
             "index_status": index_status,
             "permissions": document.acl.permissions if document.acl else None,
+            "task_member_ids": document.acl.task_member_ids if document.acl else None,
+            "outline": outline,
+            "summary": summary,
         }
         for c in chunks:
             row = c.model_dump()
@@ -166,6 +171,7 @@ class InMemoryEsStore:
         item["title"] = document.title
         item["meta_version"] = document.meta_version or ""
         item["permissions"] = document.acl.permissions if document.acl else None
+        item["task_member_ids"] = document.acl.task_member_ids if document.acl else None
         for row in self.chunks.get(chunk_idx, {}).values():
             if (row.get("item_key") or row["ref"]) == key:
                 row["title"] = document.title

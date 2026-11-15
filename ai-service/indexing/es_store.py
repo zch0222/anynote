@@ -15,12 +15,14 @@ from indexing.models import (
     IndexVersionConflictError,
     SourceDocument,
 )
+from indexing.outline import replace_summary_title
 
 ITEM_ALIAS = "kn_item"
 CHUNK_ALIAS = "kn_chunk"
 META_INDEX = "kn_meta"
 META_ACTIVE_DOC_ID = "active"
 META_CURSOR_DOC_ID = "cursor"
+INDEX_SCHEMA_VERSION = 2
 
 
 def _format_datetime(value: datetime | int | str | None) -> str | None:
@@ -82,6 +84,8 @@ def _build_item_mappings() -> dict[str, Any]:
                 "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
             },
             "format": {"type": "keyword"},
+            "outline": {"type": "text", "analyzer": "cjk"},
+            "summary": {"type": "text", "analyzer": "cjk"},
             "authority": {"type": "keyword"},
             "content_version": {"type": "keyword"},
             "meta_version": {"type": "keyword"},
@@ -89,6 +93,7 @@ def _build_item_mappings() -> dict[str, Any]:
             "create_by": {"type": "long"},
             "permissions": {"type": "keyword"},
             "data_scope": {"type": "integer"},
+            "task_member_ids": {"type": "long"},
             "attributes": {"type": "object", "enabled": False},
             "source_created_at": {"type": "date"},
             "source_updated_at": {"type": "date"},
@@ -119,6 +124,7 @@ def _build_chunk_mappings(embedding_dims: int | None) -> dict[str, Any]:
         "create_by": {"type": "long"},
         "permissions": {"type": "keyword"},
         "data_scope": {"type": "integer"},
+        "task_member_ids": {"type": "long"},
         "source_updated_at": {"type": "date"},
         "indexed_at": {"type": "date"},
     }
@@ -172,6 +178,7 @@ class ElasticsearchKnowledgeStore:
             mappings={
                 "properties": {
                     "version": {"type": "integer"},
+                    "schema_version": {"type": "integer"},
                     "item_index": {"type": "keyword"},
                     "chunk_index": {"type": "keyword"},
                     "embedding_model": {"type": "keyword"},
@@ -271,6 +278,8 @@ class ElasticsearchKnowledgeStore:
             await self.swap_aliases(1, embedding_model, embedding_dims)
             return item_idx, chunk_idx
 
+        if int(active.get("schema_version") or 1) != INDEX_SCHEMA_VERSION:
+            raise IndexVersionConflictError()
         active_model = active.get("embedding_model")
         active_dims = active.get("embedding_dims")
         item_idx = active["item_index"]
@@ -368,6 +377,7 @@ class ElasticsearchKnowledgeStore:
             id=META_ACTIVE_DOC_ID,
             document={
                 "version": version,
+                "schema_version": INDEX_SCHEMA_VERSION,
                 "item_index": item_index_name(version),
                 "chunk_index": chunk_index_name(version),
                 "embedding_model": embedding_model,
@@ -405,6 +415,8 @@ class ElasticsearchKnowledgeStore:
         chunks: list[ChunkPayload],
         index_status: int = DOC_STATUS_INDEXED,
         delete_existing_chunks: bool = True,
+        outline: str = "",
+        summary: str = "",
     ) -> None:
         """写入或替换单篇源文档及其全部分块。
 
@@ -414,6 +426,8 @@ class ElasticsearchKnowledgeStore:
         :param chunks: 待写入分块列表
         :param index_status: 条目索引状态
         :param delete_existing_chunks: 写入前是否清理旧分块
+        :param outline: 条目大纲文本
+        :param summary: 条目确定性摘要
         """
         item_key = document.canonical_key
         if delete_existing_chunks:
@@ -436,6 +450,8 @@ class ElasticsearchKnowledgeStore:
             "parent_ref": document.parent_ref,
             "title": document.title or "",
             "format": document.format,
+            "outline": outline,
+            "summary": summary,
             "authority": document.authority,
             "content_version": document.content_version or "",
             "meta_version": document.meta_version or "",
@@ -443,6 +459,7 @@ class ElasticsearchKnowledgeStore:
             "create_by": acl.create_by if acl else None,
             "permissions": acl.permissions if acl else None,
             "data_scope": acl.data_scope if acl else None,
+            "task_member_ids": acl.task_member_ids if acl else None,
             "attributes": document.attributes or {},
             "source_created_at": _format_datetime(document.source_created_at),
             "source_updated_at": _format_datetime(document.source_updated_at),
@@ -475,6 +492,7 @@ class ElasticsearchKnowledgeStore:
                 "create_by": chunk.create_by,
                 "permissions": chunk.permissions,
                 "data_scope": chunk.data_scope,
+                "task_member_ids": chunk.task_member_ids,
                 "source_updated_at": chunk.source_updated_at,
                 "indexed_at": now_iso,
             }
@@ -501,6 +519,8 @@ class ElasticsearchKnowledgeStore:
         now_iso = datetime.now(UTC).isoformat()
         acl = document.acl
         source_updated = _format_datetime(document.source_updated_at)
+        current = await self._client.get(index=item_idx, id=item_key, _source=["summary"])
+        stored_summary = (current.get("_source") or {}).get("summary") if current else None
 
         await self._client.update(
             index=item_idx,
@@ -509,11 +529,13 @@ class ElasticsearchKnowledgeStore:
                 "kb_id": document.kb_id,
                 "parent_ref": document.parent_ref,
                 "title": document.title or "",
+                "summary": replace_summary_title(stored_summary, document.title),
                 "authority": document.authority,
                 "meta_version": document.meta_version or "",
                 "create_by": acl.create_by if acl else None,
                 "permissions": acl.permissions if acl else None,
                 "data_scope": acl.data_scope if acl else None,
+                "task_member_ids": acl.task_member_ids if acl else None,
                 "attributes": document.attributes or {},
                 "source_updated_at": source_updated,
                 "indexed_at": now_iso,
@@ -533,6 +555,7 @@ class ElasticsearchKnowledgeStore:
                     "ctx._source.create_by = params.create_by;"
                     "ctx._source.permissions = params.permissions;"
                     "ctx._source.data_scope = params.data_scope;"
+                    "ctx._source.task_member_ids = params.task_member_ids;"
                     "ctx._source.source_updated_at = params.source_updated_at;"
                     "ctx._source.indexed_at = params.indexed_at;"
                 ),
@@ -545,6 +568,7 @@ class ElasticsearchKnowledgeStore:
                     "create_by": acl.create_by if acl else None,
                     "permissions": acl.permissions if acl else None,
                     "data_scope": acl.data_scope if acl else None,
+                    "task_member_ids": acl.task_member_ids if acl else None,
                     "source_updated_at": source_updated,
                     "indexed_at": now_iso,
                 },

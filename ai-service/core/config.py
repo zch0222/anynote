@@ -53,7 +53,7 @@ class IndexerRuntimeSettings(BaseModel):
     reconcile_interval_s: float = Field(default=3600.0, ge=0, le=86400)
     batch_size: int = Field(default=50, ge=1, le=200)
     chunk_size_chars: int = Field(default=600, ge=100, le=4000)
-    chunk_overlap_chars: int = Field(default=100, ge=0, le=1000)
+    summary_body_chars: int = Field(default=200, ge=0, le=2000)
     embedding_batch_size: int = Field(default=16, ge=1, le=128)
     embedding_timeout_s: float = Field(default=30.0, gt=0, le=300)
     pdf_parse_timeout_s: float = Field(default=30.0, gt=0, le=300)

@@ -23,7 +23,7 @@ class ChunkDraft:
     end_ms: int | None = None
 
 
-def _split_long_text(text: str, chunk_size: int, overlap: int) -> list[str]:
+def _split_long_text(text: str, chunk_size: int) -> list[str]:
     clean = text.strip()
     if not clean:
         return []
@@ -32,7 +32,6 @@ def _split_long_text(text: str, chunk_size: int, overlap: int) -> list[str]:
 
     parts: list[str] = []
     start = 0
-    step_floor = max(1, chunk_size - min(overlap, chunk_size // 2))
     length = len(clean)
 
     while start < length:
@@ -49,10 +48,7 @@ def _split_long_text(text: str, chunk_size: int, overlap: int) -> list[str]:
         piece = clean[start:end].strip()
         if piece:
             parts.append(piece)
-        if end >= length:
-            break
-        next_start = max(start + 1, end - overlap)
-        start = min(next_start, start + step_floor) if next_start <= start else next_start
+        start = end
     return parts
 
 
@@ -88,7 +84,7 @@ def _pack_timed_sections(
             continue
         if len(text) > chunk_size:
             flush()
-            for piece in _split_long_text(text, chunk_size, min(100, chunk_size // 4)):
+            for piece in _split_long_text(text, chunk_size):
                 drafts.append(
                     ChunkDraft(
                         chunk_index=start_index + len(drafts),
@@ -111,13 +107,11 @@ def _pack_timed_sections(
 def chunk_sections(
     sections: list[ParsedSection],
     chunk_size_chars: int = 600,
-    chunk_overlap_chars: int = 100,
 ) -> list[ChunkDraft]:
-    """按结构边界切分段落，保留章节路径、页码或字幕时间区间。
+    """按结构边界切分段落，片段之间不重叠，保留章节路径、页码或字幕时间区间。
 
     :param sections: 解析器输出段落列表
     :param chunk_size_chars: 目标分块字符上限
-    :param chunk_overlap_chars: 长文本切分重叠字符数
     :return: 有序分块列表
     """
     if not sections:
@@ -129,7 +123,7 @@ def chunk_sections(
 
     drafts: list[ChunkDraft] = []
     for sec in sections:
-        for piece in _split_long_text(sec.text, chunk_size_chars, chunk_overlap_chars):
+        for piece in _split_long_text(sec.text, chunk_size_chars):
             drafts.append(
                 ChunkDraft(
                     chunk_index=len(drafts),

@@ -23,6 +23,7 @@ from indexing.models import (
     KnowledgeChangeEvent,
     SourceDocument,
 )
+from indexing.outline import build_outline, build_summary
 from indexing.parsers.pdf import PdfParseError
 from models.catalog import ModelCatalogSnapshot
 from models.openai_compatible import OpenAICompatibleAdapter
@@ -132,6 +133,7 @@ class IndexingPipeline:
                     create_by=acl.create_by if acl else None,
                     permissions=acl.permissions if acl else None,
                     data_scope=acl.data_scope if acl else None,
+                    task_member_ids=acl.task_member_ids if acl else None,
                     source_updated_at=source_updated,
                     embedding=vectors[idx] if vectors is not None else None,
                 )
@@ -181,6 +183,7 @@ class IndexingPipeline:
                 chunks=[],
                 index_status=DOC_STATUS_UNEXTRACTABLE,
                 delete_existing_chunks=delete_existing_chunks,
+                summary=build_summary(doc.title, [], self._runtime.summary_body_chars),
             )
             if doc.entity_type == "doc":
                 await self._knowledge.update_doc_index_status(doc.entity_id, DOC_STATUS_UNEXTRACTABLE)
@@ -189,7 +192,6 @@ class IndexingPipeline:
         drafts = chunk_sections(
             parsed.sections,
             chunk_size_chars=self._runtime.chunk_size_chars,
-            chunk_overlap_chars=self._runtime.chunk_overlap_chars,
         )
         vectors, inferred_dims = await self._embed_drafts(snapshot, drafts, emb_model)
         effective_dims = emb_dims if emb_dims is not None else inferred_dims
@@ -203,6 +205,8 @@ class IndexingPipeline:
             chunks=payloads,
             index_status=DOC_STATUS_INDEXED,
             delete_existing_chunks=delete_existing_chunks,
+            outline=build_outline(parsed.sections),
+            summary=build_summary(doc.title, parsed.sections, self._runtime.summary_body_chars),
         )
         if doc.entity_type == "doc":
             await self._knowledge.update_doc_index_status(doc.entity_id, DOC_STATUS_INDEXED)

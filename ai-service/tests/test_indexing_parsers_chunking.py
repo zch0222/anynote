@@ -70,7 +70,7 @@ def test_srt_parser_and_chunk_preserve_ms_range():
     )
     parsed = srt.parse_srt(subtitle)
     assert len(parsed.sections) == 2
-    chunks = chunk_sections(parsed.sections, chunk_size_chars=100, chunk_overlap_chars=0)
+    chunks = chunk_sections(parsed.sections, chunk_size_chars=100)
     assert len(chunks) == 1
     assert chunks[0].start_ms == 1250
     assert chunks[0].end_ms == 8100
@@ -89,7 +89,7 @@ def test_plain_text_dispatch_and_long_chunk_split():
     parsed = parse_document_text(doc)
     assert "\r" not in parsed.sections[0].text
     long_doc = plain_text.parse_plain_text("A" * 350)
-    chunks = chunk_sections(long_doc.sections, chunk_size_chars=120, chunk_overlap_chars=20)
+    chunks = chunk_sections(long_doc.sections, chunk_size_chars=120)
     assert len(chunks) >= 3
     assert all(len(c.content) <= 120 for c in chunks)
 

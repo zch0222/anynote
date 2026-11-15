@@ -44,6 +44,7 @@ class SourceAcl(BaseModel):
     create_by: int | None = None
     permissions: str | None = None
     data_scope: int | None = None
+    task_member_ids: list[int] | None = None
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -244,5 +245,6 @@ class ChunkPayload(BaseModel):
     create_by: int | None = None
     permissions: str | None = None
     data_scope: int | None = None
+    task_member_ids: list[int] | None = None
     source_updated_at: str | None = None
     embedding: list[float] | None = None
