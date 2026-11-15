@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.anynote.ai.mapper.RetrievalSettingMapper">
+
+    <resultMap id="RetrievalSettingResultMap" type="com.anynote.ai.model.po.RetrievalSettingPO">
+        <id property="id" column="id" />
+        <result property="rrfK" column="rrf_k" />
+        <result property="channelCandidates" column="channel_candidates" />
+        <result property="keywordLexicalWeight" column="keyword_lexical_weight" />
+        <result property="keywordSemanticWeight" column="keyword_semantic_weight" />
+        <result property="questionLexicalWeight" column="question_lexical_weight" />
+        <result property="questionSemanticWeight" column="question_semantic_weight" />
+        <result property="defaultLexicalWeight" column="default_lexical_weight" />
+        <result property="defaultSemanticWeight" column="default_semantic_weight" />
+        <result property="itemWeight" column="item_weight" />
+        <result property="authorityOriginal" column="authority_original" />
+        <result property="authorityTranscript" column="authority_transcript" />
+        <result property="authorityGenerated" column="authority_generated" />
+        <result property="maxChunksPerEntity" column="max_chunks_per_entity" />
+        <result property="searchDefaultLimit" column="search_default_limit" />
+        <result property="searchMaxLimit" column="search_max_limit" />
+        <result property="neighborWindow" column="neighbor_window" />
+        <result property="neighborMaxChars" column="neighbor_max_chars" />
+        <result property="readMaxChars" column="read_max_chars" />
+        <result property="grepMaxHits" column="grep_max_hits" />
+        <result property="grepContextDefault" column="grep_context_default" />
+        <result property="grepContextMax" column="grep_context_max" />
+        <result property="grepKbCandidates" column="grep_kb_candidates" />
+        <result property="shortKeywordChars" column="short_keyword_chars" />
+        <result property="rerankEnabled" column="rerank_enabled" />
+        <result property="version" column="version" />
+        <result property="createBy" column="create_by" />
+        <result property="updateBy" column="update_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <select id="selectSetting" resultMap="RetrievalSettingResultMap">
+        SELECT
+            id, rrf_k, channel_candidates, keyword_lexical_weight,
+            keyword_semantic_weight, question_lexical_weight, question_semantic_weight, default_lexical_weight,
+            default_semantic_weight, item_weight, authority_original, authority_transcript,
+            authority_generated, max_chunks_per_entity, search_default_limit, search_max_limit,
+            neighbor_window, neighbor_max_chars, read_max_chars, grep_max_hits,
+            grep_context_default, grep_context_max, grep_kb_candidates, short_keyword_chars,
+            rerank_enabled, version, create_by, update_by,
+            create_time, update_time
+        FROM a_retrieval_setting
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+</mapper>

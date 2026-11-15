@@ -13,7 +13,7 @@ import java.util.Map;
 /**
  * 模型供应商配置快照，供内部调用方（Python AI 服务）整体拉取。
  *
- * <p>{@link #version} 由「所有行 version 的最大值」与 Nacos 映射版本拼接而成，格式为
+ * <p>{@link #version} 由「供应商行 version 的最大值、逻辑模型版本与检索参数版本之和」与 Nacos 映射版本拼接而成，格式为
  * {@code ${providersVersion}:${mappingVersion}}；空表时 providersVersion 为 0。
  * 调用方可据此比对缓存是否过期。{@link #providers} 中的 {@code apiKey} 已是解密后的明文，
  * 本端点只允许内部签名调用。</p>
@@ -44,6 +44,12 @@ public class ModelProviderSnapshotVO {
      */
     @Schema(description = "逻辑模型名到供应商模型的映射")
     private Map<String, ModelCatalogProperties.LogicalModel> logicalModels;
+
+    /**
+     * 知识检索运行参数，运行开始时读取一次。
+     */
+    @Schema(description = "知识检索运行参数")
+    private RetrievalSettingVO retrieval;
 
     /**
      * 单个供应商快照，包含解密后的 API Key。

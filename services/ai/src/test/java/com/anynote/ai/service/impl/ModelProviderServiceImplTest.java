@@ -283,6 +283,42 @@ class ModelProviderServiceImplTest {
         assertEquals(1024, merged.getDimensions());
     }
 
+    /**
+     * 快照携带数据库检索参数，并把检索参数版本计入联合版本号。
+     */
+    @Test
+    @DisplayName("快照合并检索参数并推进联合版本号")
+    void snapshotMergesRetrievalSettings() {
+        com.anynote.ai.service.RetrievalSettingService retrievalService =
+                org.mockito.Mockito.mock(com.anynote.ai.service.RetrievalSettingService.class);
+        com.anynote.ai.model.vo.RetrievalSettingVO saved = RetrievalSettingServiceImpl.defaults().toBuilder()
+                .rrfK(30).version(3L).build();
+        when(retrievalService.get()).thenReturn(saved);
+        ModelProviderServiceImpl snapshotService = new ModelProviderServiceImpl(modelProviderMapper,
+                modelCatalogProperties, aesGcmCipher, new Gson(), null, retrievalService);
+        when(modelProviderMapper.selectAll()).thenReturn(List.of(providerPO(1L, "openai", "sk-plain", 2L, 1)));
+
+        ModelProviderSnapshotVO snapshot = snapshotService.snapshot();
+
+        assertEquals("5:0", snapshot.getVersion());
+        assertEquals(30, snapshot.getRetrieval().getRrfK());
+    }
+
+    /**
+     * 未注入检索参数服务时快照下发默认值且不改变版本号。
+     */
+    @Test
+    @DisplayName("无检索参数服务时下发默认值")
+    void snapshotUsesRetrievalDefaultsWithoutService() {
+        when(modelProviderMapper.selectAll()).thenReturn(Collections.emptyList());
+
+        ModelProviderSnapshotVO snapshot = modelProviderService.snapshot();
+
+        assertEquals("0:0", snapshot.getVersion());
+        assertEquals(60, snapshot.getRetrieval().getRrfK());
+        assertFalse(snapshot.getRetrieval().getRerankEnabled());
+    }
+
     private ModelProviderUpdateDTO updateDTO() {
         ModelProviderUpdateDTO dto = new ModelProviderUpdateDTO();
         dto.setDisplayName("OpenAI-新");

@@ -8,9 +8,11 @@ import com.anynote.ai.model.po.LogicalModelConfigPO;
 import com.anynote.ai.model.po.ModelProviderPO;
 import com.anynote.ai.model.vo.ModelProviderAdminVO;
 import com.anynote.ai.model.vo.ModelProviderSnapshotVO;
+import com.anynote.ai.model.vo.RetrievalSettingVO;
 import com.anynote.ai.properties.ModelCatalogProperties;
 import com.anynote.ai.security.credential.AesGcmCipher;
 import com.anynote.ai.service.ModelProviderService;
+import com.anynote.ai.service.RetrievalSettingService;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.StringUtils;
 import com.anynote.core.web.enums.ResCode;
@@ -48,6 +50,8 @@ public class ModelProviderServiceImpl implements ModelProviderService {
 
     private final LogicalModelConfigMapper logicalModelConfigMapper;
 
+    private final RetrievalSettingService retrievalSettingService;
+
     /**
      * 构造器注入（兼容既有单测）。
      *
@@ -60,7 +64,7 @@ public class ModelProviderServiceImpl implements ModelProviderService {
                                     ModelCatalogProperties modelCatalogProperties,
                                     AesGcmCipher aesGcmCipher,
                                     Gson gson) {
-        this(modelProviderMapper, modelCatalogProperties, aesGcmCipher, gson, null);
+        this(modelProviderMapper, modelCatalogProperties, aesGcmCipher, gson, null, null);
     }
 
     /**
@@ -72,17 +76,37 @@ public class ModelProviderServiceImpl implements ModelProviderService {
      * @param gson 模型清单 JSON 序列化器
      * @param logicalModelConfigMapper 运行时逻辑模型配置 Mapper，可为空
      */
-    @Autowired
     public ModelProviderServiceImpl(ModelProviderMapper modelProviderMapper,
                                     ModelCatalogProperties modelCatalogProperties,
                                     AesGcmCipher aesGcmCipher,
                                     Gson gson,
                                     LogicalModelConfigMapper logicalModelConfigMapper) {
+        this(modelProviderMapper, modelCatalogProperties, aesGcmCipher, gson, logicalModelConfigMapper, null);
+    }
+
+    /**
+     * 构造器注入。
+     *
+     * @param modelProviderMapper 供应商目录 Mapper
+     * @param modelCatalogProperties Nacos 逻辑模型映射配置
+     * @param aesGcmCipher 凭据加解密组件
+     * @param gson 模型清单 JSON 序列化器
+     * @param logicalModelConfigMapper 运行时逻辑模型配置 Mapper，可为空
+     * @param retrievalSettingService 检索参数服务，可为空（为空时下发默认值）
+     */
+    @Autowired
+    public ModelProviderServiceImpl(ModelProviderMapper modelProviderMapper,
+                                    ModelCatalogProperties modelCatalogProperties,
+                                    AesGcmCipher aesGcmCipher,
+                                    Gson gson,
+                                    LogicalModelConfigMapper logicalModelConfigMapper,
+                                    RetrievalSettingService retrievalSettingService) {
         this.modelProviderMapper = modelProviderMapper;
         this.modelCatalogProperties = modelCatalogProperties;
         this.aesGcmCipher = aesGcmCipher;
         this.gson = gson;
         this.logicalModelConfigMapper = logicalModelConfigMapper;
+        this.retrievalSettingService = retrievalSettingService;
     }
 
     @Override
@@ -124,11 +148,15 @@ public class ModelProviderServiceImpl implements ModelProviderService {
                 logicalVersion = embeddingConfig.getVersion() == null ? 0L : embeddingConfig.getVersion();
             }
         }
-        long combinedVersion = providersVersion + logicalVersion;
+        RetrievalSettingVO retrieval = retrievalSettingService == null
+                ? RetrievalSettingServiceImpl.defaults() : retrievalSettingService.get();
+        long retrievalVersion = retrieval.getVersion() == null ? 0L : retrieval.getVersion();
+        long combinedVersion = providersVersion + logicalVersion + retrievalVersion;
         return ModelProviderSnapshotVO.builder()
                 .version(combinedVersion + ":" + modelCatalogProperties.getMappingVersion())
                 .providers(providerVOS)
                 .logicalModels(logicalModels)
+                .retrieval(retrieval)
                 .build();
     }
 
