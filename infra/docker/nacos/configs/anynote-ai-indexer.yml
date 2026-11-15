@@ -1,5 +1,5 @@
 indexer:
-  poll-interval-s: 5
+  poll-interval-s: 3
   reconcile-interval-s: 3600
   batch-size: 50
   chunk-size-chars: 600
