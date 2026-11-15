@@ -103,6 +103,7 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
                 .name(filePO.getOriginalFileName())
                 .knowledgeBaseId(pdfCreateParam.getKnowledgeBaseId())
                 .type(DocType.PDF.getValue())
+                .indexStatus(DocIndexStatus.NOT_INDEXED.getValue())
                 .dataScope(1)
                 .permissions("70000")
                 .deleted(0)

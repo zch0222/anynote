@@ -6,6 +6,7 @@ import com.anynote.core.web.model.bo.ResData;
 import com.anynote.file.api.RemoteFileService;
 import com.anynote.file.api.model.po.FilePO;
 import com.anynote.note.api.model.po.Doc;
+import com.anynote.note.enums.DocIndexStatus;
 import com.anynote.note.enums.KnowledgeEntityType;
 import com.anynote.note.enums.KnowledgeOperation;
 import com.anynote.note.mapper.DocMapper;
@@ -19,6 +20,7 @@ import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -26,6 +28,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -71,7 +74,7 @@ class DocServiceImplKnowledgeChangeTest {
     }
 
     /**
-     * 直接 PDF 创建成功后记录 DOC CREATE。
+     * 直接 PDF 创建成功后初始化未索引状态并记录 DOC CREATE。
      */
     @Test
     void directPdfCreateRecordsChange() {
@@ -86,6 +89,9 @@ class DocServiceImplKnowledgeChangeTest {
 
         service.createPDF(param);
 
+        ArgumentCaptor<Doc> captor = ArgumentCaptor.forClass(Doc.class);
+        verify(docMapper).insert(captor.capture());
+        assertThat(captor.getValue().getIndexStatus()).isEqualTo(DocIndexStatus.NOT_INDEXED.getValue());
         verify(changeService).record(KnowledgeEntityType.DOC, 10L, 3L, KnowledgeOperation.CREATE);
     }
 
