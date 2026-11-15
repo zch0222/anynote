@@ -1,7 +1,7 @@
 # AI 模块重构里程碑（M16.x）
 
 > 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-15
-> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0–M16.4 已于 2026-11-15 完成**
+> 状态：**D1–D17、P1/P2 均已拍板；本次按无生产环境的破坏性升级实施；M16.0–M16.5 已于 2026-11-15 完成**
 > 关联文档：[调研报告](./AI_RESEARCH.md) · [总体方案](./AI_REFACTOR_PLAN.md) · [知识检索方案](./KNOWLEDGE_RETRIEVAL_PLAN.md)
 >
 > 本文是执行计划：每个里程碑的任务、验收标准与依赖。设计取舍在两份方案里，这里不重复。
@@ -532,15 +532,15 @@ Harness 内核（不依赖 FastAPI）：
 
 **任务**
 
-- [ ] 检索范围的获取与缓存（每次运行一次）；预过滤条件的生成
-- [ ] 全文召回、语义召回、条目级召回
-- [ ] 查询特征分析；倒数排名融合；去重与每实体限量；重排（可关闭）；相邻片段扩展
-- [ ] 第二段权限确认（批量）；丢弃比例指标；索引滞后标记
-- [ ] 证据结构与去重
-- [ ] 七个工具：`kb_list`、`kb_outline`、`kb_search`、`kb_grep`、`kb_read`、`kb_query`、`kb_related`
-- [ ] 各通道不可用时的降级行为
-- [ ] Python 侧读取同一份权限矩阵用例，验证预过滤口径
-- [ ] 检索层评测的运行器与第一版数据集（不调用对话模型）
+- [x] 检索范围的获取与缓存（每次运行一次）；预过滤条件的生成
+- [x] 全文召回、语义召回、条目级召回
+- [x] 查询特征分析；倒数排名融合；去重与每实体限量；重排（可关闭）；相邻片段扩展
+- [x] 第二段权限确认（批量）；丢弃比例指标；索引滞后标记
+- [x] 证据结构与去重
+- [x] 七个工具：`kb_list`、`kb_outline`、`kb_search`、`kb_grep`、`kb_read`、`kb_query`、`kb_related`
+- [x] 各通道不可用时的降级行为
+- [x] Python 侧读取同一份权限矩阵用例，验证预过滤口径
+- [x] 检索层评测的运行器与第一版数据集（不调用对话模型）
 
 **验收**
 
@@ -548,6 +548,61 @@ Harness 内核（不依赖 FastAPI）：
 - 权限矩阵用例在 Java 与 Python 两侧都通过
 - 检索层评测：权限泄漏为零；期望证据前十召回率达到 M16.0 之后定下的基线
 - 关闭嵌入服务时 `kb_search` 仍返回全文结果；停掉 Elasticsearch 时其余工具按设计降级
+
+**完成时间**：2026-11-15。在当前 `dev` 开发，未新切分支。契约见 [OpenSpec](../../.claude/openspec/changes/2026-11-15-knowledge-retrieval-tools.md)，逐文件清单见 [`docs/changelist/2026-11-15-knowledge-retrieval-tools.md`](../changelist/2026-11-15-knowledge-retrieval-tools.md)。
+
+**用户拍板（2026-11-15，两轮）**：作者条款不受库成员关系限制（Q1）；超管在默认范围内按普通成员预过滤，显式范围才用超管口径（Q2）；知识库通知本期不参与检索（Q3）；任务成员写入索引（Q4/R1）；片段改为不重叠并删除 `chunk-overlap-chars`（Q5/R4）；`kn_item` 补大纲与摘要、PDF 补书签/字号标题与双栏（Q6/R2/R3）；`RunRequest.scope` 定为 `{knowledgeBaseIds, refs}`（Q7）；Harness 内核按需改动（Q8）；上下文编入工具交互（Q9/R5）；`kb_list` 计数由 note 新端点提供（Q10/R6）；检索参数存数据库、经模型快照下发、运行中的循环不变，管理入口本期只做接口（Q13/R7）；评测按固定语料执行（Q14）；在线进程加 ES 依赖（Q15）；用户可见文案与给模型的提示均已确认（Q16/Q17/R8）。
+
+**执行结果**
+
+- **检索层（`ai-service/retrieval/`）**：每运行一个 `RetrievalSession`，只向 note 取一次 `/scope`；`prefilter.py` 把范围翻译为 ES 过滤（作者条款、库成员条款、超管显式范围条款、排除通知、调用方收窄），五位权限串按位用 `regexp` 判定；三路召回（片段全文、片段近邻、条目标题/大纲/摘要）→ 应用层 RRF → 权威性系数 → 每实体限量 → 重排开关（无实现时跳过）→ `/authorize` 每批 100 条 → 相邻片段扩展（已入选的片段不重复补入）→ 证据。证据编号按运行内位置去重，`permission_basis` 与 `retrieval` 只进 Trace；第二段丢弃比例写 `diagnostics` 与日志；`stale` 由 `/authorize` 版本与索引版本比对得出。
+- **七个工具（`ai-service/tools/knowledge/`）**：经 `register_knowledge_tools` 注册，全部只读，描述写明适用与不适用场景；按引用读取的工具先 `/authorize`，再校验显式范围，超管默认范围另用预过滤在索引上复核。note 端点网络失败、鉴权失败或服务错误时抛 `FatalActionError`，循环以 `KNOWLEDGE_ACCESS_UNAVAILABLE` 结束运行。知识检索 Agent 的接入留 M16.6。
+- **Harness 内核**：`ContextBuilder` 在用户问题后按 OpenAI 格式编入 assistant `tool_calls` 与 `tool` 消息（不可信定界，预算不足时从最早一轮截断内容、保留配对）；`ToolOutput/ActionResult/Observation` 增加只进 `trace.action` 的 `diagnostics`；`EvidenceItem` 增加知识库、权威性、滞后与检索字段；`BoundAction` 带运行范围与模型快照；`RunRequest.scope` 改为类型化的 `RunScope`；有工具交互时按含知识库内容调用模型。
+- **检索参数（`services/ai`）**：单行表 `a_retrieval_setting`（无记录时返回默认值）、`GET/PUT /v1/admin/retrieval-settings`（仅 `ADMIN_X`）、并入 `/internal/v1/model-providers/snapshot` 的 `retrieval` 字段，版本计入快照数值部分；Python 每次运行开始时读取一次。
+- **note**：任务 ACL 新增 `taskMemberIds` 并计入 `metaVersion`；新建任务异步插完成员后、新成员加入知识库补任务成员后各登记 `task UPDATE`；新增 `POST /internal/v1/knowledge/stats`（口径同 `/query`）。
+- **索引管线补齐**：schema 升到 2（`kn_item.outline/summary/task_member_ids`、`kn_chunk.task_member_ids`，`kn_meta.active.schema_version`，旧 schema 拒绝写入并提示 `rebuild`）；切分不再重叠；只改元数据时同步任务成员并替换摘要首行标题；PDF 改用 pdfplumber 提取，书签优先，否则按字号识别标题（≥ 正文中位数 1.2 倍、≤ 80 字、非句末标点，最多三级），双栏按中线留白先左后右。
+- **评测（`ai-service/evals/`）**：固定语料 `corpus_v1.json`（2 个身份、2 个知识库、11 篇笔记、1 个任务）、经网关创建语料的 `seed.py`、24 题数据集 `datasets/retrieval_v1.jsonl`（关键词、无答案、同义改写、权限负例、清单与计数）、运行器 `run_retrieval.py` 与指标 `metrics.py`；不进默认 pytest。
+
+**与方案的偏差**
+
+1. 按拍板回补 M16.4 的四处实现（任务成员、片段不重叠、条目大纲/摘要、PDF 标题与双栏），索引需执行一次 `worker.py rebuild`。
+2. 知识库通知已在 M16.4 进入索引，但 note 的 `/authorize` 对通知恒为不可读，本期检索排除通知（预过滤排除、按引用读取返回不存在）。**缺口**：需要 note 或 notify 提供通知的用户可读性判定后再开放。
+3. 超管默认范围：`/authorize`、`/content`、`/outline` 对超管放行，为满足 D16 与 Q2，按引用读取与目录结果另用预过滤（普通成员口径）在索引上复核；因此超管默认范围下这几类调用依赖 ES，ES 不可用时返回「检索通道不可用」。`/query` 与 `/stats` 在 Java 侧已按普通用户判定。
+4. 语义通道区分「关闭」与「不可用」：未配置嵌入时不提示，只走全文；配置了但嵌入调用失败、或模型/维度与激活索引不一致时提示「语义检索暂不可用，本次仅使用全文检索」。
+5. `kb_query` 在显式范围或带 `kb_ids` 时于客户端二次过滤：先取 100 行并请求计数，note 总数不超过 100 时重算数量，否则 `count` 为空，不给近似值。
+6. 查询特征规则（问句标记词、代码样式正则）写成代码常量；`kb_related` 的 `links` 只解析笔记链接（资料没有单篇路由），`submission` 只返回当前用户自己的提交（`MY_TASKS` 口径）。
+
+**验证结果（本机 Docker）**
+
+| 验证 | 实际结果 |
+|---|---|
+| Python 单测 | `anynote/ai-service-test:local` 中 `pytest` **258 passed**（M16.4 后为 56；新增预过滤矩阵、排序、证据与文本、会话、七个工具、上下文工具交互、索引大纲/PDF、评测指标） |
+| 权限矩阵（Python） | 共享 `access-matrix.json` 59 条：显式范围与默认范围两组参数化用例全部通过（匿名用例不适用；超管非成员在默认范围按 D16 断言不可见） |
+| Java 单测 | `maven:3.9.11-eclipse-temurin-21` 内 `mvn -o install -pl note,ai -am`：`services/note` **242/242**（含矩阵 59 条）、`services/ai` **64/64**，上游模块一并通过 |
+| 迁移 | dev MySQL 执行 `2026-11-15-ai-retrieval-setting.sql` 两次，幂等 |
+| 索引重建 | 部署后旧 v1 被 schema 守卫拒绝；`worker.py rebuild` 18 秒完成，`kn_item_v2` 1231 条、`kn_chunk_v2` 962 条，`schema_version=2` |
+| 增量与任务成员 | 经网关新建的评测笔记与任务被增量索引；`task:304` 的 `task_member_ids=[593, 594]`（异步插入成员后的 `task UPDATE` 生效），笔记带大纲与摘要 |
+| 检索层评测 | 24 题：基线（排除同义改写）前十召回 **1.0**（目标 0.85），**权限泄漏 0**，计数题 2/2 正确；同义改写题召回 0（本机未配置嵌入服务，单列不计入基线） |
+| 工具真实栈 | 七个工具以真实用户令牌全部走通；他人笔记读取、显式范围外读取均返回「知识内容不存在或不可读」；非管理员访问检索参数接口返回 `A0301` |
+| 降级 | 嵌入未配置时 `kb_search` 只走全文；ES 地址不可达时 `kb_search` 与库范围 `kb_grep` 返回「检索通道不可用」，`kb_list`、`kb_outline`、`kb_read`（笔记）、单实体 `kb_grep`、`kb_query`、`kb_related` 照常；note 地址不可达时 14 次工具调用全部以 `KNOWLEDGE_ACCESS_UNAVAILABLE` 结束 |
+| 参数运行时生效 | 直接向 `a_retrieval_setting` 写入一行后，下一次快照 `version` 由 `0:1` 变为 `3:1`、`rrfK=30`；删除该行后恢复默认 |
+| PDF 解析 | M16.0 样本、单核、三次中位数：15 页论文 3.66 秒、9 个标题路径；扫描件标记无法提取文本；受控与双栏样本均识别出标题 |
+| OpenAPI | Docker 内拉取并经 `normalize-cli.mjs` 归一化：仅 `note.json`（`/stats` 与 3 个 schema、`Acl.taskMemberIds`）与 `ai.json`（`/v1/admin/retrieval-settings` 与 3 个 schema、快照 `retrieval`）变化，其余 4 份字节一致 |
+| Compose 回归 | `infra/tests/test_compose.py` 5/6，失败项为 M16.4 已记录的既有断言 |
+
+**待补与限制**
+
+- **检索参数管理页面待补**（桌面与移动端设置页，R7 拍板本期只做接口）。
+- 语义通道只有单测覆盖，未接真实嵌入服务联调；超管路径（显式范围超管口径、默认范围索引复核）只有单测覆盖，本机无超管账号。
+- PDF 双栏规则对「标题横跨中线」的页面不拆栏，双栏样本因此把左右两栏的小标题合并为一行；阈值已按拍板固定，是否调整另行决定。
+- 工具已能在真实循环中被模型看到结果，但尚未接入任何 Agent；`RetrievalSessionMiddleware` 需在 M16.6 挂到运行上。
+- 评测语料（2 个账号、2 个知识库、11 篇笔记、1 个任务）保留在 dev 库，供重跑评测；账号信息只在本机评测输出文件中。
+
+**发现但未修改的既有问题（按范围约束仅记录）**
+
+- M16.4 记录的「水位与索引延迟指标」在 worker 中只有 `ok/unhealthy` 健康检查，未找到延迟指标实现。
+- note `/scope` 的 OpenSpec 写「未归档实体的显式超管范围使用 kbId=0」，实现只加入 `kbId>0` 的知识库。
+- 检索参数接口复用 `SystemAdminGuard`，非管理员看到的文案是既有的「只有系统管理员可以管理模型供应商」。
 
 ---
 
