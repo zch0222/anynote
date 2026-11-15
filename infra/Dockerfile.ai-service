@@ -22,6 +22,7 @@ FROM online-dependencies AS test
 COPY ai-service/requirements/test-linux.lock.txt ./requirements/test-linux.lock.txt
 RUN pip install --no-cache-dir -r requirements/test-linux.lock.txt
 COPY ai-service/ ./
+COPY services/note/src/test/resources/knowledge/access-matrix.json /services/note/src/test/resources/knowledge/access-matrix.json
 ENV TIKTOKEN_CACHE_DIR=/opt/tiktoken
 RUN mkdir -p /opt/tiktoken \
     && python -c 'import tiktoken; tiktoken.get_encoding("o200k_base")'

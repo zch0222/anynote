@@ -6,3 +6,4 @@ ai-service/server.log
 ai-service/data/
 ai-service/venv/
 ai-service/.idea/
+!services/note/src/test/resources/knowledge/access-matrix.json

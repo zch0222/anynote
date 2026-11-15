@@ -272,11 +272,15 @@ services:
       NACOS_SERVICE_NAME: anynote-ai-harness
       NACOS_CONFIG_DATA_ID: anynote-ai-harness.yml
       AI_SERVICE_URL: http://anynote-modules-ai:9065
+      NOTE_SERVICE_URL: http://anynote-modules-note:18091
+      ES_URL: http://elasticsearch:9200
       ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:-anynote-internal-secret-change-in-prod}
     networks:
       - anynote-net
     depends_on:
       nacos:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
     ports:
       - "127.0.0.1:${AI_HARNESS_PORT:-8000}:8000"

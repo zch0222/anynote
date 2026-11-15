@@ -87,6 +87,8 @@ services:
       NACOS_SERVICE_NAME: anynote-ai-harness
       NACOS_CONFIG_DATA_ID: anynote-ai-harness.yml
       AI_SERVICE_URL: http://anynote-modules-ai:9065
+      NOTE_SERVICE_URL: http://anynote-modules-note:18091
+      ES_URL: http://elasticsearch:9200
       ANYNOTE_INTERNAL_SECRET: ${ANYNOTE_INTERNAL_SECRET:?请配置至少32字符的内部调用密钥}
   anynote-ai-indexer:
     <<: *prod
