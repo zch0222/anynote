@@ -50,6 +50,7 @@ CREATE TABLE `a_chat_conversation` (
   `title` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '无标题对话' COMMENT '标题',
   `type` tinyint(1) NOT NULL COMMENT '对话类型0.文档rag',
   `doc_id` bigint unsigned DEFAULT NULL COMMENT '文档ID',
+  `scope` json DEFAULT NULL COMMENT '知识检索范围',
   `knowledge_base_id` bigint unsigned NOT NULL DEFAULT '0' COMMENT '知识库id',
   `permissions` char(5) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '70000' COMMENT '权限(作者 知识库管理员 同知识库用户 其它用户 匿名用户)',
   `is_delete` tinyint(1) NOT NULL DEFAULT '0' COMMENT '删除标记 0正常 1删除',
@@ -74,6 +75,9 @@ CREATE TABLE `a_chat_message` (
   `conversation_id` bigint unsigned DEFAULT NULL COMMENT '对话id',
   `order_index` int NOT NULL COMMENT '排序号',
   `content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '消息',
+  `run_id` varchar(64) DEFAULT NULL COMMENT '关联的 Agent 运行标识',
+  `citations` json DEFAULT NULL COMMENT '结构化引用',
+  `outcome` varchar(32) DEFAULT NULL COMMENT 'Agent 运行结果类型',
   `role` tinyint(1) NOT NULL COMMENT '角色: 0.用户 1.bot',
   `type` tinyint(1) NOT NULL COMMENT '0.文档rag',
   `doc_id` bigint unsigned DEFAULT NULL COMMENT '文档id',
@@ -83,7 +87,8 @@ CREATE TABLE `a_chat_message` (
   `update_by` bigint unsigned DEFAULT '0' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
   `remark` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '备注',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_run_id` (`run_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1663 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1204,3 +1209,43 @@ CREATE TABLE IF NOT EXISTS `a_retrieval_setting` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='知识检索运行参数（单行表）';
+
+--
+-- 2026-11-15 知识检索 Agent 运行记录与引用（M16.6）
+-- 建表语句已同步到 infra/sql/migrations/2026-11-15-ai-agent-runs.sql。
+-- 运行事件表只保存 Trace 与不含正文的运行元数据，保留 30 天。
+--
+
+CREATE TABLE IF NOT EXISTS `a_agent_run` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `run_id` varchar(64) NOT NULL COMMENT '运行标识',
+  `conversation_id` bigint unsigned NOT NULL COMMENT '会话标识',
+  `user_id` bigint unsigned NOT NULL COMMENT '用户标识',
+  `agent_name` varchar(64) NOT NULL COMMENT 'Agent 名称',
+  `agent_version` varchar(32) NOT NULL COMMENT 'Agent 版本',
+  `model` varchar(128) DEFAULT NULL COMMENT '模型标识',
+  `state` varchar(32) NOT NULL COMMENT '运行状态',
+  `outcome` varchar(32) DEFAULT NULL COMMENT '运行结果类型',
+  `token_usage` json DEFAULT NULL COMMENT 'Token 用量',
+  `duration_ms` bigint DEFAULT NULL COMMENT '运行耗时（毫秒）',
+  `started_at` datetime(3) NOT NULL COMMENT '运行开始时间',
+  `finished_at` datetime(3) DEFAULT NULL COMMENT '运行结束时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_agent_run_id` (`run_id`),
+  KEY `idx_agent_run_user` (`user_id`, `run_id`),
+  KEY `idx_agent_run_conversation` (`conversation_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='AI Agent 运行记录';
+
+CREATE TABLE IF NOT EXISTS `a_agent_run_event` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `run_id` varchar(64) NOT NULL COMMENT '运行标识',
+  `seq` bigint unsigned NOT NULL COMMENT '运行内事件序号',
+  `type` varchar(64) NOT NULL COMMENT '事件类型',
+  `content` json NOT NULL COMMENT '事件或 Trace 元数据，不含回答正文与引用原文',
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '记录时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_agent_run_event_seq` (`run_id`, `seq`),
+  KEY `idx_agent_run_event_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='AI Agent 运行事件与 Trace（保留 30 天）';
