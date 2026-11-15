@@ -1,7 +1,7 @@
 # AI 模块重构
 
 > 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-15
-> 状态：**D1–D17、P1/P2 均已拍板；无生产环境；M16.0–M16.3、M16.5 的完成记录保留；M16.4 已重开修复并等待最终验收，M16.6 的索引依赖尚未关闭**
+> 状态：**D1–D17、P1/P2 均已拍板；无生产环境；M16.0–M16.5 已完成；M16.4 按调整后的验收范围关闭，真实语义评测移至 M16.8；M16.6 的索引依赖已就绪**
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 测试节](../../README.md#测试)、[`README.md` Git 工作流](../../README.md#git-工作流)、
 > [`docs/refactor/FRONTEND_MILESTONES.md`](../refactor/FRONTEND_MILESTONES.md) M7.6（AI 流式全链路的后端缺口，本方案解除）
 > 参考：AI Agent Handbook（白皮书），本机路径 `D:\code\ai-agent-handbook`，调研时的提交为 `754ec0c`
@@ -116,6 +116,6 @@ AI 相关模块（`services/ai`、`ai-service/` 以及连带的 Feign 契约与�
 3. ~~M16.1（Java 去 WebFlux、D9 改名、P1 凭据基础设施）~~（2026-11-14 完成，验收记录见 `AI_MILESTONES.md` M16.1）。
 4. ~~M16.2（Harness 内核、供应商管理）~~（2026-11-14 完成，验收记录见 `AI_MILESTONES.md` M16.2）。
 5. ~~M16.3（note 知识访问层）~~（2026-11-14 完成，验收记录见 `AI_MILESTONES.md` M16.3）。
-6. **M16.4（索引管线）已重开修复**：原完成记录的缺口见 [独立失败报告](./M16_4_ACCEPTANCE_AUDIT.md)，按[修复契约](../../.claude/openspec/changes/2026-11-15-indexing-integrity-repair.md)实施；固定九类、故障路径与时延已通过，真实语义评测未执行，详见 [新验收记录](./M16_4_REPAIR_ACCEPTANCE.md)。
+6. ~~M16.4（索引管线）~~（2026-11-15 按调整后的验收范围关闭）：原完成记录的缺口见 [独立失败报告](./M16_4_ACCEPTANCE_AUDIT.md)，修复结果见 [新验收记录](./M16_4_REPAIR_ACCEPTANCE.md)；真实语义评测移至 M16.8。
 7. ~~M16.5（检索通道与七个工具）~~（2026-11-15 完成，验收记录见 `AI_MILESTONES.md` M16.5；检索参数管理页面待补）。
-8. M16.6（知识检索 Agent 与运行端点）的索引前置验收尚未关闭；在 M16.4 最终验收完成后确认依赖就绪，真实 Python 上游与真实模型链路仍在 M16.8 复核。
+8. M16.6（知识检索 Agent 与运行端点）的索引前置依赖已随 M16.4 关闭而就绪；真实 Python 上游、真实模型链路与真实 Embedding 语义评测仍在 M16.8 复核。
