@@ -28,6 +28,9 @@ import com.anynote.core.exception.BusinessException;
 import com.google.gson.Gson;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -38,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -146,7 +150,8 @@ class AgentRunServiceImplTest {
         verify(messageMapper).updateById(org.mockito.ArgumentMatchers.argThat((ChatMessage message) ->
                 "答案[1]".equals(message.getContent())
                         && "ANSWERED".equals(message.getOutcome())
-                        && message.getCitations().contains("E1")));
+                        && message.getCitations().contains("E1")
+                        && message.getAnswerNotices().contains("UNSOURCED")));
         verify(runMapper, atLeastOnce()).updateById(org.mockito.ArgumentMatchers.argThat((AgentRunPO run) ->
                 "COMPLETED".equals(run.getState())
                         && "ANSWERED".equals(run.getOutcome())
@@ -170,6 +175,58 @@ class AgentRunServiceImplTest {
                         && "FAILED".equals(message.getOutcome())));
         verify(runMapper).updateById(org.mockito.ArgumentMatchers.argThat((AgentRunPO run) ->
                 "FAILED".equals(run.getState()) && "FAILED".equals(run.getOutcome())));
+    }
+
+    /**
+     * 上游错误类别只向用户返回对应的已确认文案。
+     *
+     * @param category Harness 错误类别
+     * @param expectedMessage 用户可见文案
+     */
+    @ParameterizedTest
+    @MethodSource("failureMessages")
+    void mapsHarnessFailureCategoryToApprovedMessage(String category, String expectedMessage) {
+        AgentRunEventVO[] forwardedError = new AgentRunEventVO[1];
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Consumer<AgentRunEventVO> consumer = invocation.getArgument(2);
+            HarnessRunRequestDTO request = invocation.getArgument(1);
+            String runId = request.getRunId();
+            forwardedError[0] = event(runId, 1, "error", Map.of(
+                    "category", category,
+                    "retryable", false,
+                    "message", "上游内部信息"));
+            consumer.accept(forwardedError[0]);
+            consumer.accept(event(runId, 2, "run.finished", Map.of(
+                    "state", "FAILED",
+                    "outcome", "FAILED",
+                    "evidence", List.of(),
+                    "answerNotices", List.of(),
+                    "unfinished", List.of(),
+                    "usage", Map.of())));
+            return null;
+        }).when(harnessClient).streamAgentRun(any(), any(), any());
+
+        service.createRun(AgentRunRequestDTO.builder().input("问题").build(), context());
+
+        assertThat(forwardedError[0].getData()).containsEntry("message", expectedMessage);
+    }
+
+    /**
+     * 提供错误类别及已确认的用户文案。
+     *
+     * @return 参数化测试数据
+     */
+    static Stream<Arguments> failureMessages() {
+        return Stream.of(
+                Arguments.of("BUDGET_MODEL_TURNS", "这个问题需要的步骤超出了单次上限，可以缩小范围或拆成几个问题再试"),
+                Arguments.of("NO_PROGRESS", "这个问题需要的步骤超出了单次上限，可以缩小范围或拆成几个问题再试"),
+                Arguments.of("MODEL_TIMEOUT", "模型调用超时，请稍后重试"),
+                Arguments.of("MODEL_UNAVAILABLE", "模型服务暂时不可用，请稍后重试"),
+                Arguments.of("EMPTY_MODEL_OUTPUT", "模型没有返回内容，请重试"),
+                Arguments.of("KNOWLEDGE_ACCESS_UNAVAILABLE", "知识库服务暂时不可用，请稍后重试"),
+                Arguments.of("INTERNAL", "服务暂时不可用，请稍后重试"),
+                Arguments.of("UNEXPECTED", "服务暂时不可用，请稍后重试"));
     }
 
     /**
@@ -296,6 +353,7 @@ class AgentRunServiceImplTest {
                     "state", "COMPLETED",
                     "outcome", "ANSWERED",
                     "evidence", List.of("E1"),
+                    "answerNotices", List.of("UNSOURCED"),
                     "unfinished", List.of(),
                     "usage", Map.of("totalTokens", 12.0, "known", true))));
             return null;

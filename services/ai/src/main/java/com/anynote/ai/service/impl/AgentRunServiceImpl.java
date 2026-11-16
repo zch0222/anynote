@@ -65,6 +65,16 @@ public class AgentRunServiceImpl implements AgentRunService {
 
     private static final String SERVICE_UNAVAILABLE_MESSAGE = "服务暂时不可用，请稍后重试";
 
+    private static final String BUDGET_EXHAUSTED_MESSAGE = "这个问题需要的步骤超出了单次上限，可以缩小范围或拆成几个问题再试";
+
+    private static final String MODEL_TIMEOUT_MESSAGE = "模型调用超时，请稍后重试";
+
+    private static final String MODEL_UNAVAILABLE_MESSAGE = "模型服务暂时不可用，请稍后重试";
+
+    private static final String EMPTY_MODEL_OUTPUT_MESSAGE = "模型没有返回内容，请重试";
+
+    private static final String KNOWLEDGE_ACCESS_UNAVAILABLE_MESSAGE = "知识库服务暂时不可用，请稍后重试";
+
     private static final String CONCURRENCY_LIMIT_MESSAGE = "当前使用人数较多，请稍后再试";
 
     private static final String DAILY_LIMIT_MESSAGE = "今日 AI 问答次数已达上限，请明天再试。";
@@ -448,7 +458,7 @@ public class AgentRunServiceImpl implements AgentRunService {
             if ("CANCELLED".equals(category)) {
                 return;
             }
-            data.put("message", SERVICE_UNAVAILABLE_MESSAGE);
+            data.put("message", userErrorMessage(category));
             event.setData(data);
         } else if ("run.finished".equals(event.getType())) {
             persistFinished(setup, state, data);
@@ -466,6 +476,7 @@ public class AgentRunServiceImpl implements AgentRunService {
             state.usage = castMap(usage);
             setup.run().setTokenUsage(gson.toJson(usage));
         }
+        state.answerNotices = readStringList(data.get("answerNotices"));
         setup.run().setState(runState);
         setup.run().setOutcome(outcome);
         setup.run().setFinishedAt(now);
@@ -501,6 +512,7 @@ public class AgentRunServiceImpl implements AgentRunService {
                 "state", "FAILED",
                 "outcome", "FAILED",
                 "evidence", List.of(),
+                "answerNotices", List.of(),
                 "unfinished", List.of(),
                 "usage", state.usage));
         sendEvent(emitter, finished, finished.getData());
@@ -511,6 +523,7 @@ public class AgentRunServiceImpl implements AgentRunService {
     private void saveAnswer(ChatMessage answerMessage, RelayState state, String outcome, Date updatedAt) {
         answerMessage.setContent(state.answer.toString());
         answerMessage.setCitations(gson.toJson(state.citations));
+        answerMessage.setAnswerNotices(gson.toJson(state.answerNotices));
         answerMessage.setOutcome(outcome);
         answerMessage.setUpdateTime(updatedAt);
         messageMapper.updateById(answerMessage);
@@ -528,6 +541,7 @@ public class AgentRunServiceImpl implements AgentRunService {
                 "state", "FAILED",
                 "outcome", "FAILED",
                 "evidence", List.of(),
+                "answerNotices", List.of(),
                 "unfinished", List.of(),
                 "usage", Map.of());
         AgentRunEventVO finished = event(runId, 2L, "run.finished", finishedData);
@@ -650,6 +664,34 @@ public class AgentRunServiceImpl implements AgentRunService {
         return value == null ? Map.of() : value;
     }
 
+    /**
+     * 将 Harness 错误类别映射为已确认的用户文案。
+     *
+     * @param category 上游错误类别
+     * @return 用户可见错误文案
+     */
+    private String userErrorMessage(Object category) {
+        String value = category == null ? "" : String.valueOf(category);
+        if (value.startsWith("BUDGET_")) {
+            return BUDGET_EXHAUSTED_MESSAGE;
+        }
+        return switch (value) {
+            case "NO_PROGRESS" -> BUDGET_EXHAUSTED_MESSAGE;
+            case "MODEL_TIMEOUT" -> MODEL_TIMEOUT_MESSAGE;
+            case "MODEL_UNAVAILABLE" -> MODEL_UNAVAILABLE_MESSAGE;
+            case "EMPTY_MODEL_OUTPUT" -> EMPTY_MODEL_OUTPUT_MESSAGE;
+            case "KNOWLEDGE_ACCESS_UNAVAILABLE" -> KNOWLEDGE_ACCESS_UNAVAILABLE_MESSAGE;
+            default -> SERVICE_UNAVAILABLE_MESSAGE;
+        };
+    }
+
+    private List<String> readStringList(Object value) {
+        if (value instanceof List<?> items) {
+            return items.stream().map(String::valueOf).toList();
+        }
+        return List.of();
+    }
+
     private String stringValue(Object value, String fallback) {
         return value == null ? fallback : String.valueOf(value);
     }
@@ -668,6 +710,8 @@ public class AgentRunServiceImpl implements AgentRunService {
         private final StringBuilder answer = new StringBuilder();
 
         private final List<Map<String, Object>> citations = new ArrayList<>();
+
+        private List<String> answerNotices = List.of();
 
         private long lastSequence;
 

@@ -52,6 +52,11 @@ public class ChatMessage extends BaseEntity {
     private String citations;
 
     /**
+     * JSON 格式的回答标注。
+     */
+    private String answerNotices;
+
+    /**
      * Agent 运行结果类型。
      */
     private String outcome;
@@ -80,8 +85,9 @@ public class ChatMessage extends BaseEntity {
 
     @Builder
     public ChatMessage(Long id, Long conversationId, Integer orderIndex, String content, int role, int type,
-                       String runId, String citations, String outcome, Long docId, int deleted, Long createBy,
-                       Date createTime, Long updateBy, Date updateTime, String remark, Map<String, Object> params) {
+                       String runId, String citations, String answerNotices, String outcome, Long docId, int deleted,
+                       Long createBy, Date createTime, Long updateBy, Date updateTime, String remark,
+                       Map<String, Object> params) {
         super(createBy, createTime, updateBy, updateTime, remark, params);
         this.id = id;
         this.conversationId = conversationId;
@@ -89,6 +95,7 @@ public class ChatMessage extends BaseEntity {
         this.content = content;
         this.runId = runId;
         this.citations = citations;
+        this.answerNotices = answerNotices;
         this.outcome = outcome;
         this.role = role;
         this.type = type;

@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 会话消息响应对象，将 JSON 引用转换为结构化数组。
+ * 会话消息响应对象，将 JSON 引用与回答标注转换为结构化数组。
  *
  * @author 称霸幼儿园
  */
@@ -39,6 +39,9 @@ public class ChatMessageVO {
     @Schema(description = "结构化引用")
     private List<Map<String, Object>> citations;
 
+    @Schema(description = "回答标注")
+    private List<String> answerNotices;
+
     private String outcome;
 
     private int role;
@@ -61,6 +64,8 @@ public class ChatMessageVO {
 
     private static final Type CITATIONS_TYPE = new TypeToken<List<Map<String, Object>>>() { }.getType();
 
+    private static final Type ANSWER_NOTICES_TYPE = new TypeToken<List<String>>() { }.getType();
+
     /**
      * 将持久化消息转换为接口消息。
      *
@@ -80,6 +85,17 @@ public class ChatMessageVO {
                 // 历史消息的非 JSON 引用按空数组返回。
             }
         }
+        List<String> answerNotices = List.of();
+        if (message.getAnswerNotices() != null && !message.getAnswerNotices().isBlank()) {
+            try {
+                List<String> parsed = gson.fromJson(message.getAnswerNotices(), ANSWER_NOTICES_TYPE);
+                if (parsed != null) {
+                    answerNotices = parsed;
+                }
+            } catch (RuntimeException ignored) {
+                // 历史消息的非 JSON 标注按空数组返回。
+            }
+        }
         return ChatMessageVO.builder()
                 .id(message.getId())
                 .conversationId(message.getConversationId())
@@ -87,6 +103,7 @@ public class ChatMessageVO {
                 .content(message.getContent())
                 .runId(message.getRunId())
                 .citations(citations)
+                .answerNotices(answerNotices)
                 .outcome(message.getOutcome())
                 .role(message.getRole())
                 .type(message.getType())

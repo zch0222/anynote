@@ -77,6 +77,7 @@ CREATE TABLE `a_chat_message` (
   `content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '消息',
   `run_id` varchar(64) DEFAULT NULL COMMENT '关联的 Agent 运行标识',
   `citations` json DEFAULT NULL COMMENT '结构化引用',
+  `answer_notices` json DEFAULT NULL COMMENT '回答标注',
   `outcome` varchar(32) DEFAULT NULL COMMENT 'Agent 运行结果类型',
   `role` tinyint(1) NOT NULL COMMENT '角色: 0.用户 1.bot',
   `type` tinyint(1) NOT NULL COMMENT '0.文档rag',
