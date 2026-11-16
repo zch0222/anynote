@@ -121,7 +121,12 @@ class ContextBuilder:
                 selected_reason="本轮输入",
             )
         )
-        fixed_tokens = sum(self._counter.count(item.content) for item in high)
+        fixed_tokens = sum(
+            self._counter.count(
+                item.referenced_content if item.referenced_content is not None else item.content
+            )
+            for item in high
+        )
         remaining = max(0, run.runtime.context_tokens - fixed_tokens)
         exchange_messages, exchange_layers = self._exchange_messages(run.tool_exchanges, remaining // 2)
         remaining = max(0, remaining - sum(self._counter.count(item.content) for item in exchange_layers))
@@ -133,7 +138,9 @@ class ContextBuilder:
         selected = [*high, *selected_history, *selected_evidence, *exchange_layers]
         messages = self._compile_messages(high, selected_history, selected_evidence)
         messages.extend(exchange_messages)
-        token_count = self._counter.count(json.dumps(messages, ensure_ascii=False))
+        token_count = self._counter.count(json.dumps(messages, ensure_ascii=False)) + self._counter.count(
+            json.dumps(tools, ensure_ascii=False)
+        )
         manifest = ContextManifest(
             run_id=run.run_id,
             model_turn=run.model_turns + 1,

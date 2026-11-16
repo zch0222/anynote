@@ -92,7 +92,7 @@ def test_manifest_does_not_contain_access_token():
 
 
 async def test_context_sends_tool_definitions_only_in_tools_parameter():
-    """工具 JSON 不再拼进系统提示，清单仅保留引用记录和 token 数。"""
+    """工具 JSON 不拼进系统提示，清单保留引用记录，上下文预算只计一份。"""
     run = make_run(["search"])
     tools = [
         {
@@ -110,7 +110,9 @@ async def test_context_sends_tool_definitions_only_in_tools_parameter():
     assert result.tools == tools
     assert tool_layer.transform == "REFERENCE"
     assert tool_layer.token_count == len(json.dumps(tools, ensure_ascii=False))
-    assert result.token_count == len(json.dumps(result.messages, ensure_ascii=False))
+    assert result.token_count == len(json.dumps(result.messages, ensure_ascii=False)) + len(
+        json.dumps(tools, ensure_ascii=False)
+    )
 
 
 async def test_budget_hint_is_recomputed_without_accumulating_between_turns():
