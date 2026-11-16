@@ -1,6 +1,7 @@
 package com.anynote.note.api.model.vo;
 
 import lombok.Data;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Date;
 
@@ -41,6 +42,10 @@ public class DocVO {
     private Date updateTime;
 
     private String url;
+
+    /** 资料关联的文件标识。 */
+    @Schema(description = "资料关联的文件标识")
+    private Long fileId;
 
     private String hash;
 
