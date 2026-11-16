@@ -97,7 +97,10 @@ class ContextBuilder:
             run.history = list(history)
         high = self._fixed_layers(run, tools)
         history_layers = [self._history_layer(index, item) for index, item in enumerate(history)]
-        evidence_layers = [self._evidence_layer(run, item) for item in run.workspace.evidence]
+        # 结构化行（清单、目录、关系）已带 evidenceId 出现在工具结果里，不再以证据层重复发送
+        evidence_layers = [
+            self._evidence_layer(run, item) for item in run.workspace.evidence if not item.structured
+        ]
         high.append(
             _Layer(
                 scope="run",

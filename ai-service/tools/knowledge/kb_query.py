@@ -8,7 +8,7 @@ from typing import Any
 from harness.action.policy import BoundAction
 from harness.action.registry import ToolOutput, ToolSpec
 from tools.knowledge.args import KbQueryArgs
-from tools.knowledge.common import KnowledgeToolContext, dumps
+from tools.knowledge.common import KnowledgeToolContext, dumps, register_row
 
 NAME = "kb_query"
 SUMMARY = "查询知识库清单"
@@ -56,7 +56,6 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
         evidence = []
         payload_rows = []
         for row in rows:
-            item_key = f"{row.ref}#{row.subtype}" if row.subtype else row.ref
             fields = {
                 "entityType": row.entity_type,
                 "title": row.title,
@@ -64,25 +63,22 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
                 "updateTime": row.update_time,
                 "attributes": row.attributes,
             }
-            item = session.evidence.register(
-                item_key=item_key,
-                entity_type=row.entity_type or row.ref.split(":", 1)[0],
-                text=dumps(fields),
+            item = register_row(
+                session,
+                ref=row.ref,
+                subtype=row.subtype,
+                entity_type=row.entity_type,
                 title=row.title,
-                locator={"queryRow": True, **({"moocId": row.attributes["moocId"]}
-                         if row.attributes.get("moocId") is not None else {})},
                 kb_id=row.kb_id,
                 kb_name=scope.kb_name(row.kb_id),
-                authority="original",
-                content_version=None,
-                stale=False,
-                permission_basis=None,
-                retrieval={"channels": {"query": 1}},
+                channel="query",
                 selected_reason=NAME,
+                locator={"moocId": row.attributes.get("moocId")},
             )
-            evidence.append(item)
-            payload_rows.append({"evidenceId": item.evidence_id, "ref": row.ref, "subtype": row.subtype,
-                                 "kbId": row.kb_id, **fields})
+            identity = {"evidenceId": item.evidence_id} if item is not None else {}
+            if item is not None:
+                evidence.append(item)
+            payload_rows.append({**identity, "ref": row.ref, "subtype": row.subtype, "kbId": row.kb_id, **fields})
         payload = {"rows": payload_rows, "count": count if args.with_count else None}
         return ToolOutput(
             content=dumps(payload),

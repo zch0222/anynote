@@ -6,6 +6,8 @@
 import asyncio
 import time
 
+from pydantic import ValidationError
+
 from agents.knowledge_retrieval.agent import AgentFinishArgs, finish_tool_definition
 from agents.knowledge_retrieval.response import validate_answer
 from core.errors import BUDGET_EXHAUSTED_MESSAGE, INTERNAL_ERROR_MESSAGE, RUN_CANCELLED_MESSAGE
@@ -28,6 +30,25 @@ from harness.trace.middleware import TraceMiddleware
 from harness.verify.framework import VerificationIssue, VerificationReport, VerifierFramework
 from models.base import ChatModel
 from models.catalog import ModelError
+
+MISSING_FINISH_HINT = "未收到结构化终态，请调用 agent_finish 提交结果；回答写在本条回复正文里或 answer 参数里都可以。"
+FINISH_WITH_TOOLS_HINT = "agent_finish 需要单独调用；本轮已先执行其他工具，请看过结果后再提交。"
+MULTIPLE_FINISH_HINT = "agent_finish 每轮只能调用一次，请重新提交。"
+INVALID_FINISH_HINT = "agent_finish 参数不合法（{details}），请按工具定义重新提交。"
+
+
+def _validation_details(error: ValidationError, limit: int = 3) -> str:
+    """把终态参数的校验错误压缩成给模型看的一行提示。
+
+    :param error: Pydantic 校验错误
+    :param limit: 最多列出的错误条数
+    :return: 形如「answer: ...; reasoning: ...」的说明
+    """
+    parts = []
+    for item in error.errors()[:limit]:
+        location = ".".join(str(part) for part in item.get("loc", ())) or "arguments"
+        parts.append(f"{location}: {item.get('msg', 'invalid')}")
+    return "; ".join(parts)
 
 
 class Harness:
@@ -113,7 +134,9 @@ class Harness:
                     await self._finish_short_circuit(context, events, machine, chain, decision)
                     return
                 context.model_turns += 1
-                calls, turn_usage, finish_signal = await self._call_model(context, events, prepared)
+                calls, turn_usage, finish_signal, finish_problem = await self._call_model(
+                    context, events, prepared
+                )
                 await self._add_usage(context, events, turn_usage)
                 await chain.invoke(
                     Hook.AFTER_MODEL,
@@ -145,7 +168,9 @@ class Harness:
                     if finish_signal is None:
                         if signal_attempts == 0:
                             signal_attempts += 1
-                            context.hints.append("未收到结构化终态，请使用 agent_finish 提交结果。")
+                            context.hints.append(finish_problem or MISSING_FINISH_HINT)
+                            # 模型已在正文里作答或终态无效：重交的这一轮只提供 agent_finish
+                            context.force_finish = True
                             continue
                         context.error_category = "VALIDATION_FAILED"
                         context.error_message = INTERNAL_ERROR_MESSAGE
@@ -157,7 +182,6 @@ class Harness:
                         await self._finish_short_circuit(context, events, machine, chain, decision)
                         return
                     validated = validate_answer(
-                        context.answer,
                         finish_signal,
                         context.workspace.evidence,
                         context.scope_summary,
@@ -267,10 +291,20 @@ class Harness:
             await chain.invoke(Hook.AFTER_RUN, context)
 
     async def _call_model(self, context: RunContext, events: EventBus, prepared):
+        """调用一次模型并拆出工具调用与终态信号。
+
+        有终态工具的 Agent 以 ``agent_finish.answer`` 为回答；终态没带 answer 时，取同一条回复的正文。
+        正文在校验前不下发。终态与其他工具同轮出现时先执行其他工具；终态参数不合法或重复时交给循环提示重交。
+
+        :param context: 当前运行
+        :param events: 运行事件总线
+        :param prepared: 编译后的上下文
+        :return: （工具调用, 用量, 终态信号, 终态问题提示）
+        """
         calls = []
-        usage = TokenUsage()
+        finish_calls = []
         buffered_text = []
-        finish_signal = None
+        usage = TokenUsage()
         structured = context.agent.terminal_tool is not None
         async for chunk in self._model.stream(
             context.request.model or context.agent.main_model,
@@ -289,19 +323,30 @@ class Harness:
                     await events.emit("text.delta", {"delta": chunk.text_delta})
             if chunk.usage:
                 usage = usage.plus(chunk.usage)
-            if chunk.tool_calls:
-                for call in chunk.tool_calls:
-                    if structured and call.name == context.agent.terminal_tool:
-                        if finish_signal is not None or calls:
-                            raise ValueError("Agent finish signal must be the only terminal tool call")
-                        finish_signal = AgentFinishArgs.model_validate(call.arguments)
-                    else:
-                        if finish_signal is not None:
-                            raise ValueError("Agent finish signal cannot be combined with another tool call")
-                        calls.append(call)
-        if structured:
-            context.answer = "".join(buffered_text) if finish_signal is not None else ""
-        return calls, usage, finish_signal
+            for call in chunk.tool_calls or []:
+                if structured and call.name == context.agent.terminal_tool:
+                    finish_calls.append(call)
+                else:
+                    calls.append(call)
+        if not structured:
+            return calls, usage, None, None
+        context.answer = ""
+        if not finish_calls:
+            return calls, usage, None, None
+        if calls and not context.force_finish:
+            context.hints.append(FINISH_WITH_TOOLS_HINT)
+            return calls, usage, None, None
+        if len(finish_calls) > 1:
+            return [], usage, None, MULTIPLE_FINISH_HINT
+        try:
+            finish_signal = AgentFinishArgs.model_validate(finish_calls[0].arguments)
+        except ValidationError as error:
+            return [], usage, None, INVALID_FINISH_HINT.format(details=_validation_details(error))
+        if finish_signal.outcome == "ANSWERED":
+            if not (finish_signal.answer or "").strip():
+                finish_signal = finish_signal.model_copy(update={"answer": "".join(buffered_text)})
+            context.answer = finish_signal.answer or ""
+        return [], usage, finish_signal, None
 
     async def _act(self, context: RunContext, events: EventBus, calls):
         specs = [self._registry.get(call.name) for call in calls]

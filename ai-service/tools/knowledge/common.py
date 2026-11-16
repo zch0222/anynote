@@ -7,11 +7,13 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from harness.models import EvidenceItem
 from retrieval.models import DOC_UNAVAILABLE_MESSAGE, AuthorizationItem
 from retrieval.search import HybridSearcher
 from retrieval.session import RetrievalSession, RetrievalSessionStore
 
 MAX_CONTENT_PAGES = 100
+COUNT_LABELS = {"note": "笔记", "doc": "资料", "mooc": "慕课", "task": "任务"}
 
 
 @dataclass
@@ -32,6 +34,74 @@ def dumps(value: Any) -> str:
     :return: JSON 文本
     """
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
+
+
+def counts_summary(counts: dict[str, int]) -> str:
+    """把知识库各类内容的数量写成来源摘要，如「笔记 3 · 资料 1」。
+
+    :param counts: note 统计的各类数量
+    :return: 摘要文本
+    """
+    known = [f"{label} {counts[key]}" for key, label in COUNT_LABELS.items() if key in counts]
+    other = [f"{key} {value}" for key, value in counts.items() if key not in COUNT_LABELS]
+    return " · ".join(known + other)
+
+
+def register_row(
+    session: RetrievalSession,
+    *,
+    ref: str,
+    entity_type: str | None,
+    title: str | None,
+    kb_id: int | None,
+    kb_name: str | None,
+    channel: str,
+    selected_reason: str,
+    subtype: str | None = None,
+    summary: str = "",
+    locator: dict[str, Any] | None = None,
+    authority: str = "original",
+    permission_basis: str | None = None,
+) -> EvidenceItem | None:
+    """把清单、目录或关系结果里的一行登记为可引用的结构化证据。
+
+    行已经过 note 的可读性过滤；不在本次运行显式范围内的行只给模型看，不登记为证据。
+    定位符带 ``row`` 标记，避免与同一实体的正文证据共用编号。
+
+    :param session: 检索会话
+    :param ref: 实体引用
+    :param entity_type: 实体类型，缺省时取附属类型或引用前缀
+    :param title: 标题
+    :param kb_id: 所属知识库
+    :param kb_name: 知识库名称
+    :param channel: 记入命中通道的名称
+    :param selected_reason: 进入上下文的原因
+    :param subtype: 附属类型（字幕或总结）
+    :param summary: 服务端生成的来源摘要，作为引用片段展示
+    :param locator: 额外定位，空值会被去掉
+    :param authority: original、transcript 或 generated
+    :param permission_basis: 可读依据
+    :return: 证据条目；不在范围内时为空值
+    """
+    if not session.in_run_scope(ref, kb_id):
+        return None
+    extra = {key: value for key, value in (locator or {}).items() if value is not None}
+    return session.evidence.register(
+        item_key=f"{ref}#{subtype}" if subtype else ref,
+        entity_type=entity_type or subtype or ref.split(":", 1)[0],
+        text=summary,
+        title=title,
+        locator={"row": True, **extra},
+        kb_id=kb_id,
+        kb_name=kb_name,
+        authority=authority,
+        content_version=None,
+        stale=False,
+        permission_basis=permission_basis,
+        retrieval={"channels": {channel: 1}},
+        selected_reason=selected_reason,
+        structured=True,
+    )
 
 
 def split_item_key(item_key: str) -> tuple[str, str | None]:

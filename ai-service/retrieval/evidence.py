@@ -56,12 +56,13 @@ class EvidenceRegistry:
         permission_basis: str | None,
         retrieval: dict[str, Any] | None,
         selected_reason: str,
+        structured: bool = False,
     ) -> EvidenceItem:
         """登记一条证据；位置已存在时返回已有证据，不覆盖其内容。
 
         :param item_key: 条目键
         :param entity_type: 实体类型
-        :param text: 证据正文
+        :param text: 证据正文；结构化行为服务端生成的来源摘要
         :param title: 标题
         :param locator: 定位符
         :param kb_id: 所属知识库
@@ -72,6 +73,7 @@ class EvidenceRegistry:
         :param permission_basis: 可读依据
         :param retrieval: 命中通道、排名与分数
         :param selected_reason: 进入上下文的原因
+        :param structured: 是否为清单、目录、关系结果里的一行
         :return: 证据条目
         """
         mooc_id = self._mooc_ids.get(item_key)
@@ -97,6 +99,7 @@ class EvidenceRegistry:
             authority=authority,
             stale=stale,
             retrieval=retrieval,
+            structured=structured,
         )
         self._ids[key] = evidence_id
         self._items[evidence_id] = item

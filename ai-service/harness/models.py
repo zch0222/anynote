@@ -177,6 +177,9 @@ class EvidenceItem(BaseModel):
     authority: str | None = None
     stale: bool = False
     retrieval: dict[str, Any] | None = None
+    # 清单、目录、关系结果里的一行：只有标题与属性、没有原文，引用时只核对编号；
+    # 此时 content 是服务端生成的来源摘要，可为空。
+    structured: bool = False
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 

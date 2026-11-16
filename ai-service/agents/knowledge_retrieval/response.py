@@ -28,12 +28,15 @@ RAW_URL_PATTERN = re.compile(r"(?i)(?:https?://|www\.)[^\s<>]+")
 class ValidatedAnswer:
     """已过滤的回答、结果类型、引用与验证缺口。
 
+    引用三元组为（编号, 证据, 来源片段）：正文类证据的片段是核对过的原文，
+    结构化行的片段是服务端生成的摘要，可为空。
+
     @author 称霸幼儿园
     """
 
     outcome: RunOutcome
     answer: str
-    citations: list[tuple[int, EvidenceItem, str]]
+    citations: list[tuple[int, EvidenceItem, str | None]]
     issues: list[str]
 
 
@@ -67,14 +70,15 @@ def filter_external_links_and_images(text: str) -> str:
 
 
 def validate_answer(
-    text: str,
     signal: AgentFinishArgs,
     evidence: list[EvidenceItem],
     scope_summary: str | None,
 ) -> ValidatedAnswer:
     """核对 Agent 终态、引用编号及引用原文。
 
-    :param text: Agent 正文
+    回答只取自终态信号的 ``answer``，助手正文不参与。正文类证据要求引用片段逐字出现在证据里；
+    清单、目录、关系结果（结构化行）只核对编号，来源片段改用服务端摘要。
+
     :param signal: 结构化终态信号
     :param evidence: 本次运行内已授权证据
     :param scope_summary: 检索范围摘要
@@ -104,28 +108,34 @@ def validate_answer(
             issues=issues,
         )
 
-    clean_text = filter_external_links_and_images(text)
+    clean_text = filter_external_links_and_images(signal.answer or "")
     evidence_by_id = {item.evidence_id: item for item in evidence}
     quotes = {item.index: item.quote for item in signal.citations}
     seen: set[int] = set()
-    citations: list[tuple[int, EvidenceItem, str]] = []
+    citations: list[tuple[int, EvidenceItem, str | None]] = []
     invalid: set[int] = set()
     issues: list[str] = []
 
     for index, quote in quotes.items():
         item = evidence_by_id.get(f"E{index}")
-        if item is None or quote not in item.content:
+        if item is None or (not item.structured and quote not in item.content):
             invalid.add(index)
 
     for match in CITATION_PATTERN.finditer(clean_text):
         index = int(match.group(1))
         item = evidence_by_id.get(f"E{index}")
-        quote = quotes.get(index)
-        if item is None or not quote or quote not in item.content:
+        if item is None:
             invalid.add(index)
             continue
+        if item.structured:
+            snippet = item.content or None
+        else:
+            snippet = quotes.get(index)
+            if not snippet or snippet not in item.content:
+                invalid.add(index)
+                continue
         if index not in seen:
-            citations.append((index, item, quote))
+            citations.append((index, item, snippet))
             seen.add(index)
 
     if invalid:

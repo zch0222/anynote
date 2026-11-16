@@ -6,14 +6,21 @@
 from core.config import HarnessRuntimeSettings
 from harness.context.builder import ContextBuilder
 from harness.events import EventBus
-from harness.loop import Harness
+from harness.loop import MISSING_FINISH_HINT, Harness
 from harness.models import EvidenceItem, RunContext, RunOutcome, RunRequest, RunScope
 from models.catalog import ModelCatalogSnapshot
 from models.scripted import ScriptedModel, ScriptStep
 from retrieval.search import SearchOutcome
 from retrieval.session import RetrievalSessionMiddleware, RetrievalSessionStore
 from tests.conftest import CharacterCounter
-from retrieval.models import KnowledgeScope, ScopeKnowledgeBase
+from retrieval.models import (
+    KnowledgeScope,
+    QueryResult,
+    QueryRow,
+    ScopeKnowledgeBase,
+    StatsKnowledgeBase,
+    StatsResult,
+)
 from harness.action.registry import ToolRegistry
 from tests.knowledge_fakes import FakeIndexReader, FakeKnowledgeClient
 from tools.knowledge import KNOWLEDGE_TOOL_NAMES, register_knowledge_tools
@@ -52,17 +59,39 @@ def _run(run_id: str = "knowledge-run") -> RunContext:
     )
 
 
-def _tool_arguments(outcome: str, index: int = 1, quote: str = "可核对原文") -> dict:
-    """构造 Agent 结构化终态工具参数。"""
+def _tool_arguments(
+    outcome: str,
+    index: int = 1,
+    quote: str = "可核对原文",
+    answer: str = "结论[1]",
+) -> dict:
+    """构造 Agent 结构化终态工具参数；回答正文放在 answer 里。"""
+    if outcome != "ANSWERED":
+        return {"outcome": outcome, "citations": []}
     return {
         "outcome": outcome,
-        "citations": [{"index": index, "quote": quote}] if outcome == "ANSWERED" else [],
+        "answer": answer,
+        "citations": [{"index": index, "quote": quote}],
     }
 
 
-async def _execute(model: ScriptedModel, evidence: list[EvidenceItem]):
+def _finish(call_id: str, arguments: dict) -> ModelChunk:
+    """构造一次 agent_finish 工具调用。"""
+    return ModelChunk(tool_calls=[ToolCall(call_id=call_id, name="agent_finish", arguments=arguments)])
+
+
+def _deltas(events) -> list[str]:
+    """取出发给调用方的回答文本。"""
+    return [event.data["delta"] for event in events if event.type == "text.delta"]
+
+
+async def _execute(
+    model: ScriptedModel,
+    evidence: list[EvidenceItem],
+    knowledge: FakeKnowledgeClient | None = None,
+):
     """挂载知识工具与首轮中间件并收集运行事件。"""
-    knowledge = FakeKnowledgeClient()
+    knowledge = knowledge or FakeKnowledgeClient()
     index = FakeIndexReader()
     store = RetrievalSessionStore(knowledge, index)  # type: ignore[arg-type]
     searcher = PrefetchSearcher(evidence)
@@ -97,21 +126,13 @@ def _evidence() -> EvidenceItem:
 
 
 async def test_first_turn_prefetch_is_hidden_until_citation_validation_finishes():
-    """首轮预取使用原问题，Agent 终态信号不进入 SSE 文本。"""
+    """首轮预取使用原问题；回答取自 agent_finish.answer，助手正文里的过程话术不会发出。"""
     model = ScriptedModel(
         [
             ScriptStep(
                 [
-                    ModelChunk(text_delta="结论[1]"),
-                    ModelChunk(
-                        tool_calls=[
-                            ToolCall(
-                                call_id="finish-1",
-                                name="agent_finish",
-                                arguments=_tool_arguments("ANSWERED"),
-                            )
-                        ]
-                    ),
+                    ModelChunk(text_delta="我来为你查询相关内容。"),
+                    _finish("finish-1", _tool_arguments("ANSWERED")),
                 ]
             )
         ]
@@ -127,12 +148,11 @@ async def test_first_turn_prefetch_is_hidden_until_citation_validation_finishes(
     assert any("这是可核对原文" in item["content"] for item in calls[0]["messages"])
     assert run.state == RunState.COMPLETED
     assert run.outcome == RunOutcome.ANSWERED
-    assert [event.type for event in visible].count("text.delta") == 1
-    assert next(event for event in visible if event.type == "text.delta").data["delta"] == "结论[1]"
+    assert _deltas(visible) == ["结论[1]"]
     citation = next(event for event in visible if event.type == "citation")
     assert citation.data["evidenceId"] == "E1"
     assert citation.data["snippet"] == "可核对原文"
-    assert "agent_finish" not in "".join(str(event.data) for event in visible if event.type == "text.delta")
+    assert "agent_finish" not in "".join(_deltas(visible))
     assert next(event for event in visible if event.type == "run.started").data["scopeSummary"] == "默认范围"
 
 
@@ -140,42 +160,214 @@ async def test_invalid_first_citation_retries_before_any_answer_text_is_emitted(
     """无效引用使模型重试一次，首轮草稿不会进入 SSE。"""
     model = ScriptedModel(
         [
+            ScriptStep([_finish("finish-bad", _tool_arguments("ANSWERED", index=2, answer="错误草稿[2]"))]),
+            ScriptStep([_finish("finish-good", _tool_arguments("ANSWERED", answer="正确回答[1]"))]),
+        ]
+    )
+
+    _run_context, _searcher, calls, events = await _execute(model, [_evidence()])
+
+    assert len(calls) == 2
+    assert _deltas(events) == ["正确回答[1]"]
+
+
+async def test_kb_list_answer_cites_knowledge_bases_instead_of_not_found():
+    """复现：问「我有哪些知识库」时模型调用 kb_list 作答，回答不能被改写成未找到。"""
+    knowledge = FakeKnowledgeClient()
+    knowledge.stats_result = StatsResult(
+        knowledgeBases=[
+            StatsKnowledgeBase(
+                kbId=1,
+                name="库一",
+                role="EDIT",
+                counts={"note": 3, "doc": 1, "mooc": 0, "task": 2},
+            )
+        ]
+    )
+    model = ScriptedModel(
+        [
+            ScriptStep([ModelChunk(tool_calls=[ToolCall(call_id="list-1", name="kb_list", arguments={})])]),
             ScriptStep(
                 [
-                    ModelChunk(text_delta="错误草稿[2]"),
-                    ModelChunk(
-                        tool_calls=[
-                            ToolCall(
-                                call_id="finish-bad",
-                                name="agent_finish",
-                                arguments=_tool_arguments("ANSWERED", index=2),
-                            )
-                        ]
-                    ),
-                ]
-            ),
-            ScriptStep(
-                [
-                    ModelChunk(text_delta="正确回答[1]"),
-                    ModelChunk(
-                        tool_calls=[
-                            ToolCall(
-                                call_id="finish-good",
-                                name="agent_finish",
-                                arguments=_tool_arguments("ANSWERED"),
-                            )
-                        ]
-                    ),
+                    _finish(
+                        "finish-list",
+                        _tool_arguments(
+                            "ANSWERED",
+                            quote='{"kbId":1,"name":"库一","role":"EDIT"}',
+                            answer="你有 1 个知识库：库一[1]",
+                        ),
+                    )
                 ]
             ),
         ]
     )
 
-    _run_context, _searcher, calls, events = await _execute(model, [_evidence()])
-    deltas = [event.data["delta"] for event in events if event.type == "text.delta"]
+    run, _searcher, calls, events = await _execute(model, [], knowledge)
+    citation = next(event for event in events if event.type == "citation")
+    tool_message = next(item for item in calls[1]["messages"] if item["role"] == "tool")
+
+    assert run.outcome == RunOutcome.ANSWERED
+    assert _deltas(events) == ["你有 1 个知识库：库一[1]"]
+    assert '"evidenceId":"E1"' in tool_message["content"]
+    assert citation.data["sourceType"] == "kb"
+    assert citation.data["sourceId"] == "kb:1"
+    assert citation.data["kbId"] == 1
+    assert citation.data["title"] == "库一"
+    assert citation.data["snippet"] == "笔记 3 · 资料 1 · 慕课 0 · 任务 2"
+
+
+async def test_kb_query_row_cited_with_paraphrased_quote_is_accepted():
+    """复现：清单行被改写引用时不再判为无效引用。"""
+    knowledge = FakeKnowledgeClient()
+    knowledge.query_result = QueryResult(
+        rows=[QueryRow(ref="note:101", entityType="note", kbId=1, title="倒排索引笔记")],
+        count=1,
+    )
+    model = ScriptedModel(
+        [
+            ScriptStep(
+                [
+                    ModelChunk(
+                        tool_calls=[
+                            ToolCall(
+                                call_id="query-1",
+                                name="kb_query",
+                                arguments={"entity": "note", "sort": "updatedAt:desc"},
+                            )
+                        ]
+                    )
+                ]
+            ),
+            ScriptStep(
+                [
+                    _finish(
+                        "finish-query",
+                        _tool_arguments(
+                            "ANSWERED",
+                            quote="倒排索引笔记（note:101），更新时间 2026-11-14",
+                            answer="最近更新的是倒排索引笔记[1]",
+                        ),
+                    )
+                ]
+            ),
+        ]
+    )
+
+    run, _searcher, calls, events = await _execute(model, [], knowledge)
+    citation = next(event for event in events if event.type == "citation")
 
     assert len(calls) == 2
-    assert deltas == ["正确回答[1]"]
+    assert run.outcome == RunOutcome.ANSWERED
+    assert _deltas(events) == ["最近更新的是倒排索引笔记[1]"]
+    assert citation.data["sourceId"] == "note:101"
+    assert citation.data["title"] == "倒排索引笔记"
+    assert citation.data["snippet"] is None
+
+
+async def test_structured_rows_stay_out_of_the_evidence_layer():
+    """清单行只出现在工具结果里，不再以证据层重复发给模型。"""
+    knowledge = FakeKnowledgeClient()
+    knowledge.query_result = QueryResult(rows=[QueryRow(ref="note:101", entityType="note", kbId=1, title="唯一标题")])
+    model = ScriptedModel(
+        [
+            ScriptStep(
+                [ModelChunk(tool_calls=[ToolCall(call_id="q", name="kb_query", arguments={"entity": "note"})])]
+            ),
+            ScriptStep([_finish("finish", _tool_arguments("ANSWERED", answer="唯一标题[1]", quote=""))]),
+        ]
+    )
+
+    _run, _searcher, calls, _events = await _execute(model, [], knowledge)
+    non_tool = [item["content"] for item in calls[1]["messages"] if item["role"] != "tool"]
+
+    assert not any("唯一标题" in str(content) for content in non_tool)
+
+
+async def test_invalid_finish_arguments_are_retried_instead_of_failing_the_run():
+    """agent_finish 参数不合法时提示模型重交一次，而不是直接以内部错误结束。"""
+    model = ScriptedModel(
+        [
+            ScriptStep([_finish("finish-bad", {**_tool_arguments("ANSWERED"), "reasoning": "多余字段"})]),
+            ScriptStep([_finish("finish-good", _tool_arguments("ANSWERED"))]),
+        ]
+    )
+
+    run, _searcher, calls, events = await _execute(model, [_evidence()])
+
+    assert len(calls) == 2
+    assert run.outcome == RunOutcome.ANSWERED
+    assert _deltas(events) == ["结论[1]"]
+    assert any("agent_finish" in hint for hint in run.hints)
+
+
+async def test_answer_falls_back_to_same_reply_text_when_finish_has_no_answer():
+    """agent_finish 没带 answer 时，以同一条回复的正文为回答（真实模型的常见写法）。"""
+    model = ScriptedModel(
+        [
+            ScriptStep(
+                [
+                    ModelChunk(text_delta="倒排索引是从词到文档的映射[1]。"),
+                    _finish("finish", {"outcome": "ANSWERED", "citations": [{"index": 1, "quote": "可核对原文"}]}),
+                ]
+            )
+        ]
+    )
+
+    run, _searcher, calls, events = await _execute(model, [_evidence()])
+
+    assert len(calls) == 1
+    assert run.outcome == RunOutcome.ANSWERED
+    assert _deltas(events) == ["倒排索引是从词到文档的映射[1]。"]
+
+
+async def test_missing_finish_retry_offers_only_agent_finish():
+    """复现：模型只在正文里作答、不调用 agent_finish 时，重交的那一轮只提供 agent_finish。"""
+    model = ScriptedModel(
+        [
+            ScriptStep([ModelChunk(text_delta="倒排索引是从词到文档的映射[1]。")]),
+            ScriptStep([_finish("finish", _tool_arguments("ANSWERED"))]),
+        ]
+    )
+
+    run, _searcher, calls, events = await _execute(model, [_evidence()])
+
+    assert len(calls) == 2
+    assert [item["function"]["name"] for item in calls[1]["tools"]] == ["agent_finish"]
+    assert MISSING_FINISH_HINT in run.hints
+    assert run.outcome == RunOutcome.ANSWERED
+    assert _deltas(events) == ["结论[1]"]
+
+
+async def test_finish_combined_with_tool_call_runs_the_tool_first():
+    """agent_finish 与其他工具同轮出现时先执行工具，终态在看到结果后再提交。"""
+    knowledge = FakeKnowledgeClient()
+    knowledge.stats_result = StatsResult(knowledgeBases=[StatsKnowledgeBase(kbId=1, name="库一", counts={"note": 3})])
+    model = ScriptedModel(
+        [
+            ScriptStep(
+                [
+                    ModelChunk(
+                        tool_calls=[
+                            ToolCall(call_id="list-1", name="kb_list", arguments={}),
+                            ToolCall(
+                                call_id="finish-early",
+                                name="agent_finish",
+                                arguments=_tool_arguments("ANSWERED", answer="猜测的回答[1]"),
+                            ),
+                        ]
+                    )
+                ]
+            ),
+            ScriptStep([_finish("finish-late", _tool_arguments("ANSWERED", answer="你有库一[1]", quote=""))]),
+        ]
+    )
+
+    run, _searcher, calls, events = await _execute(model, [], knowledge)
+
+    assert len(calls) == 2
+    assert knowledge.count("stats") == 1
+    assert run.outcome == RunOutcome.ANSWERED
+    assert _deltas(events) == ["你有库一[1]"]
 
 
 async def test_not_found_signal_replaces_model_text_with_fixed_result():

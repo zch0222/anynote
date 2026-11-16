@@ -350,6 +350,12 @@ async def test_query_default_scope_passes_through_count():
     assert payload["rows"][0]["evidenceId"] == "E1"
     request = client.calls[-1][1]
     assert request["kbIds"] is None and request["limit"] == 20 and request["withCount"] is True
+    evidence = result.evidence[0]
+    assert evidence.structured is True
+    assert evidence.source_id == "task:4"
+    assert evidence.title == "任务"
+    assert evidence.locator == {"row": True}
+    assert evidence.content == ""
 
 
 async def test_query_explicit_scope_filters_rows_and_recounts():
@@ -389,6 +395,40 @@ async def test_list_uses_default_or_explicit_stats():
     assert explicit.count("stats") == 0
 
 
+async def test_list_rows_are_citable_knowledge_base_evidence():
+    """每个知识库登记为一条可引用的结构化证据，摘要由各类数量生成。"""
+    client = FakeKnowledgeClient()
+    client.stats_result = StatsResult(knowledgeBases=[
+        StatsKnowledgeBase(kbId=1, name="库一", role="EDIT", counts={"note": 3, "doc": 1, "mooc": 0, "task": 2}),
+        StatsKnowledgeBase(kbId=2, name="库二", role="READ", counts={"note": 1}),
+    ])
+    registry, _store = make_toolkit(client, FakeIndexReader())
+
+    result = await _call(registry, make_tool_run(), "kb_list", {})
+
+    rows = _payload(result)["knowledgeBases"]
+    assert [row["evidenceId"] for row in rows] == ["E1", "E2"]
+    first = result.evidence[0]
+    assert (first.source_type, first.source_id, first.title, first.kb_id, first.kb_name) == (
+        "kb", "kb:1", "库一", 1, "库一")
+    assert first.structured is True
+    assert first.content == "笔记 3 · 资料 1 · 慕课 0 · 任务 2"
+    assert result.evidence[1].content == "笔记 1"
+
+
+async def test_list_leaves_knowledge_bases_outside_explicit_refs_uncited():
+    """只按资料限定范围时，资料所在的知识库仍可列出，但不作为可引用证据。"""
+    scope = KnowledgeScope(userId=7, defaultScope=False, knowledgeBases=[ScopeKnowledgeBase(kbId=1, name="库一")])
+    client = FakeKnowledgeClient(scope)
+    client.stats_result = StatsResult(knowledgeBases=[StatsKnowledgeBase(kbId=1, name="库一", counts={"doc": 1})])
+    registry, _store = make_toolkit(client, FakeIndexReader())
+
+    result = await _call(registry, make_tool_run(scope=RunScope(refs=["doc:4"])), "kb_list", {})
+
+    assert "evidenceId" not in _payload(result)["knowledgeBases"][0]
+    assert result.evidence == []
+
+
 async def test_outline_kb_with_mooc_children():
     """知识库目录展开两层时附带慕课的章节。"""
     client = FakeKnowledgeClient()
@@ -404,10 +444,36 @@ async def test_outline_kb_with_mooc_children():
     node = _payload(result)["nodes"][0]
     assert node["ref"] == "mooc:2"
     assert node["children"][0]["ref"] == "mooc_item:5"
+    assert node["evidenceId"] == "E1"
+    assert node["children"][0]["evidenceId"] == "E2"
+    mooc, item = result.evidence
+    assert (mooc.source_id, mooc.title, mooc.kb_id, mooc.structured) == ("mooc:2", "课", 1, True)
+    assert (item.source_type, item.source_id, item.title) == ("mooc_item", "mooc_item:5", "第一章")
+    assert item.locator == {"row": True, "moocId": 2}
+
+
+async def test_outline_note_headings_are_citable_by_line_range():
+    """笔记标题树的每个小节登记为指向该笔记行范围的结构化证据。"""
+    client = FakeKnowledgeClient()
+    client.allow("note:7", kb_id=3)
+    client.outlines[("note:7", None)] = OutlineResult(ref="note:7", nodes=[
+        OutlineNode(ref="note:7", entityType="heading", title="第一章", parentRef="note:7",
+                    locator={"startLine": 1, "endLine": 4}),
+        OutlineNode(ref="note:7", entityType="heading", title="第二章", parentRef="note:7",
+                    locator={"startLine": 5, "endLine": 9}),
+    ])
+    registry, _store = make_toolkit(client, FakeIndexReader())
+
+    result = await _call(registry, make_tool_run(), "kb_outline", {"ref": "note:7"})
+
+    assert [node["evidenceId"] for node in _payload(result)["nodes"]] == ["E1", "E2"]
+    heading = result.evidence[1]
+    assert (heading.source_type, heading.source_id, heading.title, heading.kb_id) == ("note", "note:7", "第二章", 3)
+    assert heading.locator == {"row": True, "startLine": 5, "endLine": 9}
 
 
 async def test_outline_doc_groups_by_heading_or_page():
-    """资料目录按连续标题分组，无标题时按页分组。"""
+    """资料目录按连续标题分组，无标题时按页分组；每组可按页码引用。"""
     client = FakeKnowledgeClient()
     client.allow("doc:4")
     index = FakeIndexReader()
@@ -419,9 +485,27 @@ async def test_outline_doc_groups_by_heading_or_page():
     registry, _store = make_toolkit(client, index)
     result = await _call(registry, make_tool_run(), "kb_outline", {"ref": "doc:4"})
     assert _payload(result)["nodes"] == [
-        {"sectionPath": "第一章", "pageStart": 1, "pageEnd": 2},
-        {"sectionPath": None, "pageStart": 3, "pageEnd": 3},
+        {"sectionPath": "第一章", "pageStart": 1, "pageEnd": 2, "evidenceId": "E1"},
+        {"sectionPath": None, "pageStart": 3, "pageEnd": 3, "evidenceId": "E2"},
     ]
+    first = result.evidence[0]
+    assert (first.source_id, first.title, first.structured) == ("doc:4", "标题-doc:4", True)
+    assert first.locator == {"row": True, "sectionPath": "第一章", "pageStart": 1, "pageEnd": 2}
+
+
+async def test_outline_children_outside_explicit_refs_are_not_citable():
+    """只限定一门慕课时，章节可以列出，但不在范围内的条目不登记为证据。"""
+    scope = KnowledgeScope(userId=7, defaultScope=False, knowledgeBases=[ScopeKnowledgeBase(kbId=1)])
+    client = FakeKnowledgeClient(scope)
+    client.allow("mooc:2", kb_id=1)
+    client.outlines[("mooc:2", None)] = OutlineResult(ref="mooc:2", nodes=[
+        OutlineNode(ref="mooc_item:5", entityType="mooc_item", title="第一章")])
+    registry, _store = make_toolkit(client, FakeIndexReader())
+
+    result = await _call(registry, make_tool_run(scope=RunScope(refs=["mooc:2"])), "kb_outline", {"ref": "mooc:2"})
+
+    assert "evidenceId" not in _payload(result)["nodes"][0]
+    assert result.evidence == []
 
 
 async def test_outline_admin_default_filters_entity_nodes():
@@ -449,22 +533,30 @@ async def test_related_attachments_submission_links_and_siblings():
     run = make_tool_run()
 
     attachments = await _call(registry, run, "kb_related", {"ref": "mooc_item:5", "relation": "attachments"})
-    assert _payload(attachments)["related"] == [{"ref": "mooc_item:5", "subtype": "transcript", "kbId": 1}]
+    assert _payload(attachments)["related"] == [
+        {"ref": "mooc_item:5", "subtype": "transcript", "kbId": 1, "evidenceId": "E1"}]
+    transcript = attachments.evidence[0]
+    assert (transcript.source_type, transcript.source_id, transcript.authority) == (
+        "transcript", "mooc_item:5#transcript", "transcript")
+    assert transcript.structured is True
 
     client.query_result = QueryResult(rows=[QueryRow(ref="task:4", kbId=1, attributes={
         "submissionNoteId": 8, "noteHistoryId": 30, "submissionStatus": 1})])
     submission = await _call(registry, run, "kb_related", {"ref": "task:4", "relation": "submission"})
     assert _payload(submission)["related"][0]["ref"] == "note:8"
     assert _payload(submission)["related"][0]["noteHistoryId"] == 30
+    assert _payload(submission)["related"][0]["evidenceId"] == "E2"
 
     client.contents["note:1"] = [ContentResult(ref="note:1", content="见 [x](/notes/1/8) 和 [y](/notes/1/77)")]
     links = await _call(registry, run, "kb_related", {"ref": "note:1", "relation": "links"})
-    assert _payload(links)["related"] == [{"ref": "note:8", "kbId": 1}]
+    assert _payload(links)["related"] == [{"ref": "note:8", "kbId": 1, "evidenceId": "E2"}]
 
     client.outlines[("kb:1", None)] = OutlineResult(ref="kb:1", nodes=[
-        OutlineNode(ref="note:1", entityType="note"), OutlineNode(ref="note:8", entityType="note")])
+        OutlineNode(ref="note:1", entityType="note"), OutlineNode(ref="note:8", entityType="note", title="笔记八")])
     siblings = await _call(registry, run, "kb_related", {"ref": "note:1", "relation": "siblings"})
     assert [item["ref"] for item in _payload(siblings)["related"]] == ["note:8"]
+    assert _payload(siblings)["related"][0]["evidenceId"] == "E2"
+    assert siblings.evidence[0].kb_id == 1
 
 
 async def test_related_mooc_item_siblings_use_index_parent_and_reject_mismatch():
