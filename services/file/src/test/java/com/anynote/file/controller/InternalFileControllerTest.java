@@ -35,6 +35,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(MockitoExtension.class)
 class InternalFileControllerTest {
 
+    /** 预览签名端点保留内部鉴权并返回资料访问地址。 */
+    @Test
+    void documentPreviewRequiresInnerAuth() throws Exception {
+        var url = com.anynote.file.api.model.bo.ObjectURL.builder().url("http://localhost/doc.pdf").build();
+        when(fileService.getDocPreviewUrl(9L)).thenReturn(url);
+        assertThat(new InternalFileController(fileService).docPreviewUrl(9L).getData()).isSameAs(url);
+        Method method = InternalFileController.class.getMethod("docPreviewUrl", Long.class);
+        assertThat(method.getAnnotation(InnerAuth.class)).isNotNull();
+    }
+
     @Mock
     private FileService fileService;
 

@@ -107,6 +107,14 @@ public interface FileService extends IService<FilePO> {
     public ObjectURL getObjectUrlByFileId(Long fileId);
 
     /**
+     * 内部资料预览签名，调用方负责资料阅读权限校验。
+     *
+     * @param fileId 资料文件标识
+     * @return 时效访问地址
+     */
+    ObjectURL getDocPreviewUrl(Long fileId);
+
+    /**
      * 下载对象到本地目录
      * @param downloadObjectDTO
      * @return

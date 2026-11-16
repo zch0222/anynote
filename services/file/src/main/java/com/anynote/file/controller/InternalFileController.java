@@ -2,12 +2,15 @@ package com.anynote.file.controller;
 
 import com.anynote.common.security.annotation.InnerAuth;
 import com.anynote.file.service.FileService;
+import com.anynote.core.web.model.bo.ResData;
+import com.anynote.file.api.model.bo.ObjectURL;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,6 +37,20 @@ public class InternalFileController {
      */
     public InternalFileController(FileService fileService) {
         this.fileService = fileService;
+    }
+
+    /**
+     * 为调用方已授权的资料签发浏览器预览地址。
+     *
+     * @param fileId 资料文件标识
+     * @return 时效访问地址
+     */
+    @InnerAuth
+    @Operation(summary = "内部资料预览签名", description = "调用方须先校验资料 READ 权限；仅允许知识库资料来源文件")
+    @GetMapping("/{fileId}/doc-preview-url")
+    public ResData<ObjectURL> docPreviewUrl(@Parameter(description = "资料文件标识")
+                                         @PathVariable Long fileId) {
+        return ResData.success(fileService.getDocPreviewUrl(fileId));
     }
 
     /**

@@ -431,6 +431,23 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FilePO>
         return objectURL;
     }
 
+    /**
+     * 为内部已授权的知识库资料生成预览地址。
+     *
+     * @param fileId 资料文件标识
+     * @return 时效访问地址
+     */
+    @Override
+    public ObjectURL getDocPreviewUrl(Long fileId) {
+        FilePO file = fileId == null ? null : this.baseMapper.selectById(fileId);
+        if (file == null || !java.util.Objects.equals(file.getSource(),
+                com.anynote.file.api.enums.FileSources.KNOWLEDGE_BASE_DOC.getValue())
+                || file.getObjectName() == null || file.getObjectName().isBlank()) {
+            throw new BusinessException("服务暂时不可用，请稍后重试", ResCode.BUSINESS_ERROR);
+        }
+        return signObjectUrl(file.getObjectName());
+    }
+
     @Override
     public ObjectURL getObjectUrlByFileId(Long fileId) {
         FilePO filePO = this.baseMapper.selectById(fileId);

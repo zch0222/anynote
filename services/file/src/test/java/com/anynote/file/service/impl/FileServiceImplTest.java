@@ -63,6 +63,28 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class FileServiceImplTest {
 
+    /** 内部签名允许已由资料服务授权的其他用户文件，公开入口仍拒绝。 */
+    @Test
+    void signsAuthorizedDocumentWithoutChangingPublicOwnership() {
+        FilePO doc = fileOwnedBy(OTHER_USER_ID);
+        doc.setSource(com.anynote.file.api.enums.FileSources.KNOWLEDGE_BASE_DOC.getValue());
+        when(fileMapper.selectById(FILE_ID)).thenReturn(doc);
+        when(filePlugin.getObjectUrl(eq(OBJECT_NAME), anyInt())).thenReturn(someUrl());
+        assertEquals(someUrl().getUrl(), fileService.getDocPreviewUrl(FILE_ID).getUrl());
+        assertThrows(BusinessException.class, () -> fileService.getObjectUrlByFileId(FILE_ID));
+    }
+
+    /** 内部资料签名拒绝其他来源文件和不存在的文件。 */
+    @Test
+    void rejectsNonDocumentPreviewSigning() {
+        FilePO image = fileOwnedBy(USER_ID);
+        image.setSource(com.anynote.file.api.enums.FileSources.NOTE_IMAGE.getValue());
+        when(fileMapper.selectById(FILE_ID)).thenReturn(image);
+        assertThrows(BusinessException.class, () -> fileService.getDocPreviewUrl(FILE_ID));
+        assertThrows(BusinessException.class, () -> fileService.getDocPreviewUrl(null));
+        verify(filePlugin, never()).getObjectUrl(anyString(), anyInt());
+    }
+
     private static final long USER_ID = 7L;
     private static final long OTHER_USER_ID = 8L;
     private static final long FILE_ID = 100L;
