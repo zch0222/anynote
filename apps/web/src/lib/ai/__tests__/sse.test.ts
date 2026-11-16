@@ -57,6 +57,16 @@ describe("toAiRunErrorMessage", () => {
     );
   });
 
+  it.each([
+    "这个问题需要的步骤超出了单次上限，可以缩小范围或拆成几个问题再试",
+    "模型调用超时，请稍后重试",
+    "模型服务暂时不可用，请稍后重试",
+    "模型没有返回内容，请重试",
+    "知识库服务暂时不可用，请稍后重试",
+  ])("保留分类失败文案：%s", (message) => {
+    expect(toAiRunErrorMessage(message)).toBe(message);
+  });
+
   it("未知错误使用已确认的运行失败文案", () => {
     expect(toAiRunErrorMessage("内部错误详情")).toBe("服务暂时不可用，请稍后重试");
   });
