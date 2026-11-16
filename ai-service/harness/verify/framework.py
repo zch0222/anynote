@@ -15,6 +15,8 @@ class VerificationIssue:
 
     code: str
     detail: str
+    indices: list[int] = field(default_factory=list)
+    repairable: bool = True
 
 
 @dataclass(frozen=True)

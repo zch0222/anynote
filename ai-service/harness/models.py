@@ -340,8 +340,11 @@ class RunContext:
     tool_calls: int = 0
     verification_attempts: int = 0
     hints: list[str] = field(default_factory=list)
+    budget_hints: list[str] = field(default_factory=list)
+    last_hints: list[str] = field(default_factory=list)
     force_finish: bool = False
     answer: str = ""
+    answer_notices: list[str] = field(default_factory=list)
     outcome: RunOutcome | None = None
     error_category: str | None = None
     error_message: str | None = None
@@ -382,7 +385,7 @@ class RunContext:
 
         :param updates: 状态字段与值
         """
-        allowed = {"force_finish"}
+        allowed = {"force_finish", "budget_hints"}
         for key, value in updates.items():
             if key in allowed:
                 setattr(self, key, value)

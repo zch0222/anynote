@@ -292,7 +292,11 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
                 run.scope_summary = self._scope_summary(run.request.scope, None)
                 raise
             run.scope_summary = self._scope_summary(run.request.scope, scope)
-        elif context.hook == Hook.BEFORE_PREPARE and self._prefetch_tool is not None:
+        elif (
+            context.hook == Hook.BEFORE_PREPARE
+            and self._prefetch_tool is not None
+            and run.runtime.prefetch_enabled
+        ):
             session = self._store.for_run(run)
             if not session.prefetched:
                 session.prefetched = True
@@ -334,7 +338,12 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
                 self._prefetch_tool.handler(arguments, action),
                 timeout=context.run.runtime.tool_timeout_s,
             )
-            context.run.workspace.add_evidence(output.evidence or [])
+            context.run.workspace.add_evidence(
+                [
+                    item.model_copy(update={"selected_reason": "按原句预先检索的候选"})
+                    for item in output.evidence or []
+                ]
+            )
             result = {
                 "callId": call_id,
                 "name": self._prefetch_tool.name,

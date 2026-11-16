@@ -9,7 +9,7 @@ from core.config import HarnessRuntimeSettings
 from harness.context.builder import ContextBuilder
 from harness.context.policy import EVIDENCE_BEGIN, EVIDENCE_END
 from harness.events import EventBus
-from harness.loop import MISSING_FINISH_HINT, Harness
+from harness.loop import Harness
 from harness.models import EvidenceItem, RunContext, RunOutcome, RunRequest, RunScope
 from models.catalog import ModelCatalogSnapshot
 from models.scripted import ScriptedModel, ScriptStep
@@ -30,6 +30,7 @@ from tools.knowledge import KNOWLEDGE_TOOL_NAMES, register_knowledge_tools
 from tools.knowledge.common import KnowledgeToolContext
 from agents.knowledge_retrieval.agent import load_knowledge_retrieval_agent
 from harness.models import ModelChunk, RunState, ToolCall
+from harness.verify.framework import VerificationIssue
 
 
 class PrefetchSearcher:
@@ -92,6 +93,8 @@ async def _execute(
     model: ScriptedModel,
     evidence: list[EvidenceItem],
     knowledge: FakeKnowledgeClient | None = None,
+    runtime: HarnessRuntimeSettings | None = None,
+    force_finish: bool = False,
 ):
     """挂载知识工具与首轮中间件并收集运行事件。"""
     knowledge = knowledge or FakeKnowledgeClient()
@@ -107,6 +110,8 @@ async def _execute(
         context_builder=ContextBuilder(model, CharacterCounter()),
     )
     run = _run()
+    run.runtime = runtime or HarnessRuntimeSettings(prefetch_enabled=True)
+    run.force_finish = force_finish
     bus = EventBus(run.run_id)
     await harness.run(run, bus)
     await bus.close()
@@ -154,7 +159,7 @@ async def test_first_turn_prefetch_is_hidden_until_citation_validation_finishes(
     assert _deltas(visible) == ["结论[1]"]
     citation = next(event for event in visible if event.type == "citation")
     assert citation.data["evidenceId"] == "E1"
-    assert citation.data["snippet"] == "可核对原文"
+    assert citation.data["snippet"] is None
     assert "agent_finish" not in "".join(_deltas(visible))
     assert next(event for event in visible if event.type == "run.started").data["scopeSummary"] == "默认范围"
 
@@ -368,7 +373,7 @@ async def test_invalid_finish_arguments_are_retried_instead_of_failing_the_run()
     assert len(calls) == 2
     assert run.outcome == RunOutcome.ANSWERED
     assert _deltas(events) == ["结论[1]"]
-    assert any("agent_finish" in hint for hint in run.hints)
+    assert any("agent_finish" in hint for hint in run.last_hints)
 
 
 async def test_answer_falls_back_to_same_reply_text_when_finish_has_no_answer():
@@ -391,22 +396,22 @@ async def test_answer_falls_back_to_same_reply_text_when_finish_has_no_answer():
     assert _deltas(events) == ["倒排索引是从词到文档的映射[1]。"]
 
 
-async def test_missing_finish_retry_offers_only_agent_finish():
-    """复现：模型只在正文里作答、不调用 agent_finish 时，重交的那一轮只提供 agent_finish。"""
+async def test_plain_text_finish_keeps_tools_available_and_does_not_force_finish():
+    """纯文本完成申请不再触发缺终态重交，也不打开强制收束。"""
     model = ScriptedModel(
-        [
-            ScriptStep([ModelChunk(text_delta="倒排索引是从词到文档的映射[1]。")]),
-            ScriptStep([_finish("finish", _tool_arguments("ANSWERED"))]),
-        ]
+        [ScriptStep([ModelChunk(text_delta="倒排索引是从词到文档的映射[1]。")])]
     )
 
     run, _searcher, calls, events = await _execute(model, [_evidence()])
 
-    assert len(calls) == 2
-    assert [item["function"]["name"] for item in calls[1]["tools"]] == ["agent_finish"]
-    assert MISSING_FINISH_HINT in run.hints
+    assert len(calls) == 1
+    assert {item["function"]["name"] for item in calls[0]["tools"]} == {
+        *KNOWLEDGE_TOOL_NAMES,
+        "agent_finish",
+    }
+    assert run.force_finish is False
     assert run.outcome == RunOutcome.ANSWERED
-    assert _deltas(events) == ["结论[1]"]
+    assert _deltas(events) == ["倒排索引是从词到文档的映射[1]。"]
 
 
 async def test_finish_combined_with_tool_call_runs_the_tool_first():
@@ -512,3 +517,219 @@ def test_scope_summary_uses_permission_confirmed_names_and_requested_refs():
     )
 
     assert summary == "课程库、doc:8"
+
+
+async def test_kb_list_plain_text_without_citation_is_repaired_once_then_delivered():
+    """复现清单回答无编号：保留工具能力修复一次，仍缺失时标注并交付。"""
+    knowledge = FakeKnowledgeClient()
+    knowledge.stats_result = StatsResult(
+        knowledgeBases=[StatsKnowledgeBase(kbId=1, name="库一", counts={"note": 3})]
+    )
+    model = ScriptedModel(
+        [
+            ScriptStep([ModelChunk(tool_calls=[ToolCall(call_id="list-1", name="kb_list", arguments={})])]),
+            ScriptStep([ModelChunk(text_delta="你有 1 个知识库：库一")]),
+            ScriptStep([ModelChunk(text_delta="你有 1 个知识库：库一")]),
+        ]
+    )
+
+    run, _searcher, calls, events = await _execute(model, [], knowledge)
+    finished = next(event for event in events if event.type == "run.finished")
+
+    assert run.outcome == RunOutcome.ANSWERED
+    assert run.state == RunState.COMPLETED
+    assert len(calls) == 3
+    assert run.force_finish is False
+    assert "kb_list" in {item["function"]["name"] for item in calls[2]["tools"]}
+    assert "上一次回答没有通过校验" in calls[2]["messages"][0]["content"]
+    assert _deltas(events) == ["你有 1 个知识库：库一"]
+    assert finished.data["answerNotices"] == ["UNSOURCED"]
+
+
+async def test_plain_text_answer_is_a_completion_request_without_finish_tool():
+    """有正文且没有工具调用时直接申请完成，不再要求 agent_finish。"""
+    model = ScriptedModel([ScriptStep([ModelChunk(text_delta="结论[1]")])])
+
+    run, _searcher, calls, events = await _execute(model, [_evidence()])
+    finished = next(event for event in events if event.type == "run.finished")
+
+    assert len(calls) == 1
+    assert run.outcome == RunOutcome.ANSWERED
+    assert _deltas(events) == ["结论[1]"]
+    assert finished.data["answerNotices"] == []
+
+
+async def test_prefetch_defaults_off_for_conversation_and_can_be_enabled_with_candidate_label():
+    """默认问候不预取且标注非知识库；开启时预取证据标为原句候选。"""
+    greeting = ScriptedModel([ScriptStep([ModelChunk(text_delta="你好，很高兴帮助你。")])])
+    run, searcher, _calls, events = await _execute(
+        greeting,
+        [_evidence()],
+        runtime=HarnessRuntimeSettings(),
+    )
+    greeting_finished = next(event for event in events if event.type == "run.finished")
+
+    assert searcher.requests == []
+    assert run.outcome == RunOutcome.ANSWERED
+    assert greeting_finished.data["answerNotices"] == ["NOT_FROM_KNOWLEDGE"]
+
+    prefetched = ScriptedModel([ScriptStep([ModelChunk(text_delta="结论[1]")])])
+    _run, enabled_searcher, _calls, enabled_events = await _execute(
+        prefetched,
+        [_evidence()],
+        runtime=HarnessRuntimeSettings(prefetch_enabled=True),
+    )
+    context_trace = next(event for event in enabled_events if event.type == "trace.context")
+    evidence_entry = next(
+        item
+        for item in context_trace.data["attributes"]["manifest"]["entries"]
+        if item["sourceType"] == "note"
+    )
+    assert enabled_searcher.requests[0].query == "原始用户问题"
+    assert evidence_entry["selectedReason"] == "按原句预先检索的候选"
+
+
+async def test_repair_hint_is_only_present_in_the_next_model_turn():
+    """结构化修复提示只注入下一轮，后续工具轮不重复携带。"""
+    knowledge = FakeKnowledgeClient()
+    knowledge.stats_result = StatsResult(
+        knowledgeBases=[StatsKnowledgeBase(kbId=2, name="库二", counts={"note": 1})]
+    )
+    model = ScriptedModel(
+        [
+            ScriptStep([ModelChunk(text_delta="没有来源的回答")]),
+            ScriptStep([ModelChunk(tool_calls=[ToolCall(call_id="list-2", name="kb_list", arguments={})])]),
+            ScriptStep([ModelChunk(text_delta="结论[1]")]),
+        ]
+    )
+
+    run, _searcher, calls, _events = await _execute(model, [_evidence()], knowledge)
+
+    assert run.outcome == RunOutcome.ANSWERED
+    assert "上一次回答没有通过校验" in calls[1]["messages"][0]["content"]
+    assert "上一次回答没有通过校验" not in calls[2]["messages"][0]["content"]
+
+
+async def test_force_finish_ignores_tool_calls_when_same_reply_has_answer_text():
+    """收束轮忽略其他工具，但同条回复正文仍按完成申请校验。"""
+    knowledge = FakeKnowledgeClient()
+    model = ScriptedModel(
+        [
+            ScriptStep(
+                [
+                    ModelChunk(text_delta="收束回答[1]"),
+                    ModelChunk(
+                        tool_calls=[ToolCall(call_id="ignored-list", name="kb_list", arguments={})]
+                    ),
+                ]
+            )
+        ]
+    )
+
+    run, _searcher, _calls, events = await _execute(
+        model,
+        [_evidence()],
+        knowledge,
+        force_finish=True,
+    )
+
+    assert knowledge.count("stats") == 0
+    assert run.outcome == RunOutcome.ANSWERED
+    assert _deltas(events) == ["收束回答[1]"]
+
+
+async def test_two_empty_model_outputs_fail_with_empty_output_category():
+    """连续两轮无正文也无工具时以 EMPTY_MODEL_OUTPUT 失败，重交轮不强制收束。"""
+    model = ScriptedModel([ScriptStep(), ScriptStep()])
+
+    run, _searcher, calls, events = await _execute(
+        model,
+        [],
+        runtime=HarnessRuntimeSettings(),
+    )
+    error = next(event for event in events if event.type == "error")
+
+    assert len(calls) == 2
+    assert run.force_finish is False
+    assert "kb_list" in {item["function"]["name"] for item in calls[1]["tools"]}
+    assert run.outcome == RunOutcome.FAILED
+    assert error.data["category"] == "EMPTY_MODEL_OUTPUT"
+    assert events[-1].data["answerNotices"] == []
+
+
+async def test_second_invalid_finish_signal_fails_as_internal():
+    """连续两次非法 agent_finish 参数按已确认的 INTERNAL 类别结束。"""
+    model = ScriptedModel(
+        [
+            ScriptStep([_finish("bad-1", {"outcome": "ANSWERED", "reasoning": "多余字段"})]),
+            ScriptStep([_finish("bad-2", {"outcome": "ANSWERED", "reasoning": "多余字段"})]),
+        ]
+    )
+
+    run, _searcher, _calls, events = await _execute(model, [_evidence()])
+    error = next(event for event in events if event.type == "error")
+
+    assert run.outcome == RunOutcome.FAILED
+    assert error.data["category"] == "INTERNAL"
+
+
+async def test_mismatched_quote_is_removed_after_one_repair_and_traced():
+    """对不上的原文修复一次后移除编号，交付正文并记录结构化 Trace。"""
+    model = ScriptedModel(
+        [
+            ScriptStep([_finish("quote-bad-1", _tool_arguments("ANSWERED", quote="对不上的原文"))]),
+            ScriptStep([_finish("quote-bad-2", _tool_arguments("ANSWERED", quote="对不上的原文"))]),
+        ]
+    )
+
+    run, _searcher, calls, events = await _execute(model, [_evidence()])
+    verify_traces = [event for event in events if event.type == "trace.verify"]
+    finished = next(event for event in events if event.type == "run.finished")
+
+    assert run.outcome == RunOutcome.ANSWERED
+    assert len(calls) == 2
+    assert "[1] 附的原文没有出现在证据 E1 里" in calls[1]["messages"][0]["content"]
+    assert _deltas(events) == ["结论"]
+    assert finished.data["answerNotices"] == ["UNSOURCED", "CITATIONS_REMOVED"]
+    invalid = verify_traces[-1].data["attributes"]["issues"][0]
+    assert invalid["code"] == "INVALID_CITATION"
+    assert invalid["indices"] == [1]
+    assert invalid["repairable"] is True
+
+
+async def test_force_finish_with_only_tool_calls_fails_and_keeps_last_hint():
+    """收束轮只有工具且没有正文时以 NO_PROGRESS 失败，完成事件保留持续提示。"""
+    model = ScriptedModel(
+        [ScriptStep([ModelChunk(tool_calls=[ToolCall(call_id="only-tool", name="kb_list", arguments={})])])]
+    )
+
+    run, _searcher, _calls, events = await _execute(model, [], force_finish=True)
+    error = next(event for event in events if event.type == "error")
+    finished = next(event for event in events if event.type == "run.finished")
+
+    assert run.outcome == RunOutcome.FAILED
+    assert error.data["category"] == "NO_PROGRESS"
+    assert finished.data["unfinished"] == ["连续行动没有新增进展，停止检索并直接给出结果。"]
+
+
+def test_repair_hint_limits_available_evidence_to_ten_and_reports_total():
+    """修复提示最多列十条证据，并注明实际证据总数。"""
+    evidence = [
+        EvidenceItem(
+            evidenceId=f"E{index}",
+            sourceType="note",
+            sourceId=f"note:{index}",
+            content="正文",
+            title=f"笔记 {index}",
+        )
+        for index in range(1, 12)
+    ]
+
+    hint = Harness._repair_hint(
+        [VerificationIssue(code="MISSING_CITATION", detail="缺少来源")],
+        evidence,
+    )
+
+    assert "[10] note「笔记 10」" in hint
+    assert "[11]" not in hint
+    assert "共 11 条证据，仅列前 10 条" in hint

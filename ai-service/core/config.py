@@ -35,6 +35,7 @@ class HarnessRuntimeSettings(BaseModel):
     large_result_chars: int = Field(default=2000, ge=200, le=100000)
     large_result_preview_chars: int = Field(default=500, ge=50, le=10000)
     model_max_attempts: int = Field(default=2, ge=1, le=5)
+    prefetch_enabled: bool = False
 
     model_config = ConfigDict(
         alias_generator=_kebab_case,

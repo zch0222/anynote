@@ -14,3 +14,4 @@ harness:
   large-result-chars: 2000
   large-result-preview-chars: 500
   model-max-attempts: 2
+  prefetch-enabled: false

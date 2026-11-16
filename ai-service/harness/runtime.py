@@ -166,6 +166,7 @@ class RunManager:
                     "state": RunState.CANCELLED.value,
                     "outcome": RunOutcome.CANCELLED.value,
                     "evidence": [],
+                    "answerNotices": [],
                     "unfinished": [],
                 },
             )

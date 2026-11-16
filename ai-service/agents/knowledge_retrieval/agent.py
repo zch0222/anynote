@@ -32,7 +32,7 @@ class CitationQuote(BaseModel):
 
 
 class AgentFinishArgs(BaseModel):
-    """知识检索 Agent 的机器可读终态信号；回答正文也由它提交。
+    """未找到、需澄清或附引用原文时使用的机器可读终态信号。
 
     @author 称霸幼儿园
     """
@@ -49,7 +49,7 @@ class AgentFinishArgs(BaseModel):
     citations: list[CitationQuote] = Field(
         default_factory=list,
         max_length=50,
-        description="answer 里每个 [n] 对应的证据",
+        description="answer 里 [n] 对应的证据；正文类引用可选择附逐字原文，附了就会核对，清单、目录、关系类证据可留空",
     )
     clarification_question: str | None = Field(
         default=None,
@@ -83,7 +83,7 @@ def finish_tool_definition() -> dict:
         "type": "function",
         "function": {
             "name": "agent_finish",
-            "description": "结束本次运行并提交结果：终态、引用，以及回答（也可以写在本条回复正文里）。",
+            "description": "未找到、需澄清或需要给正文类引用附原文时结束本次运行并提交结果。",
             "parameters": AgentFinishArgs.model_json_schema(),
         },
     }

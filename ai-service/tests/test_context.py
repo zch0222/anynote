@@ -3,6 +3,8 @@
 @author 称霸幼儿园
 """
 
+import json
+
 from core.config import HarnessRuntimeSettings
 from harness.budget import BudgetMiddleware
 from harness.context.builder import ContextBuilder
@@ -87,3 +89,43 @@ def test_manifest_does_not_contain_access_token():
     )
     assert "secret-user-token" not in run.workspace.evidence_fingerprint()
     assert "secret-user-token" not in repr(run)
+
+
+async def test_context_sends_tool_definitions_only_in_tools_parameter():
+    """工具 JSON 不再拼进系统提示，清单仅保留引用记录和 token 数。"""
+    run = make_run(["search"])
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "search", "description": "搜索", "parameters": {"type": "object"}},
+        }
+    ]
+    model = ScriptedModel([])
+
+    result = await ContextBuilder(model, CharacterCounter()).build(run, tools)
+
+    system = result.messages[0]["content"]
+    tool_layer = next(item for item in result.manifest.entries if item.source_type == "tools")
+    assert '"name": "search"' not in system
+    assert result.tools == tools
+    assert tool_layer.transform == "REFERENCE"
+    assert tool_layer.token_count == len(json.dumps(tools, ensure_ascii=False))
+    assert result.token_count == len(json.dumps(result.messages, ensure_ascii=False))
+
+
+async def test_budget_hint_is_recomputed_without_accumulating_between_turns():
+    """接近预算上限的持续提示每轮重新计算，不在系统提示中累积重复项。"""
+    run = make_run(runtime=HarnessRuntimeSettings(model_turns=5))
+    run.model_turns = 4
+    builder = ContextBuilder(ScriptedModel([]), CharacterCounter())
+    middleware = BudgetMiddleware()
+
+    first = await middleware.handle(MiddlewareContext(run=run, hook=Hook.BEFORE_PREPARE))
+    run.apply_updates(first.state_updates)
+    first_result = await builder.build(run, [])
+    second = await middleware.handle(MiddlewareContext(run=run, hook=Hook.BEFORE_PREPARE))
+    run.apply_updates(second.state_updates)
+    second_result = await builder.build(run, [])
+
+    assert first_result.messages[0]["content"].count("模型轮数接近上限") == 1
+    assert second_result.messages[0]["content"].count("模型轮数接近上限") == 1

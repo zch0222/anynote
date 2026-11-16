@@ -100,6 +100,7 @@ async def test_create_loads_knowledge_agent_and_registers_its_tools():
         "kb_related",
         "agent_finish",
     }
-    assert any(event.type == "tool.started" and event.data["name"] == "kb_search" for event in events)
     assert any(event.type == "run.finished" for event in events)
+    assert not any(event.type == "tool.started" and event.data["name"] == "kb_search" for event in events)
+    assert events[-1].data["answerNotices"] == []
     await manager.close()

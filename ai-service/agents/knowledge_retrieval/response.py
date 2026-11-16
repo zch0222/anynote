@@ -4,7 +4,7 @@
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 from harness.models import EvidenceItem, RunOutcome
@@ -22,14 +22,26 @@ HTML_ANCHOR_PATTERN = re.compile(
 )
 ANGLE_URL_PATTERN = re.compile(r"(?i)<(?:https?://|www\.)[^>]+>")
 RAW_URL_PATTERN = re.compile(r"(?i)(?:https?://|www\.)[^\s<>]+")
+HIGHLIGHT_TAG_PATTERN = re.compile(r"</?em>", re.IGNORECASE)
+DEFAULT_CLARIFICATION_QUESTION = "能具体说明一下要找的内容吗？可以补充关键词或指定知识库"
+
+
+@dataclass(frozen=True)
+class ValidationGap:
+    """一项可修复的回答校验缺口。
+
+    @author 称霸幼儿园
+    """
+
+    code: str
+    detail: str
+    indices: list[int] = field(default_factory=list)
+    repairable: bool = True
 
 
 @dataclass(frozen=True)
 class ValidatedAnswer:
-    """已过滤的回答、结果类型、引用与验证缺口。
-
-    引用三元组为（编号, 证据, 来源片段）：正文类证据的片段是核对过的原文，
-    结构化行的片段是服务端生成的摘要，可为空。
+    """已过滤的回答、结果类型、引用、验证缺口与回答标注。
 
     @author 称霸幼儿园
     """
@@ -37,7 +49,8 @@ class ValidatedAnswer:
     outcome: RunOutcome
     answer: str
     citations: list[tuple[int, EvidenceItem, str | None]]
-    issues: list[str]
+    issues: list[ValidationGap]
+    answer_notices: list[str] = field(default_factory=list)
 
 
 def filter_external_links_and_images(text: str) -> str:
@@ -73,37 +86,44 @@ def validate_answer(
     signal: AgentFinishArgs,
     evidence: list[EvidenceItem],
     scope_summary: str | None,
+    tool_calls: int = 0,
+    repair_exhausted: bool = False,
 ) -> ValidatedAnswer:
-    """核对 Agent 终态、引用编号及引用原文。
+    """核对回答、引用编号及可选原文，并在修复耗尽后按缺口降级。
 
-    回答只取自终态信号的 ``answer``，助手正文不参与。正文类证据要求引用片段逐字出现在证据里；
-    清单、目录、关系结果（结构化行）只核对编号，来源片段改用服务端摘要。
-
-    :param signal: 结构化终态信号
+    :param signal: 结构化终态信号或纯文本完成申请
     :param evidence: 本次运行内已授权证据
     :param scope_summary: 检索范围摘要
-    :return: 已核对的回答
+    :param tool_calls: 本次运行已执行的工具调用数
+    :param repair_exhausted: 是否已用过唯一一次修复机会
+    :return: 已核对的回答与降级标注
     """
-    if signal.outcome == "NOT_FOUND" or (signal.outcome == "ANSWERED" and not evidence):
+    if signal.outcome == "NOT_FOUND":
         return ValidatedAnswer(
             outcome=RunOutcome.NOT_FOUND,
-            answer=f"未找到相关内容。已查询范围：{scope_summary or '默认范围'}",
+            answer=_not_found_answer(scope_summary),
             citations=[],
             issues=[],
         )
 
     if signal.outcome == "NEEDS_CLARIFICATION":
-        question = (signal.clarification_question or "").strip()
-        issues = []
+        question = filter_external_links_and_images((signal.clarification_question or "").strip())
         terminators = list(re.finditer(r"[?？]", question))
         if len(terminators) > 1:
             question = question[: terminators[0].end()].strip()
-            issues.append("MULTIPLE_CLARIFICATION_QUESTIONS")
+        issues = []
         if not question:
-            issues.append("MISSING_CLARIFICATION_QUESTION")
+            issues.append(
+                ValidationGap(
+                    code="MISSING_CLARIFICATION_QUESTION",
+                    detail="需澄清但没有提供问题",
+                )
+            )
+            if repair_exhausted:
+                question = DEFAULT_CLARIFICATION_QUESTION
         return ValidatedAnswer(
             outcome=RunOutcome.NEEDS_CLARIFICATION,
-            answer=filter_external_links_and_images(question),
+            answer=question,
             citations=[],
             issues=issues,
         )
@@ -114,12 +134,8 @@ def validate_answer(
     seen: set[int] = set()
     citations: list[tuple[int, EvidenceItem, str | None]] = []
     invalid: set[int] = set()
-    issues: list[str] = []
-
-    for index, quote in quotes.items():
-        item = evidence_by_id.get(f"E{index}")
-        if item is None or (not item.structured and quote not in item.content):
-            invalid.add(index)
+    invalid_details: list[str] = []
+    issues: list[ValidationGap] = []
 
     for match in CITATION_PATTERN.finditer(clean_text):
         index = int(match.group(1))
@@ -127,31 +143,84 @@ def validate_answer(
         if item is None:
             invalid.add(index)
             continue
-        if item.structured:
-            snippet = item.content or None
-        else:
-            snippet = quotes.get(index)
-            if not snippet or snippet not in item.content:
-                invalid.add(index)
-                continue
+        quote = quotes.get(index, "")
+        if not item.structured and quote and quote not in item.content:
+            invalid.add(index)
+            continue
         if index not in seen:
+            snippet = item.content or None if item.structured else _highlight_snippet(item)
             citations.append((index, item, snippet))
             seen.add(index)
 
     if invalid:
-        issues.append("INVALID_CITATION")
         clean_text = CITATION_PATTERN.sub(
             lambda match: "" if int(match.group(1)) in invalid else match.group(0),
             clean_text,
         ).strip()
-    if not citations:
-        issues.append("MISSING_VALID_CITATION")
+        for index in sorted(invalid):
+            if f"E{index}" not in evidence_by_id:
+                invalid_details.append(f"[{index}] 对应的证据 E{index} 不存在")
+            else:
+                invalid_details.append(f"[{index}] 附的原文没有出现在证据 E{index} 里")
+        issues.append(
+            ValidationGap(
+                code="INVALID_CITATION",
+                detail="；".join(invalid_details),
+                indices=sorted(invalid),
+            )
+        )
+
+    if not evidence and tool_calls > 0:
+        return ValidatedAnswer(
+            outcome=RunOutcome.NOT_FOUND,
+            answer=_not_found_answer(scope_summary),
+            citations=[],
+            issues=[],
+        )
+
+    if evidence and not citations:
+        issues.append(
+            ValidationGap(
+                code="MISSING_CITATION",
+                detail="回答用到了工具结果，但没有标注来源",
+            )
+        )
     if not clean_text:
-        issues.append("EMPTY_ANSWER")
+        issues.append(ValidationGap(code="EMPTY_ANSWER", detail="过滤后正文为空"))
+    if not clean_text and repair_exhausted:
+        return ValidatedAnswer(
+            outcome=RunOutcome.NOT_FOUND,
+            answer=_not_found_answer(scope_summary),
+            citations=[],
+            issues=issues,
+        )
+
+    answer_notices = []
+    if not evidence and tool_calls == 0:
+        answer_notices.append("NOT_FROM_KNOWLEDGE")
+    if repair_exhausted:
+        if evidence and not citations:
+            answer_notices.insert(0, "UNSOURCED")
+        if invalid:
+            answer_notices.append("CITATIONS_REMOVED")
 
     return ValidatedAnswer(
         outcome=RunOutcome.ANSWERED,
         answer=clean_text,
         citations=citations,
         issues=issues,
+        answer_notices=answer_notices,
     )
+
+
+def _highlight_snippet(item: EvidenceItem) -> str | None:
+    """取出去除检索高亮标签的来源片段。"""
+    highlight = (item.retrieval or {}).get("highlight")
+    if not isinstance(highlight, str) or not highlight:
+        return None
+    return HIGHLIGHT_TAG_PATTERN.sub("", highlight)
+
+
+def _not_found_answer(scope_summary: str | None) -> str:
+    """生成既有未找到结果文案。"""
+    return f"未找到相关内容。已查询范围：{scope_summary or '默认范围'}"

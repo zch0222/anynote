@@ -31,7 +31,8 @@ from harness.verify.framework import VerificationIssue, VerificationReport, Veri
 from models.base import ChatModel
 from models.catalog import ModelError
 
-MISSING_FINISH_HINT = "未收到结构化终态，请调用 agent_finish 提交结果；回答写在本条回复正文里或 answer 参数里都可以。"
+EMPTY_OUTPUT_HINT = "本轮没有正文或工具调用，请直接回答或调用所需工具。"
+EMPTY_MODEL_OUTPUT_MESSAGE = "模型没有返回内容，请重试"
 FINISH_WITH_TOOLS_HINT = "agent_finish 需要单独调用；本轮已先执行其他工具，请看过结果后再提交。"
 MULTIPLE_FINISH_HINT = "agent_finish 每轮只能调用一次，请重新提交。"
 INVALID_FINISH_HINT = "agent_finish 参数不合法（{details}），请按工具定义重新提交。"
@@ -90,6 +91,7 @@ class Harness:
             events=events,
         )
         signal_attempts = 0
+        previous_finish_problem = None
         try:
             pre_run_error = None
             try:
@@ -166,14 +168,23 @@ class Harness:
                     return
                 if context.agent.terminal_tool:
                     if finish_signal is None:
+                        problem = finish_problem or EMPTY_OUTPUT_HINT
                         if signal_attempts == 0:
                             signal_attempts += 1
-                            context.hints.append(finish_problem or MISSING_FINISH_HINT)
-                            # 模型已在正文里作答或终态无效：重交的这一轮只提供 agent_finish
-                            context.force_finish = True
+                            previous_finish_problem = problem
+                            context.hints.append(problem)
                             continue
-                        context.error_category = "VALIDATION_FAILED"
-                        context.error_message = INTERNAL_ERROR_MESSAGE
+                        context.error_category = (
+                            "EMPTY_MODEL_OUTPUT"
+                            if problem == EMPTY_OUTPUT_HINT
+                            and previous_finish_problem == EMPTY_OUTPUT_HINT
+                            else "INTERNAL"
+                        )
+                        context.error_message = (
+                            EMPTY_MODEL_OUTPUT_MESSAGE
+                            if context.error_category == "EMPTY_MODEL_OUTPUT"
+                            else INTERNAL_ERROR_MESSAGE
+                        )
                         await self._fail(context, events, machine, chain)
                         return
                     await self._transition(context, events, machine, chain, RunState.VERIFYING)
@@ -181,34 +192,40 @@ class Harness:
                     if self._short_circuited(decision):
                         await self._finish_short_circuit(context, events, machine, chain, decision)
                         return
+                    repair_exhausted = context.verification_attempts > 0
                     validated = validate_answer(
                         finish_signal,
                         context.workspace.evidence,
                         context.scope_summary,
+                        tool_calls=context.tool_calls,
+                        repair_exhausted=repair_exhausted,
                     )
                     base_report = self._verifier.verify(context)
                     report = VerificationReport(
                         issues=[
                             *base_report.issues,
-                            *(VerificationIssue(code, code) for code in validated.issues),
+                            *(
+                                VerificationIssue(
+                                    code=issue.code,
+                                    detail=issue.detail,
+                                    indices=issue.indices,
+                                    repairable=issue.repairable,
+                                )
+                                for issue in validated.issues
+                            ),
                         ]
                     )
                     await chain.invoke(Hook.AFTER_VERIFY, context, report)
-                    if not report.passed:
-                        if context.verification_attempts == 0:
-                            context.verification_attempts += 1
-                            context.hints.append(
-                                "引用或终态验证未通过: "
-                                + ",".join(issue.code for issue in report.issues)
-                            )
-                            context.answer = ""
-                            await self._transition(context, events, machine, chain, RunState.RUNNING)
-                            continue
-                        context.error_category = "VALIDATION_FAILED"
-                        context.error_message = INTERNAL_ERROR_MESSAGE
-                        await self._fail(context, events, machine, chain)
-                        return
+                    if not report.passed and not repair_exhausted:
+                        context.verification_attempts += 1
+                        context.hints.append(
+                            self._repair_hint(report.issues, context.workspace.evidence)
+                        )
+                        context.answer = ""
+                        await self._transition(context, events, machine, chain, RunState.RUNNING)
+                        continue
                     context.answer = validated.answer
+                    context.answer_notices = validated.answer_notices
                     context.outcome = validated.outcome
                     for index, item, snippet in validated.citations:
                         await events.emit(
@@ -291,10 +308,7 @@ class Harness:
             await chain.invoke(Hook.AFTER_RUN, context)
 
     async def _call_model(self, context: RunContext, events: EventBus, prepared):
-        """调用一次模型并拆出工具调用与终态信号。
-
-        有终态工具的 Agent 以 ``agent_finish.answer`` 为回答；终态没带 answer 时，取同一条回复的正文。
-        正文在校验前不下发。终态与其他工具同轮出现时先执行其他工具；终态参数不合法或重复时交给循环提示重交。
+        """调用一次模型并拆出工具调用与完成申请。
 
         :param context: 当前运行
         :param events: 运行事件总线
@@ -331,8 +345,22 @@ class Harness:
         if not structured:
             return calls, usage, None, None
         context.answer = ""
+        text = "".join(buffered_text)
         if not finish_calls:
-            return calls, usage, None, None
+            if calls and not context.force_finish:
+                return calls, usage, None, None
+            if text.strip():
+                try:
+                    finish_signal = AgentFinishArgs(outcome="ANSWERED", answer=text)
+                except ValidationError as error:
+                    return [], usage, None, INVALID_FINISH_HINT.format(
+                        details=_validation_details(error)
+                    )
+                context.answer = finish_signal.answer or ""
+                return [], usage, finish_signal, None
+            if calls and context.force_finish:
+                return calls, usage, None, None
+            return [], usage, None, EMPTY_OUTPUT_HINT
         if calls and not context.force_finish:
             context.hints.append(FINISH_WITH_TOOLS_HINT)
             return calls, usage, None, None
@@ -344,9 +372,44 @@ class Harness:
             return [], usage, None, INVALID_FINISH_HINT.format(details=_validation_details(error))
         if finish_signal.outcome == "ANSWERED":
             if not (finish_signal.answer or "").strip():
-                finish_signal = finish_signal.model_copy(update={"answer": "".join(buffered_text)})
+                finish_signal = finish_signal.model_copy(update={"answer": text})
             context.answer = finish_signal.answer or ""
         return [], usage, finish_signal, None
+
+    @staticmethod
+    def _repair_hint(issues: list[VerificationIssue], evidence) -> str:
+        """把一次 Verify 的缺口整理成下一轮修复提示。"""
+        lines = ["上一次回答没有通过校验，请修改后重新提交："]
+        evidence_by_id = {item.evidence_id: item for item in evidence}
+        for issue in issues:
+            if issue.code == "INVALID_CITATION":
+                for index in issue.indices:
+                    if f"E{index}" not in evidence_by_id:
+                        lines.append(
+                            f"- [{index}] 不存在：本次运行没有证据 E{index}，请删除或改成正确的编号。"
+                        )
+                    else:
+                        lines.append(
+                            f"- [{index}] 附的原文没有出现在证据 E{index} 里：请逐字摘取，或者不附原文。"
+                        )
+            elif issue.code == "MISSING_CITATION":
+                available = "、".join(
+                    f"[{item.evidence_id[1:]}] {item.source_type}「{item.title or item.source_id}」"
+                    for item in evidence[:10]
+                )
+                if len(evidence) > 10:
+                    available += f"；共 {len(evidence)} 条证据，仅列前 10 条"
+                lines.append(
+                    "- 回答用到了工具结果，但没有标注来源。可以引用的证据："
+                    f"{available}。在用到对应证据的句子后写 [n]。"
+                )
+            elif issue.code == "EMPTY_ANSWER":
+                lines.append("- 过滤后的回答为空，请重新给出回答。")
+            elif issue.code == "MISSING_CLARIFICATION_QUESTION":
+                lines.append("- 需澄清终态没有提供问题，请只提出一个具体的澄清问题。")
+            else:
+                lines.append(f"- {issue.detail or issue.code}")
+        return "\n".join(lines)
 
     async def _act(self, context: RunContext, events: EventBus, calls):
         specs = [self._registry.get(call.name) for call in calls]
@@ -448,7 +511,8 @@ class Harness:
                 "state": context.state.value,
                 "outcome": context.outcome.value if context.outcome else None,
                 "evidence": [item.evidence_id for item in context.workspace.evidence],
-                "unfinished": context.hints if context.outcome == RunOutcome.FAILED else [],
+                "answerNotices": context.answer_notices,
+                "unfinished": context.last_hints if context.outcome == RunOutcome.FAILED else [],
                 "usage": context.usage.model_dump(mode="json", by_alias=True),
             },
         )

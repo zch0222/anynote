@@ -48,7 +48,7 @@ def test_knowledge_retrieval_agent_loads_three_files_and_seven_tools():
     agent = load_agent("knowledge-retrieval")
 
     assert agent.name == "knowledge-retrieval"
-    assert agent.version == "2"
+    assert agent.version == "3"
     assert agent.terminal_tool == "agent_finish"
     assert agent.tools == list(KNOWLEDGE_TOOL_NAMES)
     assert agent.context_policy["evidence_trust_level"] == "UNTRUSTED_CONTENT"
@@ -98,10 +98,10 @@ def test_answer_validation_requires_existing_evidence_and_exact_quote():
 
     assert valid.issues == []
     assert valid.citations[0][1].evidence_id == "E1"
-    assert valid.citations[0][2] == "原文片段"
-    assert invalid.issues == ["INVALID_CITATION", "MISSING_VALID_CITATION"]
+    assert valid.citations[0][2] is None
+    assert [issue.code for issue in invalid.issues] == ["INVALID_CITATION", "MISSING_CITATION"]
     assert invalid.answer == "结论"
-    assert paraphrased.issues == ["INVALID_CITATION", "MISSING_VALID_CITATION"]
+    assert [issue.code for issue in paraphrased.issues] == ["INVALID_CITATION", "MISSING_CITATION"]
 
 
 def test_structured_row_citation_needs_no_quote_and_uses_server_snippet():
@@ -130,8 +130,8 @@ def test_structured_row_citation_needs_no_quote_and_uses_server_snippet():
     assert [item[0] for item in without_quote.citations] == [1]
 
 
-def test_answer_text_comes_only_from_finish_signal():
-    """ANSWERED 缺少 answer 时报空回答，不回退到助手正文。"""
+def test_empty_answer_signal_reports_format_and_source_gaps():
+    """ANSWERED 缺少 answer 时报告空回答与缺失来源缺口。"""
     result = validate_answer(
         AgentFinishArgs(outcome="ANSWERED", citations=[CitationQuote(index=1, quote="原文片段")]),
         [_evidence()],
@@ -139,16 +139,16 @@ def test_answer_text_comes_only_from_finish_signal():
     )
 
     assert result.outcome == RunOutcome.ANSWERED
-    assert "EMPTY_ANSWER" in result.issues
-    assert "MISSING_VALID_CITATION" in result.issues
+    assert [issue.code for issue in result.issues] == ["MISSING_CITATION", "EMPTY_ANSWER"]
 
 
-def test_empty_evidence_changes_answered_signal_to_approved_not_found_result():
-    """证据为空时不保留模型回答并返回固定未找到结果。"""
+def test_empty_evidence_after_tool_call_changes_answer_to_not_found():
+    """调用过工具仍无证据时不保留模型自己的知识回答。"""
     result = validate_answer(
         AgentFinishArgs(outcome="ANSWERED", answer="模型自答"),
         [],
         "课程库",
+        tool_calls=1,
     )
 
     assert result.outcome == RunOutcome.NOT_FOUND
@@ -169,7 +169,7 @@ def test_clarification_signal_keeps_at_most_one_question():
 
     assert result.outcome == RunOutcome.NEEDS_CLARIFICATION
     assert result.answer == "你指哪门课？"
-    assert result.issues == ["MULTIPLE_CLARIFICATION_QUESTIONS"]
+    assert result.issues == []
 
 
 def test_output_filter_removes_images_and_external_links_only():
@@ -191,3 +191,118 @@ def test_output_filter_removes_reference_images_and_html_external_anchors():
     assert "引用图片" not in result
     assert "网页外链" in result
     assert "https://" not in result
+
+
+def test_answer_validation_returns_structured_gaps_and_degrades_after_repair():
+    """无效编号与缺失来源合并返回结构化缺口，修复耗尽后降级交付。"""
+    invalid = validate_answer(
+        AgentFinishArgs(
+            outcome="ANSWERED",
+            answer="结论[2]",
+            citations=[CitationQuote(index=2, quote="不存在")],
+        ),
+        [_evidence()],
+        "课程库",
+    )
+    degraded = validate_answer(
+        AgentFinishArgs(
+            outcome="ANSWERED",
+            answer="结论[2]",
+            citations=[CitationQuote(index=2, quote="不存在")],
+        ),
+        [_evidence()],
+        "课程库",
+        repair_exhausted=True,
+    )
+
+    assert [issue.code for issue in invalid.issues] == ["INVALID_CITATION", "MISSING_CITATION"]
+    assert invalid.issues[0].indices == [2]
+    assert invalid.issues[0].repairable is True
+    assert degraded.answer == "结论"
+    assert degraded.answer_notices == ["UNSOURCED", "CITATIONS_REMOVED"]
+    assert degraded.citations == []
+
+
+def test_missing_citation_is_delivered_with_notice_after_repair():
+    """有证据但修复后仍无有效引用时保留正文并标注未标注来源。"""
+    result = validate_answer(
+        AgentFinishArgs(outcome="ANSWERED", answer="没有编号的回答"),
+        [_evidence()],
+        "课程库",
+        repair_exhausted=True,
+    )
+
+    assert [issue.code for issue in result.issues] == ["MISSING_CITATION"]
+    assert result.answer == "没有编号的回答"
+    assert result.answer_notices == ["UNSOURCED"]
+
+
+def test_body_citation_quote_is_optional_and_snippet_uses_search_highlight():
+    """正文引用未附原文时只核对编号，界面片段取去除标签的检索高亮。"""
+    evidence = _evidence().model_copy(
+        update={"retrieval": {"highlight": "<em>可核对</em>的原文片段。"}}
+    )
+    result = validate_answer(
+        AgentFinishArgs(outcome="ANSWERED", answer="结论[1]"),
+        [evidence],
+        "课程库",
+    )
+
+    assert result.issues == []
+    assert result.citations[0][2] == "可核对的原文片段。"
+
+
+def test_answer_without_evidence_distinguishes_conversation_from_tool_fallback():
+    """无工具回答标注非知识库来源，调用过工具的空证据回答仍改写为未找到。"""
+    conversation = validate_answer(
+        AgentFinishArgs(outcome="ANSWERED", answer="你好，我可以帮助查询知识库。"),
+        [],
+        "默认范围",
+        tool_calls=0,
+    )
+    fallback = validate_answer(
+        AgentFinishArgs(outcome="ANSWERED", answer="根据我的知识回答"),
+        [],
+        "默认范围",
+        tool_calls=1,
+    )
+
+    assert conversation.outcome == RunOutcome.ANSWERED
+    assert conversation.answer_notices == ["NOT_FROM_KNOWLEDGE"]
+    assert fallback.outcome == RunOutcome.NOT_FOUND
+    assert fallback.answer == "未找到相关内容。已查询范围：默认范围"
+
+
+def test_empty_answer_and_missing_clarification_have_confirmed_fallbacks():
+    """修复后空回答改写为未找到，空澄清问题使用已确认固定问题。"""
+    empty = validate_answer(
+        AgentFinishArgs(outcome="ANSWERED", answer=""),
+        [_evidence()],
+        "课程库",
+        repair_exhausted=True,
+    )
+    clarification = validate_answer(
+        AgentFinishArgs(outcome="NEEDS_CLARIFICATION"),
+        [],
+        "默认范围",
+        repair_exhausted=True,
+    )
+
+    assert empty.outcome == RunOutcome.NOT_FOUND
+    assert empty.answer == "未找到相关内容。已查询范围：课程库"
+    assert clarification.answer == "能具体说明一下要找的内容吗？可以补充关键词或指定知识库"
+
+
+def test_multiple_clarification_questions_are_truncated_without_retry_issue():
+    """多个澄清问题截到第一个后直接交付，不再要求重交。"""
+    result = validate_answer(
+        AgentFinishArgs(
+            outcome="NEEDS_CLARIFICATION",
+            clarification_question="你指哪门课？哪个学期？",
+        ),
+        [],
+        "默认范围",
+    )
+
+    assert result.answer == "你指哪门课？"
+    assert result.issues == []

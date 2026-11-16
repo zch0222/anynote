@@ -9,6 +9,8 @@ from core.errors import BUDGET_EXHAUSTED_MESSAGE
 from harness.middleware import HarnessMiddleware, Hook, MiddlewareContext, MiddlewareDecision
 from harness.models import Observation, RunOutcome
 
+FORCE_FINISH_HINT = "连续行动没有新增进展，停止检索并直接给出结果。"
+
 
 class BudgetMiddleware(HarnessMiddleware):
     """在固定挂载点检查五类运行预算。
@@ -32,7 +34,7 @@ class BudgetMiddleware(HarnessMiddleware):
                 hints.append("模型轮数接近上限，请使用已有信息收束。")
             if run.tool_calls >= runtime.tool_calls * 0.8:
                 hints.append("工具调用数接近上限，请使用已有信息收束。")
-            return MiddlewareDecision(append=hints)
+            return MiddlewareDecision(state_updates={"budget_hints": hints})
         if context.hook == Hook.AFTER_PREPARE:
             token_count = getattr(context.payload, "token_count", 0)
             if token_count > runtime.context_tokens:
@@ -90,10 +92,7 @@ class NoProgressMiddleware(HarnessMiddleware):
         else:
             run.no_progress_strikes = 0
         if run.no_progress_strikes >= 2:
-            return MiddlewareDecision(
-                state_updates={"force_finish": True},
-                append=["连续行动没有新增进展，停止检索并直接给出结果。"],
-            )
+            return MiddlewareDecision(state_updates={"force_finish": True})
         if run.no_progress_strikes == 1:
             return MiddlewareDecision(append=["上一轮没有新增进展，请更换方法或参数。"])
         return MiddlewareDecision()

@@ -12,6 +12,7 @@ from typing import Any, Protocol
 import tiktoken
 
 from harness.action.preview import structured_preview
+from harness.budget import FORCE_FINISH_HINT
 from harness.context.compaction import HistoryCompactor
 from harness.context.manifest import ContextManifest, ManifestEntry
 from harness.context.policy import EVIDENCE_BEGIN, EVIDENCE_END, PLATFORM_RULES
@@ -66,6 +67,7 @@ class _Layer:
     selected_reason: str
     transform: str = "ORIGINAL"
     permission_basis: str | None = None
+    referenced_content: str | None = None
 
 
 class ContextBuilder:
@@ -96,7 +98,13 @@ class ContextBuilder:
             summary, additional_usage = await self._compactor.compact(run, history[:split])
             history = [summary, *history[split:]]
             run.history = list(history)
-        high = self._fixed_layers(run, tools)
+        active_hints = list(run.budget_hints)
+        if run.force_finish:
+            active_hints.append(FORCE_FINISH_HINT)
+        active_hints.extend(run.hints)
+        run.last_hints = list(active_hints)
+        run.hints.clear()
+        high = self._fixed_layers(run, tools, active_hints)
         history_layers = [self._history_layer(index, item) for index, item in enumerate(history)]
         # 结构化行（清单、目录、关系）已带 evidenceId 出现在工具结果里，不再以证据层重复发送
         evidence_layers = [
@@ -134,20 +142,35 @@ class ContextBuilder:
         )
         return CompiledContext(messages, manifest, token_count, tools, additional_usage)
 
-    def _fixed_layers(self, run: RunContext, tools: list[dict[str, Any]]) -> list[_Layer]:
+    def _fixed_layers(
+        self,
+        run: RunContext,
+        tools: list[dict[str, Any]],
+        active_hints: list[str],
+    ) -> list[_Layer]:
         runtime = {
             "date": datetime.now(UTC).date().isoformat(),
             "scope": run.request.scope.model_dump(by_alias=True) if run.request.scope else None,
             "contextPolicy": run.agent.context_policy,
             "modelTurnsRemaining": max(0, run.runtime.model_turns - run.model_turns),
             "toolCallsRemaining": max(0, run.runtime.tool_calls - run.tool_calls),
-            "hints": run.hints,
+            "hints": active_hints,
         }
         return [
             _Layer("platform", "platform", "platform-rules", PLATFORM_RULES, "PLATFORM", "1", "平台规则"),
             _Layer("agent", "agent", run.agent.name, run.agent.instructions, "PLATFORM", run.agent.version, "Agent 契约"),
             _Layer("run", "runtime", run.run_id, json.dumps(runtime, ensure_ascii=False), "SYSTEM_GENERATED", "1", "运行状态"),
-            _Layer("run", "tools", run.agent.name, json.dumps(tools, ensure_ascii=False), "PLATFORM", run.agent.version, "行动面工具定义"),
+            _Layer(
+                "run",
+                "tools",
+                run.agent.name,
+                "",
+                "PLATFORM",
+                run.agent.version,
+                "行动面工具定义",
+                transform="REFERENCE",
+                referenced_content=json.dumps(tools, ensure_ascii=False),
+            ),
         ]
 
     @staticmethod
@@ -343,7 +366,7 @@ class ContextBuilder:
         evidence: list[_Layer],
     ) -> list[dict[str, Any]]:
         question = high[-1]
-        instructions = "\n\n".join(item.content for item in high[:-1])
+        instructions = "\n\n".join(item.content for item in high[:-1] if item.content)
         messages: list[dict[str, Any]] = [{"role": "system", "content": instructions}]
         messages.extend({"role": "user", "content": item.content} for item in history)
         if evidence:
@@ -354,6 +377,7 @@ class ContextBuilder:
         return messages
 
     def _manifest_entry(self, layer: _Layer) -> ManifestEntry:
+        content = layer.referenced_content if layer.referenced_content is not None else layer.content
         return ManifestEntry(
             source_type=layer.source_type,
             source_id=layer.source_id,
@@ -362,7 +386,7 @@ class ContextBuilder:
             trust_level=layer.trust_level,
             permission_basis=layer.permission_basis,
             selected_reason=layer.selected_reason,
-            token_count=self._counter.count(layer.content),
+            token_count=self._counter.count(content),
             transform=layer.transform,
-            content_hash=hashlib.sha256(layer.content.encode("utf-8")).hexdigest(),
+            content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
         )
