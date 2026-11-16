@@ -11,7 +11,7 @@
 
 ### 前端
 
-- 新功能写在 `apps/web/`（Next.js 15）；`apps/web-legacy/` 只修线上 bug，不加新功能
+- 新功能与缺陷修复都写在 `apps/web/`（Next.js 15）；`apps/web-legacy/` 已完全下线，不再修改
 - 数据获取：TanStack Query（`use<X>Query` / `use<X>Mutation`）
 - API 调用只使用 `packages/api-client/src/` 下生成的函数，不手写 fetch/axios
 - 样式只用 Tailwind CSS，不写内联 style

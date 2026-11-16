@@ -17,7 +17,7 @@
 anynote/
 ├── apps/
 │   ├── web/                  前端 Next.js 15 应用（Phase 5 重写，M0-M8 已完成）
-│   ├── web-legacy/           旧前端 Next.js 13.5（用户当前实际访问的版本，不在 workspace 内）
+│   ├── web-legacy/           旧前端 Next.js 13.5（已完全下线，目录暂留、不再修改，不在 workspace 内）
 │   ├── collab/               协同编辑 WebSocket 服务（Node，:1234）
 │   └── desktop/              Tauri 2 桌面壳（构建需 Rust 工具链，见其 README）
 ├── packages/
@@ -544,6 +544,8 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同服务均保留命名�
 | `CURL_VERSION` | `8.10.1` |
 
 ### 旧前端（`apps/web-legacy/.env`）
+
+> 旧前端已完全下线，线上只用新前端；下表仅作目录暂留期间的参考。
 
 | 变量 | 示例值 | 说明 |
 |------|--------|------|

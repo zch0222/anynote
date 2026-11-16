@@ -154,7 +154,7 @@
   - [x] M8.2 桌面端骨架：`apps/desktop` Tauri 2 配置 + `/api/auth/exchange` 令牌交换（**未配 `DESKTOP_EXCHANGE_KEY` 即整体关闭**，三道闸已在真实服务器逐条验证）+ `lib/desktop/bridge.ts`（localStorage 禁令的唯一例外，非桌面环境读写空操作）。**构建验证后置**：本机无 rustc / cargo / MSVC Build Tools，`src-tauri/` 的 Rust 代码尚未编译验证
   - [x] M8.3 E2E + 性能预算：Playwright **15 条全绿**（6 条关键路径 + 协同双上下文同步）；Lighthouse `/login` 100 其余 99、无障碍全 100；产物预算最重路由 `/notes/[baseId]/[noteId]` 292.0 KB、编辑器 10.2 KB。**两处量法纠错**：产物预算原先漏算各级 layout chunk（改对后立刻抓出 `/docs` 315KB 超预算，已改懒加载）；Lighthouse 只设 `formFactor` 而未换节流参数，此前 84/77 分并非真实桌面表现
   - [x] M8.4 清理与文档：README / CONTRIBUTING / CLAUDE.md / `.claude/context/frontend.md` 全量同步（顺带修正与实际不符的目录结构、删掉 CLAUDE.md 里重复两遍的小节）；`.gitignore` 补 Tauri 与 e2e 产物
-  - [ ] **不删 `apps/web-legacy/`**：里程碑条件是「确认 1 周稳定后」，而 M7.6 的 5 个后端缺口未解，新前端尚不能替代它承担线上流量；删除前置条件已写入 `CLAUDE.md`「双前端约定」
+  - [ ] **不删 `apps/web-legacy/`**：里程碑条件是「确认 1 周稳定后」，而 M7.6 的 5 个后端缺口未解，新前端尚不能替代它承担线上流量；删除前置条件已写入 `CLAUDE.md`「双前端约定」。**2026-11-16 更新**：旧前端已完全下线，前置条件不再适用，目录删除时间另定（见 `CLAUDE.md`「旧前端已下线」）
   - [ ] Sentry（里程碑原文标注为可选）未接入
   - [ ] 合并 `main` 与打 Tag `v0.6.0`——按用户决定，停在 `dev`
 

@@ -10,7 +10,7 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 
 - `services/` — Java 21 · Spring Boot 3.3.4 · Spring Cloud 2023.0.3（9 个微服务 + Feign API 模块 + common 共享库 + BOM）
 - `apps/web/` — Next.js 15 · React 19（**Phase 5 重写，M0-M8 已实现并验收；M8 于 2026-09-11 完成，发版待定**）。桌面版在 `app/(workspace)/**`，移动端在 `app/(mobile)/m/**`（M10.x，见 `docs/mobile/`）
-- `apps/web-legacy/` — Next.js 13.5（**旧前端，仍是当前用户访问的版本**，删除条件见下方 Phase 5 表）
+- `apps/web-legacy/` — Next.js 13.5（**旧前端，已完全下线**，线上只用 `apps/web`；目录暂留、不再修改，见下方「旧前端已下线」）
 - `apps/collab/` — Node · yjs 13 · ws（协同编辑 WebSocket 服务，:1234；M8.1 自建，后端无此端点）。**房间契约 `note:<noteId>`**（M13.2 起）：令牌绑定房间与只读标志，`index` / `doc:<uuid>` 已退役。**笔记默认是非协同模式**（单人保存，`NEXT_PUBLIC_COLLAB_NOTES` 不设即关闭，2026-09-27 拍板），协同需以 `NEXT_PUBLIC_COLLAB_NOTES=1` 构建 web 显式开启。开启协同时 `note` 房间默认不落盘（客户端各自保存）；**打开 `COLLAB_SERVER_PERSIST` 后由协同服务经 note 内部端点写回 MySQL**（M14，见 `docs/collab-persistence/`）。产物由 tsup 打包（含 TS 源码包 `@anynote/editor-core`）
 - `apps/desktop/` — Tauri 2 桌面壳（M8.2 骨架；构建需 Rust + MSVC 工具链，尚未编译验证）。**计划原地重做**为界面打包进安装包、直连网关的精简客户端，方案见 `docs/desktop/`（2026-10-01 草案，待拍板）
 - `apps/cli/` — TypeScript CLI 前端 `@anynote/cli`（供人与 agent 操作知识库/笔记；直连 Gateway，配套 `.claude/skills/anynote-*`，方案见 `docs/cli/`）
@@ -32,7 +32,7 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 | 2 | Maven BOM（统一版本） | ✅ v0.3.0 |
 | 3 | Spring Boot 3 + JDK 21 升级（javax→jakarta、Security 6、合并 ai+ai-nio） | ✅ v0.4.0 |
 | 4 | 服务层重构（统一异常、REST 规范、HMAC 内部鉴权） | ✅ v0.5.0 — 收尾任务见 `docs/refactor/TASKS.md` L124-128 |
-| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **代码完成，发版待定** — M0-M7 已于 2026-09-11 全部 `--no-ff` 合并 `dev`。**M8（协同 + 桌面 + E2E/性能 + 收尾）同日完成**：`apps/collab` 自建协同服务 + `/docs` 协同文档库、`apps/desktop` Tauri 骨架与 `/api/auth/exchange` 令牌交换、Playwright 用例（2026-09-12 笔记模块重构后扩充，2026-09-16 UI 补稿后 **118** 条，2026-09-16 知识库概览还原后 **126** 条，2026-09-19 官网首页 D-19/M-14 落地后 **136** 条）、Lighthouse（性能 97-100 / 无障碍 100）、产物预算全绿；全仓前端单测 **1814**（2026-09-19 官网首页后，含落地页 26 条与中间件公开页分流 6 条）+ 协同服务 **75**。**未做**：桌面构建验证（本机无 Rust/MSVC 工具链）、删除 `apps/web-legacy/`（M7.6 的 5 个后端缺口未解，新前端还不能替代它）、合并 `main` 与打 tag `v0.6.0`。AI 流式与 PDF 上传仍受后端阻塞（见里程碑 M7.6）。详见 `docs/refactor/FRONTEND_MILESTONES.md` M7/M7.6/M8/M8.6/§5 与 `docs/refactor/TASKS.md` Phase 5；E2E 与性能门禁命令见 README「测试」 |
+| 5 | 前端完全重写（TipTap + BFF + TanStack Query） | 🟡 **代码完成，发版待定** — M0-M7 已于 2026-09-11 全部 `--no-ff` 合并 `dev`。**M8（协同 + 桌面 + E2E/性能 + 收尾）同日完成**：`apps/collab` 自建协同服务 + `/docs` 协同文档库、`apps/desktop` Tauri 骨架与 `/api/auth/exchange` 令牌交换、Playwright 用例（2026-09-12 笔记模块重构后扩充，2026-09-16 UI 补稿后 **118** 条，2026-09-16 知识库概览还原后 **126** 条，2026-09-19 官网首页 D-19/M-14 落地后 **136** 条）、Lighthouse（性能 97-100 / 无障碍 100）、产物预算全绿；全仓前端单测 **1814**（2026-09-19 官网首页后，含落地页 26 条与中间件公开页分流 6 条）+ 协同服务 **75**。**未做**：桌面构建验证（本机无 Rust/MSVC 工具链）、删除 `apps/web-legacy/` 目录（旧前端已完全下线，2026-11-16 确认；目录删除时间另定）、合并 `main` 与打 tag `v0.6.0`。AI 流式与 PDF 上传仍受后端阻塞（见里程碑 M7.6）。详见 `docs/refactor/FRONTEND_MILESTONES.md` M7/M7.6/M8/M8.6/§5 与 `docs/refactor/TASKS.md` Phase 5；E2E 与性能门禁命令见 README「测试」 |
 | 6 | Python AI 现代化（Pydantic v2） | ✅ v0.7.0 |
 | 7 | OpenSpec 集成 | ✅ v1.0.0 |
 
@@ -254,20 +254,15 @@ CLI 的见 [`apps/cli/README.md`](./apps/cli/README.md)。
 
 SQL 文件在 `infra/sql/`，**手动执行**（无 Flyway / Liquibase 自动化）。MyBatis Plus 自动填充 `createTime` / `updateTime`，业务代码不要手动赋值这两个字段。
 
-### Phase 5 重写期间的双前端约定
+### 旧前端已下线（2026-11-16 用户确认）
 
-- `apps/web-legacy/` 是用户当前实际访问的前端，**修复线上 bug 在这里改**
-- `apps/web/` 是新前端目标位置，**新功能开发去这里**
-- 两者不共用 workspace（`pnpm-workspace.yaml` 显式排除 legacy）
+- `apps/web-legacy/` **已完全下线**，线上只使用 `apps/web`。**新功能与缺陷修复都只在 `apps/web` 做**，不再修改 legacy
+- 目录暂留在仓库里，不在 workspace 内（`pnpm-workspace.yaml` 显式排除）；删除时间另定
+- 后端改契约时不需要兼顾 legacy 的调用方式。它的私有请求（仍用旧 `accessToken` 头）和 AI 功能（调已删除的 `/api/aiNio/**`）早已失效
 
-**M8.4 复核结论：`apps/web-legacy/` 暂不删除。** 里程碑原文的删除条件是「确认 1 周稳定后」，
-而当前新前端还有 M7.6 记录的 5 个后端缺口未解（AI 流式全链路、PDF 上传转存、资料保存
-`@InnerAuth`、mooc 权限规则、图片分片直传），尚不能替代 legacy 承担线上流量。
-**删除前置条件**（全部满足才动手）：
-
-1. M7.6 的后端缺口全部关闭，新前端在这些路径上端到端可用
-2. 新前端接管线上流量并稳定运行 1 周
-3. `pnpm --filter web test:e2e` 20 条用例在生产环境全绿
+M8.4 当时为删除 legacy 定的三条前置条件（M7.6 后端缺口关闭、新前端接管线上流量稳定 1 周、
+生产环境 E2E 全绿）是为保护线上流量设的，随旧前端下线不再适用；原记录见
+`docs/refactor/FRONTEND_MILESTONES.md` M8.4。
 
 ## 上下文文档导航
 
