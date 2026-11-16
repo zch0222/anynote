@@ -29,6 +29,17 @@ import jakarta.validation.constraints.NotNull;
         configuration = MultipartSupportConfig.class)
 public interface RemoteFileService {
 
+    /**
+     * 为已通过资料阅读权限校验的文件生成预览地址。
+     *
+     * @param fileId 资料文件标识
+     * @param fromSource 内部调用来源
+     * @return 时效访问地址
+     */
+    @GetMapping("/internal/v1/files/{fileId}/doc-preview-url")
+    ResData<ObjectURL> getDocPreviewUrl(@PathVariable("fileId") Long fileId,
+                                      @RequestHeader("from-source") String fromSource);
+
     @PostMapping(value = "", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResData<FilePO> uploadFile(@RequestPart("file") @NotNull(message = "文件不能为空") MultipartFile file,
                                       @RequestPart("path") @NotNull(message = "文件路径不能为空") String path,

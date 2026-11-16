@@ -31,6 +31,11 @@ public class RemoteFileFallbackFactory implements FallbackFactory<RemoteFileServ
         return new RemoteFileService() {
 
             @Override
+            public ResData<ObjectURL> getDocPreviewUrl(Long fileId, String fromSource) {
+                return ResData.error(ResCode.INNER_FILE_SERVICE_ERROR);
+            }
+
+            @Override
             public ResData<FilePO> uploadFile(MultipartFile file, String path, Long userId, String uploadId, Integer source) {
                 return ResUtil.error(ResCode.INNER_FILE_SERVICE_ERROR);
             }
