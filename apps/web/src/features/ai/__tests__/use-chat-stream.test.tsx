@@ -22,8 +22,7 @@ const aiApiPostMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/ai/sse", () => ({
   streamAiSse: (options: Parameters<typeof streamAiSseMock>[0]) => streamAiSseMock(options),
   toAiRunErrorMessage: (value: unknown) =>
-    value === "当前使用人数较多，请稍后再试" ||
-    value === "今日 AI 问答次数已达上限，请明天再试。"
+    value === "当前使用人数较多，请稍后再试" || value === "今日 AI 问答次数已达上限，请明天再试。"
       ? value
       : "服务暂时不可用，请稍后重试",
 }));
@@ -49,6 +48,39 @@ async function flush() {
 }
 
 describe("chat stream store", () => {
+  /** 范围、进度、引用与终态随活跃会话迁移而保留。 */
+  it("保存新协议的引用和范围", async () => {
+    useChatStreamStore.setState({ sessions: {} });
+    streamAiSseMock.mockImplementation(async ({ onEvent }) => {
+      onEvent(
+        event("run.started", { conversationId: 42, scope: { knowledgeBaseIds: [3], refs: [] } }),
+      );
+      onEvent(event("tool.started", { callId: "a", name: "kb_search", summary: "检索知识库" }, 2));
+      expect(useChatStreamStore.getState().sessions.c42?.messages[1]?.progress).toBe("检索知识库");
+      onEvent(event("citation", { index: 1, sourceType: "note", sourceId: "note:5", kbId: 3 }, 3));
+      onEvent(event("text.delta", { delta: "答案[1]" }, 4));
+      onEvent(event("run.finished", { outcome: "ANSWERED" }, 5));
+    });
+    await useChatStreamStore.getState().send({
+      key: "new",
+      prompt: "问题",
+      scope: { knowledgeBaseIds: [3], refs: [] },
+      onConversationCreated: (id) => useChatStreamStore.getState().renameKey("new", `c${id}`),
+    });
+    expect(streamAiSseMock.mock.calls[0]?.[0].body).toMatchObject({
+      scope: { knowledgeBaseIds: [3], refs: [] },
+    });
+    expect(useChatStreamStore.getState().sessions.c42?.scope).toEqual({
+      knowledgeBaseIds: [3],
+      refs: [],
+    });
+    expect(useChatStreamStore.getState().sessions.c42?.messages[1]).toMatchObject({
+      runId: "r1",
+      outcome: "ANSWERED",
+      citations: [{ index: 1, sourceId: "note:5" }],
+    });
+  });
+
   beforeEach(() => {
     streamAiSseMock.mockReset().mockImplementation(async ({ onEvent }) => completeRun(onEvent));
     aiApiPostMock.mockReset().mockResolvedValue({ data: { accepted: true } });
@@ -59,17 +91,15 @@ describe("chat stream store", () => {
 
   it("send 乐观追加用户消息与空的助手消息，并进入 streaming", async () => {
     let finishStream: (() => void) | undefined;
-    streamAiSseMock.mockImplementation(
-      ({ onEvent }) => {
-        onEvent(event("run.started", {}, 1));
-        return new Promise<void>((resolve) => {
-          finishStream = () => {
-            onEvent(event("run.finished", { outcome: "ANSWERED" }, 2));
-            resolve();
-          };
-        });
-      },
-    );
+    streamAiSseMock.mockImplementation(({ onEvent }) => {
+      onEvent(event("run.started", {}, 1));
+      return new Promise<void>((resolve) => {
+        finishStream = () => {
+          onEvent(event("run.finished", { outcome: "ANSWERED" }, 2));
+          resolve();
+        };
+      });
+    });
     const { result } = renderSession("new");
     expect(result.current.messages).toHaveLength(0);
 
@@ -139,7 +169,9 @@ describe("chat stream store", () => {
   it("新会话首帧改名后失败终态仍结束当前会话", async () => {
     streamAiSseMock.mockImplementation(async ({ onEvent }) => {
       onEvent(event("run.started", { conversationId: 42 }, 1));
-      onEvent(event("error", { category: "MODEL_UNAVAILABLE", message: "服务暂时不可用，请稍后重试" }, 2));
+      onEvent(
+        event("error", { category: "MODEL_UNAVAILABLE", message: "服务暂时不可用，请稍后重试" }, 2),
+      );
       onEvent(event("run.finished", { outcome: "FAILED" }, 3));
     });
 
@@ -200,7 +232,13 @@ describe("chat stream store", () => {
         type: "error",
         data: { category: "INTERNAL", retryable: true, message: "服务暂时不可用，请稍后重试" },
       });
-      onEvent({ seq: 2, runId: "r1", ts: "now", type: "run.finished", data: { outcome: "FAILED" } });
+      onEvent({
+        seq: 2,
+        runId: "r1",
+        ts: "now",
+        type: "run.finished",
+        data: { outcome: "FAILED" },
+      });
     });
     await useChatStreamStore.getState().send({ key: "new", prompt: "q" });
     expect(useChatStreamStore.getState().sessions.new?.status).toBe("error");
@@ -214,17 +252,15 @@ describe("chat stream store", () => {
 
   it("abort 调用运行取消端点并保留已收内容", async () => {
     let finishStream: (() => void) | undefined;
-    streamAiSseMock.mockImplementation(
-      ({ onEvent }) => {
-        onEvent(event("run.started", { conversationId: 42 }, 1));
-        return new Promise<void>((resolve) => {
-          finishStream = () => {
-            onEvent(event("run.finished", { outcome: "CANCELLED" }, 3));
-            resolve();
-          };
-        });
-      },
-    );
+    streamAiSseMock.mockImplementation(({ onEvent }) => {
+      onEvent(event("run.started", { conversationId: 42 }, 1));
+      return new Promise<void>((resolve) => {
+        finishStream = () => {
+          onEvent(event("run.finished", { outcome: "CANCELLED" }, 3));
+          resolve();
+        };
+      });
+    });
     const pending = useChatStreamStore.getState().send({ key: "new", prompt: "长问题" });
     const assistantId = useChatStreamStore.getState().sessions.new?.messages[1]?.id;
     streamAiSseMock.mock.calls[0]?.[0].onEvent(event("text.delta", { delta: "部分" }, 2));

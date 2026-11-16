@@ -271,7 +271,7 @@ describe("KnowledgeBaseOverview（D-02）预览块", () => {
   const DOCS = Array.from({ length: 6 }, (_, index) => ({
     id: 200 + index,
     docName: `文档 ${index + 1}.pdf`,
-    indexStatus: index === 0 ? 1 : 0,
+    indexStatus: index === 0 ? 0 : 3,
     creatorNickname: "林一",
     createTime: "2026-09-15T01:00:00.000Z",
   }));

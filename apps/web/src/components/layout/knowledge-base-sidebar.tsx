@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import type { KnowledgeBase } from "@/features/notes/schemas";
 import { cn } from "@/lib/utils";
-import { ChevronsUpDown } from "lucide-react";
+import { ChevronsUpDown, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { knowledgeBaseSectionHref, knowledgeBaseSections } from "./navigation";
 
@@ -87,6 +87,14 @@ export function SidebarKnowledgeBaseNav({
     <section>
       <p className="px-2 pb-1 pt-4 text-footnote text-label-tertiary">知识库内容</p>
       <nav aria-label="知识库内容" className="space-y-0.5">
+        <Link
+          href={`/ai/chat?baseId=${baseId}`}
+          data-testid="kb-ask-link"
+          className="flex min-h-9 items-center gap-2.5 rounded-md px-2 py-1.5 text-body text-accent outline-none hover:bg-fill-hover focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <MessageSquare className="size-[18px]" aria-hidden="true" />
+          知识库问答
+        </Link>
         {knowledgeBaseSections.map((section) => {
           const active = section.key === activeSection;
           const count = counts[section.key as keyof SectionCounts];

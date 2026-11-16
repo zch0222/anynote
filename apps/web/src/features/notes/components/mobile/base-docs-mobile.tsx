@@ -5,8 +5,8 @@ import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { EmptyState, QueryError } from "@/components/shared/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DocIndexBadge } from "@/features/ai/components/doc-index-badge";
 import { MobileBaseHeader } from "@/features/notes/components/mobile/base-section-tabs";
-import { DOC_INDEXED } from "@/features/notes/schemas";
 import { useKnowledgeBaseDocsQuery } from "@/features/notes/use-docs";
 import { useKnowledgeBaseQuery } from "@/features/notes/use-knowledge-bases";
 import { formatRelativeTime } from "@/lib/format-time";
@@ -91,9 +91,7 @@ export function MobileBaseDocs({ baseId }: { baseId: number }) {
                           {doc.createTime ? ` · ${formatRelativeTime(doc.createTime)}` : ""}
                         </span>
                       </span>
-                      <Badge variant={doc.indexStatus === DOC_INDEXED ? "success" : "secondary"}>
-                        {doc.indexStatus === DOC_INDEXED ? "已索引" : "未索引"}
-                      </Badge>
+                      <DocIndexBadge status={doc.indexStatus} />
                       <ChevronRight
                         className="size-4 shrink-0 text-label-tertiary"
                         aria-hidden="true"

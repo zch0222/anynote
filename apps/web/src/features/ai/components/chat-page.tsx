@@ -11,6 +11,7 @@ import { ConversationList } from "./conversation-list";
 export type ChatPageProps = {
   /** 路由中的会话 id；不传表示新对话。 */
   conversationId?: number;
+  initialBaseId?: number | undefined;
 };
 
 /**
@@ -20,11 +21,10 @@ export type ChatPageProps = {
  * 从流式 chunk 拿到 conversationId：把会话迁移到正式 key 并回填路由，
  * 全程不重发请求、不丢消息。
  */
-export function ChatPage({ conversationId }: ChatPageProps) {
+export function ChatPage({ conversationId, initialBaseId }: ChatPageProps) {
   const router = useRouter();
-  const sessionKey = conversationId
-    ? conversationKey({ id: conversationId })
-    : NEW_CONVERSATION_KEY;
+  const newKey = initialBaseId ? `new:kb${initialBaseId}` : NEW_CONVERSATION_KEY;
+  const sessionKey = conversationId ? conversationKey({ id: conversationId }) : newKey;
   const renameKey = useChatStreamStore((state) => state.renameKey);
   const detail = useConversationQuery(conversationId ?? 0);
   const hydrate = useChatStreamStore((state) => state.hydrate);
@@ -36,6 +36,7 @@ export function ChatPage({ conversationId }: ChatPageProps) {
         `c${conversationId}`,
         detail.data.messages,
         detail.data.conversation?.id ?? conversationId,
+        detail.data.conversation?.scope,
       );
     }
   }, [detail.data, conversationId, hydrate]);
@@ -48,9 +49,14 @@ export function ChatPage({ conversationId }: ChatPageProps) {
       <main className="min-w-0 flex-1">
         <ChatPanel
           sessionKey={sessionKey}
+          initialBaseId={initialBaseId}
+          historyStatus={
+            !conversationId || detail.data ? "ready" : detail.isError ? "error" : "pending"
+          }
+          onReloadHistory={() => void detail.refetch()}
           onConversationCreated={(createdId) => {
             if (!conversationId) {
-              renameKey(NEW_CONVERSATION_KEY, `c${createdId}`);
+              renameKey(newKey, `c${createdId}`);
               router.replace(`/ai/chat/${createdId}`);
             }
           }}

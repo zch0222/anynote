@@ -53,14 +53,17 @@ describe("MobileChat", () => {
       isPending: false,
       isError: false,
       data: {
-        conversation: { id: 9, title: "聊聊架构" },
+        conversation: { id: 9, title: "聊聊架构", scope: { knowledgeBaseIds: [3], refs: [] } },
         messages: [{ role: 0, content: "在？" }],
       },
     });
     renderWithProviders(<MobileChat conversationId={9} />);
 
     expect(screen.getByTestId("chat-panel")).toHaveAttribute("data-session-key", "c9");
-    expect(store.hydrate).toHaveBeenCalledWith("c9", [{ role: 0, content: "在？" }], 9);
+    expect(store.hydrate).toHaveBeenCalledWith("c9", [{ role: 0, content: "在？" }], 9, {
+      knowledgeBaseIds: [3],
+      refs: [],
+    });
     expect(screen.getByRole("heading", { name: "聊聊架构" })).toBeInTheDocument();
   });
 

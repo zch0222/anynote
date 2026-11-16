@@ -1,8 +1,10 @@
 "use client";
 
+import { type Citation, parseCitations } from "@/lib/ai/citations";
+import { runProgress } from "@/lib/ai/run-progress";
 import { streamAiSse, toAiRunErrorMessage } from "@/lib/ai/sse";
 import { type StoreApi, type UseBoundStore, create } from "zustand";
-import type { ChatMessage } from "./schemas";
+import { type ChatMessage, type RunScope, runScopeSchema } from "./schemas";
 
 /**
  * AI 流式会话的状态层（聊天 / Chat PDF 共用）。
@@ -22,8 +24,9 @@ export type StreamMessage = {
   /** 助手消息仍在接收增量。 */
   streaming?: boolean;
   runId?: string | null;
-  citations?: Array<Record<string, unknown>>;
+  citations?: Citation[];
   outcome?: string | null;
+  progress?: string;
 };
 
 export type ChatSession = {
@@ -31,6 +34,7 @@ export type ChatSession = {
   status: ChatStreamStatus;
   error: string | null;
   conversationId: number | null;
+  scope?: RunScope;
 };
 
 export type SendArgs = {
@@ -42,6 +46,7 @@ export type SendArgs = {
   /** 传入时走单资料范围的 Agent 运行端点。 */
   docId?: number;
   model?: string;
+  scope?: RunScope;
   /** 新会话首条消息收到 conversationId 时回调（页面据此回填路由）。 */
   onConversationCreated?: (conversationId: number) => void;
   /** 流结束（成功 / 失败 / 中止）后回调（页面据此刷新会话列表）。 */
@@ -53,7 +58,13 @@ type ChatStreamState = {
   send: (args: SendArgs) => Promise<void>;
   abort: (key: string) => void;
   /** 打开已有会话时灌入服务端历史；幂等——已有内容的会话不覆盖。 */
-  hydrate: (key: string, messages: ChatMessage[], conversationId: number | null) => void;
+  hydrate: (
+    key: string,
+    messages: ChatMessage[],
+    conversationId: number | null,
+    scope?: RunScope | null,
+  ) => void;
+  setScope: (key: string, scope: RunScope) => void;
   /** 新会话拿到 conversationId 后把 "new" 会话迁移到正式 key。 */
   renameKey: (from: string, to: string) => void;
   clear: (key: string) => void;
@@ -132,10 +143,18 @@ function ensureChatStreamStore(): ChatStreamStore {
                 messages: [
                   ...session.messages,
                   { id: messageId(), role: 0, content: args.prompt },
-                  { id: assistantId, role: 1, content: "", streaming: true },
+                  {
+                    id: assistantId,
+                    role: 1,
+                    content: "",
+                    streaming: true,
+                    progress: "正在准备",
+                    citations: [],
+                  },
                 ],
                 status: "streaming",
                 error: null,
+                ...(args.scope ? { scope: args.scope } : {}),
               },
             },
           };
@@ -158,14 +177,53 @@ function ensureChatStreamStore(): ChatStreamStore {
                   agent: "knowledge-retrieval",
                   ...(args.conversationId ? { conversationId: args.conversationId } : {}),
                   ...(args.model ? { model: args.model } : {}),
+                  ...(args.scope ? { scope: args.scope } : {}),
                 },
             signal: controller.signal,
             onEvent: (event) => {
+              set((current) => {
+                const session = current.sessions[activeRun.key];
+                if (!session) return current;
+                const scope =
+                  event.type === "run.started" ? runScopeSchema.safeParse(event.data.scope) : null;
+                return {
+                  sessions: {
+                    ...current.sessions,
+                    [activeRun.key]: {
+                      ...session,
+                      ...(scope?.success ? { scope: scope.data } : {}),
+                      messages: session.messages.map((message) => {
+                        if (message.id !== assistantId) return message;
+                        const progress = runProgress(event);
+                        const citation =
+                          event.type === "citation" ? parseCitations([event.data])[0] : undefined;
+                        return {
+                          ...message,
+                          runId: event.runId,
+                          ...(progress ? { progress } : {}),
+                          ...(citation
+                            ? {
+                                citations: parseCitations([...(message.citations ?? []), citation]),
+                              }
+                            : {}),
+                          ...(event.type === "run.finished" &&
+                          typeof event.data.outcome === "string"
+                            ? { outcome: event.data.outcome }
+                            : {}),
+                        };
+                      }),
+                    },
+                  },
+                };
+              });
               if (event.type === "run.started") {
                 const active = controllers.get(activeRun.key);
                 if (active) {
                   active.runId = event.runId;
-                  if (typeof event.data.conversationId === "number" && !get().sessions[activeRun.key]?.conversationId) {
+                  if (
+                    typeof event.data.conversationId === "number" &&
+                    !get().sessions[activeRun.key]?.conversationId
+                  ) {
                     const conversationId = event.data.conversationId;
                     set((current) => {
                       const session = current.sessions[activeRun.key];
@@ -318,7 +376,15 @@ function ensureChatStreamStore(): ChatStreamStore {
         }
       },
 
-      hydrate: (key, messages, conversationId) => {
+      setScope: (key, scope) => {
+        set((current) => {
+          const session = current.sessions[key] ?? EMPTY_SESSION;
+          if (session.status === "streaming") return current;
+          return { sessions: { ...current.sessions, [key]: { ...session, scope } } };
+        });
+      },
+
+      hydrate: (key, messages, conversationId, scope) => {
         set((current) => {
           const existing = current.sessions[key];
           if (existing && (existing.status === "streaming" || existing.messages.length > 0)) {
@@ -335,12 +401,13 @@ function ensureChatStreamStore(): ChatStreamStore {
                     role: message.role as 0 | 1,
                     content: message.content ?? "",
                     ...(message.runId ? { runId: message.runId } : {}),
-                    citations: message.citations ?? [],
+                    citations: parseCitations(message.citations),
                     ...(message.outcome ? { outcome: message.outcome } : {}),
                   })),
                 status: "idle",
                 error: null,
                 conversationId,
+                ...(scope ? { scope } : {}),
               },
             },
           };

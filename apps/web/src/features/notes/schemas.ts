@@ -51,7 +51,7 @@ export function memberDisplayName(member: KnowledgeBaseMember): string {
  * `indexStatus` 是后端的索引状态位：只有已索引的文档才能被 RAG 问答检索到，
  * 所以列表上必须能看出来，否则用户会以为"传上去了却搜不到"。
  */
-export const DOC_INDEXED = 1;
+export { DOC_INDEXED } from "@/features/ai/doc-index-status";
 
 export const docListSchema = z.object({
   id: z.number(),

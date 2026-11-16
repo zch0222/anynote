@@ -1,3 +1,4 @@
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }));
 import { renderWithProviders } from "@/test/render";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";

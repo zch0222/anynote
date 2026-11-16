@@ -12,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DOC_INDEXED } from "@/features/ai/schemas";
 import { docSessionKey } from "@/features/ai/use-chat-stream";
 import {
   useDeleteDocMutation,
@@ -22,17 +21,20 @@ import {
   useUploadPdfMutation,
 } from "@/features/ai/use-docs";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
+import { type Citation, locatorNumber, positiveParam } from "@/lib/ai/citations";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, FileText, Trash2, Upload } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { isDocIndexPending } from "../../doc-index-status";
 import { ChatPanel } from "../chat-panel";
+import { DocIndexBadge } from "../doc-index-badge";
 import { PdfViewer } from "./pdf-viewer";
 
 /** 小屏（< lg）一次只显示一个面板，用顶部切换控件在两者之间来回。 */
-type PdfPane = "docs" | "chat";
+type PdfPane = "docs" | "preview" | "chat";
 
 /**
  * 地址参数解析：只接受合法正整数。
@@ -96,6 +98,10 @@ function PdfChatPane() {
   );
   const [progress, setProgress] = useState<number | null>(null);
   const [pane, setPane] = useState<PdfPane>("docs");
+  const [pageTarget, setPageTarget] = useState(() => ({
+    page: positiveParam(searchParams.get("page")) ?? undefined,
+    request: 0,
+  }));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -112,17 +118,28 @@ function PdfChatPane() {
   const deleteDoc = useDeleteDocMutation();
 
   // 索引未就绪时轮询详情，完成后刷新列表徽章
-  const indexPending = Boolean(docId) && doc.isSuccess && doc.data.indexStatus !== DOC_INDEXED;
+  const indexPending = Boolean(docId) && doc.isSuccess && isDocIndexPending(doc.data.indexStatus);
   const indexPoll = useDocIndexStatus(docId ?? 0, { enabled: indexPending });
   useEffect(() => {
-    if (indexPoll.data?.indexStatus === DOC_INDEXED) {
+    if (indexPoll.data && !isDocIndexPending(indexPoll.data.indexStatus)) {
       queryClient.invalidateQueries({ queryKey: ["ai", "docs"] });
     }
   }, [indexPoll.data, queryClient]);
 
   const currentBase = bases.data?.find((base) => base.id === baseId);
-  const indexed =
-    doc.data?.indexStatus === DOC_INDEXED || indexPoll.data?.indexStatus === DOC_INDEXED;
+  const indexStatus = indexPoll.data?.indexStatus ?? doc.data?.indexStatus;
+
+  /** 将当前资料的引用定位到预览页。 */
+  const handleCitation = (citation: Citation): boolean => {
+    if (citation.sourceId !== `doc:${docId}`) return false;
+    const page = locatorNumber(citation.locator?.pageStart ?? citation.locator?.pageNo);
+    setPageTarget((current) => ({
+      page: page && Number.isSafeInteger(page) ? page : 1,
+      request: current.request + 1,
+    }));
+    setPane("preview");
+    return true;
+  };
 
   const handleFiles = async (files: FileList | null) => {
     const file = files?.[0];
@@ -185,6 +202,7 @@ function PdfChatPane() {
         {(
           [
             ["docs", "文档库"],
+            ["preview", "预览"],
             ["chat", "问答"],
           ] as const
         ).map(([key, label]) => (
@@ -315,26 +333,9 @@ function PdfChatPane() {
                     {row.docName ?? "未命名文档"}
                   </span>
                 </button>
-                {row.indexStatus === DOC_INDEXED ? (
-                  <Badge variant="secondary" className="shrink-0">
-                    已索引
-                  </Badge>
-                ) : row.id === docId && indexPending ? (
-                  /*
-                   * 不传 label：这一行旁边没有文字，所以**必须**自己带状态语义，
-                   * 但用 sr-only 文字而不是 `label` —— Spinner 的 `label` 会给 SVG
-                   * 挂 role="status" 并成为独立播报点，而这里真正的语义是
-                   * 「这一行正在建索引」，挂在整行上比挂在图标上准确。
-                   */
-                  <span className="flex shrink-0 items-center gap-1 text-label-secondary">
-                    <Spinner size="badge" />
-                    <span className="sr-only">索引构建中</span>
-                  </span>
-                ) : (
-                  <Badge variant="outline" className="shrink-0">
-                    未索引
-                  </Badge>
-                )}
+                <DocIndexBadge
+                  status={row.id === docId ? (indexStatus ?? row.indexStatus) : row.indexStatus}
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -354,29 +355,27 @@ function PdfChatPane() {
         </div>
       </aside>
 
-      <section className="hidden min-w-0 flex-1 flex-col lg:flex">
+      <section
+        data-testid="pdf-pane-preview"
+        className={cn(
+          "min-h-0 min-w-0 flex-1 flex-col lg:flex",
+          pane === "preview" ? "flex" : "hidden",
+        )}
+      >
         {docId && doc.data?.url ? (
           <>
             <div className="flex items-center gap-2 border-b px-4 py-2 text-sm">
               <span className="truncate font-medium" title={doc.data.docName ?? ""}>
                 {doc.data.docName ?? "未命名文档"}
               </span>
-              {indexed ? (
-                <Badge variant="secondary">已索引</Badge>
-              ) : (
-                <Badge variant="outline">
-                  {/*
-                    不传 label：紧邻的「索引构建中」文字已经是可播报的状态，
-                    再给 SVG 挂 role="status" 会让读屏把同一件事念两遍。
-                    Badge 用 `[&>svg]:size-3!` 统一收口图标尺寸，这里保留原来的 mr-1 间距。
-                  */}
-                  <Spinner size="badge" className="mr-1" />
-                  索引构建中
-                </Badge>
-              )}
+              <DocIndexBadge status={indexStatus} />
             </div>
             <div className="min-h-0 flex-1 bg-fill-hover/50 p-4">
-              <PdfViewer url={doc.data.url} />
+              <PdfViewer
+                url={doc.data.url}
+                page={pageTarget.page}
+                navigationKey={pageTarget.request}
+              />
             </div>
           </>
         ) : (
@@ -394,7 +393,7 @@ function PdfChatPane() {
         )}
       >
         {docId ? (
-          <DocChatPanel docId={docId} />
+          <DocChatPanel docId={docId} onCitation={handleCitation} />
         ) : (
           <div className="flex h-full items-center justify-center px-6 text-center text-sm text-label-secondary">
             上传并选中 PDF 后，可以就文档内容提问。
@@ -405,11 +404,15 @@ function PdfChatPane() {
   );
 }
 
-function DocChatPanel({ docId }: { docId: number }) {
+function DocChatPanel({
+  docId,
+  onCitation,
+}: { docId: number; onCitation: (citation: Citation) => boolean }) {
   // 文档问答沿用后端会话模型：每篇文档在流式 store 里独立会话，首条消息由后端建会话。
   return (
     <ChatPanel
       sessionKey={docSessionKey(docId)}
+      onCitation={onCitation}
       docId={docId}
       emptyHint="就当前文档提问"
       placeholder="例如：这篇文档讲了什么？"

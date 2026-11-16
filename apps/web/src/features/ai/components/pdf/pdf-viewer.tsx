@@ -13,10 +13,12 @@ const PdfDocument = dynamic(() => import("./pdf-document").then((mod) => mod.Pdf
 export type PdfViewerProps = {
   url: string;
   onLoaded?: (numPages: number) => void;
+  page?: number | undefined;
+  navigationKey?: number | undefined;
 };
 
 /** PDF 预览面板：宽度跟随容器，滚动翻页。 */
-export function PdfViewer({ url, onLoaded }: PdfViewerProps) {
+export function PdfViewer({ url, onLoaded, page, navigationKey }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(720);
 
@@ -38,7 +40,14 @@ export function PdfViewer({ url, onLoaded }: PdfViewerProps) {
 
   return (
     <div ref={containerRef} className="h-full overflow-y-auto" data-testid="pdf-viewer">
-      <PdfDocument url={url} width={width} onLoaded={onLoaded} />
+      <PdfDocument
+        key={url}
+        url={url}
+        width={width}
+        onLoaded={onLoaded}
+        page={page}
+        navigationKey={navigationKey}
+      />
     </div>
   );
 }

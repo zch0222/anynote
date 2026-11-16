@@ -11,6 +11,7 @@ import { useEffect } from "react";
 export type MobileChatProps = {
   /** 路由中的会话 id；不传表示新对话（`/m/ai/chat/new`）。 */
   conversationId?: number;
+  initialBaseId?: number | undefined;
 };
 
 /**
@@ -22,11 +23,10 @@ export type MobileChatProps = {
  * 新会话的 key 迁移与路由回填也与桌面一致：首条消息完成后从流式 chunk 拿到
  * conversationId，把会话迁到正式 key 并 replace 路由，全程不重发请求。
  */
-export function MobileChat({ conversationId }: MobileChatProps) {
+export function MobileChat({ conversationId, initialBaseId }: MobileChatProps) {
   const router = useRouter();
-  const sessionKey = conversationId
-    ? conversationKey({ id: conversationId })
-    : NEW_CONVERSATION_KEY;
+  const newKey = initialBaseId ? `new:kb${initialBaseId}` : NEW_CONVERSATION_KEY;
+  const sessionKey = conversationId ? conversationKey({ id: conversationId }) : newKey;
   const renameKey = useChatStreamStore((state) => state.renameKey);
   const hydrate = useChatStreamStore((state) => state.hydrate);
   const detail = useConversationQuery(conversationId ?? 0);
@@ -38,6 +38,7 @@ export function MobileChat({ conversationId }: MobileChatProps) {
         `c${conversationId}`,
         detail.data.messages,
         detail.data.conversation?.id ?? conversationId,
+        detail.data.conversation?.scope,
       );
     }
   }, [detail.data, conversationId, hydrate]);
@@ -49,9 +50,15 @@ export function MobileChat({ conversationId }: MobileChatProps) {
       <div className="min-h-0 flex-1" data-testid="mobile-chat">
         <ChatPanel
           sessionKey={sessionKey}
+          initialBaseId={initialBaseId}
+          historyStatus={
+            !conversationId || detail.data ? "ready" : detail.isError ? "error" : "pending"
+          }
+          onReloadHistory={() => void detail.refetch()}
+          variant="mobile"
           onConversationCreated={(createdId) => {
             if (!conversationId) {
-              renameKey(NEW_CONVERSATION_KEY, `c${createdId}`);
+              renameKey(newKey, `c${createdId}`);
               router.replace(`/m/ai/chat/${createdId}`);
             }
           }}

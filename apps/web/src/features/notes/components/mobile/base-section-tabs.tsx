@@ -54,6 +54,13 @@ export function MobileBaseHeader({
         <span className="min-w-0 flex-1 truncate text-footnote text-label-secondary">
           {meta ? `${typeText} · ${meta}` : typeText}
         </span>
+        <Link
+          href={`/m/ai/chat/new?baseId=${baseId}`}
+          data-testid="mobile-kb-ask-link"
+          className="shrink-0 rounded-lg px-2 py-2 text-footnote text-accent outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          知识库问答
+        </Link>
       </header>
       <BaseSectionTabs baseId={baseId} current={current} />
     </>

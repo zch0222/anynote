@@ -3,10 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { NEW_CONVERSATION_KEY, aiQueryKeys } from "@/features/ai/query-keys";
 import { type SendArgs, useChatSession, useChatStreamStore } from "@/features/ai/use-chat-stream";
+import type { Citation, CitationVariant } from "@/lib/ai/citations";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
+import { scopeDocId } from "../schemas";
 import { ChatInput } from "./chat-input";
+import { ChatScopeSelect } from "./chat-scope-select";
 import { MessageItem } from "./message-item";
 
 export type ChatPanelProps = {
@@ -14,6 +17,11 @@ export type ChatPanelProps = {
   sessionKey: string;
   /** 传入时走文档 RAG（Chat PDF）。 */
   docId?: number;
+  initialBaseId?: number | undefined;
+  historyStatus?: "pending" | "error" | "ready";
+  onReloadHistory?: (() => void) | undefined;
+  variant?: CitationVariant;
+  onCitation?: ((citation: Citation) => boolean) | undefined;
   /** 流结束后刷新会话列表等外部数据。 */
   onSettled?: () => void;
   /** 新会话拿到 conversationId 时回调（聊天页据此迁移 key 并回填路由）。 */
@@ -25,19 +33,32 @@ export type ChatPanelProps = {
 /** 右侧聊天面板：消息流 + 输入区。流式状态由全局 store 持有，切页不丢。 */
 export function ChatPanel({
   sessionKey,
-  docId,
+  docId: requestedDocId,
+  initialBaseId,
+  historyStatus = "ready",
+  onReloadHistory,
+  variant = "desktop",
+  onCitation,
   onSettled,
   onConversationCreated,
   placeholder,
   emptyHint,
 }: ChatPanelProps) {
   const session = useChatSession(sessionKey);
+  const docId = requestedDocId ?? scopeDocId(session.scope);
   const send = useChatStreamStore((state) => state.send);
   const abort = useChatStreamStore((state) => state.abort);
+  const setScope = useChatStreamStore((state) => state.setScope);
   const queryClient = useQueryClient();
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+
+  useEffect(() => {
+    if (!docId && !session.scope) {
+      setScope(sessionKey, { knowledgeBaseIds: initialBaseId ? [initialBaseId] : [], refs: [] });
+    }
+  }, [docId, session.scope, initialBaseId, sessionKey, setScope]);
 
   // 用户向上翻阅时不强拉底部；重新贴近底部后恢复跟随
   useEffect(() => {
@@ -66,6 +87,8 @@ export function ChatPanel({
       };
       if (docId) {
         args.docId = docId;
+      } else if (session.scope) {
+        args.scope = session.scope;
       }
       if (conversationId > 0) {
         args.conversationId = conversationId;
@@ -77,6 +100,7 @@ export function ChatPanel({
       sessionKey,
       docId,
       session.conversationId,
+      session.scope,
       send,
       onConversationCreated,
       onSettled,
@@ -92,9 +116,19 @@ export function ChatPanel({
   }, [session.messages, handleSend]);
 
   const streaming = session.status === "streaming";
+  const historyUnavailable = session.messages.length === 0 && historyStatus !== "ready";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {docId ? (
+        <p className="border-b px-4 py-2 text-sm text-label-secondary">检索范围：当前资料</p>
+      ) : (
+        <ChatScopeSelect
+          scope={session.scope ?? { knowledgeBaseIds: [], refs: [] }}
+          disabled={streaming || historyUnavailable}
+          onChange={(scope) => setScope(sessionKey, scope)}
+        />
+      )}
       <div
         ref={viewportRef}
         className="min-h-0 flex-1 overflow-y-auto"
@@ -105,6 +139,18 @@ export function ChatPanel({
         }}
       >
         <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6" data-testid="message-list">
+          {historyUnavailable ? (
+            historyStatus === "pending" ? (
+              <p className="text-sm text-label-secondary">加载中…</p>
+            ) : (
+              <div role="alert" className="space-y-2 text-sm text-danger">
+                <p>服务暂时不可用，请稍后重试</p>
+                <Button variant="outline" size="sm" onClick={onReloadHistory}>
+                  重试
+                </Button>
+              </div>
+            )
+          ) : null}
           {session.messages.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-lg font-medium">{emptyHint ?? "开始新的对话"}</p>
@@ -115,7 +161,14 @@ export function ChatPanel({
               </p>
             </div>
           ) : (
-            session.messages.map((message) => <MessageItem key={message.id} message={message} />)
+            session.messages.map((message) => (
+              <MessageItem
+                key={message.id}
+                message={message}
+                variant={variant}
+                onCitation={onCitation}
+              />
+            ))
           )}
           {session.status === "error" && session.error ? (
             <div
@@ -135,6 +188,7 @@ export function ChatPanel({
       <div className="mx-auto w-full max-w-3xl px-4 pb-4">
         <ChatInput
           streaming={streaming}
+          disabled={historyUnavailable}
           onSend={handleSend}
           onStop={() => {
             abort(sessionKey);

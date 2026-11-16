@@ -25,8 +25,8 @@ import { KnowledgeBaseDocs } from "../knowledge-base-detail";
 const IDLE = { isPending: false, isError: false, isFetching: false };
 
 const DOCS = [
-  { id: 71, docName: "需求文档.pdf", indexStatus: 1, creatorNickname: "林一" },
-  { id: 72, docName: "设计稿.pdf", indexStatus: 0, creatorNickname: "周宁" },
+  { id: 71, docName: "需求文档.pdf", indexStatus: 0, creatorNickname: "林一" },
+  { id: 72, docName: "设计稿.pdf", indexStatus: 3, creatorNickname: "周宁" },
 ];
 
 function mockDocs(rows: unknown[]) {
@@ -34,7 +34,7 @@ function mockDocs(rows: unknown[]) {
 }
 
 beforeEach(() => {
-  indexMutate.mockReset();
+  indexMutate.mockReset().mockImplementation((_id, options) => options?.onSuccess?.());
   // 默认未轮询（未点击「建立索引」时 enabled 为 false，组件也不该读它的 data）
   useDocIndexStatus.mockReturnValue({ data: undefined });
 });
@@ -74,29 +74,29 @@ describe("KnowledgeBaseDocs（D-08）", () => {
     expect(indexMutate).toHaveBeenCalledTimes(1);
     expect(indexMutate.mock.calls[0]?.[0]).toBe(72);
 
-    // 徽标换成「索引中…」，并开启轮询
-    expect(await screen.findByText("索引中…")).toBeInTheDocument();
+    // 徽标换成「索引构建中」，并开启轮询
+    expect(await screen.findByText("索引构建中")).toBeInTheDocument();
     await waitFor(() => expect(useDocIndexStatus).toHaveBeenLastCalledWith(72, { enabled: true }));
   });
 
-  it("轮询到 indexStatus === 1 后显示已索引", async () => {
+  it("轮询到 indexStatus === 0 后显示已索引", async () => {
     mockDocs(DOCS);
     const { rerender } = renderWithProviders(<KnowledgeBaseDocs baseId={5} />);
 
     fireEvent.click(screen.getByTestId("doc-index-72"));
-    expect(await screen.findByText("索引中…")).toBeInTheDocument();
+    expect(await screen.findByText("索引构建中")).toBeInTheDocument();
 
-    // 模拟轮询返回：后端索引完成（RocketMQ 消费后 indexStatus 变 1）
-    useDocIndexStatus.mockReturnValue({ data: { indexStatus: 1 } });
+    // 模拟轮询返回：后端索引完成（RocketMQ 消费后 indexStatus 变 0）
+    useDocIndexStatus.mockReturnValue({ data: { indexStatus: 0 } });
     rerender(<KnowledgeBaseDocs baseId={5} />);
 
-    // 该行不再是「索引中…」（两行都变成「已索引」）
-    expect(screen.queryByText("索引中…")).toBeNull();
+    // 该行不再是「索引构建中」（两行都变成「已索引」）
+    expect(screen.queryByText("索引构建中")).toBeNull();
     expect(screen.getAllByText("已索引")).toHaveLength(2);
   });
 
   it("已索引的行不出现「建立索引」按钮", () => {
-    mockDocs([{ id: 71, docName: "需求文档.pdf", indexStatus: 1 }]);
+    mockDocs([{ id: 71, docName: "需求文档.pdf", indexStatus: 0 }]);
     renderWithProviders(<KnowledgeBaseDocs baseId={5} />);
 
     // 悬停才显形的按钮仍在 DOM 里，但已索引行不该渲染它

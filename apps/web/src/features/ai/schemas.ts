@@ -1,4 +1,24 @@
+import type { components } from "@anynote/api-client/src/ai";
 import { z } from "zod";
+
+/**
+ * 单次运行的检索范围。
+ *
+ * @author 称霸幼儿园
+ */
+export const runScopeSchema = z.object({
+  knowledgeBaseIds: z.array(z.number().int().positive()).default([]),
+  refs: z.array(z.string()).default([]),
+}) satisfies z.ZodType<components["schemas"]["AgentRunScopeDTO"]>;
+export type RunScope = z.infer<typeof runScopeSchema>;
+
+/** 返回单资料会话的资料标识，其他范围返回空值。 */
+export function scopeDocId(scope: RunScope | null | undefined): number | undefined {
+  if (!scope || scope.knowledgeBaseIds.length || scope.refs.length !== 1) return undefined;
+  const match = /^doc:([1-9]\d*)$/.exec(scope.refs[0] ?? "");
+  const id = match ? Number(match[1]) : 0;
+  return Number.isSafeInteger(id) && id > 0 ? id : undefined;
+}
 
 /** 分页信封：rows 由调用方传入的 schema 逐条校验（与 notes 域同一后端结构，域内自治）。 */
 export function pageBeanSchema<T extends z.ZodTypeAny>(row: T) {
@@ -23,6 +43,7 @@ export const conversationSchema = z.object({
   title: z.string().nullish(),
   type: z.number().nullish(),
   docId: z.number().nullish(),
+  scope: runScopeSchema.nullish(),
   createTime: z.string().nullish(),
   updateTime: z.string().nullish(),
 });
@@ -74,7 +95,7 @@ export const docSchema = z.object({
   id: z.number(),
   docName: z.string().nullish(),
   knowledgeBaseId: z.number().nullish(),
-  /** 0/1 之外的值按「未索引」处理，后端加枚举不致前端崩。 */
+  /** 与后端 DocIndexStatus 的 0–4 五种状态一致。 */
   indexStatus: z.number().nullish(),
   createTime: z.string().nullish(),
   updateTime: z.string().nullish(),
@@ -87,7 +108,7 @@ export const docDetailSchema = docSchema.extend({
 });
 export type DocDetail = z.infer<typeof docDetailSchema>;
 
-export const DOC_INDEXED = 1;
+export { DOC_INDEXED } from "./doc-index-status";
 
 // ---------------------------------------------------------------------------
 // AI 工作流（M7.2，纯前端编排，节点/边持久化到 localStorage）

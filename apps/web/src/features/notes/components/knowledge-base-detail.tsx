@@ -1,5 +1,8 @@
 "use client";
 
+import { DocIndexBadge } from "@/features/ai/components/doc-index-badge";
+import { isDocIndexPending } from "@/features/ai/doc-index-status";
+
 import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Spinner } from "@/components/loading/spinner";
 import { EmptyState, QueryError } from "@/components/shared/states";
@@ -243,81 +246,44 @@ function UploadLink({ baseId }: { baseId: number }) {
   );
 }
 
-/**
- * 索引状态格（D-08 图例 15）。
- *
- * 三种形态互斥：已索引 → 徽标；索引中 → 徽标 + 转圈；未索引 → 徽标，
- * 悬停或行内聚焦时**换成**「建立索引」按钮。切换用 `group-hover` / `group-focus-within`
- * 而不是条件渲染：条件渲染要靠 JS 追踪悬停，键盘用户拿不到同一个入口。
- *
- * 索引是 RocketMQ 异步链路（`POST /docs/{id}/index` 只是投递），所以点击后
- * 不能立刻重取列表——那一刻 `indexStatus` 还是 0。这里切到 `useDocIndexStatus`
- * 轮询，轮询到 1 再失效列表，把权威状态交回服务端。
- */
+/** 资料索引状态及重建入口。 */
 function DocIndexCell({ baseId, doc }: { baseId: number; doc: DocListItem }) {
   const queryClient = useQueryClient();
   const [indexing, setIndexing] = useState(false);
   const indexDoc = useIndexDocMutation();
-  const poll = useDocIndexStatus(doc.id, { enabled: indexing });
-
-  const indexed = doc.indexStatus === DOC_INDEXED || poll.data?.indexStatus === DOC_INDEXED;
+  const poll = useDocIndexStatus(doc.id, {
+    enabled: indexing || isDocIndexPending(doc.indexStatus),
+  });
+  const status = indexDoc.isPending
+    ? 1
+    : (poll.data?.indexStatus ?? (indexing ? 1 : doc.indexStatus));
 
   useEffect(() => {
-    if (poll.data?.indexStatus !== DOC_INDEXED) return;
+    if (!poll.data || isDocIndexPending(poll.data.indexStatus)) return;
     setIndexing(false);
     void queryClient.invalidateQueries({ queryKey: noteQueryKeys.docList(baseId) });
   }, [poll.data, queryClient, baseId]);
 
-  if (indexed) {
-    return <Badge variant="success">已索引</Badge>;
-  }
-
-  if (indexing) {
-    return (
-      <Badge variant="secondary" data-testid={`doc-indexing-${doc.id}`}>
-        {/*
-          不传 label：紧邻的「索引中…」已经是可播报的状态，
-          再给 SVG 挂 role="status" 会让读屏把同一件事念两遍。
-        */}
-        <Spinner size="badge" className="mr-1" />
-        索引中…
-      </Badge>
-    );
-  }
-
   return (
-    <span
-      className={cn(
-        "relative flex items-center justify-end",
-        // 不可见时不能截获点击：否则"点了个空"也会触发建立索引
-        "pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto",
-      )}
-    >
-      <Badge
-        variant="secondary"
-        className="transition-opacity group-hover:opacity-0 group-focus-within:opacity-0"
-      >
-        未索引
-      </Badge>
-      <Button
-        variant="outline"
-        size="xs"
-        className="absolute right-0 h-6 bg-surface text-accent opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-        disabled={indexDoc.isPending}
-        onClick={() => {
-          // 先切到轮询态再发请求：接口很慢时按钮不能一直"没反应"
-          setIndexing(true);
-          indexDoc.mutate(doc.id, {
-            onError: (error) => {
-              setIndexing(false);
-              toast.error(error instanceof Error ? error.message : "建立索引失败，请稍后重试");
-            },
-          });
-        }}
-        data-testid={`doc-index-${doc.id}`}
-      >
-        建立索引
-      </Button>
+    <span className="flex flex-wrap items-center justify-end gap-2">
+      <DocIndexBadge status={status} />
+      {status === 2 || status === 3 ? (
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={indexDoc.isPending}
+          onClick={() =>
+            indexDoc.mutate(doc.id, {
+              onSuccess: () => setIndexing(true),
+              onError: (error) =>
+                toast.error(error instanceof Error ? error.message : "建立索引失败，请稍后重试"),
+            })
+          }
+          data-testid={`doc-index-${doc.id}`}
+        >
+          建立索引
+        </Button>
+      ) : null}
     </span>
   );
 }

@@ -5,6 +5,7 @@ import { ApiError, unwrapEnvelope } from "@/lib/api/errors";
 import { aiApi, noteApi } from "@/lib/api/openapi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { isDocIndexPending } from "./doc-index-status";
 import { aiQueryKeys } from "./query-keys";
 import {
   DOC_INDEXED,
@@ -27,6 +28,8 @@ export function useDocsQuery(knowledgeBaseId: number) {
     queryKey: aiQueryKeys.docList(knowledgeBaseId),
     enabled: Number.isSafeInteger(knowledgeBaseId) && knowledgeBaseId > 0,
     placeholderData: (previous) => previous,
+    refetchInterval: (query) =>
+      query.state.data?.rows.some((doc) => isDocIndexPending(doc.indexStatus)) ? 3_000 : false,
     queryFn: async (): Promise<DocPage> => {
       const { response } = await noteApi.GET("/docs", {
         // DocListDTO 是 ModelAttribute POJO：Spring 按平铺参数绑定（实测 bracket/dot 均不绑定），
@@ -71,7 +74,7 @@ const createResEntitySchema = z.object({ id: z.number().nullish() });
  * 从 `useUploadPdfMutation` 的第 2 步抽出（12.2.5）：资料 Tab 的「建立索引」
  * 与上传链路是同一个动作，各写一份的话后端换端点或换参数时必然漏改一处。
  *
- * 这是一个**投递**而不是等待：RocketMQ 消费完 `indexStatus` 才会变 1，
+ * 这是一个**投递**而不是等待：worker 完成后 `indexStatus` 才会变 0，
  * 所以调用方不能靠它返回后重取列表，而要轮询 `useDocIndexStatus`。
  */
 export function useIndexDocMutation() {
@@ -93,7 +96,7 @@ export function useIndexDocMutation() {
 /**
  * 上传 PDF 并建索引（两步合一个 mutation）：
  * 1. multipart POST /docs/pdfs（note 服务经内部 Feign 转存 file 服务）
- * 2. POST /docs/{id}/index 触发异步 RAG 索引（RocketMQ → ES），indexStatus 稍后变 1
+ * 2. POST /docs/{id}/index 触发异步 RAG 索引（RocketMQ → ES），indexStatus 稍后变 0
  *
  * 第 2 步复用 `useIndexDocMutation`，上传链路与「资料」Tab 只有一份实现。
  */
@@ -146,13 +149,13 @@ export function useDeleteDocMutation() {
   });
 }
 
-/** 轮询文档详情直到索引完成（indexStatus === 1）。索引走 RocketMQ 异步链路。 */
+/** 轮询索引中的资料，完成、失败或无法提取文本时停止。 */
 export function useDocIndexStatus(docId: number, options: { enabled: boolean }) {
   return useQuery({
     queryKey: ["ai", "docs", "detail", docId, "index-poll"],
     enabled: options.enabled && Number.isSafeInteger(docId) && docId > 0,
     refetchInterval: (query) =>
-      query.state.data && query.state.data.indexStatus === DOC_INDEXED ? false : 3_000,
+      query.state.data && !isDocIndexPending(query.state.data.indexStatus) ? false : 3_000,
     refetchIntervalInBackground: false,
     retry: false,
     staleTime: 0,

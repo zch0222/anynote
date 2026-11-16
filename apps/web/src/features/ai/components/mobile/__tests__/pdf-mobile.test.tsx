@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
   usePathname: () => "/m/ai/pdf",
 }));
@@ -47,7 +48,7 @@ describe("MobilePdfList", () => {
   it("渲染文档并跳到详情页，带索引状态徽章", () => {
     vi.mocked(useDocsQuery).mockReturnValue({
       ...IDLE,
-      data: { rows: [{ id: 7, docName: "论文.pdf", indexStatus: 1 }] },
+      data: { rows: [{ id: 7, docName: "论文.pdf", indexStatus: 0 }] },
     } as never);
     renderWithProviders(<MobilePdfList />);
 
@@ -108,7 +109,7 @@ describe("MobilePdfList", () => {
   it("删除走底部动作表并二次确认", async () => {
     vi.mocked(useDocsQuery).mockReturnValue({
       ...IDLE,
-      data: { rows: [{ id: 7, docName: "论文.pdf", indexStatus: 0 }] },
+      data: { rows: [{ id: 7, docName: "论文.pdf", indexStatus: 3 }] },
     } as never);
     renderWithProviders(<MobilePdfList />);
 
@@ -127,7 +128,7 @@ describe("MobilePdfDetail", () => {
   it("三栏换成预览 / 问答两个标签页，默认停在预览", () => {
     vi.mocked(useDocQuery).mockReturnValue({
       ...IDLE,
-      data: { id: 7, docName: "论文.pdf", url: "https://obs/x.pdf", indexStatus: 1 },
+      data: { id: 7, docName: "论文.pdf", url: "https://obs/x.pdf", indexStatus: 0 },
     } as never);
     renderWithProviders(<MobilePdfDetail docId={7} />);
 
@@ -138,7 +139,7 @@ describe("MobilePdfDetail", () => {
   it("问答页用与桌面相同的文档会话 key", () => {
     vi.mocked(useDocQuery).mockReturnValue({
       ...IDLE,
-      data: { id: 7, docName: "论文.pdf", url: "https://obs/x.pdf", indexStatus: 1 },
+      data: { id: 7, docName: "论文.pdf", url: "https://obs/x.pdf", indexStatus: 0 },
     } as never);
     renderWithProviders(<MobilePdfDetail docId={7} />);
 
@@ -151,16 +152,16 @@ describe("MobilePdfDetail", () => {
   it("索引未就绪时顶栏显示索引中", () => {
     vi.mocked(useDocQuery).mockReturnValue({
       ...IDLE,
-      data: { id: 7, docName: "论文.pdf", url: "", indexStatus: 0 },
+      data: { id: 7, docName: "论文.pdf", url: "", indexStatus: 1 },
     } as never);
     renderWithProviders(<MobilePdfDetail docId={7} />);
-    expect(screen.getByText("索引中")).toBeInTheDocument();
+    expect(screen.getByText("索引构建中")).toBeInTheDocument();
   });
 
   it("没有预览地址时给提示而不是空白", () => {
     vi.mocked(useDocQuery).mockReturnValue({
       ...IDLE,
-      data: { id: 7, docName: "论文.pdf", url: null, indexStatus: 1 },
+      data: { id: 7, docName: "论文.pdf", url: null, indexStatus: 0 },
     } as never);
     renderWithProviders(<MobilePdfDetail docId={7} />);
     expect(screen.getByText("这篇文档还没有可预览的地址。")).toBeInTheDocument();

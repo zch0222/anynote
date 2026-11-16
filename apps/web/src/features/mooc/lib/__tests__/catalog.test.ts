@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { firstPlayable, isPlayable, nextPlayable } from "../catalog";
+import { findCatalogItem, firstPlayable, isPlayable, nextPlayable } from "../catalog";
 
 /**
  * 目录：
@@ -29,6 +29,13 @@ function loader() {
 }
 
 describe("目录遍历", () => {
+  /** 引用选择指定条目，同时保留其父章节。 */
+  it("按条目标识定位到所属章节", async () => {
+    const found = await findCatalogItem(loader(), 21);
+    expect(found?.item.id).toBe(21);
+    expect(found?.chapter?.id).toBe(2);
+    expect(await findCatalogItem(loader(), 999)).toBeNull();
+  });
   it("章节不算可播放内容，视频与文档算", () => {
     expect(isPlayable({ id: 1, moocItemType: 0 })).toBe(false);
     expect(isPlayable({ id: 1, moocItemType: 1 })).toBe(true);

@@ -4,7 +4,7 @@ import { DocumentSkeleton } from "@/components/loading/skeletons";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // worker 由 scripts/sync-pdf-worker.mjs 同步到 public/（自托管，不走 CDN）
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
@@ -13,34 +13,59 @@ export type PdfDocumentProps = {
   url: string;
   width: number;
   onLoaded?: ((numPages: number) => void) | undefined;
+  page?: number | undefined;
+  navigationKey?: number | undefined;
 };
 
 /**
  * react-pdf 渲染器。此模块经 `dynamic(..., { ssr: false })` 加载：
  * pdfjs 依赖 DOM 与 worker，不能进 SSR 包。
  */
-export function PdfDocument({ url, width, onLoaded }: PdfDocumentProps) {
+export function PdfDocument({ url, width, onLoaded, page, navigationKey }: PdfDocumentProps) {
   const [numPages, setNumPages] = useState(0);
+  const [rendered, setRendered] = useState<Set<number>>(new Set());
+  const container = useRef<HTMLDivElement>(null);
   const pages = Array.from({ length: numPages }, (_, index) => index + 1);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 同页引用再次点击也触发滚动。
+  useEffect(() => {
+    if (!page || !numPages || rendered.size < numPages) return;
+    const target = page <= numPages ? page : 1;
+    container.current
+      ?.querySelector(`[data-pdf-page="${target}"]`)
+      ?.scrollIntoView({ block: "start" });
+  }, [page, numPages, rendered, navigationKey]);
+
   return (
-    <Document
-      file={url}
-      onLoadSuccess={(pdf) => {
-        setNumPages(pdf.numPages);
-        onLoaded?.(pdf.numPages);
-      }}
-      loading={<DocumentSkeleton />}
-      error={
-        <p className="p-6 text-center text-sm text-danger">
-          PDF 加载失败：预览链接可能已过期，重新选择文档试试。
-        </p>
-      }
-      className="flex flex-col items-center gap-4"
-    >
-      {pages.map((pageNumber) => (
-        <Page key={pageNumber} pageNumber={pageNumber} width={width} />
-      ))}
-    </Document>
+    <div ref={container}>
+      <Document
+        file={url}
+        onLoadSuccess={(pdf) => {
+          setNumPages(pdf.numPages);
+          onLoaded?.(pdf.numPages);
+        }}
+        loading={<DocumentSkeleton />}
+        error={
+          <p className="p-6 text-center text-sm text-danger">
+            PDF 加载失败：预览链接可能已过期，重新选择文档试试。
+          </p>
+        }
+        className="flex flex-col items-center gap-4"
+      >
+        {pages.map((pageNumber) => (
+          <div key={pageNumber} data-pdf-page={pageNumber} className="scroll-mt-4">
+            <Page
+              pageNumber={pageNumber}
+              width={width}
+              onRenderSuccess={() =>
+                setRendered((current) =>
+                  current.has(pageNumber) ? current : new Set(current).add(pageNumber),
+                )
+              }
+            />
+          </div>
+        ))}
+      </Document>
+    </div>
   );
 }

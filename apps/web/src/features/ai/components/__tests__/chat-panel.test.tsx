@@ -1,3 +1,4 @@
+vi.mock("../chat-scope-select", () => ({ ChatScopeSelect: () => null }));
 import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,13 +15,19 @@ vi.mock("@/features/ai/use-chat-stream", () => ({
     conversationId: null,
   }),
   useChatStreamStore: (selector: (state: unknown) => unknown) =>
-    selector({ send: sendMock, abort: abortMock }),
+    selector({ send: sendMock, abort: abortMock, setScope: vi.fn() }),
 }));
 
 import { ChatPanel } from "@/features/ai/components/chat-panel";
 import { renderWithProviders } from "@/test/render";
 
 describe("ChatPanel", () => {
+  /** 会话范围恢复前不允许发送，避免意外创建其他范围的运行。 */
+  it("恢复历史期间禁用输入", () => {
+    renderWithProviders(<ChatPanel sessionKey="c1" historyStatus="pending" />);
+    expect(screen.getByTestId("chat-input")).toBeDisabled();
+    expect(screen.getByText("加载中…")).toBeVisible();
+  });
   beforeEach(() => {
     sendMock.mockReset();
     abortMock.mockReset();

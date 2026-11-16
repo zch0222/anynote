@@ -6,13 +6,13 @@ import { ProgressBar } from "@/components/loading/progress";
 import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DOC_INDEXED } from "@/features/ai/schemas";
 import { useDeleteDocMutation, useDocsQuery, useUploadPdfMutation } from "@/features/ai/use-docs";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { ChevronDown, FileText, MoreHorizontal, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { DocIndexBadge } from "../doc-index-badge";
 
 /**
  * `/m/ai/pdf`：文档列表页。
@@ -142,9 +142,7 @@ export function MobilePdfList() {
                 >
                   <FileText className="size-4 shrink-0 text-label-secondary" aria-hidden="true" />
                   <span className="min-w-0 flex-1 truncate">{row.docName ?? "未命名文档"}</span>
-                  <Badge variant={row.indexStatus === DOC_INDEXED ? "secondary" : "outline"}>
-                    {row.indexStatus === DOC_INDEXED ? "已索引" : "未索引"}
-                  </Badge>
+                  <DocIndexBadge status={row.indexStatus} />
                 </Link>
                 <button
                   type="button"

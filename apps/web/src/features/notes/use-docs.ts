@@ -1,5 +1,6 @@
 "use client";
 
+import { isDocIndexPending } from "@/features/ai/doc-index-status";
 import { flattenedDtoQuerySerializer } from "@/lib/api/dto-query";
 import { unwrapEnvelope } from "@/lib/api/errors";
 import { noteApi } from "@/lib/api/openapi";
@@ -22,6 +23,8 @@ export function useKnowledgeBaseDocsQuery(baseId: number) {
   return useQuery({
     queryKey: noteQueryKeys.docList(baseId),
     enabled: Number.isFinite(baseId) && baseId > 0,
+    refetchInterval: (query) =>
+      query.state.data?.rows.some((doc) => isDocIndexPending(doc.indexStatus)) ? 3_000 : false,
     queryFn: async (): Promise<{ rows: DocListItem[]; total: number }> => {
       const { response } = await noteApi.GET("/docs", {
         params: {

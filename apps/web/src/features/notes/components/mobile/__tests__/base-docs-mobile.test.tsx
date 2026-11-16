@@ -36,7 +36,7 @@ describe("MobileBaseDocs（M-05）", () => {
   });
 
   it("资料行可点，进已有的 PDF 详情", () => {
-    mockDocs([{ id: 7, docName: "设计规范.pdf", indexStatus: 1, creatorNickname: "陈可" }]);
+    mockDocs([{ id: 7, docName: "设计规范.pdf", indexStatus: 0, creatorNickname: "陈可" }]);
     renderWithProviders(<MobileBaseDocs baseId={3} />);
 
     expect(screen.getByTestId("mobile-doc-7")).toHaveAttribute("href", "/m/ai/pdf/7");
@@ -45,7 +45,7 @@ describe("MobileBaseDocs（M-05）", () => {
   });
 
   it("资料行行首有 36 的文件图标块，列表尾有索引能力说明（V10）", () => {
-    mockDocs([{ id: 7, docName: "设计规范.pdf", indexStatus: 1 }]);
+    mockDocs([{ id: 7, docName: "设计规范.pdf", indexStatus: 0 }]);
     const { container } = renderWithProviders(<MobileBaseDocs baseId={3} />);
 
     // 图标块是行首第一个子元素（36×36 圆角 9 的 accent-soft 底），没有它资料行就是纯文字
@@ -57,13 +57,13 @@ describe("MobileBaseDocs（M-05）", () => {
   });
 
   it("未索引的行给「未索引」徽标", () => {
-    mockDocs([{ id: 7, docName: "草稿.pdf", indexStatus: 0 }]);
+    mockDocs([{ id: 7, docName: "草稿.pdf", indexStatus: 3 }]);
     renderWithProviders(<MobileBaseDocs baseId={3} />);
     expect(screen.getByText("未索引")).toBeInTheDocument();
   });
 
   it("列表末尾有「去「PDF 问答」上传 ›」文字链接", () => {
-    mockDocs([{ id: 7, docName: "设计规范.pdf", indexStatus: 1 }]);
+    mockDocs([{ id: 7, docName: "设计规范.pdf", indexStatus: 0 }]);
     renderWithProviders(<MobileBaseDocs baseId={3} />);
 
     expect(screen.getByTestId("mobile-doc-upload-link")).toHaveAttribute("href", "/m/ai/pdf");

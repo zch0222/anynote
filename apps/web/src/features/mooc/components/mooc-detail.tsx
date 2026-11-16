@@ -4,7 +4,12 @@ import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { NotFoundState, QueryError } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { type CatalogNode, firstPlayable, nextPlayable } from "@/features/mooc/lib/catalog";
+import {
+  type CatalogNode,
+  findCatalogItem,
+  firstPlayable,
+  nextPlayable,
+} from "@/features/mooc/lib/catalog";
 import { moocQueryKeys } from "@/features/mooc/query-keys";
 import { MOOC_ITEM_TYPE, type MoocItem, moocItemTypeName } from "@/features/mooc/schemas";
 import {
@@ -14,11 +19,13 @@ import {
   useMoocQuery,
   useObjectUrlQuery,
 } from "@/features/mooc/use-moocs";
+import { positiveParam } from "@/lib/ai/citations";
 import { toUserMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, FileText, Film, ListTree } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { VideoPlayer } from "./video-player";
 
@@ -28,6 +35,8 @@ import { VideoPlayer } from "./video-player";
  */
 export function MoocDetailPage({ baseId, moocId }: { baseId: number; moocId: number }) {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const citationItemId = positiveParam(searchParams.get("itemId"));
   const mooc = useMoocQuery(moocId);
   const [selected, setSelected] = useState<MoocItem | null>(null);
   const [chapter, setChapter] = useState<MoocItem | null>(null);
@@ -69,12 +78,20 @@ export function MoocDetailPage({ baseId, moocId }: { baseId: number; moocId: num
   // 进入页面默认选中目录里的第一个视频（D-06 图例 21：不再停在"请从左侧选择"）
   useEffect(() => {
     if (autoSelected.current || !items.data) return;
-    autoSelected.current = true;
-    void firstPlayable(loadItems).then((node) => {
+    let cancelled = false;
+    const target = citationItemId
+      ? findCatalogItem(loadItems, citationItemId).then((node) => node ?? firstPlayable(loadItems))
+      : firstPlayable(loadItems);
+    void target.then((node) => {
+      if (cancelled) return;
+      autoSelected.current = true;
       if (!node) return;
       selectItem(node.item, node.chapter);
     });
-  }, [items.data, loadItems, selectItem]);
+    return () => {
+      cancelled = true;
+    };
+  }, [items.data, loadItems, selectItem, citationItemId]);
 
   return (
     <section className="mx-auto w-full max-w-[1000px] space-y-4" data-testid="mooc-detail">
@@ -339,6 +356,9 @@ function SelectedItemPanel({
   loadItems: (parentId: number) => Promise<MoocItem[]>;
 }) {
   const detail = useMoocItemQuery(moocId, item.id);
+  const searchParams = useSearchParams();
+  const startTime =
+    positiveParam(searchParams.get("itemId")) === item.id ? Number(searchParams.get("t") ?? 0) : 0;
   const isVideo = (detail.data?.moocItemType ?? item.moocItemType) === MOOC_ITEM_TYPE.VIDEO;
   const objectName = detail.data?.objectName ?? item.objectName;
   const objectUrl = useObjectUrlQuery(isVideo ? (objectName ?? null) : null);
@@ -391,7 +411,11 @@ function SelectedItemPanel({
             </Button>
           </div>
         ) : (
-          <VideoPlayer url={objectUrl.data.url} title={item.title ?? undefined} />
+          <VideoPlayer
+            url={objectUrl.data.url}
+            title={item.title ?? undefined}
+            startTime={startTime}
+          />
         )
       ) : detail.isPending ? (
         <Skeleton className="h-48 w-full rounded-xl" />

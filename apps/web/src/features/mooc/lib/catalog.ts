@@ -47,6 +47,21 @@ export async function firstPlayable(load: MoocItemsLoader): Promise<CatalogNode 
 }
 
 /**
+ * 查找引用指向的目录条目及所属章节。
+ *
+ * @author 称霸幼儿园
+ */
+export async function findCatalogItem(
+  load: MoocItemsLoader,
+  itemId: number,
+): Promise<CatalogNode | null> {
+  for await (const node of iterateCatalog(load)) {
+    if (node.item.id === itemId && isPlayable(node.item)) return node;
+  }
+  return null;
+}
+
+/**
  * 目录顺序上 `currentItemId` 的下一个视频 / 文档；已是最后一个时返回 `null`
  * （调用方据此隐藏「下一节」）。
  *

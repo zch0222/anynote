@@ -19,6 +19,7 @@ import {
   useSaveNote,
 } from "@/features/notes/use-save-note";
 import { useSaveShortcut } from "@/features/notes/use-save-shortcut";
+import { scrollToNoteCitation } from "@/lib/ai/note-location";
 import { env } from "@/lib/env";
 import { bodyCharCount, ensureLeadingHeading } from "@anynote/editor-core/leading-heading";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
@@ -224,8 +225,18 @@ export function useNoteEditorSession(noteId: number) {
       editorRef.current = editor;
       onEditorReady(editor);
       setEditorInstance(collaboration ? editor : null);
+      const search = window.location.search;
+      if (new URLSearchParams(search).has("section") || new URLSearchParams(search).has("line")) {
+        const locate = () => {
+          if (scrollToNoteCitation(editor, search, note.data?.content ?? ""))
+            editor.off("update", locate);
+        };
+        requestAnimationFrame(locate);
+        editor.on("update", locate);
+        editor.on("destroy", () => editor.off("update", locate));
+      }
     },
-    [onEditorReady, collaboration],
+    [onEditorReady, collaboration, note.data?.content],
   );
 
   /** 图片分片直传；实现只在真的插图时才加载。引用须稳定。 */

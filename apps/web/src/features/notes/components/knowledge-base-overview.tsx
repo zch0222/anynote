@@ -5,6 +5,7 @@ import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { NotFoundState } from "@/components/shared/states";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DocIndexBadge } from "@/features/ai/components/doc-index-badge";
 import { useMoocsQuery } from "@/features/mooc/use-moocs";
 import { coverClassName } from "@/features/notes/lib/cover-gradient";
 import {
@@ -450,7 +451,6 @@ function NoteRow({ baseId, note }: { baseId: number; note: NoteListItem }) {
 function DocRow({ doc }: { doc: DocListItem }) {
   const creator = doc.creatorNickname?.trim() || doc.creatorUsername?.trim() || "未知作者";
   const time = formatRelativeTime(doc.createTime);
-  const indexed = doc.indexStatus === DOC_INDEXED;
   return (
     <li
       className="flex h-14 items-center gap-3 border-b border-separator px-4 last:border-b-0"
@@ -466,7 +466,7 @@ function DocRow({ doc }: { doc: DocListItem }) {
           {time ? ` · ${time}` : ""}
         </span>
       </span>
-      <Badge variant={indexed ? "success" : "secondary"}>{indexed ? "已索引" : "未索引"}</Badge>
+      <DocIndexBadge status={doc.indexStatus} />
     </li>
   );
 }
