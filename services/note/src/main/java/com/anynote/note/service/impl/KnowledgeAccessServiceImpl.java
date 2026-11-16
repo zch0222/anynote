@@ -141,6 +141,9 @@ public class KnowledgeAccessServiceImpl implements KnowledgeAccessService {
                     .kbId(current.getKbId())
                     .contentVersion(current.getContentVersion())
                     .metaVersion(current.getMetaVersion())
+                    .moocId(current.getAttributes() != null
+                            && current.getAttributes().get("moocId") instanceof Number moocId
+                            ? moocId.longValue() : null)
                     .build());
         }
         return KnowledgeAuthorizationVO.builder().items(results).build();

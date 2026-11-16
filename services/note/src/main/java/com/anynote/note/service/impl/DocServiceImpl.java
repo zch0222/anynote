@@ -18,6 +18,8 @@ import com.anynote.core.web.model.bo.ResData;
 import com.anynote.file.api.RemoteFileService;
 import com.anynote.file.api.enums.FileSources;
 import com.anynote.file.api.model.bo.HuaweiOBSTemporarySignature;
+import com.anynote.file.api.model.bo.ObjectURL;
+import com.anynote.core.constant.SecurityConstants;
 import com.anynote.file.api.model.dto.CompleteUploadDTO;
 import com.anynote.file.api.model.dto.CreateHuaweiOBSTemporarySignatureDTO;
 import com.anynote.file.api.model.po.FilePO;
@@ -213,6 +215,12 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
                 KnowledgeEntityType.DOC, doc.getCreateBy(), doc.getPermissions(), knowledgeBasePermissions));
     }
 
+    /**
+     * 读取可读资料详情并解析浏览器预览地址。
+     *
+     * @param queryParam 资料标识与已校验的阅读权限
+     * @return 资料详情
+     */
     @Override
     @RequiresDocPermissions(DocPermissions.READ)
     public DocVO getDocById(DocQueryParam queryParam) {
@@ -222,6 +230,15 @@ public class DocServiceImpl extends ServiceImpl<DocMapper, Doc>
         }
         docVO.setPermission(((DocPermissions)queryParam.getParams().get(RequiresDocPermissionsAspect.DOC_PERMISSIONS))
                 .getValue());
+        if (docVO.getUrl() != null && !docVO.getUrl().isBlank()
+                && !docVO.getUrl().startsWith("https://") && !docVO.getUrl().startsWith("http://")) {
+            ObjectURL preview = RemoteResDataUtil.getResData(remoteFileService.getDocPreviewUrl(
+                    docVO.getFileId(), SecurityConstants.INNER), "服务暂时不可用，请稍后重试");
+            if (preview.getUrl() == null || preview.getUrl().isBlank()) {
+                throw new BusinessException("服务暂时不可用，请稍后重试");
+            }
+            docVO.setUrl(preview.getUrl());
+        }
         return docVO;
     }
 

@@ -23,6 +23,8 @@ public class KnowledgeAuthorizationItemVO {
     private boolean readable;
     private String permissionBasis;
     private Long kbId;
+    @Schema(description = "可读慕课条目所属的慕课标识，其他来源为空")
+    private Long moocId;
     private String contentVersion;
     private String metaVersion;
 }

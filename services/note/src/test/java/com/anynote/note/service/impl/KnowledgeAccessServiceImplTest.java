@@ -150,6 +150,8 @@ class KnowledgeAccessServiceImplTest {
         request.setItems(List.of(first, denied, item("note:1", null)));
         KnowledgeSourceDocumentVO readable = document(KnowledgeEntityType.NOTE, 1L, 1L, 7L, "70000", 1);
         KnowledgeSourceDocumentVO unreadable = document(KnowledgeEntityType.NOTE, 2L, 1L, 8L, "70000", 3);
+        readable.setAttributes(java.util.Map.of("moocId", 11L));
+        unreadable.setAttributes(java.util.Map.of("moocId", 12L));
         mockDocument(readable, "body", "content-1", "meta-1");
         mockDocument(unreadable, "secret", "content-2", "meta-2");
 
@@ -158,11 +160,13 @@ class KnowledgeAccessServiceImplTest {
         assertThat(result.getItems()).hasSize(3);
         assertThat(result.getItems().get(0).isReadable()).isTrue();
         assertThat(result.getItems().get(0).getContentVersion()).isEqualTo("content-1");
+        assertThat(result.getItems().get(0).getMoocId()).isEqualTo(11L);
         assertThat(result.getItems().get(2).isReadable()).isTrue();
         assertThat(result.getItems().get(1).isReadable()).isFalse();
         assertThat(result.getItems().get(1).getContentVersion()).isNull();
         assertThat(result.getItems().get(1).getMetaVersion()).isNull();
         assertThat(result.getItems().get(1).getKbId()).isNull();
+        assertThat(result.getItems().get(1).getMoocId()).isNull();
     }
 
     /**
@@ -242,7 +246,7 @@ class KnowledgeAccessServiceImplTest {
         return KnowledgeSourceDocumentVO.builder()
                 .ref(source.getRef()).entityType(source.getEntityType()).subtype(source.getSubtype())
                 .entityId(source.getEntityId()).kbId(source.getKbId()).title(source.getTitle())
-                .acl(source.getAcl()).metaVersion(source.getMetaVersion()).build();
+                .acl(source.getAcl()).attributes(source.getAttributes()).metaVersion(source.getMetaVersion()).build();
     }
 
     private KnowledgeAuthorizeDTO.Item item(String ref, String subtype) {
