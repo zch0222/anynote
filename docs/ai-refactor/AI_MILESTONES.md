@@ -1,7 +1,7 @@
 # AI 模块重构里程碑（M16.x）
 
 > 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-16
-> 状态：**D1–D17、P1/P2 均已拍板；无生产环境；M16.0–M16.6 已完成；M16.4 按调整后的验收范围关闭，真实语义评测移至 M16.8**
+> 状态：**D1–D17、P1/P2 均已拍板；无生产环境；M16.0–M16.6 已完成；M16.4 按调整后的验收范围关闭，真实语义评测移至 M16.8**；视频总结与任务提交分析两个旧端点当前不可用，已登记暂不处理（见 [M16.9 已知问题](#已知问题2026-11-16-登记暂不处理)）
 > 关联文档：[调研报告](./AI_RESEARCH.md) · [总体方案](./AI_REFACTOR_PLAN.md) · [知识检索方案](./KNOWLEDGE_RETRIEVAL_PLAN.md)
 >
 > 本文是执行计划：每个里程碑的任务、验收标准与依赖。设计取舍在两份方案里，这里不重复。
@@ -771,3 +771,17 @@ Playwright 使用宿主机生产前端 `http://localhost:3107` 和本机 Docker 
 
 - 依赖清单里没有不再使用的库
 - 全仓搜索不到旧端点、旧服务名的引用
+
+### 已知问题（2026-11-16 登记，暂不处理）
+
+2026-11-16 对照代码评估进度时发现：下面两个 Java 端点在 M16.2 删除 Python 旧对话接口后已不可用。M16.6 只替换了 `/chat/completions` 与 `/chat/completions/noConversation`，这两个端点没有迁移。用户确认本次用不到这两项功能，只登记、不修复；处理方式（迁到 Harness 运行，或直接删除）另行决定。
+
+| 端点 | 用途 | 断点 |
+|---|---|---|
+| `POST /chat/moocVideoSummarize` | 慕课视频总结（生成并保存） | `ChatServiceImpl.relayMoocSummarize` → `HarnessClient.streamChat` |
+| `POST /chat/noteTaskSubmissionAnalyze` | 任务提交分析 | `ChatServiceImpl.relayNoteTaskAnalyze` → `HarnessClient.streamChat` |
+
+- **根因**：`HarnessClient.streamChat` 仍请求 Harness 的 `/v1/chat/completions`（常量 `CHAT_PATH`）。该路由已随 M16.2 删除，`ai-service/tests/test_auth_api.py` 还断言它不在 OpenAPI 中；Harness 现在只有 `/internal/v1/runs` 与 `/healthz`。调用会被上游 404 拒绝，Java 侧捕获异常后发出失败帧结束流。
+- **测试为何没发现**：`ChatServiceImplTest` 把 `HarnessClient` mock 掉；M16.1 的真实栈验证用的模拟上游实现了该路径，且发生在 M16.2 删除之前。[总体方案 §4.6](./AI_REFACTOR_PLAN.md#46-配置与验收) 里「视频总结全部可用」是 M16.1 当时的验收项，不代表现状。
+- **影响**：新前端 `apps/web` 没有这两个功能的入口，界面上看不到；`apps/web-legacy` 调的 `/api/aiNio/**` 已删除，同样不可用。视频总结是索引中 `summary` 类语料的来源，修复前不会产生新的视频总结，已入库的总结不受影响。
+- **同源残留**：`ChatServiceImpl.relayChat`、`relayNoConversation` 的对外端点已在 M16.6 删除，方法本身仍在并引用 `streamChat`；`FastApiChatCompletionsDTO` / `FastApiChatCompletionsVO`、`ChatStreamAccumulator` 也只服务于这条旧路径。处理上面两个端点时一并清理。
