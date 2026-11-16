@@ -37,4 +37,39 @@ describe("MessageItem", () => {
     render(<MessageItem message={{ id: "4", role: 1, content: "", streaming: true }} />);
     expect(screen.getByTestId("assistant-thinking")).toBeTruthy();
   });
+
+  it("完成后逐行展示三种回答标注", () => {
+    render(
+      <MessageItem
+        message={{
+          id: "5",
+          role: 1,
+          content: "回答",
+          answerNotices: ["UNSOURCED", "NOT_FROM_KNOWLEDGE", "CITATIONS_REMOVED"],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("这条回答没有标注来源，内容可能不完全来自你的知识库")).toBeVisible();
+    expect(screen.getByText("这条回答不是来自你的知识库")).toBeVisible();
+    expect(screen.getByText("部分无法核对的引用已移除")).toBeVisible();
+  });
+
+  it("无标注或流式期间不显示标注区域", () => {
+    const { rerender } = render(<MessageItem message={{ id: "6", role: 1, content: "回答" }} />);
+    expect(screen.queryByTestId("answer-notices")).toBeNull();
+
+    rerender(
+      <MessageItem
+        message={{
+          id: "6",
+          role: 1,
+          content: "回答",
+          streaming: true,
+          answerNotices: ["UNSOURCED"],
+        }}
+      />,
+    );
+    expect(screen.queryByTestId("answer-notices")).toBeNull();
+  });
 });

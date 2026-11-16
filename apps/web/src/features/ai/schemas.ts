@@ -12,6 +12,14 @@ export const runScopeSchema = z.object({
 }) satisfies z.ZodType<components["schemas"]["AgentRunScopeDTO"]>;
 export type RunScope = z.infer<typeof runScopeSchema>;
 
+/**
+ * 助手回答的来源与引用处理标注。
+ *
+ * @author 称霸幼儿园
+ */
+export const answerNoticeSchema = z.enum(["UNSOURCED", "NOT_FROM_KNOWLEDGE", "CITATIONS_REMOVED"]);
+export type AnswerNotice = z.infer<typeof answerNoticeSchema>;
+
 /** 返回单资料会话的资料标识，其他范围返回空值。 */
 export function scopeDocId(scope: RunScope | null | undefined): number | undefined {
   if (!scope || scope.knowledgeBaseIds.length || scope.refs.length !== 1) return undefined;
@@ -69,6 +77,10 @@ export const chatMessageSchema = z.object({
         return [];
       }
     }),
+  answerNotices: z
+    .array(answerNoticeSchema)
+    .nullish()
+    .transform((value) => value ?? []),
   outcome: z.string().nullish(),
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;

@@ -58,4 +58,27 @@ describe("CitationAnswer", () => {
     expect(push).not.toHaveBeenCalled();
     expect(screen.getByText("第 2 页")).toBeVisible();
   });
+
+  /** 空片段仍显示标题与定位，不渲染空引用块。 */
+  it("支持空引用片段", () => {
+    const { container } = render(
+      <CitationAnswer
+        content="答案[1]"
+        variant="desktop"
+        citations={[
+          {
+            index: 1,
+            sourceType: "doc",
+            sourceId: "doc:7",
+            title: "空片段资料",
+            locator: { pageStart: 3 },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("[1] 空片段资料")).toBeVisible();
+    expect(screen.getByText("第 3 页")).toBeVisible();
+    expect(container.querySelector("blockquote")).toBeNull();
+  });
 });

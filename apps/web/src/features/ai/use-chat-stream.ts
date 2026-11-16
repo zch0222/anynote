@@ -4,7 +4,13 @@ import { type Citation, parseCitations } from "@/lib/ai/citations";
 import { runProgress } from "@/lib/ai/run-progress";
 import { streamAiSse, toAiRunErrorMessage } from "@/lib/ai/sse";
 import { type StoreApi, type UseBoundStore, create } from "zustand";
-import { type ChatMessage, type RunScope, runScopeSchema } from "./schemas";
+import {
+  type AnswerNotice,
+  type ChatMessage,
+  type RunScope,
+  answerNoticeSchema,
+  runScopeSchema,
+} from "./schemas";
 
 /**
  * AI 流式会话的状态层（聊天 / Chat PDF 共用）。
@@ -25,6 +31,7 @@ export type StreamMessage = {
   streaming?: boolean;
   runId?: string | null;
   citations?: Citation[];
+  answerNotices?: AnswerNotice[];
   outcome?: string | null;
   progress?: string;
 };
@@ -150,6 +157,7 @@ function ensureChatStreamStore(): ChatStreamStore {
                     streaming: true,
                     progress: "正在准备",
                     citations: [],
+                    answerNotices: [],
                   },
                 ],
                 status: "streaming",
@@ -197,6 +205,10 @@ function ensureChatStreamStore(): ChatStreamStore {
                         const progress = runProgress(event);
                         const citation =
                           event.type === "citation" ? parseCitations([event.data])[0] : undefined;
+                        const answerNotices =
+                          event.type === "run.finished"
+                            ? answerNoticeSchema.array().safeParse(event.data.answerNotices)
+                            : null;
                         return {
                           ...message,
                           runId: event.runId,
@@ -206,6 +218,7 @@ function ensureChatStreamStore(): ChatStreamStore {
                                 citations: parseCitations([...(message.citations ?? []), citation]),
                               }
                             : {}),
+                          ...(answerNotices?.success ? { answerNotices: answerNotices.data } : {}),
                           ...(event.type === "run.finished" &&
                           typeof event.data.outcome === "string"
                             ? { outcome: event.data.outcome }
@@ -402,6 +415,7 @@ function ensureChatStreamStore(): ChatStreamStore {
                     content: message.content ?? "",
                     ...(message.runId ? { runId: message.runId } : {}),
                     citations: parseCitations(message.citations),
+                    answerNotices: message.answerNotices ?? [],
                     ...(message.outcome ? { outcome: message.outcome } : {}),
                   })),
                 status: "idle",

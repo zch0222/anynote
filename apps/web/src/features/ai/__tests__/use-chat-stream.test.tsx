@@ -59,7 +59,7 @@ describe("chat stream store", () => {
       expect(useChatStreamStore.getState().sessions.c42?.messages[1]?.progress).toBe("检索知识库");
       onEvent(event("citation", { index: 1, sourceType: "note", sourceId: "note:5", kbId: 3 }, 3));
       onEvent(event("text.delta", { delta: "答案[1]" }, 4));
-      onEvent(event("run.finished", { outcome: "ANSWERED" }, 5));
+      onEvent(event("run.finished", { outcome: "ANSWERED", answerNotices: ["UNSOURCED"] }, 5));
     });
     await useChatStreamStore.getState().send({
       key: "new",
@@ -77,6 +77,7 @@ describe("chat stream store", () => {
     expect(useChatStreamStore.getState().sessions.c42?.messages[1]).toMatchObject({
       runId: "r1",
       outcome: "ANSWERED",
+      answerNotices: ["UNSOURCED"],
       citations: [{ index: 1, sourceId: "note:5" }],
     });
   });
@@ -346,23 +347,32 @@ describe("chat stream store", () => {
     store.hydrate(
       "c1",
       [
-        { id: 1, role: 0, content: "问", citations: [] },
-        { id: 2, role: 1, content: "答", citations: [] },
-        { id: 3, role: 2, content: "system 不展示", citations: [] },
+        { id: 1, role: 0, content: "问", citations: [], answerNotices: [] },
+        { id: 2, role: 1, content: "答", citations: [], answerNotices: ["NOT_FROM_KNOWLEDGE"] },
+        { id: 3, role: 2, content: "system 不展示", citations: [], answerNotices: [] },
       ],
       1,
     );
     const session = useChatStreamStore.getState().sessions.c1;
     expect(session?.messages).toHaveLength(2);
+    expect(session?.messages[1]?.answerNotices).toEqual(["NOT_FROM_KNOWLEDGE"]);
     expect(session?.conversationId).toBe(1);
 
-    store.hydrate("c1", [{ id: 9, role: 0, content: "应被忽略", citations: [] }], 1);
+    store.hydrate(
+      "c1",
+      [{ id: 9, role: 0, content: "应被忽略", citations: [], answerNotices: [] }],
+      1,
+    );
     expect(useChatStreamStore.getState().sessions.c1?.messages).toHaveLength(2);
   });
 
   it("renameKey 迁移会话（新会话回填场景）且 clear 清空", () => {
     const store = useChatStreamStore.getState();
-    store.hydrate("new", [{ id: 1, role: 0, content: "问", citations: [] }], null);
+    store.hydrate(
+      "new",
+      [{ id: 1, role: 0, content: "问", citations: [], answerNotices: [] }],
+      null,
+    );
     store.renameKey("new", "c42");
     expect(useChatStreamStore.getState().sessions.new).toBeUndefined();
     expect(useChatStreamStore.getState().sessions.c42?.messages).toHaveLength(1);

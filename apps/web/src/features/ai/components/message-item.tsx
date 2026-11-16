@@ -3,9 +3,16 @@
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { type Citation, type CitationVariant, parseCitations } from "@/lib/ai/citations";
 import { memo } from "react";
+import type { AnswerNotice } from "../schemas";
 import type { StreamMessage } from "../use-chat-stream";
 import { CitationAnswer } from "./citation-answer";
 import { AiAvatar, StreamCaret, ThinkingDots } from "./stream-states";
+
+const ANSWER_NOTICE_TEXT: Record<AnswerNotice, string> = {
+  UNSOURCED: "这条回答没有标注来源，内容可能不完全来自你的知识库",
+  NOT_FROM_KNOWLEDGE: "这条回答不是来自你的知识库",
+  CITATIONS_REMOVED: "部分无法核对的引用已移除",
+};
 
 /**
  * 显示用户消息、运行进度与带引用的助手回答。
@@ -74,6 +81,15 @@ export const MessageItem = memo(function MessageItem({
             这次没有生成内容，可以换个说法再试。
           </p>
         )}
+        {!message.streaming && message.answerNotices?.length ? (
+          <div className="space-y-1" data-testid="answer-notices">
+            {message.answerNotices.map((notice) => (
+              <p key={notice} className="text-xs text-label-secondary">
+                {ANSWER_NOTICE_TEXT[notice]}
+              </p>
+            ))}
+          </div>
+        ) : null}
         {message.streaming && message.content ? (
           <output className="block text-xs text-label-secondary">
             {message.progress ?? "正在生成回答"}
