@@ -64,6 +64,24 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ChatServiceImplTest {
 
+    /**
+     * 会话详情返回数据库中保存的结构化范围，历史空范围保持为空。
+     */
+    @Test
+    void restoresPersistedConversationScope() {
+        ChatConversation conversation = ChatConversation.builder().id(5L)
+                .scope("{\"knowledgeBaseIds\":[3],\"refs\":[]}").build();
+        when(chatConversationService.getById(5L)).thenReturn(conversation);
+        when(chatMessageService.list(org.mockito.ArgumentMatchers
+                .<com.baomidou.mybatisplus.core.conditions.Wrapper<ChatMessage>>any())).thenReturn(List.of());
+        com.anynote.ai.model.vo.ChatConversationVO result = ReflectionTestUtils
+                .invokeMethod(chatService, "loadConversationVO", 5L);
+        assertThat(result.getConversation().getScope().getKnowledgeBaseIds()).containsExactly(3L);
+        conversation.setScope(null);
+        result = ReflectionTestUtils.invokeMethod(chatService, "loadConversationVO", 5L);
+        assertThat(result.getConversation().getScope()).isNull();
+    }
+
     @Mock
     private ChatConversationService chatConversationService;
 

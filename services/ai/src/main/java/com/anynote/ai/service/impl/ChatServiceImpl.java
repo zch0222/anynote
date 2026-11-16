@@ -16,6 +16,7 @@ import com.anynote.ai.harness.HarnessClient;
 import com.anynote.ai.harness.dto.FastApiChatCompletionsDTO;
 import com.anynote.ai.model.bo.NoteTaskSubmissionAnalyzeBO;
 import com.anynote.ai.model.dto.MoocVideoSummarizeDTO;
+import com.anynote.ai.model.dto.AgentRunScopeDTO;
 import com.anynote.ai.model.dto.NoteTaskSubmissionAnalyzeDTO;
 import com.anynote.ai.model.vo.ChatConversationInfoVO;
 import com.anynote.ai.model.vo.ChatConversationVO;
@@ -308,6 +309,12 @@ public class ChatServiceImpl implements ChatService {
                 .build();
     }
 
+    /**
+     * 读取会话消息与保存的检索范围。
+     *
+     * @param conversationId 会话标识
+     * @return 会话详情
+     */
     private ChatConversationVO loadConversationVO(Long conversationId) {
         ChatConversation conversation = chatConversationService.getById(conversationId);
         if (StringUtils.isNull(conversation)) {
@@ -322,6 +329,7 @@ public class ChatServiceImpl implements ChatService {
                         .title(conversation.getTitle())
                         .type(conversation.getType())
                         .docId(conversation.getDocId())
+                        .scope(gson.fromJson(conversation.getScope(), AgentRunScopeDTO.class))
                         .createBy(conversation.getCreateBy())
                         .createTime(conversation.getCreateTime())
                         .updateBy(conversation.getUpdateBy())

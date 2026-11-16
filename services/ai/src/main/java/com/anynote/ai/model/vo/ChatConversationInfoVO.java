@@ -1,5 +1,7 @@
 package com.anynote.ai.model.vo;
 
+import com.anynote.ai.model.dto.AgentRunScopeDTO;
+import io.swagger.v3.oas.annotations.media.Schema;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,6 +10,11 @@ import lombok.NoArgsConstructor;
 
 import java.util.Date;
 
+/**
+ * 会话摘要与已保存的检索范围。
+ *
+ * @author 称霸幼儿园
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -33,6 +40,9 @@ public class ChatConversationInfoVO {
      * 文档ID
      */
     private Long docId;
+
+    @Schema(description = "会话保存的检索范围；历史会话可为空")
+    private AgentRunScopeDTO scope;
 
 
     private int permission;
