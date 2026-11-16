@@ -677,23 +677,56 @@ Python：
 
 **目标**：新前端用上新的事件协议与引用。
 
+**状态（2026-11-16）**：功能实现与真实栈验收已完成；全仓格式门禁存在本批以外的既有问题，处理范围待用户确认，**本里程碑尚未关闭**。
+
 **任务**
 
 - [x] `openapi/specs/ai.json` 更新后由 Web 构建取得新类型
 - [x] `lib/ai/sse.ts` 解析新事件；`use-chat-stream` 适配；保留中途切页不丢消息的行为
-- [ ] 聊天页（桌面与移动）：范围选择、进度展示、引用编号与引用列表
-- [ ] 引用跳转：笔记到小节、资料到页、视频到时间点；桌面与移动各自生成链接
-- [ ] PDF 问答页接新端点
-- [ ] 知识库页面的问答入口
-- [ ] 资料列表展示索引状态（含「无法提取文本」）
-- [x] 单测：事件解析与 hooks（引用链接生成留待引用 UI）
-- [ ] Playwright 用例：一次带引用的问答、一次未找到、一次 PDF 问答
+- [x] 聊天页（桌面与移动）：范围选择、进度展示、引用编号与引用列表
+- [x] 引用跳转：笔记到小节、资料到页、视频到时间点；桌面与移动各自生成链接
+- [x] PDF 问答页接新端点
+- [x] 知识库页面的问答入口
+- [x] 资料列表展示索引状态（含「无法提取文本」）
+- [x] 单测：事件解析、hooks、范围、引用链接与编号、笔记定位、PDF 跳页、视频时间定位
+- [x] Playwright 用例：桌面与移动端各一次带引用问答、一次未找到、一次 PDF 问答
 
 **验收**
 
-- `pnpm test`、`pnpm typecheck`、`pnpm check` 通过
-- `pnpm --filter web bundle:budget` 通过
-- 新增的端到端用例在真实栈上通过
+- [x] `pnpm test`、`pnpm typecheck` 通过
+- [ ] `pnpm check` 通过（全仓既有格式问题，见下方停止点）
+- [x] 本批 57 个 TypeScript / TSX 文件的 Biome check 通过
+- [x] `pnpm --filter web bundle:budget` 通过
+- [x] 新增的端到端用例在真实栈上通过
+
+**用户拍板与实现**
+
+用户确认全部/单知识库选择、每轮可切换且运行期间禁用、知识库入口预选、会话范围恢复、视频引用补充所属慕课标识；新增文案整组确认；验收使用 M16.6 本机脚本化供应商，不调用外部付费模型。契约见 [2026-11-16-ai-frontend-integration.md](../../.claude/openspec/changes/2026-11-16-ai-frontend-integration.md)。
+
+运行 store 保存范围、进度、引用和结果类型，正式会话 key 迁移后继续接收事件；历史范围恢复前禁用发送。回答中的有效编号变为站内链接，代码与已有链接不改写，来源列表显示原文片段、页码/小节/时间和已确认的权威性/滞后标记。桌面侧栏与移动知识库头提供问答入口。前端索引枚举统一为后端的 0–4，终态停止轮询。
+
+真实栈复现 PDF 详情返回对象键导致预览 404：note 在既有 READ 校验后经 HMAC 内部端点取得签名 URL，仅签发知识库资料来源文件，原公开文件接口仍要求本人归属；新增文件标识使用 XML `resultMap` 映射。移动 PDF 固定内容高度并将预览滚动限制在面板内，点击引用后第 2 页可见且问答标签仍在视口。笔记定位使用完整标题路径区分重名小节，视频目录定位后在元数据就绪时跳到引用秒数。
+
+**验证记录（2026-11-16）**
+
+| 检查 | 实际结果 |
+|---|---|
+| 宿主机 Java `mvn -o install -pl note,file,ai "-Dtest.excluded.groups=integration"` | note 245 / file 29 / ai 80，共 354 条通过 |
+| 宿主机 Python `venv/Scripts/python.exe -m pytest -o addopts='' -q` | 360 passed / 20 skipped |
+| `pnpm run test -- --maxWorkers=4` | 全仓 6 个测试任务通过，Web 179 文件 / 2074 条通过 |
+| `pnpm typecheck`、Web 生产构建 | 通过；宿主机以 `NEXT_DISABLE_STANDALONE=1` 构建 |
+| 变更文件 Biome check | 57 文件通过 |
+| `pnpm --filter web bundle:budget` | 桌面最大 303.7/310 KB，移动最大 246.6/250 KB，编辑器 15.8/250 KB，均通过 |
+| Playwright `E2E_AGENT_RETRIEVAL=1`，两份 `*agent-retrieval.spec.ts` | 桌面 3/3、移动 3/3，共 6/6，最终 35.3 秒 |
+| 真实 OpenAPI 与客户端派生 | 归一化 live Springdoc 后仅 ai/note/file 三份 baseline 变化，其余三份不变；通过已安装的 openapi-typescript 生成客户端，未手改生成代码 |
+
+Playwright 使用宿主机生产前端 `http://localhost:3107` 和本机 Docker 的真实 Java/Python/MySQL/Elasticsearch/MinIO。断言包含范围请求体、ANSWERED/NOT_FOUND 终态、刷新恢复范围和引用、长文小节进入视口、PDF 单资料端点与第 2 页及移动端标签可见。初轮 Chromium 无法读取 SSE 响应体，改为观察真实页面消费后的 store 终态与 DOM；后续失败复现了 PDF 对象键与移动滚动问题，修复后全部通过。脚本化供应商仅用于链路验证，真实模型质量仍归 M16.8。
+
+本机 MinIO 公开地址原为不可达的 `https://192.168.3.90:9000`，验收期间仅将 Redis 缓存中的公开地址临时改为 localhost，结束后逐字节恢复原值；模型供应商、模型容器和 Nacos 映射也已恢复/清理。临时知识库、笔记和资料经公开 API 删除，测试账号沿用既有 global-setup 保留规则。原始记录在本机 `tmp/m16-7/` 与 Web `e2e/.output/`；逐文件清单见 [changelist](../changelist/2026-11-16-ai-frontend-integration.md)。
+
+**全仓格式门禁停止点**
+
+只读执行与 `pnpm check` 相同扫描范围的 `biome check .`，初次报告 451 个错误，包含本机 venv/tmp 产物；启用 Git ignore 后仍有 41 个版本库文件的格式错误。逐文件与 `HEAD` 比较，41/41 均未被本批修改，类别全部为 format；涉及历史评测 JSON、UI 快照、模型供应商与设置代码、旧编辑器和 SSE 文件。本批文件检查已通过。按用户第 8 条未改这些文件，也未执行会自动改写它们的全仓脚本 `pnpm check`；是否扩大清理范围或调整本次格式验收口径，等待用户确认。
 
 ---
 
