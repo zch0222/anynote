@@ -11,6 +11,7 @@ from typing import Any, Protocol
 
 import tiktoken
 
+from harness.action.preview import structured_preview
 from harness.context.compaction import HistoryCompactor
 from harness.context.manifest import ContextManifest, ManifestEntry
 from harness.context.policy import EVIDENCE_BEGIN, EVIDENCE_END, PLATFORM_RULES
@@ -189,7 +190,8 @@ class ContextBuilder:
     ) -> tuple[list[dict[str, Any]], list[_Layer]]:
         """把本次运行的工具交互编译为 assistant tool_calls 与 tool 消息。
 
-        预算不足时从最早一轮开始截断 tool 消息内容，调用与结果始终成对保留。
+        预算不足时从最早一轮开始收缩 tool 消息内容，调用与结果始终成对保留；
+        JSON 对象结果按条目收缩并保留 count 等元数据，其他结果按字符截取。
 
         :param exchanges: 按轮记录的工具交互
         :param budget: 工具交互可用的 token 预算
@@ -215,20 +217,25 @@ class ContextBuilder:
                     None,
                 )
                 content = observation.content if observation else ""
+                reference = ""
                 if observation and observation.result_ref:
-                    content = f"{content}\n完整结果引用: {observation.result_ref}"
-                result_entries.append((call.call_id, call.name, content, "ORIGINAL"))
+                    reference = f"\n完整结果引用: {observation.result_ref}"
+                result_entries.append((call.call_id, call.name, content, reference))
         call_tokens = sum(self._counter.count(item.content) for item in call_layers)
-        overflow = sum(self._counter.count(item[2]) for item in result_entries) - max(0, budget - call_tokens)
+        overflow = sum(
+            self._counter.count(content + reference) for _call_id, _name, content, reference in result_entries
+        ) - max(0, budget - call_tokens)
         fitted: list[tuple[str, str, str, str]] = []
-        for call_id, name, content, transform in result_entries:
+        for call_id, name, content, reference in result_entries:
+            full, transform = content + reference, "ORIGINAL"
             if overflow > 0:
-                tokens = self._counter.count(content)
-                kept = self._truncate(content, max(0, tokens - overflow))
+                tokens = self._counter.count(full)
+                target = tokens - overflow - self._counter.count(reference)
+                kept = self._fit_tool_result(content, target) + reference if target > 0 else ""
                 overflow -= tokens - self._counter.count(kept)
-                if kept != content:
-                    content, transform = kept, "TRUNCATED"
-            fitted.append((call_id, name, content, transform))
+                if kept != full:
+                    full, transform = kept, "TRUNCATED"
+            fitted.append((call_id, name, full, transform))
         results = {call_id: (name, content, transform) for call_id, name, content, transform in fitted}
         messages: list[dict[str, Any]] = []
         layers: list[_Layer] = []
@@ -296,6 +303,26 @@ class ContextBuilder:
             )
             break
         return selected
+
+    def _fit_tool_result(self, content: str, budget: int) -> str:
+        """把工具结果收进 token 预算：能做结构化预览时取放得下的最大预览，否则按字符截取。
+
+        :param content: 工具结果（不含完整结果引用）
+        :param budget: token 预算
+        :return: 收缩后的结果
+        """
+        if self._counter.count(content) <= budget:
+            return content
+        best = None
+        low, high = 0, len(content)
+        while low <= high:
+            middle = (low + high) // 2
+            preview = structured_preview(content, middle)
+            if preview is not None and self._counter.count(preview) <= budget:
+                best, low = preview, middle + 1
+            else:
+                high = middle - 1
+        return best if best is not None else self._truncate(content, budget)
 
     def _truncate(self, content: str, budget: int) -> str:
         if self._counter.count(content) <= budget:

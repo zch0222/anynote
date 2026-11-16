@@ -11,7 +11,7 @@ from retrieval.models import NO_MATCH_MESSAGE, AuthorizationItem
 from retrieval.session import RetrievalSession
 from retrieval.text import grep_lines
 from tools.knowledge.args import KbGrepArgs
-from tools.knowledge.common import KnowledgeToolContext, dumps, full_text_lines, split_item_key
+from tools.knowledge.common import RESULT_FULL_CHARS, KnowledgeToolContext, dumps, full_text_lines, split_item_key
 
 NAME = "kb_grep"
 SUMMARY = "在原文中查找"
@@ -89,6 +89,7 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
         description=DESCRIPTION,
         args_model=KbGrepArgs,
         handler=handle,
+        full_result_chars=RESULT_FULL_CHARS,
     )
 
 

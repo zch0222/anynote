@@ -14,7 +14,7 @@ from retrieval.models import NOT_FOUND_MESSAGE, AuthorizationItem, KnowledgeScop
 from retrieval.session import RetrievalSession
 from retrieval.text import extract_note_links
 from tools.knowledge.args import KbRelatedArgs
-from tools.knowledge.common import KnowledgeToolContext, dumps, full_text_lines, register_row
+from tools.knowledge.common import RESULT_FULL_CHARS, KnowledgeToolContext, dumps, full_text_lines, register_row
 from tools.knowledge.kb_outline import cite_node, filter_ordinary, ref_id
 
 NAME = "kb_related"
@@ -130,6 +130,7 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
         description=DESCRIPTION,
         args_model=KbRelatedArgs,
         handler=handle,
+        full_result_chars=RESULT_FULL_CHARS,
     )
 
 

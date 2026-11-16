@@ -14,6 +14,9 @@ from retrieval.session import RetrievalSession, RetrievalSessionStore
 
 MAX_CONTENT_PAGES = 100
 COUNT_LABELS = {"note": "笔记", "doc": "资料", "mooc": "慕课", "task": "任务"}
+# 返回列表的知识工具声明的结果完整展示长度，覆盖各工具默认的一页：标题 18 字左右时，
+# kb_outline 默认 50 个节点约 8000 字、kb_query 默认 20 行约 4400 字。更大的页由 Harness 保留元数据、整条省略。
+RESULT_FULL_CHARS = 10000
 
 
 @dataclass

@@ -12,7 +12,7 @@ from harness.models import EvidenceItem
 from retrieval.models import DOC_UNAVAILABLE_MESSAGE, ChunkHit, OutlineNode
 from retrieval.session import RetrievalSession
 from tools.knowledge.args import KbOutlineArgs
-from tools.knowledge.common import KnowledgeToolContext, dumps, register_row
+from tools.knowledge.common import RESULT_FULL_CHARS, KnowledgeToolContext, dumps, register_row
 
 NAME = "kb_outline"
 SUMMARY = "查看目录"
@@ -197,6 +197,7 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
         description=DESCRIPTION,
         args_model=KbOutlineArgs,
         handler=handle,
+        full_result_chars=RESULT_FULL_CHARS,
     )
 
 

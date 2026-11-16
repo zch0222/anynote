@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import json
 
 from pydantic import BaseModel
 
@@ -18,8 +19,9 @@ class SearchArgs(BaseModel):
     query: str
 
 
-def registry_with(handler, read_only=True, timeout_s=None):
+def registry_with(handler, read_only=True, timeout_s=None, full_result_chars=None):
     registry = ToolRegistry()
+    declared = {} if full_result_chars is None else {"full_result_chars": full_result_chars}
     registry.register(
         ToolSpec(
             name="search",
@@ -29,9 +31,53 @@ def registry_with(handler, read_only=True, timeout_s=None):
             handler=handler,
             read_only=read_only,
             timeout_s=timeout_s,
+            **declared,
         )
     )
     return registry
+
+
+async def _observe(plane: ActionPlane, run):
+    result = await plane.execute(run, ToolCall(call_id="c1", name="search", arguments={"query": "q"}))
+    return plane.observe(run, result)
+
+
+async def test_oversized_json_result_keeps_metadata_and_whole_rows():
+    """复现：超长 JSON 结果按字符硬切会丢掉排在后面的 count 并切断行；应保留元数据与完整的行。"""
+    rows = [{"id": index, "text": "abcdefghij"} for index in range(30)]
+    content = json.dumps({"rows": rows, "count": 30, "notices": ["索引落后"]}, ensure_ascii=False)
+
+    async def handler(_args, _action):
+        return ToolOutput(content)
+
+    run = make_run(["search"])
+    run.runtime.large_result_chars = 300
+    run.runtime.large_result_preview_chars = 50
+    observation = await _observe(ActionPlane(registry_with(handler)), run)
+    payload = json.loads(observation.content)
+
+    assert len(observation.content) <= 300
+    assert payload["count"] == 30
+    assert payload["notices"] == ["索引落后"]
+    assert payload["rows"] and payload["rows"] == rows[: len(payload["rows"])]
+    assert payload["omitted"] == {"rows": 30 - len(payload["rows"])}
+    assert run.workspace.get_result(observation.result_ref) == content
+
+
+async def test_declared_result_budget_and_runtime_threshold_take_the_larger():
+    """工具声明的完整展示长度与运行参数取较大值，未超出时结果原样保留。"""
+    async def handler(_args, _action):
+        return ToolOutput("y" * 300)
+
+    run = make_run(["search"])
+    run.runtime.large_result_chars = 20
+    declared = await _observe(ActionPlane(registry_with(handler, full_result_chars=1000)), run)
+    run.runtime.large_result_chars = 1000
+    configured = await _observe(ActionPlane(registry_with(handler, full_result_chars=10)), run)
+
+    for observation in (declared, configured):
+        assert observation.content == "y" * 300
+        assert observation.result_ref is None
 
 
 async def test_invalid_arguments_do_not_execute_handler():

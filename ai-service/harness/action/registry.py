@@ -24,7 +24,12 @@ class ToolOutput:
 
 @dataclass(frozen=True)
 class ToolSpec:
-    """工具的静态能力与边界。"""
+    """工具的静态能力与边界。
+
+    ``full_result_chars`` 是工具声明的结果完整展示长度：观察里不超过它的结果原样保留，
+    与运行参数 ``large_result_chars`` 取较大值；为空时只看运行参数。工具按自己默认一页的大小声明它，
+    避免默认分页就被截断。
+    """
 
     name: str
     summary: str
@@ -33,7 +38,7 @@ class ToolSpec:
     handler: Callable[[BaseModel, Any], Awaitable[ToolOutput]]
     read_only: bool = True
     timeout_s: float | None = None
-    result_max_chars: int = 2000
+    full_result_chars: int | None = None
 
     def definition(self) -> dict[str, Any]:
         """生成 OpenAI 兼容工具定义。

@@ -7,7 +7,7 @@ from harness.action.policy import BoundAction
 from harness.action.registry import ToolOutput, ToolSpec
 from retrieval.search import SearchRequest
 from tools.knowledge.args import KbSearchArgs
-from tools.knowledge.common import KnowledgeToolContext, dumps
+from tools.knowledge.common import RESULT_FULL_CHARS, KnowledgeToolContext, dumps
 
 NAME = "kb_search"
 SUMMARY = "检索知识库"
@@ -52,4 +52,5 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
         description=DESCRIPTION,
         args_model=KbSearchArgs,
         handler=handle,
+        full_result_chars=RESULT_FULL_CHARS,
     )

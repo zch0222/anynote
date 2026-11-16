@@ -452,6 +452,28 @@ async def test_outline_kb_with_mooc_children():
     assert item.locator == {"row": True, "moocId": 2}
 
 
+async def test_outline_default_page_is_observed_whole():
+    """复现：知识库目录默认一页 50 个节点约 8000 字，观察里应原样保留，不被截成前 500 字。"""
+    client = FakeKnowledgeClient()
+    client.allow("kb:1", kb_id=1)
+    client.outlines[("kb:1", None)] = OutlineResult(ref="kb:1", nodes=[
+        OutlineNode(ref=f"note:{100 + index}", entityType="note", parentRef="kb:1",
+                    title=f"第{index}章 进程调度与内存管理读书笔记整理", updateTime="2026-11-12T08:00:00")
+        for index in range(50)
+    ], total=50)
+    registry, _store = make_toolkit(client, FakeIndexReader())
+    run = make_tool_run()
+    plane = ActionPlane(registry)
+
+    result = await plane.execute(run, ToolCall(call_id="c1", name="kb_outline", arguments={"ref": "kb:1"}))
+    observation = plane.observe(run, result)
+
+    assert len(result.content) > run.runtime.large_result_chars
+    assert observation.content == result.content
+    assert observation.result_ref is None
+    assert len(_payload(result)["nodes"]) == 50
+
+
 async def test_outline_note_headings_are_citable_by_line_range():
     """笔记标题树的每个小节登记为指向该笔记行范围的结构化证据。"""
     client = FakeKnowledgeClient()

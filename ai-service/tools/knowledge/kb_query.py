@@ -8,7 +8,7 @@ from typing import Any
 from harness.action.policy import BoundAction
 from harness.action.registry import ToolOutput, ToolSpec
 from tools.knowledge.args import KbQueryArgs
-from tools.knowledge.common import KnowledgeToolContext, dumps, register_row
+from tools.knowledge.common import RESULT_FULL_CHARS, KnowledgeToolContext, dumps, register_row
 
 NAME = "kb_query"
 SUMMARY = "查询知识库清单"
@@ -92,4 +92,5 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
         description=DESCRIPTION,
         args_model=KbQueryArgs,
         handler=handle,
+        full_result_chars=RESULT_FULL_CHARS,
     )

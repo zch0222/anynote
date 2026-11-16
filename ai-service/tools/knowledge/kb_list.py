@@ -6,7 +6,7 @@
 from harness.action.policy import BoundAction
 from harness.action.registry import ToolOutput, ToolSpec
 from tools.knowledge.args import KbListArgs
-from tools.knowledge.common import KnowledgeToolContext, counts_summary, dumps, register_row
+from tools.knowledge.common import RESULT_FULL_CHARS, KnowledgeToolContext, counts_summary, dumps, register_row
 
 NAME = "kb_list"
 SUMMARY = "列出可访问的知识库"
@@ -69,4 +69,5 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
         description=DESCRIPTION,
         args_model=KbListArgs,
         handler=handle,
+        full_result_chars=RESULT_FULL_CHARS,
     )

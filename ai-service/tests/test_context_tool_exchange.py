@@ -3,6 +3,8 @@
 @author 称霸幼儿园
 """
 
+import json
+
 from harness.action.plane import FatalActionError
 from harness.action.registry import ToolOutput, ToolRegistry, ToolSpec
 from harness.context.builder import ContextBuilder
@@ -59,6 +61,27 @@ async def test_builder_truncates_oldest_tool_results_but_keeps_pairs():
     assert "新" * 50 in tool_messages[1]["content"]
     transforms = {entry.source_id: entry.transform for entry in result.manifest.entries
                   if entry.source_type == "tool_result"}
+    assert transforms == {"c1": "TRUNCATED", "c2": "ORIGINAL"}
+
+
+async def test_builder_shrinks_oldest_json_result_by_whole_rows_and_keeps_count():
+    """复现：上下文预算不足时按字符截断旧的清单结果会切断行、丢掉排在后面的 count；应整条收缩并保留元数据。"""
+    rows = [{"ref": f"note:{index}", "title": "进程调度笔记"} for index in range(40)]
+    listing = json.dumps({"rows": rows, "count": 40}, ensure_ascii=False, separators=(",", ":"))
+    run = make_run(tools=["search"])
+    run.runtime.context_tokens = 1024
+    run.tool_exchanges = [_exchange("c1", listing), _exchange("c2", "新" * 50)]
+    result = await ContextBuilder(ScriptedModel([]), CharacterCounter()).build(run, [])
+
+    first = next(message for message in result.messages if message.get("tool_call_id") == "c1")["content"]
+    payload = json.loads(first[len(EVIDENCE_BEGIN) + 1 : -len(EVIDENCE_END) - 1])
+    transforms = {entry.source_id: entry.transform for entry in result.manifest.entries
+                  if entry.source_type == "tool_result"}
+
+    assert len(first) < len(listing)
+    assert payload["count"] == 40
+    assert payload["rows"] and payload["rows"] == rows[: len(payload["rows"])]
+    assert payload["omitted"] == {"rows": 40 - len(payload["rows"])}
     assert transforms == {"c1": "TRUNCATED", "c2": "ORIGINAL"}
 
 

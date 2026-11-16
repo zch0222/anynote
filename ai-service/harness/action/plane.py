@@ -10,6 +10,7 @@ import time
 from pydantic import ValidationError
 
 from harness.action.policy import BoundAction, ReadOnlyActionPolicy
+from harness.action.preview import structured_preview
 from harness.action.registry import ToolOutput, ToolRegistry
 from harness.models import (
     ActionErrorCategory,
@@ -116,15 +117,19 @@ class ActionPlane:
     def observe(self, run: RunContext, result: ActionResult) -> Observation:
         """将完整行动结果压缩成可写回状态的观察。
 
+        超过展示长度的结果全文留在工作区。JSON 对象结果压成同一长度内的结构化预览，保留元数据与完整条目；
+        其他结果按 ``large_result_preview_chars`` 截取。
+
         :param run: 当前运行
         :param result: 完整行动结果
         :return: 紧凑观察
         """
         content = result.content
         reference = None
-        if len(content) > run.runtime.large_result_chars:
+        limit = self._full_result_chars(run, result.tool_name)
+        if len(content) > limit:
             reference = run.workspace.put_result(content)
-            content = content[: run.runtime.large_result_preview_chars]
+            content = structured_preview(content, limit) or content[: run.runtime.large_result_preview_chars]
         run.workspace.add_evidence(result.evidence)
         observation = Observation(
             call_id=result.call_id,
@@ -140,6 +145,17 @@ class ActionPlane:
         )
         run.observations.append(observation)
         return observation
+
+    def _full_result_chars(self, run: RunContext, tool_name: str) -> int:
+        """返回观察中原样保留结果的字符上限：工具声明值与运行参数取较大值。
+
+        :param run: 当前运行
+        :param tool_name: 工具名
+        :return: 字符上限
+        """
+        spec = self._registry.get(tool_name)
+        declared = spec.full_result_chars if spec is not None else None
+        return max(run.runtime.large_result_chars, declared or 0)
 
     @staticmethod
     def _duration(started: float) -> int:

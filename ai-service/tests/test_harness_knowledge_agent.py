@@ -3,8 +3,11 @@
 @author 称霸幼儿园
 """
 
+import json
+
 from core.config import HarnessRuntimeSettings
 from harness.context.builder import ContextBuilder
+from harness.context.policy import EVIDENCE_BEGIN, EVIDENCE_END
 from harness.events import EventBus
 from harness.loop import MISSING_FINISH_HINT, Harness
 from harness.models import EvidenceItem, RunContext, RunOutcome, RunRequest, RunScope
@@ -281,6 +284,74 @@ async def test_structured_rows_stay_out_of_the_evidence_layer():
     non_tool = [item["content"] for item in calls[1]["messages"] if item["role"] != "tool"]
 
     assert not any("唯一标题" in str(content) for content in non_tool)
+
+
+def _query_rows(count: int) -> list[QueryRow]:
+    """构造标题长度接近真实笔记的清单行。"""
+    return [
+        QueryRow(
+            ref=f"note:{100 + index}",
+            entityType="note",
+            kbId=1,
+            title=f"第{index}章 进程调度与内存管理读书笔记整理",
+            updateTime="2026-11-12T08:00:00",
+        )
+        for index in range(count)
+    ]
+
+
+def _query_model(call_id: str, arguments: dict) -> ScriptedModel:
+    """先调用一次 kb_query，再以结构化行作答。"""
+    return ScriptedModel(
+        [
+            ScriptStep([ModelChunk(tool_calls=[ToolCall(call_id=call_id, name="kb_query", arguments=arguments)])]),
+            ScriptStep([_finish("finish", _tool_arguments("ANSWERED", answer="共有这些笔记[1]", quote=""))]),
+        ]
+    )
+
+
+def _tool_result(call: dict, call_id: str) -> str:
+    """取出模型第二轮看到的工具结果正文（去掉不可信定界符）。"""
+    message = next(item for item in call["messages"] if item.get("tool_call_id") == call_id)
+    content = message["content"]
+    assert content.startswith(f"{EVIDENCE_BEGIN}\n") and content.endswith(f"\n{EVIDENCE_END}")
+    return content[len(EVIDENCE_BEGIN) + 1 : -len(EVIDENCE_END) - 1]
+
+
+async def test_kb_query_default_page_reaches_model_in_full():
+    """复现：默认一页 20 行超过 2000 字时模型只看到前 500 字，后面的行和 count 都看不到。"""
+    knowledge = FakeKnowledgeClient()
+    knowledge.query_result = QueryResult(rows=_query_rows(20), count=20)
+    model = _query_model("query-page", {"entity": "note", "with_count": True})
+
+    run, _searcher, calls, _events = await _execute(model, [], knowledge)
+    seen = _tool_result(calls[1], "query-page")
+    payload = json.loads(seen)
+
+    assert len(seen) > 2000
+    assert payload["count"] == 20
+    assert [row["ref"] for row in payload["rows"]] == [f"note:{100 + index}" for index in range(20)]
+    assert "omitted" not in payload
+    assert run.outcome == RunOutcome.ANSWERED
+
+
+async def test_kb_query_over_budget_keeps_count_and_whole_rows():
+    """复现：超出展示上限的清单仍是合法 JSON，保留 count、只保留完整的行并说明省略了多少。"""
+    knowledge = FakeKnowledgeClient()
+    knowledge.query_result = QueryResult(rows=_query_rows(100), count=100)
+    model = _query_model("query-all", {"entity": "note", "limit": 100, "with_count": True})
+
+    _run, _searcher, calls, _events = await _execute(model, [], knowledge)
+    seen = _tool_result(calls[1], "query-all").split("\n完整结果引用: ")[0]
+    payload = json.loads(seen)
+    shown = payload["rows"]
+
+    assert payload["count"] == 100
+    assert 20 <= len(shown) < 100
+    assert [row["ref"] for row in shown] == [f"note:{100 + index}" for index in range(len(shown))]
+    assert all(row["title"].endswith("读书笔记整理") and row["evidenceId"] for row in shown)
+    assert payload["omitted"] == {"rows": 100 - len(shown)}
+    assert payload["omittedHint"]
 
 
 async def test_invalid_finish_arguments_are_retried_instead_of_failing_the_run():
