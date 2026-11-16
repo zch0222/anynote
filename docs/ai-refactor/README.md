@@ -55,7 +55,7 @@ AI 相关模块（`services/ai`、`ai-service/` 以及连带的 Feign 契约与�
 | [AI_MILESTONES.md](./AI_MILESTONES.md) | **执行计划**：M16.0 – M16.9 的任务清单、验收标准、依赖关系与粗估工期 |
 | [M16_4_ACCEPTANCE_AUDIT.md](./M16_4_ACCEPTANCE_AUDIT.md) | **失败验收报告**：M16.4 的独立核对、故障证据与 F01–F10 修复要求，保留历史 |
 | [M16_4_REPAIR_ACCEPTANCE.md](./M16_4_REPAIR_ACCEPTANCE.md) | **修复验收记录**：本次最终代码的可重跑命令、固定九类与时延结果、原始输出、清理及真实语义未覆盖项 |
-| [KNOWLEDGE_AGENT_V3_PLAN.md](./KNOWLEDGE_AGENT_V3_PLAN.md) | **知识库 Agent 版本 3 方案**（2026-11-17 确认，未实施）：首轮预取默认关闭、纯文本回复即申请完成、校验分级与回答标注、失败按类别给文案，附顺带发现的问题 |
+| [KNOWLEDGE_AGENT_V3_PLAN.md](./KNOWLEDGE_AGENT_V3_PLAN.md) | **知识库 Agent 版本 3 方案**（2026-11-17 已实施并完成 57 次真实模型重放）：首轮预取默认关闭、纯文本回复即申请完成、校验分级与回答标注、失败按类别给文案，附顺带发现的问题 |
 | [索引完整性修复契约](../../.claude/openspec/changes/2026-11-15-indexing-integrity-repair.md) | **已确认契约**：写入/对账完整性、版本重建、向量开关、结构切分、水位和用户可见说明 |
 
 阅读顺序：本页 → AI_RESEARCH → AI_REFACTOR_PLAN → KNOWLEDGE_RETRIEVAL_PLAN → AI_MILESTONES。
