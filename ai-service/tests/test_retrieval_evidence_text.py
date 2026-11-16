@@ -38,6 +38,17 @@ def test_registry_keeps_trace_only_fields_on_evidence():
     assert item.retrieval == {"channels": {"lexical": 1}}
 
 
+def test_registry_includes_authorized_mooc_id_without_mutating_input():
+    """引用保留已授权的课程定位，不修改调用方定位字典。"""
+    registry = EvidenceRegistry()
+    registry.set_mooc_id("mooc_item:5#transcript", 8)
+    locator = {"startTimeMs": 12345}
+    item = _register(registry, "mooc_item:5#transcript", locator)
+    assert item.locator == {"startTimeMs": 12345, "moocId": 8}
+    assert locator == {"startTimeMs": 12345}
+    assert _register(registry, "note:1", {}).locator == {}
+
+
 def _chunk(index: int, content: str, page: int | None = None) -> ChunkHit:
     return ChunkHit(item_key="doc:1", ref="doc:1", entity_type="doc", subtype=None, kb_id=1, title="资料",
                     chunk_index=index, content=content, section_path="第一章", page_no=page)

@@ -69,7 +69,8 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
                 entity_type=row.entity_type or row.ref.split(":", 1)[0],
                 text=dumps(fields),
                 title=row.title,
-                locator={"queryRow": True},
+                locator={"queryRow": True, **({"moocId": row.attributes["moocId"]}
+                         if row.attributes.get("moocId") is not None else {})},
                 kb_id=row.kb_id,
                 kb_name=scope.kb_name(row.kb_id),
                 authority="original",

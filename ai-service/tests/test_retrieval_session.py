@@ -40,6 +40,24 @@ async def test_authorize_batches_by_one_hundred_and_keeps_readable_only():
     assert ("note:1", None) in readable
 
 
+async def test_authorized_mooc_navigation_reaches_registered_evidence():
+    """通过权限确认的慕课标识进入最终引用定位。"""
+    client = FakeKnowledgeClient()
+    client.allow("mooc_item:4", "transcript")
+    client.readable[("mooc_item:4", "transcript")] = client.readable[
+        ("mooc_item:4", "transcript")
+    ].model_copy(update={"mooc_id": 8})
+    session = _session(client)
+    await session.authorize([("mooc_item:4", "transcript")])
+    evidence = session.evidence.register(
+        item_key="mooc_item:4#transcript", entity_type="transcript", text="字幕", title="视频",
+        locator={"startTimeMs": 12000}, kb_id=1, kb_name="课程库", authority="transcript",
+        content_version="v1", stale=False, permission_basis="MEMBER", retrieval=None,
+        selected_reason="kb_search",
+    )
+    assert evidence.locator == {"startTimeMs": 12000, "moocId": 8}
+
+
 async def test_scope_request_uses_explicit_run_scope_once():
     """显式范围按原样传给 note，且只请求一次。"""
     client = FakeKnowledgeClient()

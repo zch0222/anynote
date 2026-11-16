@@ -112,6 +112,7 @@ class RetrievalSession:
             results = await self.call_note(self.knowledge.authorize(self._access_token, batch))
             for request, result in zip(batch, results, strict=False):
                 if result.readable:
+                    self.evidence.set_mooc_id(result.item_key, result.mooc_id)
                     readable[request] = result
         return readable
 

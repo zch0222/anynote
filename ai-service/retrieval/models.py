@@ -84,6 +84,7 @@ class AuthorizationItem(_CamelModel):
     readable: bool = False
     permission_basis: str | None = None
     kb_id: int | None = None
+    mooc_id: int | None = None
     content_version: str | None = None
     meta_version: str | None = None
 

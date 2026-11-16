@@ -18,6 +18,16 @@ class EvidenceRegistry:
     def __init__(self):
         self._ids: dict[str, str] = {}
         self._items: dict[str, EvidenceItem] = {}
+        self._mooc_ids: dict[str, int] = {}
+
+    def set_mooc_id(self, item_key: str, mooc_id: int | None) -> None:
+        """登记权限确认后的慕课定位。
+
+        :param item_key: 条目引用
+        :param mooc_id: 所属慕课标识
+        """
+        if mooc_id is not None and mooc_id > 0:
+            self._mooc_ids[item_key] = mooc_id
 
     @staticmethod
     def position_key(item_key: str, locator: dict[str, Any] | None) -> str:
@@ -64,6 +74,9 @@ class EvidenceRegistry:
         :param selected_reason: 进入上下文的原因
         :return: 证据条目
         """
+        mooc_id = self._mooc_ids.get(item_key)
+        if mooc_id is not None:
+            locator = {**(locator or {}), "moocId": mooc_id}
         key = self.position_key(item_key, locator)
         existing_id = self._ids.get(key)
         if existing_id is not None:
