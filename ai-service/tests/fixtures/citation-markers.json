@@ -1,0 +1,117 @@
+[
+  {
+    "name": "chinese_prefix",
+    "input": "知识库[1]",
+    "indices": [1]
+  },
+  {
+    "name": "consecutive_markers",
+    "input": "共 3 篇笔记[1][2]：",
+    "indices": [1, 2]
+  },
+  {
+    "name": "after_bold",
+    "input": "**3 篇笔记**[1]",
+    "indices": [1]
+  },
+  {
+    "name": "paragraph_start",
+    "input": "[1] 该条来自 kb_list 的返回结果。",
+    "indices": [1]
+  },
+  {
+    "name": "after_fullwidth_parenthesis",
+    "input": "倒排索引（Inverted Index）[1]",
+    "indices": [1]
+  },
+  {
+    "name": "block_containers",
+    "input": "| 列 |\n| --- |\n| [2] |\n\n> [2]\n\n- [2]",
+    "indices": [2, 2, 2]
+  },
+  {
+    "name": "inline_code",
+    "input": "用 `lst[0]` 和 `arr[1]` 取元素",
+    "indices": []
+  },
+  {
+    "name": "fenced_code",
+    "input": "```python\nvalue = m[1][2]\n```",
+    "indices": []
+  },
+  {
+    "name": "ascii_prefix",
+    "input": "m[1][2] arr[1] Elasticsearch[1]",
+    "indices": []
+  },
+  {
+    "name": "invalid_numbers",
+    "input": "[0] [01] [1000]",
+    "indices": []
+  },
+  {
+    "name": "inline_link",
+    "input": "[1](/notes/1/2)",
+    "indices": []
+  },
+  {
+    "name": "link_text",
+    "input": "[参见 [1]](/notes/1/2)",
+    "indices": []
+  },
+  {
+    "name": "ascii_prefix_inline_link",
+    "input": "arr[1](/notes/1/2)",
+    "indices": []
+  },
+  {
+    "name": "reference_link",
+    "input": "[1][source]\n\n[source]: /notes/1/2",
+    "indices": []
+  },
+  {
+    "name": "shortcut_reference_link",
+    "input": "[1]\n\n[1]: /notes/1/2",
+    "indices": []
+  },
+  {
+    "name": "escaped_marker",
+    "input": "\\[1\\]",
+    "indices": []
+  },
+  {
+    "name": "inline_math",
+    "input": "$a[1]$",
+    "indices": []
+  },
+  {
+    "name": "block_math",
+    "input": "$$\na[1]\n$$",
+    "indices": []
+  },
+  {
+    "name": "double_brackets",
+    "input": "[[1]]",
+    "indices": []
+  },
+  {
+    "name": "linkified_url",
+    "input": "https://example.com/a[1]",
+    "indices": []
+  },
+  {
+    "name": "autolink",
+    "input": "<https://example.com/a[1]>",
+    "indices": []
+  },
+  {
+    "name": "image_alt",
+    "input": "![1](https://example.com/a.png)",
+    "indices": []
+  },
+  {
+    "name": "separated_markers",
+    "input": "第一篇[1]，第二篇[2]。",
+    "indices": [1, 2]
+  }
+]
