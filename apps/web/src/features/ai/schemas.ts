@@ -82,6 +82,7 @@ export const chatMessageSchema = z.object({
     .nullish()
     .transform((value) => value ?? []),
   outcome: z.string().nullish(),
+  process: z.record(z.string(), z.unknown()).nullish(),
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 

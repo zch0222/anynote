@@ -71,6 +71,7 @@ class ToolCallRecord:
     error_category: str | None = None
     content: str = ""
     evidence: list[EvidenceItem] = field(default_factory=list)
+    diagnostics: dict[str, Any] = field(default_factory=dict)
     error_message: str | None = None
 
 

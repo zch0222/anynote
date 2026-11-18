@@ -68,6 +68,7 @@ class RunViewMiddleware(HarnessMiddleware):
                     observation.error_category.value if observation.error_category else None
                 )
                 record.content = observation.content
+                record.diagnostics = dict(observation.diagnostics)
                 for item in run.workspace.evidence:
                     if item.evidence_id and _owned_by(observation.call_id, item):
                         record.evidence.append(item)
@@ -286,6 +287,30 @@ def _item_key(ref: str, subtype: object) -> str:
     return f"{ref}#{subtype}" if isinstance(subtype, str) and subtype else ref
 
 
+TOOL_RESULT_COUNT_KEYS: dict[str, str] = {
+    "kb_list": "knowledgeBases",
+    "kb_outline": "nodes",
+    "kb_grep": "hits",
+    "kb_read": "chars",
+    "kb_query": "rows",
+    "kb_related": "related",
+}
+
+
+def _result_count(record: ToolCallRecord) -> int | None:
+    """从工具诊断取结果计数，取不到时回退证据条数。
+
+    :param record: 工具调用记录
+    :return: 计数值，无可用计数时为 None
+    """
+    key = TOOL_RESULT_COUNT_KEYS.get(record.name)
+    if key is not None:
+        value = record.diagnostics.get(key)
+        if isinstance(value, int) and value >= 0:
+            return value
+    return None
+
+
 def _result_summary(record: ToolCallRecord, visible: VisibleSet) -> dict[str, object] | None:
     """生成工具结果摘要：命中数与前 3 个可见条目。
 
@@ -305,5 +330,8 @@ def _result_summary(record: ToolCallRecord, visible: VisibleSet) -> dict[str, ob
         if item.locator:
             entry["locator"] = item.locator
         items.append(entry)
-    result: dict[str, object] = {"count": len(record.evidence), "items": items}
+    count = _result_count(record)
+    if count is None:
+        count = len(record.evidence)
+    result: dict[str, object] = {"count": count, "items": items}
     return result

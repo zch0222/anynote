@@ -351,3 +351,83 @@ async def test_tool_target_and_result_projection():
     assert item["ref"] == "note:12"
     assert item["title"] == "复习提纲"
     assert item["kbName"] == "课程库"
+
+
+async def test_tool_result_count_uses_diagnostics():
+    """结果计数优先取工具诊断（kb_read 字数），取不到时回退证据条数。"""
+    from harness.models import EvidenceItem
+
+    registry = ToolRegistry()
+
+    async def read_handler(_args, _action):
+        return ToolOutput(
+            content="正文",
+            evidence=[
+                EvidenceItem(
+                    evidence_id="E1",
+                    source_type="note",
+                    source_id="note:12",
+                    content="正文",
+                    title="复习提纲",
+                )
+            ],
+            diagnostics={"chars": 5300},
+        )
+
+    async def plain_handler(_args, _action):
+        return ToolOutput(content="结果", diagnostics={"unknown": 1})
+
+    registry.register(
+        ToolSpec(name="kb_read", summary="阅读原文", description="测试工具",
+                  args_model=SearchArgs, handler=read_handler)
+    )
+    registry.register(
+        ToolSpec(name="kb_search", summary="检索知识库", description="测试工具",
+                  args_model=SearchArgs, handler=plain_handler)
+    )
+    model = ScriptedModel(
+        [
+            ScriptStep(
+                [
+                    ModelChunk(tool_calls=[
+                        ToolCall(call_id="c1", name="kb_read", arguments={"query": "x"}),
+                    ], finish=True),
+                ]
+            ),
+            ScriptStep(
+                [
+                    ModelChunk(tool_calls=[
+                        ToolCall(call_id="c2", name="kb_search", arguments={"query": "y"}),
+                    ], finish=True),
+                ]
+            ),
+            ScriptStep(
+                [
+                    ModelChunk(
+                        tool_calls=[
+                            ToolCall(call_id="c3", name="agent_finish",
+                                     arguments={"outcome": "ANSWERED", "answer": "最终回答"}),
+                        ],
+                        finish=True,
+                    ),
+                ]
+            ),
+        ]
+    )
+    from agents.minimal.agent import load_minimal_agent
+    from harness.models import AgentDefinition
+
+    agent = AgentDefinition(
+        **{
+            **load_minimal_agent().model_dump(),
+            "tools": ["kb_read", "kb_search"],
+            "terminal_tool": "agent_finish",
+        }
+    )
+    run = make_run(runtime=HarnessRuntimeSettings(reasoning_view_enabled=True))
+    run.agent = agent
+    events = visible(await collect_events(make_harness(model, registry=registry), run))
+    results = {e.data["callId"]: e.data["result"] for e in events if e.type == "tool.finished"}
+    assert results["c1"]["count"] == 5300
+    assert results["c2"]["count"] == 1
+

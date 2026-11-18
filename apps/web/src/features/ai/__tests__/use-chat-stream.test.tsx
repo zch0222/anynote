@@ -366,6 +366,93 @@ describe("chat stream store", () => {
     expect(useChatStreamStore.getState().sessions.c1?.messages).toHaveLength(2);
   });
 
+  it("hydrate 恢复落库过程视图：耗时、工具结果条目与完整思考", () => {
+    useChatStreamStore.getState().clear("c2");
+    useChatStreamStore.getState().hydrate(
+      "c2",
+      [
+        {
+          id: 11,
+          role: 0,
+          content: "问",
+          citations: [],
+          answerNotices: [],
+        },
+        {
+          id: 12,
+          role: 1,
+          content: "答",
+          citations: [],
+          answerNotices: [],
+          outcome: "ANSWERED",
+          process: {
+            version: 1,
+            durationMs: 18230,
+            hidden: false,
+            items: [
+              { type: "reasoning", blockId: "b1", text: "先想想", status: "done", durationMs: 100 },
+              {
+                type: "tool",
+                callId: "c1",
+                name: "kb_search",
+                status: "SUCCESS",
+                durationMs: 820,
+                target: { label: "期末复习", resolved: true },
+                result: {
+                  count: 5,
+                  items: [{ ref: "note:12", title: "提纲", kbName: "课程库" }],
+                },
+              },
+              { type: "note", text: "先看看目录" },
+            ],
+            dependencies: ["note:12"],
+          },
+        },
+      ],
+      2,
+    );
+    const message = useChatStreamStore.getState().sessions.c2?.messages[1];
+    expect(message?.process?.items).toHaveLength(3);
+    expect(message?.durationMs).toBe(18230);
+    expect(message?.processHiddenNotice).toBeUndefined();
+    const tool = message?.process?.items[1];
+    if (tool?.type !== "tool") throw new Error("期望工具行");
+    expect(tool.result?.items[0]?.title).toBe("提纲");
+    expect(tool.result?.items).toHaveLength(1);
+  });
+
+  it("hydrate 遇到隐藏过程视图时空文本行丢弃并展示已确认提示", () => {
+    useChatStreamStore.getState().clear("c3");
+    useChatStreamStore.getState().hydrate(
+      "c3",
+      [
+        {
+          id: 21,
+          role: 1,
+          content: "答",
+          citations: [],
+          answerNotices: [],
+          process: {
+            version: 1,
+            durationMs: 5000,
+            hidden: true,
+            hiddenNotice: "部分内容你已无权访问，思考过程已隐藏",
+            items: [
+              { type: "reasoning", blockId: "b1", text: null, status: "done" },
+              { type: "note", text: null },
+              { type: "retry" },
+            ],
+          },
+        },
+      ],
+      3,
+    );
+    const message = useChatStreamStore.getState().sessions.c3?.messages[0];
+    expect(message?.processHiddenNotice).toBe("部分内容你已无权访问，思考过程已隐藏");
+    // 空文本的思考与说明行丢弃，只剩重试行
+    expect(message?.process?.items).toEqual([{ type: "retry" }]);
+  });
+
   it("renameKey 迁移会话（新会话回填场景）且 clear 清空", () => {
     const store = useChatStreamStore.getState();
     store.hydrate(

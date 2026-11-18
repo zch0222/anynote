@@ -123,8 +123,11 @@ note 不可用（`KNOWLEDGE_ACCESS_UNAVAILABLE`）时 fail-closed：全部历史
 ## 验证
 
 - Python pytest：各推理格式解析（含跨片段 `think_tag` 与未闭合）、重试中断、回传、可见集投影、
-  白名单字段、T2 fail-closed、开关全关逐字段一致。
+  白名单字段、T2 fail-closed、开关全关逐字段一致。已通过（M17.1–M17.3 提交；M17.4 补 `test_tool_result_count_uses_diagnostics`
+  固定结果计数优先取工具 `diagnostics`，`kb_read` 的 `chars` 即「读取 {n} 字」口径）。
 - Java JUnit：白名单转发、过程视图落库与读取复核三分支、管理端点权限与非管理员 `A0301`、
-  访问留痕、历史引用 `ref/subtype` 传递。
-- 前端 Vitest：`lib/ai/process.ts` 归并纯函数、组件渲染、hydrate 恢复。
-- Playwright（桌面 + 移动端）与真实栈验收留待 M17.6（主密钥恢复后），登记为遗留项。
+  访问留痕、历史引用 `ref/subtype` 传递。已通过（M17.3 提交 `ec3d944`，ai 107 / note 245 全绿）。
+- 前端 Vitest：`lib/ai/process.ts` 归并纯函数、组件渲染、hydrate 恢复。已通过（M17.4，
+  `src/features/ai + src/lib/ai` 140 项，含过程区组件 8 例与回放/隐藏恢复 2 例）。
+- Playwright（桌面 + 移动端）与真实栈验收留待 M17.6（主密钥恢复后），登记为遗留项；
+  管理控制台前端（M17.5）未开始，后端端点已随 M17.3 上线。

@@ -912,6 +912,42 @@ ES 8.7 实测接受空高亮标签并保留资料原有 `<em>`；真实浏览器
 
 ---
 
+## M17 Agent 运行过程展示（思考流、工具行与管理控制台）
+
+方案：[AGENT_TRACE_VIEW_PLAN.md](./AGENT_TRACE_VIEW_PLAN.md)；契约：[OpenSpec 2026-11-18](../../.claude/openspec/changes/2026-11-18-agent-trace-view.md)。
+按 2026-11-18 拍板执行：T1 落库 + 读取时复核（任一依赖不可读隐藏全部自由文本）；T2 历史开跑前复核、note 不可用 fail-closed；
+T3 工具轮文字作为过程说明；T4 Trace 与过程视图永久保留（30 天清理任务已删除）；T5 设置页分区「AI 运行」仅桌面端；T7 固定一种展示策略；T8 文案按确认清单。
+
+### 已完成（2026-11-19）
+
+| 里程碑 | 内容 | 提交 |
+|---|---|---|
+| M17.0 | OpenSpec 提案与拍板记录、逻辑模型推理配置（随 `2026-11-18-model-config-db-only.md` 去集中化） | `76fd2b4`、`f53d53f`、`f527cdb`、`48d08a4` |
+| M17.1 | 接入层解析推理输出（`reasoning_content`/`reasoning`/`think_tag` 跨片段状态机）、重试中断、回传开关、Trace 全文投影与依赖清单 | `79a04c9`、`97e5a9e`、`cb3f09d` |
+| M17.2 | 可见集、用户视图投影、增量合并；会话历史开跑前按当前权限复核（T2） | `97e5a9e`、`ce92cfa` |
+| M17.3 | Java 白名单转发、过程视图落库与读取复核（T1）、管理端点与访问留痕、Trace 永久保留 | `ec3d944` |
+| M17.4 | 对话界面过程区（本批，见下） | 本批提交 |
+
+### M17.4 对话界面（2026-11-19）
+
+**范围**：`lib/ai/process.ts` 事件归并纯函数；`features/ai/components/process/` 过程区组件（整轮控件、思考行、工具行、过程说明、重试行）；
+`use-chat-stream` 事件流接线与落库过程视图回放（`durationMs`、`hidden` 撤权隐藏）；Python 投影结果计数改用工具 `diagnostics` 声明值，
+使 `kb_read` 摘要为「读取 {n} 字」、`kb_grep` 为「命中 {n} 处」，与已确认文案对齐。
+
+**验证**：Web `src/features/ai + src/lib/ai` Vitest 140 项通过（含新增 `process` 纯函数 7 例、`process-area` 组件 8 例、回放 2 例）；
+`tsc --noEmit` 与 Biome 通过；`bundle:budget` 桌面 304.3/310 KB、移动端 246.6/250 KB、编辑器 16.9/250 KB 全绿。
+Python 全量多轮在 455 passed、20 skipped 与 1 failed、454 passed 之间抖动，失败均为既有超时/索引用例（`test_models.py::test_first_idle_and_total_timeouts[TOTAL]`、
+`test_indexing_pipeline.py::test_incremental_store_failure_preserves_cursor_success_time_and_doc_status`），干净树同样复现、单独复跑通过，与本批无关未修改。
+新增 `test_tool_result_count_uses_diagnostics` 固定计数口径。
+
+**与方案的偏差**：确认清单之外的思考行「已中断」徽标未实现（确认清单只有重试行「模型连接中断，已重试」），中断状态仅保留在过程状态中不额外展示；
+移动端「运行中只显示整轮控件和最新一行」未单独实现（移动端复用桌面 `ChatPanel`，整轮收起后行为一致），与 Playwright 桌面/移动端用例一并留待 M17.6。
+
+**遗留项（M17.5/M17.6）**：管理控制台前端（`/settings/ai-runs`）未开始；Playwright 用例、真实推理模型重放（主密钥恢复后）、
+开关逐项打开与体量实测未执行。逐文件清单见 [`docs/changelist/2026-11-19-agent-process-area.md`](../changelist/2026-11-19-agent-process-area.md)。
+
+---
+
 ## M16.9 清理
 
 **目标**：清理破坏性升级后仍残留的旧引用与旧依赖。无生产环境，不设置“稳定一个版本”的等待期；M16.8 通过后执行。

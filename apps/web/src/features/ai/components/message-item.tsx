@@ -5,6 +5,7 @@ import { memo } from "react";
 import type { AnswerNotice } from "../schemas";
 import type { StreamMessage } from "../use-chat-stream";
 import { CitationAnswer } from "./citation-answer";
+import { ProcessArea } from "./process/process-area";
 import { AiAvatar, StreamCaret, ThinkingDots } from "./stream-states";
 
 const ANSWER_NOTICE_TEXT: Record<AnswerNotice, string> = {
@@ -47,6 +48,20 @@ export const MessageItem = memo(function MessageItem({
     >
       <AiAvatar thinking={thinking} />
       <div className="min-w-0 flex-1 space-y-1">
+        {message.process && message.process.items.length > 0 ? (
+          <ProcessArea
+            process={message.process}
+            streaming={Boolean(message.streaming)}
+            durationMs={message.durationMs === undefined ? undefined : message.durationMs}
+            failed={message.outcome === "FAILED"}
+            cancelled={message.outcome === "CANCELLED"}
+          />
+        ) : null}
+        {message.processHiddenNotice ? (
+          <p className="text-xs text-label-secondary" data-testid="process-hidden-notice">
+            {message.processHiddenNotice}
+          </p>
+        ) : null}
         {thinking ? (
           <output
             data-testid="assistant-thinking"

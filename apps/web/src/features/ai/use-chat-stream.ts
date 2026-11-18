@@ -1,6 +1,12 @@
 "use client";
 
 import { type Citation, parseCitations } from "@/lib/ai/citations";
+import {
+  EMPTY_PROCESS,
+  type ProcessResultItem,
+  type ProcessState,
+  applyRunEvent,
+} from "@/lib/ai/process";
 import { runProgress } from "@/lib/ai/run-progress";
 import { streamAiSse, toAiRunErrorMessage } from "@/lib/ai/sse";
 import { type StoreApi, type UseBoundStore, create } from "zustand";
@@ -34,6 +40,12 @@ export type StreamMessage = {
   answerNotices?: AnswerNotice[];
   outcome?: string | null;
   progress?: string;
+  /** 运行过程状态（思考、工具行）；hydrate 时从落库 process 恢复。 */
+  process?: ProcessState;
+  /** 过程区完成后展示的总耗时（毫秒）。 */
+  durationMs?: number;
+  /** 落库过程视图的隐藏提示（撤权后回放时显示）。 */
+  processHiddenNotice?: string;
 };
 
 export type ChatSession = {
@@ -170,6 +182,7 @@ function ensureChatStreamStore(): ChatStreamStore {
 
         let failed = false;
         let finished = false;
+        const startedAtMs = Date.now();
         try {
           await streamAiSse({
             path: args.docId ? "/rag/query/docs/v1" : "/v1/agent/runs",
@@ -194,6 +207,12 @@ function ensureChatStreamStore(): ChatStreamStore {
                 if (!session) return current;
                 const scope =
                   event.type === "run.started" ? runScopeSchema.safeParse(event.data.scope) : null;
+                const targetMessage = session.messages.find(
+                  (message) => message.id === assistantId,
+                );
+                const nextProcess = targetMessage
+                  ? applyRunEvent(targetMessage.process ?? EMPTY_PROCESS, event)
+                  : null;
                 return {
                   sessions: {
                     ...current.sessions,
@@ -212,6 +231,9 @@ function ensureChatStreamStore(): ChatStreamStore {
                         return {
                           ...message,
                           runId: event.runId,
+                          ...(nextProcess && nextProcess !== message.process
+                            ? { process: nextProcess }
+                            : {}),
                           ...(progress ? { progress } : {}),
                           ...(citation
                             ? {
@@ -222,6 +244,9 @@ function ensureChatStreamStore(): ChatStreamStore {
                           ...(event.type === "run.finished" &&
                           typeof event.data.outcome === "string"
                             ? { outcome: event.data.outcome }
+                            : {}),
+                          ...(event.type === "run.finished"
+                            ? { durationMs: Date.now() - startedAtMs }
                             : {}),
                         };
                       }),
@@ -416,6 +441,23 @@ function ensureChatStreamStore(): ChatStreamStore {
                     ...(message.runId ? { runId: message.runId } : {}),
                     citations: parseCitations(message.citations),
                     answerNotices: message.answerNotices ?? [],
+                    ...(() => {
+                      const restored = hydrateProcess(message.process);
+                      if (!restored) return {};
+                      return {
+                        process: restored,
+                        ...(typeof hydrateDurationMs(message.process) === "number"
+                          ? { durationMs: hydrateDurationMs(message.process) }
+                          : {}),
+                        ...(restored.hidden
+                          ? {
+                              processHiddenNotice:
+                                hydrateHiddenNotice(message.process) ??
+                                "部分内容你已无权访问，思考过程已隐藏",
+                            }
+                          : {}),
+                      };
+                    })(),
                     ...(message.outcome ? { outcome: message.outcome } : {}),
                   })),
                 status: "idle",
@@ -497,3 +539,107 @@ export function useChatSession(key: string): ChatSession {
 export function docSessionKey(docId: number): string {
   return `doc${docId}`;
 }
+
+/** 落库过程视图恢复为过程状态（只取可展示行；隐藏时空文本行丢弃）。 */
+function hydrateProcess(raw: unknown): (ProcessState & { hidden?: boolean }) | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const record = raw as Record<string, unknown>;
+  const hidden = record.hidden === true;
+  const items = Array.isArray(record.items) ? (record.items as ProcessItemLike[]) : [];
+  const mapped: ProcessState["items"] = [];
+  for (const entry of items) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const item = entry as Record<string, unknown>;
+    if (item.type === "reasoning" && typeof item.blockId === "string") {
+      const text = typeof item.text === "string" ? item.text : "";
+      if (hidden && !text) continue;
+      mapped.push({
+        type: "reasoning",
+        blockId: item.blockId,
+        text,
+        status:
+          item.status === "interrupted"
+            ? "interrupted"
+            : item.status === "streaming"
+              ? "streaming"
+              : "done",
+        durationMs: typeof item.durationMs === "number" ? item.durationMs : undefined,
+      });
+    } else if (item.type === "note" && typeof item.text === "string") {
+      if (hidden && !item.text) continue;
+      mapped.push({ type: "note", text: item.text });
+    } else if (item.type === "retry") {
+      mapped.push({ type: "retry" });
+    } else if (
+      item.type === "tool" &&
+      typeof item.callId === "string" &&
+      typeof item.name === "string"
+    ) {
+      mapped.push({
+        type: "tool",
+        callId: item.callId,
+        name: item.name,
+        target:
+          typeof item.target === "object" && item.target !== null
+            ? {
+                label: String((item.target as Record<string, unknown>).label ?? ""),
+                resolved: (item.target as Record<string, unknown>).resolved === true,
+              }
+            : null,
+        status: typeof item.status === "string" ? item.status : "SUCCESS",
+        durationMs: typeof item.durationMs === "number" ? item.durationMs : undefined,
+        result:
+          typeof item.result === "object" && item.result !== null
+            ? {
+                count:
+                  typeof (item.result as Record<string, unknown>).count === "number"
+                    ? ((item.result as Record<string, unknown>).count as number)
+                    : 0,
+                items: readResultItems((item.result as Record<string, unknown>).items),
+              }
+            : undefined,
+      });
+    }
+  }
+  if (mapped.length === 0) return null;
+  return {
+    active: true,
+    items: mapped,
+    hidden,
+  };
+}
+
+/** 读取工具结果条目（隐藏复核后仅剩可读条目）。 */
+function readResultItems(value: unknown): ProcessResultItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: ProcessResultItem[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const record = entry as Record<string, unknown>;
+    const item: ProcessResultItem = {};
+    if (typeof record.ref === "string") item.ref = record.ref;
+    if (typeof record.title === "string") item.title = record.title;
+    if (typeof record.kbName === "string") item.kbName = record.kbName;
+    if (typeof record.locator === "object" && record.locator !== null) {
+      item.locator = record.locator as Record<string, unknown>;
+    }
+    items.push(item);
+  }
+  return items;
+}
+
+/** 落库过程视图的隐藏提示文案。 */
+function hydrateHiddenNotice(raw: unknown): string | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const notice = (raw as Record<string, unknown>).hiddenNotice;
+  return typeof notice === "string" ? notice : undefined;
+}
+
+/** 落库过程视图的总耗时（毫秒）。 */
+function hydrateDurationMs(raw: unknown): number | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const durationMs = (raw as Record<string, unknown>).durationMs;
+  return typeof durationMs === "number" ? durationMs : undefined;
+}
+
+type ProcessItemLike = Record<string, unknown>;
