@@ -1,0 +1,136 @@
+package com.anynote.ai.controller;
+
+import com.anynote.ai.model.vo.AgentRunAdminDetailVO;
+import com.anynote.ai.model.vo.AgentRunAdminEventVO;
+import com.anynote.ai.model.vo.AgentRunAdminVO;
+import com.anynote.ai.security.SystemAdminGuard;
+import com.anynote.ai.service.AgentRunAdminService;
+import com.anynote.core.web.model.bo.PageBean;
+import com.anynote.system.api.model.bo.LoginUser;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * 管理端运行轨迹端点单测：管理员鉴权、参数与留痕传递。
+ *
+ * @author 称霸幼儿园
+ */
+@ExtendWith(MockitoExtension.class)
+class AgentRunAdminControllerTest {
+
+    @Mock
+    private AgentRunAdminService agentRunAdminService;
+
+    @Mock
+    private SystemAdminGuard systemAdminGuard;
+
+    @Mock
+    private LoginUser loginUser;
+
+    private MockMvc mockMvc;
+
+    private AgentRunAdminController agentRunAdminControllerInstance() {
+        return new AgentRunAdminController(agentRunAdminService, systemAdminGuard);
+    }
+
+    @BeforeEach
+    void setUp() {
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new AgentRunAdminController(agentRunAdminService, systemAdminGuard))
+                .build();
+    }
+
+    /**
+     * 验证列表端点先做管理员校验并传递筛选参数。
+     */
+    @Test
+    @DisplayName("列表端点校验管理员并传递筛选")
+    void listRunsRequiresAdminAndPassesFilters() throws Exception {
+        when(systemAdminGuard.requireAdmin()).thenReturn(loginUser);
+        PageBean<AgentRunAdminVO> page = new PageBean<>();
+        page.setRows(List.of(AgentRunAdminVO.builder().runId("run-abc").build()));
+        when(agentRunAdminService.listRuns(2, 10, 9L, "run-abc", "ANSWERED", null, null)).thenReturn(page);
+
+        mockMvc.perform(get("/v1/admin/agent-runs")
+                        .param("pageNum", "2")
+                        .param("pageSize", "10")
+                        .param("userId", "9")
+                        .param("runId", "run-abc")
+                        .param("outcome", "ANSWERED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.rows[0].runId").value("run-abc"));
+
+        verify(systemAdminGuard).requireAdmin();
+    }
+
+    /**
+     * 验证详情端点传递运行标识与管理员 id（留痕）。
+     */
+    @Test
+    @DisplayName("详情端点传递运行标识与管理员 id")
+    void getRunPassesAdminIdForAccessLog() throws Exception {
+        when(systemAdminGuard.requireAdmin()).thenReturn(loginUser);
+        when(loginUser.getUserId()).thenReturn(42L);
+        when(agentRunAdminService.getRun("run-1", 42L)).thenReturn(AgentRunAdminDetailVO.builder().build());
+
+        mockMvc.perform(get("/v1/admin/agent-runs/run-1"))
+                .andExpect(status().isOk());
+
+        verify(agentRunAdminService).getRun("run-1", 42L);
+    }
+
+    /**
+     * 验证事件端点限制单页上限并写留痕。
+     */
+    @Test
+    @DisplayName("事件端点收紧 limit 并传递游标")
+    void listEventsBindsLimitAndCursor() throws Exception {
+        when(systemAdminGuard.requireAdmin()).thenReturn(loginUser);
+        when(loginUser.getUserId()).thenReturn(42L);
+        when(agentRunAdminService.listEvents(eq("run-1"), eq(100L), eq(999), eq(42L)))
+                .thenReturn(List.of(AgentRunAdminEventVO.builder().seq(101L).build()));
+
+        mockMvc.perform(get("/v1/admin/agent-runs/run-1/events")
+                        .param("afterSeq", "100")
+                        .param("limit", "999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].seq").value(101));
+
+        verify(agentRunAdminService).listEvents("run-1", 100L, 999, 42L);
+    }
+
+    /**
+     * 验证非管理员被鉴权组件拒绝后不再访问服务。
+     */
+    @Test
+    @DisplayName("鉴权失败时不访问服务")
+    void rejectsWhenNotAdmin() throws Exception {
+        org.mockito.Mockito.doThrow(new com.anynote.core.exception.auth.AuthException(
+                com.anynote.core.web.enums.ResCode.UNAUTHORIZED_ERROR))
+                .when(systemAdminGuard).requireAdmin();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> agentRunAdminControllerInstance().getRun("run-1"))
+                .isInstanceOf(com.anynote.core.exception.auth.AuthException.class);
+
+        verify(agentRunAdminService, never()).getRun(any(), any());
+    }
+}

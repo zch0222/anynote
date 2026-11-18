@@ -62,6 +62,11 @@ public class ChatMessage extends BaseEntity {
     private String outcome;
 
     /**
+     * JSON 格式的过程视图（思考、工具行、过程说明与依赖清单）。
+     */
+    private String process;
+
+    /**
      * Role: 0 for user, 1 for bot.
      */
     private int role;

@@ -104,6 +104,24 @@ public class KnowledgeAccessServiceImpl implements KnowledgeAccessService {
     }
 
     @Override
+    public java.util.List<String> authorizeCombined(LoginUser loginUser, java.util.List<String> refs) {
+        if (refs == null || refs.isEmpty()) {
+            throw new BusinessException(KnowledgeErrorConstants.INVALID_ENTITY, ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+        if (refs.size() > 100) {
+            throw new BusinessException(KnowledgeErrorConstants.TOO_MANY, ResCode.USER_REQUEST_PARAM_ERROR);
+        }
+        java.util.List<String> readable = new java.util.ArrayList<>();
+        for (String combined : refs) {
+            KnowledgeRef ref = KnowledgeRef.parseCombined(combined);
+            KnowledgeSourceDocumentVO metadata = knowledgeEntityService.get(ref, false);
+            if (isReadableDocument(loginUser, ref, metadata)) {
+                readable.add(combined);
+            }
+        }
+        return readable;
+    }
+
     public KnowledgeAuthorizationVO authorize(LoginUser loginUser, KnowledgeAuthorizeDTO request) {
         if (request == null || request.getItems() == null || request.getItems().isEmpty()) {
             throw new BusinessException(KnowledgeErrorConstants.INVALID_ENTITY, ResCode.USER_REQUEST_PARAM_ERROR);

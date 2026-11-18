@@ -5,8 +5,6 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-import java.util.Date;
-
 /**
  * Agent 运行事件与 Trace 映射器。
  *
@@ -16,10 +14,14 @@ import java.util.Date;
 public interface AgentRunEventMapper extends BaseMapper<AgentRunEventPO> {
 
     /**
-     * 删除保留期之前的运行事件与 Trace。
+     * 管理端按运行标识游标分页读取事件（永久保留，不提供按时间删除）。
      *
-     * @param cutoff 保留期边界
-     * @return 删除的行数
+     * @param runId 运行标识
+     * @param afterSeq 起始序号（不含），首页传 0
+     * @param limit 单页条数
+     * @return 事件列表，按 seq 升序
      */
-    int deleteBefore(@Param("cutoff") Date cutoff);
+    java.util.List<AgentRunEventPO> selectRunEvents(@Param("runId") String runId,
+                                                    @Param("afterSeq") long afterSeq,
+                                                    @Param("limit") int limit);
 }

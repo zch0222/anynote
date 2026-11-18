@@ -91,6 +91,9 @@ class RunViewMiddleware(HarnessMiddleware):
         :param block: 思考块
         :param first: 是否为该块首个增量
         """
+        record = self._turn(turn)
+        if record is not None and block not in record.reasoning_blocks:
+            record.reasoning_blocks.append(block)
         block.append(delta, time.monotonic())
         if not run.runtime.reasoning_view_enabled:
             return

@@ -26,6 +26,12 @@ public class RemoteKnowledgeFallbackFactory implements FallbackFactory<RemoteKno
             public ResData<Long> recordChange(KnowledgeChangeRecordDTO request, String fromSource) {
                 return ResUtil.error(ResCode.INNER_NOTE_SERVICE_ERROR);
             }
+
+            @Override
+            public ResData<com.anynote.note.api.model.vo.KnowledgeAuthorizeBatchVO> authorizeBatch(
+                    com.anynote.note.api.model.dto.KnowledgeAuthorizeBatchDTO request) {
+                return ResUtil.error(ResCode.INNER_NOTE_SERVICE_ERROR);
+            }
         };
     }
 }

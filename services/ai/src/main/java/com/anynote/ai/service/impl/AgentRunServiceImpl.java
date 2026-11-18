@@ -21,6 +21,8 @@ import com.anynote.ai.model.vo.AgentRunEventVO;
 import com.anynote.ai.model.vo.AgentRunStatusVO;
 import com.anynote.ai.properties.AiHarnessProperties;
 import com.anynote.ai.run.AiCallContext;
+import com.anynote.ai.run.AgentRunProcessView;
+import com.anynote.ai.run.AgentRunEventWhitelist;
 import com.anynote.ai.run.AiRunLimiter;
 import com.anynote.ai.run.DailyRunLimitService;
 import com.anynote.ai.run.IndexWatermarkClient;
@@ -78,6 +80,8 @@ public class AgentRunServiceImpl implements AgentRunService {
     private static final String CONCURRENCY_LIMIT_MESSAGE = "当前使用人数较多，请稍后再试";
 
     private static final String DAILY_LIMIT_MESSAGE = "今日 AI 问答次数已达上限，请明天再试。";
+
+    private static final int DEFAULT_PROCESS_REASONING_MAX_CHARS = 8000;
 
     private static final Type MAP_TYPE = new TypeToken<Map<String, Object>>() { }.getType();
 
@@ -399,18 +403,27 @@ public class AgentRunServiceImpl implements AgentRunService {
                 ? new LinkedHashMap<>()
                 : new LinkedHashMap<>(event.getData());
         if (event.getType().startsWith("trace.")) {
+            Map<String, Object> traceData = data;
             withDbPermit(() -> {
                 eventMapper.insert(AgentRunEventPO.builder()
                         .runId(event.getRunId())
                         .seq(event.getSeq())
                         .type(event.getType())
-                        .content(gson.toJson(data))
+                        .content(gson.toJson(traceData))
                         .createTime(new Date())
                         .build());
                 return null;
             });
+            if ("trace.dependencies".equals(event.getType())) {
+                state.dependencies.addAll(readStringList(data.get("dependencies")));
+            }
             return;
         }
+        if (!AgentRunEventWhitelist.allowsType(event.getType())) {
+            return;
+        }
+        state.process.accumulate(event.getType(), data);
+        data = AgentRunEventWhitelist.sanitize(event.getType(), data);
         if ("run.started".equals(event.getType())) {
             data.put("conversationId", setup.conversationId());
             data.put("indexWatermark", watermark);
@@ -481,6 +494,7 @@ public class AgentRunServiceImpl implements AgentRunService {
         setup.run().setOutcome(outcome);
         setup.run().setFinishedAt(now);
         setup.run().setDurationMs(Math.max(0L, now.getTime() - setup.run().getStartedAt().getTime()));
+        state.process.view().setDurationMs(setup.run().getDurationMs());
         withDbPermitVoid(() -> {
             runMapper.updateById(setup.run());
             saveAnswer(setup.answerMessage(), state, outcome, now);
@@ -497,6 +511,7 @@ public class AgentRunServiceImpl implements AgentRunService {
         if (state.answer.isEmpty()) {
             state.answer.append(SERVICE_UNAVAILABLE_MESSAGE);
         }
+        state.process.view().setDurationMs(setup.run().getDurationMs());
         withDbPermitVoid(() -> {
             runMapper.updateById(setup.run());
             saveAnswer(setup.answerMessage(), state, "FAILED", now);
@@ -525,6 +540,11 @@ public class AgentRunServiceImpl implements AgentRunService {
         answerMessage.setCitations(gson.toJson(state.citations));
         answerMessage.setAnswerNotices(gson.toJson(state.answerNotices));
         answerMessage.setOutcome(outcome);
+        AgentRunProcessView view = state.process.view();
+        if (view.hasItems()) {
+            view.getDependencies().addAll(state.dependencies);
+            answerMessage.setProcess(gson.toJson(view));
+        }
         answerMessage.setUpdateTime(updatedAt);
         messageMapper.updateById(answerMessage);
     }
@@ -761,6 +781,11 @@ public class AgentRunServiceImpl implements AgentRunService {
         private final StringBuilder answer = new StringBuilder();
 
         private final List<Map<String, Object>> citations = new ArrayList<>();
+
+        private final List<String> dependencies = new ArrayList<>();
+
+        private final AgentRunProcessView.Accumulator process =
+                new AgentRunProcessView.Accumulator(new Gson(), DEFAULT_PROCESS_REASONING_MAX_CHARS);
 
         private List<String> answerNotices = List.of();
 

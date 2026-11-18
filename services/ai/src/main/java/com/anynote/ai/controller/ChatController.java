@@ -52,6 +52,9 @@ public class ChatController {
     private TokenUtil tokenUtil;
 
     @Resource
+    private com.anynote.ai.run.ProcessViewRecheck processViewRecheck;
+
+    @Resource
     private AccessTokenProvider accessTokenProvider;
 
     @Resource
@@ -78,7 +81,28 @@ public class ChatController {
         ChatConversationVO conversation = chatService.getChatConversationById(ChatConversationQueryParam.builder()
                 .conversationId(id)
                 .build());
-        return ResUtil.success(ChatConversationDetailVO.from(conversation, gson));
+        ChatConversationDetailVO detail = ChatConversationDetailVO.from(conversation, gson);
+        recheckProcessViews(conversation, detail);
+        return ResUtil.success(detail);
+    }
+
+    /**
+     * 会话详情返回前按当前权限复核过程视图（T1）。
+     *
+     * @param conversation 内部会话对象
+     * @param detail 待返回的会话详情
+     */
+    private void recheckProcessViews(ChatConversationVO conversation, ChatConversationDetailVO detail) {
+        if (conversation.getMessages() == null || detail.getMessages() == null) {
+            return;
+        }
+        for (int index = 0; index < conversation.getMessages().size(); index++) {
+            com.anynote.ai.model.vo.ChatMessageVO vo = detail.getMessages().get(index);
+            if (vo == null || vo.getProcess() == null) {
+                continue;
+            }
+            vo.setProcess(processViewRecheck.recheck(conversation.getMessages().get(index)));
+        }
     }
 
     @Operation(summary = "更新对话")

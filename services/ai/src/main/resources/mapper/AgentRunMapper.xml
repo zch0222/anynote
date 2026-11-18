@@ -28,4 +28,28 @@
         LIMIT 1
     </select>
 
+    <select id="selectAdminList" resultMap="AgentRunResultMap">
+        SELECT id, run_id, conversation_id, user_id, agent_name, agent_version, model,
+               state, outcome, token_usage, duration_ms, started_at, finished_at
+        FROM a_agent_run
+        <where>
+            <if test="userId != null">
+                AND user_id = #{userId}
+            </if>
+            <if test="runId != null and runId != ''">
+                AND run_id LIKE CONCAT(#{runId}, '%')
+            </if>
+            <if test="outcome != null and outcome != ''">
+                AND outcome = #{outcome}
+            </if>
+            <if test="startedFrom != null">
+                AND started_at &gt;= #{startedFrom}
+            </if>
+            <if test="startedTo != null">
+                AND started_at &lt;= #{startedTo}
+            </if>
+        </where>
+        ORDER BY started_at DESC
+    </select>
+
 </mapper>

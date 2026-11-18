@@ -4,9 +4,21 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.anynote.ai.mapper.AgentRunEventMapper">
 
-    <delete id="deleteBefore">
-        DELETE FROM a_agent_run_event
-        WHERE create_time &lt; #{cutoff}
-    </delete>
+    <resultMap id="AgentRunEventResultMap" type="com.anynote.ai.model.po.AgentRunEventPO">
+        <id property="id" column="id" />
+        <result property="runId" column="run_id" />
+        <result property="seq" column="seq" />
+        <result property="type" column="type" />
+        <result property="content" column="content" />
+        <result property="createTime" column="create_time" />
+    </resultMap>
+
+    <select id="selectRunEvents" resultMap="AgentRunEventResultMap">
+        SELECT id, run_id, seq, type, content, create_time
+        FROM a_agent_run_event
+        WHERE run_id = #{runId} AND seq &gt; #{afterSeq}
+        ORDER BY seq ASC
+        LIMIT #{limit}
+    </select>
 
 </mapper>

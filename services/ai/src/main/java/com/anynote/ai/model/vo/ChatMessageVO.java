@@ -42,6 +42,9 @@ public class ChatMessageVO {
     @Schema(description = "回答标注")
     private List<String> answerNotices;
 
+    @Schema(description = "过程视图（思考、工具行、过程说明；依赖不可读时为空且 hidden 为 true）")
+    private Map<String, Object> process;
+
     private String outcome;
 
     private int role;
@@ -65,6 +68,8 @@ public class ChatMessageVO {
     private static final Type CITATIONS_TYPE = new TypeToken<List<Map<String, Object>>>() { }.getType();
 
     private static final Type ANSWER_NOTICES_TYPE = new TypeToken<List<String>>() { }.getType();
+
+    private static final Type PROCESS_TYPE = new TypeToken<Map<String, Object>>() { }.getType();
 
     /**
      * 将持久化消息转换为接口消息。
@@ -96,6 +101,14 @@ public class ChatMessageVO {
                 // 历史消息的非 JSON 标注按空数组返回。
             }
         }
+        Map<String, Object> process = null;
+        if (message.getProcess() != null && !message.getProcess().isBlank()) {
+            try {
+                process = gson.fromJson(message.getProcess(), PROCESS_TYPE);
+            } catch (RuntimeException ignored) {
+                // 历史消息的非 JSON 过程视图按空返回。
+            }
+        }
         return ChatMessageVO.builder()
                 .id(message.getId())
                 .conversationId(message.getConversationId())
@@ -104,6 +117,7 @@ public class ChatMessageVO {
                 .runId(message.getRunId())
                 .citations(citations)
                 .answerNotices(answerNotices)
+                .process(process)
                 .outcome(message.getOutcome())
                 .role(message.getRole())
                 .type(message.getType())

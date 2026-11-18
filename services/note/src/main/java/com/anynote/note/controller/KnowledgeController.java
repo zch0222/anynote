@@ -9,6 +9,7 @@ import com.anynote.core.web.model.bo.ResData;
 import com.anynote.note.api.model.dto.KnowledgeChangeRecordDTO;
 import com.anynote.note.constant.KnowledgeErrorConstants;
 import com.anynote.note.model.dto.KnowledgeAuthorizeDTO;
+import com.anynote.note.model.dto.KnowledgeAuthorizeBatchDTO;
 import com.anynote.note.model.dto.KnowledgeContentDTO;
 import com.anynote.note.model.dto.KnowledgeDocumentBatchDTO;
 import com.anynote.note.model.dto.KnowledgeExportDTO;
@@ -18,6 +19,7 @@ import com.anynote.note.model.dto.KnowledgeQueryDTO;
 import com.anynote.note.model.dto.KnowledgeScopeDTO;
 import com.anynote.note.model.dto.KnowledgeStatsDTO;
 import com.anynote.note.model.vo.KnowledgeAuthorizationVO;
+import com.anynote.note.model.vo.KnowledgeAuthorizeBatchVO;
 import com.anynote.note.model.vo.KnowledgeChangePageVO;
 import com.anynote.note.model.vo.KnowledgeContentVO;
 import com.anynote.note.model.vo.KnowledgeDocumentBatchVO;
@@ -118,6 +120,23 @@ public class KnowledgeController {
     @PostMapping("/authorize")
     public ResData<KnowledgeAuthorizationVO> authorize(@Valid @RequestBody KnowledgeAuthorizeDTO request) {
         return ResUtil.success(knowledgeAccessService.authorize(tokenUtil.getLoginUser(), request));
+    }
+
+    /**
+     * 按复合实体键批量确认当前用户的可读集合。
+     *
+     * @param request 复合实体键列表（每批最多 100 条）
+     * @return 可读实体键列表
+     */
+    @InnerAuth(isUser = true)
+    @Operation(summary = "按复合键批量确认可读性", description = "供服务间复核使用，返回可读键集合")
+    @PostMapping("/authorize-batch")
+    public ResData<KnowledgeAuthorizeBatchVO> authorizeBatch(
+            @Valid @RequestBody KnowledgeAuthorizeBatchDTO request) {
+        return ResUtil.success(KnowledgeAuthorizeBatchVO.builder()
+                .readable(knowledgeAccessService.authorizeCombined(
+                        tokenUtil.getLoginUser(), request.getRefs()))
+                .build());
     }
 
     /**

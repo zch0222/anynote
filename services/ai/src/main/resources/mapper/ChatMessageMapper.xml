@@ -12,6 +12,7 @@
         <result property="runId" column="run_id" />
         <result property="citations" column="citations" />
         <result property="answerNotices" column="answer_notices" />
+        <result property="process" column="process" />
         <result property="outcome" column="outcome" />
         <result property="role" column="role" />
         <result property="type" column="type" />
@@ -25,7 +26,7 @@
     </resultMap>
 
     <sql id="BaseColumnList">
-        id, conversation_id, order_index, content, run_id, citations, answer_notices, outcome,
+        id, conversation_id, order_index, content, run_id, citations, answer_notices, process, outcome,
         role, type, doc_id, is_delete, create_by, create_time, update_by, update_time, remark
     </sql>
 
