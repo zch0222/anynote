@@ -65,6 +65,12 @@ idna==3.20
     #   yarl
 iniconfig==2.3.1
     # via pytest
+linkify-it-py==2.2.0
+    # via -r requirements/online.in
+markdown-it-py==4.3.0
+    # via -r requirements/online.in
+mdurl==0.1.2
+    # via markdown-it-py
 minio==7.2.15
     # via -r requirements/test.in
 multidict==7.2.1

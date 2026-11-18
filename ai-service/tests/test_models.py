@@ -188,3 +188,46 @@ def test_catalog_rejects_disabled_model_and_unmarked_egress():
     current.providers[0].enabled = False
     with pytest.raises(ModelConfigurationError):
         current.resolve("agent_main", False)
+
+
+def test_logical_model_defaults_to_no_reasoning():
+    """未下发推理配置时逻辑模型默认不解析推理。"""
+    current = snapshot()
+    mapping = current.logical_models["agent_main"]
+    assert mapping.reasoning_format == "none"
+    assert mapping.reasoning_passthrough == "none"
+
+
+def test_logical_model_parses_reasoning_fields_from_camel_case():
+    """快照下发的推理格式与回传方式按 camelCase 解析并可显式配置。"""
+    current = ModelCatalogSnapshot(
+        version="1:1",
+        providers=[],
+        logicalModels={
+            "agent_main": {
+                "provider": "openai",
+                "model": "gpt-test",
+                "reasoningFormat": "think_tag",
+                "reasoningPassthrough": "original",
+            }
+        },
+    )
+    mapping = current.logical_models["agent_main"]
+    assert mapping.reasoning_format == "think_tag"
+    assert mapping.reasoning_passthrough == "original"
+
+
+def test_logical_model_rejects_unknown_reasoning_format():
+    """非法推理格式在校验阶段拒绝，避免静默回落。"""
+    with pytest.raises(Exception):
+        ModelCatalogSnapshot(
+            version="1:1",
+            providers=[],
+            logicalModels={
+                "agent_main": {
+                    "provider": "openai",
+                    "model": "gpt-test",
+                    "reasoningFormat": "auto",
+                }
+            },
+        )

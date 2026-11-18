@@ -3,7 +3,7 @@
 @author 称霸幼儿园
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 from pydantic.alias_generators import to_camel
@@ -46,7 +46,7 @@ class ProviderSnapshot(BaseModel):
 
 
 class LogicalModelMapping(BaseModel):
-    """逻辑名到供应商模型的映射。
+    """逻辑名到供应商模型的映射，唯一来源是 Java 快照（数据库 a_logical_model）。
 
     @author 称霸幼儿园
     """
@@ -55,6 +55,8 @@ class LogicalModelMapping(BaseModel):
     model: str = ""
     enabled: bool | None = None
     dimensions: int | None = None
+    reasoning_format: Literal["none", "reasoning_content", "reasoning", "think_tag"] = "none"
+    reasoning_passthrough: Literal["none", "empty", "original"] = "none"
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
