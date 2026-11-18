@@ -49,4 +49,4 @@ class HistoryCompactor:
                 text.append(chunk.text_delta)
             if chunk.usage:
                 usage = usage.plus(chunk.usage)
-        return ChatMessage(role="user", content=f"[历史摘要]\n{''.join(text)}"), usage
+        return ChatMessage(role="user", content=f"[历史摘要]\n{''.join(text)}", summary=True), usage

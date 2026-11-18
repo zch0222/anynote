@@ -107,7 +107,11 @@ class KnowledgeIndexReader:
             query={"bool": {"must": must, "filter": _readable_filters(filters)}},
             size=size,
             _source=CHUNK_SOURCE,
-            highlight={"fields": {"content": {"fragment_size": 150, "number_of_fragments": 1}}},
+            highlight={
+                "fields": {"content": {"fragment_size": 150, "number_of_fragments": 1}},
+                "pre_tags": [""],
+                "post_tags": [""],
+            },
         )
         return [_hit(item.get("_source") or {}, item.get("highlight")) for item in response["hits"]["hits"]]
 

@@ -182,15 +182,24 @@ class ContextBuilder:
 
     @staticmethod
     def _history_layer(index: int, message: ChatMessage) -> _Layer:
+        content = f"{message.role}: {message.content}"
+        if message.citations:
+            citations = "、".join(
+                f"[{citation.index}] {citation.title or '未命名来源'}" for citation in message.citations
+            )
+            content += (
+                f"\n这条回答里的编号只对当时有效：{citations}。"
+                "本轮只能引用本轮工具结果的 evidenceId。"
+            )
         return _Layer(
             scope="conversation",
             source_type="history",
             source_id=f"history:{index}",
-            content=f"{message.role}: {message.content}",
+            content=content,
             trust_level="USER_INPUT",
             version="1",
             selected_reason="会话历史",
-            transform="SUMMARY" if message.content.startswith("[历史摘要]") else "ORIGINAL",
+            transform="SUMMARY" if message.summary else "ORIGINAL",
         )
 
     @staticmethod

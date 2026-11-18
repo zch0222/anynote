@@ -1,14 +1,13 @@
-"""知识检索 Agent 契约、引用验证与输出过滤测试。
+"""知识检索 Agent 契约、引用验证与回答原文测试。
 
 @author 称霸幼儿园
 """
 
+import pytest
+
 from agents import load_agent
 from agents.knowledge_retrieval.agent import AgentFinishArgs, CitationQuote
-from agents.knowledge_retrieval.response import (
-    filter_external_links_and_images,
-    validate_answer,
-)
+from agents.knowledge_retrieval.response import validate_answer
 from harness.models import EvidenceItem, RunOutcome
 from tools.knowledge import KNOWLEDGE_TOOL_NAMES
 
@@ -100,7 +99,7 @@ def test_answer_validation_requires_existing_evidence_and_exact_quote():
     assert valid.citations[0][1].evidence_id == "E1"
     assert valid.citations[0][2] is None
     assert [issue.code for issue in invalid.issues] == ["INVALID_CITATION", "MISSING_CITATION"]
-    assert invalid.answer == "结论"
+    assert invalid.answer == "结论[2]"
     assert [issue.code for issue in paraphrased.issues] == ["INVALID_CITATION", "MISSING_CITATION"]
 
 
@@ -156,41 +155,48 @@ def test_empty_evidence_after_tool_call_changes_answer_to_not_found():
     assert result.citations == []
 
 
-def test_clarification_signal_keeps_at_most_one_question():
-    """澄清终态最多保留 Agent 生成的一个问题。"""
+def test_answer_preserves_code_links_images_and_question_marks():
+    """普通回答只裁掉首尾空白，不删改代码、链接、图片或问号。"""
+    answer = (
+        "代码：`requests.get(\"https://example.com/api\")` 与 `String?`\n\n"
+        "```html\n<a href=\"https://example.com\"><b>首页</b></a>\n```\n\n"
+        "[外链](https://example.com) ![图片](//example.com/a.png) www.python.org"
+    )
+
     result = validate_answer(
-        AgentFinishArgs(
-            outcome="NEEDS_CLARIFICATION",
-            clarification_question="你指哪门课？哪个学期？",
-        ),
+        AgentFinishArgs(outcome="ANSWERED", answer=f"  {answer}\n"),
         [],
         "默认范围",
     )
 
-    assert result.outcome == RunOutcome.NEEDS_CLARIFICATION
-    assert result.answer == "你指哪门课？"
+    assert result.answer == answer
     assert result.issues == []
 
 
-def test_output_filter_removes_images_and_external_links_only():
-    """输出过滤删除图片和外链，保留内部链接文字与目标。"""
-    result = filter_external_links_and_images(
-        "看图 ![说明](https://example.test/a.png) [外链](https://example.test) "
-        "[笔记](/notes/7) https://example.test/raw <img src='/x.png'>"
+def test_inline_code_subscript_does_not_count_as_citation():
+    """行内代码下标不算引用，有证据时仍报告缺失来源。"""
+    result = validate_answer(
+        AgentFinishArgs(outcome="ANSWERED", answer="取第二个元素用 `arr[1]`。"),
+        [_evidence()],
+        "课程库",
+        tool_calls=1,
     )
 
-    assert result == "看图  外链 [笔记](/notes/7)"
+    assert result.answer == "取第二个元素用 `arr[1]`。"
+    assert result.citations == []
+    assert [issue.code for issue in result.issues] == ["MISSING_CITATION"]
 
 
-def test_output_filter_removes_reference_images_and_html_external_anchors():
-    """过滤引用式图片和 HTML 外链，保留可见文字。"""
-    result = filter_external_links_and_images(
-        "![引用图片][image-ref] <a href='https://example.test'>网页外链</a>"
-    )
+def test_clarification_terminal_contract_is_removed():
+    """终态工具不再接受专用澄清结果或澄清问题字段。"""
+    with pytest.raises(ValueError):
+        AgentFinishArgs.model_validate(
+            {"outcome": "NEEDS_CLARIFICATION", "clarification_question": "你指哪门课？"}
+        )
 
-    assert "引用图片" not in result
-    assert "网页外链" in result
-    assert "https://" not in result
+    schema = AgentFinishArgs.model_json_schema()
+    assert "clarification_question" not in schema["properties"]
+    assert set(schema["properties"]["outcome"]["enum"]) == {"ANSWERED", "NOT_FOUND"}
 
 
 def test_answer_validation_returns_structured_gaps_and_degrades_after_repair():
@@ -218,7 +224,7 @@ def test_answer_validation_returns_structured_gaps_and_degrades_after_repair():
     assert [issue.code for issue in invalid.issues] == ["INVALID_CITATION", "MISSING_CITATION"]
     assert invalid.issues[0].indices == [2]
     assert invalid.issues[0].repairable is True
-    assert degraded.answer == "结论"
+    assert degraded.answer == "结论[2]"
     assert degraded.answer_notices == ["UNSOURCED", "CITATIONS_REMOVED"]
     assert degraded.citations == []
 
@@ -238,7 +244,7 @@ def test_missing_citation_is_delivered_with_notice_after_repair():
 
 
 def test_body_citation_quote_is_optional_and_snippet_uses_search_highlight():
-    """正文引用未附原文时只核对编号，界面片段取去除标签的检索高亮。"""
+    """正文引用未附原文时只核对编号，检索片段保留资料原有标签。"""
     evidence = _evidence().model_copy(
         update={"retrieval": {"highlight": "<em>可核对</em>的原文片段。"}}
     )
@@ -249,7 +255,7 @@ def test_body_citation_quote_is_optional_and_snippet_uses_search_highlight():
     )
 
     assert result.issues == []
-    assert result.citations[0][2] == "可核对的原文片段。"
+    assert result.citations[0][2] == "<em>可核对</em>的原文片段。"
 
 
 def test_answer_without_evidence_distinguishes_conversation_from_tool_fallback():
@@ -273,36 +279,29 @@ def test_answer_without_evidence_distinguishes_conversation_from_tool_fallback()
     assert fallback.answer == "未找到相关内容。已查询范围：默认范围"
 
 
-def test_empty_answer_and_missing_clarification_have_confirmed_fallbacks():
-    """修复后空回答改写为未找到，空澄清问题使用已确认固定问题。"""
+def test_empty_answer_has_confirmed_not_found_fallback():
+    """修复后空回答仍使用既有未找到结果。"""
     empty = validate_answer(
         AgentFinishArgs(outcome="ANSWERED", answer=""),
         [_evidence()],
         "课程库",
         repair_exhausted=True,
     )
-    clarification = validate_answer(
-        AgentFinishArgs(outcome="NEEDS_CLARIFICATION"),
-        [],
-        "默认范围",
-        repair_exhausted=True,
-    )
 
     assert empty.outcome == RunOutcome.NOT_FOUND
     assert empty.answer == "未找到相关内容。已查询范围：课程库"
-    assert clarification.answer == "能具体说明一下要找的内容吗？可以补充关键词或指定知识库"
 
 
-def test_multiple_clarification_questions_are_truncated_without_retry_issue():
-    """多个澄清问题截到第一个后直接交付，不再要求重交。"""
+def test_conversation_without_tools_skips_citation_validation():
+    """无证据且未调用工具时保留编号写法，不报告引用缺口。"""
     result = validate_answer(
-        AgentFinishArgs(
-            outcome="NEEDS_CLARIFICATION",
-            clarification_question="你指哪门课？哪个学期？",
-        ),
+        AgentFinishArgs(outcome="ANSWERED", answer="数组示例 arr[1]，文字编号[2]"),
         [],
         "默认范围",
+        tool_calls=0,
     )
 
-    assert result.answer == "你指哪门课？"
+    assert result.answer == "数组示例 arr[1]，文字编号[2]"
+    assert result.citations == []
     assert result.issues == []
+    assert result.answer_notices == ["NOT_FROM_KNOWLEDGE"]

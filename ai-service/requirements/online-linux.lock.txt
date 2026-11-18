@@ -48,6 +48,12 @@ idna==3.20
     #   httpx
     #   requests
     #   yarl
+linkify-it-py==2.2.0
+    # via -r requirements/online.in
+markdown-it-py==4.3.0
+    # via -r requirements/online.in
+mdurl==0.1.2
+    # via markdown-it-py
 multidict==7.2.1
     # via
     #   aiohttp

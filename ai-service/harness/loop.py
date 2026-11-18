@@ -9,6 +9,7 @@ import time
 from pydantic import ValidationError
 
 from agents.knowledge_retrieval.agent import AgentFinishArgs, finish_tool_definition
+from agents.knowledge_retrieval.citations import scan_answer
 from agents.knowledge_retrieval.response import validate_answer
 from core.errors import BUDGET_EXHAUSTED_MESSAGE, INTERNAL_ERROR_MESSAGE, RUN_CANCELLED_MESSAGE
 from core.logger import get_logger
@@ -193,12 +194,18 @@ class Harness:
                         await self._finish_short_circuit(context, events, machine, chain, decision)
                         return
                     repair_exhausted = context.verification_attempts > 0
+                    citation_scan = (
+                        scan_answer((finish_signal.answer or "").strip())
+                        if finish_signal.outcome == "ANSWERED"
+                        else None
+                    )
                     validated = validate_answer(
                         finish_signal,
                         context.workspace.evidence,
                         context.scope_summary,
                         tool_calls=context.tool_calls,
                         repair_exhausted=repair_exhausted,
+                        citation_scan=citation_scan,
                     )
                     base_report = self._verifier.verify(context)
                     report = VerificationReport(
@@ -213,7 +220,11 @@ class Harness:
                                 )
                                 for issue in validated.issues
                             ),
-                        ]
+                        ],
+                        diagnostics={
+                            **base_report.diagnostics,
+                            **(citation_scan.trace_attributes() if citation_scan else {}),
+                        },
                     )
                     await chain.invoke(Hook.AFTER_VERIFY, context, report)
                     if not report.passed and not repair_exhausted:
@@ -404,9 +415,7 @@ class Harness:
                     f"{available}。在用到对应证据的句子后写 [n]。"
                 )
             elif issue.code == "EMPTY_ANSWER":
-                lines.append("- 过滤后的回答为空，请重新给出回答。")
-            elif issue.code == "MISSING_CLARIFICATION_QUESTION":
-                lines.append("- 需澄清终态没有提供问题，请只提出一个具体的澄清问题。")
+                lines.append("- 回答为空，请重新给出回答。")
             else:
                 lines.append(f"- {issue.detail or issue.code}")
         return "\n".join(lines)

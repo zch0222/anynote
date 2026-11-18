@@ -71,6 +71,7 @@ class TraceMiddleware(HarnessMiddleware):
                     {
                         "passed": report.passed,
                         "issues": [issue.__dict__ for issue in report.issues],
+                        "diagnostics": report.diagnostics,
                     },
                 ),
             )

@@ -4,7 +4,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from harness.models import RunContext
 
@@ -24,6 +24,7 @@ class VerificationReport:
     """一次验证的汇总结果。"""
 
     issues: list[VerificationIssue] = field(default_factory=list)
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:

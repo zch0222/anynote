@@ -10,7 +10,7 @@ from harness.context.builder import ContextBuilder
 from harness.context.policy import EVIDENCE_BEGIN, EVIDENCE_END
 from harness.events import EventBus
 from harness.loop import Harness
-from harness.models import EvidenceItem, RunContext, RunOutcome, RunRequest, RunScope
+from harness.models import ChatMessage, EvidenceItem, RunContext, RunOutcome, RunRequest, RunScope
 from models.catalog import ModelCatalogSnapshot
 from models.scripted import ScriptedModel, ScriptStep
 from retrieval.search import SearchOutcome
@@ -95,6 +95,7 @@ async def _execute(
     knowledge: FakeKnowledgeClient | None = None,
     runtime: HarnessRuntimeSettings | None = None,
     force_finish: bool = False,
+    history=None,
 ):
     """挂载知识工具与首轮中间件并收集运行事件。"""
     knowledge = knowledge or FakeKnowledgeClient()
@@ -110,6 +111,8 @@ async def _execute(
         context_builder=ContextBuilder(model, CharacterCounter()),
     )
     run = _run()
+    if history is not None:
+        run.history = list(history)
     run.runtime = runtime or HarnessRuntimeSettings(prefetch_enabled=True)
     run.force_finish = force_finish
     bus = EventBus(run.run_id)
@@ -474,35 +477,17 @@ async def test_not_found_signal_replaces_model_text_with_fixed_result():
     assert deltas == ["未找到相关内容。已查询范围：默认范围"]
 
 
-async def test_clarification_signal_emits_one_agent_question_as_terminal_result():
-    """结构化澄清终态只向调用方输出一个 Agent 问题。"""
-    model = ScriptedModel(
-        [
-            ScriptStep(
-                [
-                    ModelChunk(text_delta="内部草稿不应展示"),
-                    ModelChunk(
-                        tool_calls=[
-                            ToolCall(
-                                call_id="finish-clarification",
-                                name="agent_finish",
-                                arguments={
-                                    "outcome": "NEEDS_CLARIFICATION",
-                                    "clarification_question": "你指哪门课程？",
-                                },
-                            )
-                        ]
-                    ),
-                ]
-            )
-        ]
-    )
+async def test_plain_clarifying_question_is_an_unmodified_answer():
+    """需要澄清时直接交付普通回答，不使用专用终态。"""
+    question = "你指哪门课程？哪个学期？"
+    model = ScriptedModel([ScriptStep([ModelChunk(text_delta=question)])])
 
     run, _searcher, _calls, events = await _execute(model, [])
     deltas = [event.data["delta"] for event in events if event.type == "text.delta"]
 
-    assert run.outcome == RunOutcome.NEEDS_CLARIFICATION
-    assert deltas == ["你指哪门课程？"]
+    assert run.outcome == RunOutcome.ANSWERED
+    assert run.answer_notices == ["NOT_FROM_KNOWLEDGE"]
+    assert deltas == [question]
 
 
 def test_scope_summary_uses_permission_confirmed_names_and_requested_refs():
@@ -673,8 +658,8 @@ async def test_second_invalid_finish_signal_fails_as_internal():
     assert error.data["category"] == "INTERNAL"
 
 
-async def test_mismatched_quote_is_removed_after_one_repair_and_traced():
-    """对不上的原文修复一次后移除编号，交付正文并记录结构化 Trace。"""
+async def test_mismatched_quote_is_marked_after_one_repair_and_traced():
+    """对不上的原文修复一次后保留原文，添加标注并记录结构化 Trace。"""
     model = ScriptedModel(
         [
             ScriptStep([_finish("quote-bad-1", _tool_arguments("ANSWERED", quote="对不上的原文"))]),
@@ -689,12 +674,53 @@ async def test_mismatched_quote_is_removed_after_one_repair_and_traced():
     assert run.outcome == RunOutcome.ANSWERED
     assert len(calls) == 2
     assert "[1] 附的原文没有出现在证据 E1 里" in calls[1]["messages"][0]["content"]
-    assert _deltas(events) == ["结论"]
+    assert _deltas(events) == ["结论[1]"]
     assert finished.data["answerNotices"] == ["UNSOURCED", "CITATIONS_REMOVED"]
     invalid = verify_traces[-1].data["attributes"]["issues"][0]
     assert invalid["code"] == "INVALID_CITATION"
     assert invalid["indices"] == [1]
     assert invalid["repairable"] is True
+
+
+async def test_history_citation_titles_are_scoped_to_their_original_run():
+    """历史编号附原轮标题和有效范围，本轮证据仍独立校验。"""
+    history = [
+        ChatMessage(
+            role="assistant",
+            content="旧回答[1]",
+            citations=[{"index": 1, "title": "旧笔记"}],
+        )
+    ]
+    model = ScriptedModel([ScriptStep([_finish("current", _tool_arguments("ANSWERED"))])])
+
+    run, _searcher, calls, events = await _execute(model, [_evidence()], history=history)
+    prompt = "\n".join(message["content"] for message in calls[0]["messages"])
+
+    assert "旧回答[1]" in prompt
+    assert "这条回答里的编号只对当时有效：[1] 旧笔记" in prompt
+    assert "本轮只能引用本轮工具结果的 evidenceId" in prompt
+    assert run.outcome == RunOutcome.ANSWERED
+    citation = next(event for event in events if event.type == "citation")
+    assert citation.data["title"] == "课程笔记"
+
+
+async def test_verify_trace_contains_citation_and_external_resource_diagnostics():
+    """验证 Trace 只记录排除候选、外部资源数量与主机名。"""
+    answer = "结论[1] arr[1] [外链](https://example.com) ![外站](//evil.example/a.png)"
+    model = ScriptedModel(
+        [ScriptStep([_finish("diagnostics", _tool_arguments("ANSWERED", answer=answer))])]
+    )
+
+    _run, _searcher, _calls, events = await _execute(model, [_evidence()])
+    trace = next(event for event in events if event.type == "trace.verify")
+    diagnostics = trace.data["attributes"]["diagnostics"]
+
+    assert diagnostics == {
+        "citationCandidatesExcluded": 1,
+        "externalLinks": 1,
+        "externalImages": 1,
+        "externalHosts": ["example.com", "evil.example"],
+    }
 
 
 async def test_force_finish_with_only_tool_calls_fails_and_keeps_last_hint():

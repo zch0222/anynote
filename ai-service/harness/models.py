@@ -32,9 +32,20 @@ class RunState(StrEnum):
 class RunOutcome(StrEnum):
     ANSWERED = "ANSWERED"
     NOT_FOUND = "NOT_FOUND"
-    NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
+
+
+class HistoryCitation(BaseModel):
+    """历史回答在原轮次中使用的引用编号与标题。
+
+    @author 称霸幼儿园
+    """
+
+    index: int = Field(ge=1)
+    title: str | None = None
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 class ChatMessage(BaseModel):
@@ -45,6 +56,8 @@ class ChatMessage(BaseModel):
 
     role: Literal["system", "user", "assistant", "tool"]
     content: str
+    summary: bool = False
+    citations: list[HistoryCitation] = Field(default_factory=list)
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 

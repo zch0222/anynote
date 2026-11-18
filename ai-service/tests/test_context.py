@@ -41,7 +41,21 @@ async def test_history_compaction_uses_fast_model_and_keeps_recent_messages():
     assert model.calls[0]["containsKnowledge"] is True
     assert "历史 9" in result.messages[-2]["content"]
     assert any(item.transform == "SUMMARY" for item in result.manifest.entries)
+    assert run.history[0].summary is True
     assert result.additional_usage.total_tokens == 11
+
+
+def test_history_summary_uses_structured_flag_instead_of_content_prefix():
+    """历史层只按结构化摘要字段设置处理标记。"""
+    prefixed = ContextBuilder._history_layer(
+        0, ChatMessage(role="user", content="[历史摘要]\n用户原文")
+    )
+    generated = ContextBuilder._history_layer(
+        1, ChatMessage(role="user", content="压缩结果", summary=True)
+    )
+
+    assert prefixed.transform == "ORIGINAL"
+    assert generated.transform == "SUMMARY"
 
 
 async def test_large_evidence_uses_workspace_reference_and_untrusted_delimiter():

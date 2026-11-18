@@ -32,13 +32,13 @@ class CitationQuote(BaseModel):
 
 
 class AgentFinishArgs(BaseModel):
-    """未找到、需澄清或附引用原文时使用的机器可读终态信号。
+    """未找到或附引用原文时使用的机器可读终态信号。
 
     @author 称霸幼儿园
     """
 
-    outcome: Literal["ANSWERED", "NOT_FOUND", "NEEDS_CLARIFICATION"] = Field(
-        description="ANSWERED 已作答；NOT_FOUND 换过检索方式仍无相关结果；NEEDS_CLARIFICATION 需要用户先澄清",
+    outcome: Literal["ANSWERED", "NOT_FOUND"] = Field(
+        description="ANSWERED 已作答；NOT_FOUND 换过检索方式仍无相关结果",
     )
     answer: str | None = Field(
         default=None,
@@ -51,12 +51,6 @@ class AgentFinishArgs(BaseModel):
         max_length=50,
         description="answer 里 [n] 对应的证据；正文类引用可选择附逐字原文，附了就会核对，清单、目录、关系类证据可留空",
     )
-    clarification_question: str | None = Field(
-        default=None,
-        max_length=1000,
-        description="outcome 为 NEEDS_CLARIFICATION 时必填：唯一的澄清问题",
-    )
-
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
 
@@ -83,7 +77,7 @@ def finish_tool_definition() -> dict:
         "type": "function",
         "function": {
             "name": "agent_finish",
-            "description": "未找到、需澄清或需要给正文类引用附原文时结束本次运行并提交结果。",
+            "description": "未找到或需要给正文类引用附原文时结束本次运行并提交结果。",
             "parameters": AgentFinishArgs.model_json_schema(),
         },
     }
