@@ -46,6 +46,3 @@ anynote:
       max-concurrent-per-user: 2
       max-concurrent-total: 500
       db-bulkhead: 20
-    models:
-      mapping-version: 1
-      logical: {}
