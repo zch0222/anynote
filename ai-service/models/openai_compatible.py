@@ -31,9 +31,93 @@ class ModelTimeoutError(ModelError):
 class ModelServiceError(ModelError):
     """模型网络或服务端错误。"""
 
-    def __init__(self, retryable: bool):
+    def __init__(self, retryable: bool, had_output: bool = False):
         super().__init__(MODEL_UNAVAILABLE_MESSAGE)
         self.retryable = retryable
+        self.had_output = had_output
+
+
+THINK_OPEN = "<think>"
+THINK_CLOSE = "</think>"
+
+
+class _ThinkTagState:
+    """跨片段剥离正文开头的   think 标签状态机。
+
+    只认本轮回复开头（去掉前导空白后）的开启标签；正文其余位置的标签一律当普通文字。
+    流结束时仍未闭合，整段算思考、本轮没有正文。
+
+    @author 称霸幼儿园
+    """
+
+    _PROBING = "probing"
+    _REASONING = "reasoning"
+    _TEXT = "text"
+
+    def __init__(self):
+        self._phase = self._PROBING
+        self._pending = ""
+
+    @property
+    def active(self) -> bool:
+        """返回是否仍处于思考剥离阶段。"""
+        return self._phase != self._TEXT
+
+    def feed(self, text: str) -> tuple[str | None, str | None]:
+        """喂入一个正文增量。
+
+        :param text: 正文增量
+        :return: （思考增量, 正文增量），任一可为空
+        """
+        if self._phase == self._TEXT:
+            return None, text
+        buffer = self._pending + text
+        if self._phase == self._PROBING:
+            stripped = buffer.lstrip()
+            if not stripped:
+                self._pending = ""
+                return None, None
+            if stripped.startswith(THINK_OPEN):
+                self._phase = self._REASONING
+                self._pending = ""
+                return self.feed(stripped[len(THINK_OPEN):])
+            if len(stripped) < len(THINK_OPEN) and THINK_OPEN.startswith(stripped):
+                # 仍可能是被拆开的开启标签，等下一个片段再判定
+                self._pending = buffer
+                return None, None
+            self._phase = self._TEXT
+            return None, buffer
+        # reasoning 阶段：找闭合标签，支持跨片段半个标签的情况
+        index = buffer.find(THINK_CLOSE)
+        if index >= 0:
+            reasoning = buffer[:index]
+            rest = buffer[index + len(THINK_CLOSE):]
+            self._phase = self._TEXT
+            return reasoning, rest
+        keep = self._split_open_tail(buffer)
+        self._pending = buffer[len(keep):] if keep is not None else ""
+        return keep, None
+
+    def finish(self) -> tuple[str | None, bool]:
+        """流结束时收尾。
+
+        :return: （剩余思考文本, 本轮是否有正文）
+        """
+        if self._phase == self._REASONING:
+            return self._pending, False
+        return None, self._phase == self._TEXT
+
+    @staticmethod
+    def _split_open_tail(buffer: str) -> str | None:
+        """保留可能是半个闭合标签的尾部，其余作为思考输出。
+
+        :param buffer: 未闭合的思考缓冲
+        :return: 可立即输出的思考文本，尾部待定时为 None
+        """
+        for size in range(len(THINK_CLOSE) - 1, 0, -1):
+            if buffer.endswith(THINK_CLOSE[:size]):
+                return buffer[:-size]
+        return buffer
 
 
 class OpenAICompatibleAdapter:
@@ -65,9 +149,13 @@ class OpenAICompatibleAdapter:
         :return: 模型输出异步序列
         """
         provider, model = snapshot.resolve(logical_name, contains_knowledge)
+        mapping = snapshot.logical_models.get(logical_name)
+        reasoning_format = mapping.reasoning_format if mapping else "none"
+        passthrough = mapping.reasoning_passthrough if mapping else "none"
         deadline = time.monotonic() + runtime.total_timeout_s
+        messages = self._apply_passthrough(messages, passthrough, reasoning_format)
         for attempt in range(runtime.model_max_attempts):
-            output_state = {"produced": False}
+            output_state = {"produced": False, "reasoning_only": False}
             try:
                 async for chunk in self._stream_once(
                     provider,
@@ -77,13 +165,50 @@ class OpenAICompatibleAdapter:
                     runtime,
                     deadline,
                     output_state,
+                    reasoning_format,
                 ):
                     yield chunk
                 return
             except ModelError as error:
-                can_retry = error.retryable and not output_state["produced"]
+                body_produced = output_state["produced"] and not output_state["reasoning_only"]
+                can_retry = error.retryable and not body_produced
                 if not can_retry or attempt + 1 >= runtime.model_max_attempts:
                     raise
+                if output_state["produced"]:
+                    yield ModelChunk(reasoning_interrupted=True)
+
+    @staticmethod
+    def _apply_passthrough(
+        messages: list[dict[str, Any]],
+        passthrough: str,
+        reasoning_format: str,
+    ) -> list[dict[str, Any]]:
+        """按逻辑模型配置处理 assistant 消息上的推理回传字段。
+
+        Harness 会把当轮思考文本以 ``reasoning_content`` 键挂在 assistant 工具调用消息上；
+        本方法按回传方式转换或清除该字段。
+
+        :param messages: 编译后的模型输入
+        :param passthrough: 回传方式（none / empty / original）
+        :param reasoning_format: 该模型的推理输出格式
+        :return: 调整后的消息列表
+        """
+        if reasoning_format == "none":
+            return [{k: v for k, v in item.items() if k != "reasoning_content"} for item in messages]
+        field = "reasoning" if reasoning_format == "reasoning" else "reasoning_content"
+        adjusted: list[dict[str, Any]] = []
+        for item in messages:
+            if item.get("role") != "assistant":
+                adjusted.append(item)
+                continue
+            copy = dict(item)
+            carried = copy.pop("reasoning_content", None)
+            if passthrough == "original" and carried:
+                copy[field] = carried
+            elif passthrough == "empty":
+                copy[field] = ""
+            adjusted.append(copy)
+        return adjusted
 
     async def _stream_once(
         self,
@@ -94,6 +219,7 @@ class OpenAICompatibleAdapter:
         runtime: HarnessRuntimeSettings,
         deadline: float,
         output_state: dict[str, bool],
+        reasoning_format: str = "none",
     ) -> AsyncIterator[ModelChunk]:
         body: dict[str, Any] = {
             "model": model,
@@ -113,6 +239,7 @@ class OpenAICompatibleAdapter:
         fragments: dict[int, dict[str, Any]] = {}
         usage: TokenUsage | None = None
         first_produced = False
+        think_state = _ThinkTagState() if reasoning_format == "think_tag" else None
         try:
             async with self._client_factory(timeout=timeout) as client:
                 request = client.build_request(
@@ -159,11 +286,27 @@ class OpenAICompatibleAdapter:
                         chunk = json.loads(payload)
                         if chunk.get("usage"):
                             usage = self._usage(chunk["usage"])
-                        text, has_tool = self._accept_chunk(chunk, fragments)
-                        if text or has_tool:
+                        text, reasoning, has_tool = self._accept_chunk(
+                            chunk, fragments, reasoning_format,
+                        )
+                        if text or reasoning or has_tool:
                             first_produced = True
-                            output_state["produced"] = True
-                        if text:
+                            if not output_state["produced"]:
+                                output_state["produced"] = True
+                                output_state["reasoning_only"] = not (text or has_tool)
+                        if reasoning:
+                            yield ModelChunk(reasoning_delta=reasoning)
+                        if think_state is not None and text:
+                            think_text, plain_text = think_state.feed(text)
+                            if think_text:
+                                if not output_state["produced"]:
+                                    output_state["produced"] = True
+                                    output_state["reasoning_only"] = True
+                                yield ModelChunk(reasoning_delta=think_text)
+                            if plain_text:
+                                output_state["reasoning_only"] = False
+                                yield ModelChunk(text_delta=plain_text)
+                        elif text:
                             yield ModelChunk(text_delta=text)
                 finally:
                     await response.aclose()
@@ -177,6 +320,10 @@ class OpenAICompatibleAdapter:
             raise ModelServiceError(retryable=True) from error
         except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError) as error:
             raise ModelServiceError(retryable=False) from error
+        if think_state is not None and think_state.active:
+            tail, _has_text = think_state.finish()
+            if tail:
+                yield ModelChunk(reasoning_delta=tail)
         calls = []
         for index in sorted(fragments):
             fragment = fragments[index]
@@ -194,6 +341,7 @@ class OpenAICompatibleAdapter:
         yield ModelChunk(
             tool_calls=calls,
             usage=usage or TokenUsage(),
+            reasoning_tokens=usage.reasoning_tokens if usage else None,
             finish=True,
         )
 
@@ -275,14 +423,30 @@ class OpenAICompatibleAdapter:
             ) from error
 
     @staticmethod
-    def _accept_chunk(chunk: dict[str, Any], fragments: dict[int, dict[str, Any]]) -> tuple[str, bool]:
+    def _accept_chunk(
+        chunk: dict[str, Any],
+        fragments: dict[int, dict[str, Any]],
+        reasoning_format: str = "none",
+    ) -> tuple[str, str, bool]:
+        """解析一个增量片段为正文、推理与工具调用碎片。
+
+        :param chunk: SSE 增量对象
+        :param fragments: 工具调用碎片累积
+        :param reasoning_format: 推理输出格式，think_tag 正文标签由状态机处理
+        :return: （正文增量, 推理增量, 是否含工具调用）
+        """
         text_parts = []
+        reasoning_parts = []
         has_tool = False
         for choice in chunk.get("choices", []):
             delta = choice.get("delta", {})
             content = delta.get("content")
             if isinstance(content, str):
                 text_parts.append(content)
+            if reasoning_format in ("reasoning_content", "reasoning"):
+                reasoning = delta.get(reasoning_format)
+                if isinstance(reasoning, str):
+                    reasoning_parts.append(reasoning)
             for call in delta.get("tool_calls") or []:
                 has_tool = True
                 index = call.get("index", 0)
@@ -294,13 +458,15 @@ class OpenAICompatibleAdapter:
                 function = call.get("function", {})
                 fragment["name"] += function.get("name") or ""
                 fragment["arguments"] += function.get("arguments") or ""
-        return "".join(text_parts), has_tool
+        return "".join(text_parts), "".join(reasoning_parts), has_tool
 
     @staticmethod
     def _usage(value: dict[str, Any]) -> TokenUsage:
+        details = value.get("completion_tokens_details") or {}
         return TokenUsage(
             prompt_tokens=value.get("prompt_tokens"),
             completion_tokens=value.get("completion_tokens"),
             total_tokens=value.get("total_tokens"),
+            reasoning_tokens=details.get("reasoning_tokens"),
             known=True,
         )

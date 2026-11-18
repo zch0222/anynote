@@ -10,6 +10,7 @@ import pytest
 
 from core.config import HarnessRuntimeSettings
 from models.catalog import (
+    LogicalModelMapping,
     ModelCatalogSnapshot,
     ModelConfigurationError,
     ProviderSnapshot,
@@ -231,3 +232,237 @@ def test_logical_model_rejects_unknown_reasoning_format():
                 }
             },
         )
+
+
+def reasoning_snapshot(fmt: str, passthrough: str = "none") -> ModelCatalogSnapshot:
+    """构造指定推理配置的快照。
+
+    :param fmt: 推理输出格式
+    :param passthrough: 回传方式
+    :return: 模型目录快照
+    """
+    current = snapshot()
+    current.logical_models["agent_main"] = LogicalModelMapping(
+        provider="openai",
+        model="gpt-test",
+        reasoning_format=fmt,
+        reasoning_passthrough=passthrough,
+    )
+    return current
+
+
+async def collect_reasoning(adapter, snap, runtime=None):
+    """收集一次带推理配置的流式输出。
+
+    :param adapter: 适配器
+    :param snap: 模型目录快照
+    :param runtime: 运行参数
+    :return: 片段列表
+    """
+    return [
+        chunk
+        async for chunk in adapter.stream(
+            "agent_main",
+            snap,
+            [{"role": "user", "content": "测试"}],
+            [],
+            runtime or HarnessRuntimeSettings(),
+            False,
+        )
+    ]
+
+
+async def test_reasoning_content_field_is_parsed():
+    """reasoning_content 字段的推理增量单独输出且计入首输出。"""
+    chunks_data = [
+        '{"choices":[{"delta":{"reasoning_content":"先想想"}}]}',
+        '{"choices":[{"delta":{"reasoning_content":"再想想"}}]}',
+        '{"choices":[{"delta":{"content":"答案"}}]}',
+    ]
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(200, stream=_StreamOnce(sse(*chunks_data)))
+            ),
+            timeout=timeout,
+        )
+    )
+    chunks = await collect_reasoning(adapter, reasoning_snapshot("reasoning_content"))
+    reasoning = "".join(c.reasoning_delta or "" for c in chunks if c.reasoning_delta)
+    text = "".join(c.text_delta or "" for c in chunks if c.text_delta)
+    assert reasoning == "先想想再想想"
+    assert text == "答案"
+
+
+class _StreamOnce(httpx.AsyncByteStream):
+    """单次 SSE 响应流。"""
+
+    def __init__(self, payload: bytes):
+        self._payload = payload
+
+    async def __aiter__(self):
+        yield self._payload
+
+
+async def test_reasoning_field_gateway_format():
+    """reasoning 字段的网关推理输出同样解析。"""
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(
+                    200,
+                    stream=_StreamOnce(
+                        sse(
+                            '{"choices":[{"delta":{"reasoning":"思考"}}]}',
+                            '{"choices":[{"delta":{"content":"回答"}}]}',
+                        )
+                    ),
+                )
+            ),
+            timeout=timeout,
+        )
+    )
+    chunks = await collect_reasoning(adapter, reasoning_snapshot("reasoning"))
+    assert chunks[0].reasoning_delta == "思考"
+    assert any(c.text_delta == "回答" for c in chunks)
+
+
+async def test_think_tag_streaming_split_across_chunks():
+    """正文开头的 think 标签跨片段剥离，其余位置标签保留为正文。"""
+    pieces = [
+        '{"choices":[{"delta":{"content":"  <thi"}}]}',
+        '{"choices":[{"delta":{"content":"nk>第一段思考"}}]}',
+        '{"choices":[{"delta":{"content":"继续思考</th"}}]}',
+        '{"choices":[{"delta":{"content":"ink>正式回答"}}]}',
+    ]
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(200, stream=_StreamOnce(sse(*pieces)))
+            ),
+            timeout=timeout,
+        )
+    )
+    chunks = await collect_reasoning(adapter, reasoning_snapshot("think_tag"))
+    reasoning = "".join(c.reasoning_delta or "" for c in chunks if c.reasoning_delta)
+    text = "".join(c.text_delta or "" for c in chunks if c.text_delta)
+    assert reasoning == "第一段思考继续思考"
+    assert text == "正式回答"
+
+
+async def test_think_tag_unclosed_means_no_body():
+    """流结束仍未闭合时整段算思考、没有正文。"""
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(
+                    200,
+                    stream=_StreamOnce(
+                        sse('{"choices":[{"delta":{"content":"<think>只有思考没有收尾"}}]}')
+                    ),
+                )
+            ),
+            timeout=timeout,
+        )
+    )
+    chunks = await collect_reasoning(adapter, reasoning_snapshot("think_tag"))
+    reasoning = "".join(c.reasoning_delta or "" for c in chunks if c.reasoning_delta)
+    text = "".join(c.text_delta or "" for c in chunks if c.text_delta)
+    assert reasoning == "只有思考没有收尾"
+    assert text == ""
+
+
+async def test_think_tag_mid_body_tag_stays_text():
+    """正文中间出现的 think 标签不会被剥离。"""
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(
+                    200,
+                    stream=_StreamOnce(
+                        sse(
+                            '{"choices":[{"delta":{"content":"回答里提到 <think> 标签"}}]}',
+                        )
+                    ),
+                )
+            ),
+            timeout=timeout,
+        )
+    )
+    chunks = await collect_reasoning(adapter, reasoning_snapshot("think_tag"))
+    text = "".join(c.text_delta or "" for c in chunks if c.text_delta)
+    assert text == "回答里提到 <think> 标签"
+    assert not any(c.reasoning_delta for c in chunks)
+
+
+async def test_none_format_keeps_think_tag_as_text():
+    """未配置推理格式时不剥离任何标签。"""
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(
+                    200,
+                    stream=_StreamOnce(
+                        sse('{"choices":[{"delta":{"content":"<think>原样保留"}}]}')
+                    ),
+                )
+            ),
+            timeout=timeout,
+        )
+    )
+    chunks = await collect_reasoning(adapter, reasoning_snapshot("none"))
+    text = "".join(c.text_delta or "" for c in chunks if c.text_delta)
+    assert text == "<think>原样保留"
+    assert not any(c.reasoning_delta for c in chunks)
+
+
+async def test_reasoning_interrupt_emitted_before_retry():
+    """推理或正文已产出后的可重试失败先发中断片段再重试。"""
+    requests = 0
+
+    class FirstBrokenStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'data: {"choices":[{"delta":{"reasoning_content":"\\u601d\\u8003\\u4e00\\u534a"}}]}\n\n'
+
+            raise httpx.ReadError("broken")
+
+    class SecondStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield sse('{"choices":[{"delta":{"content":"重来后回答"}}]}')
+
+    def handler(_request):
+        nonlocal requests
+        requests += 1
+        stream = FirstBrokenStream() if requests == 1 else SecondStream()
+        return httpx.Response(200, stream=stream)
+
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=timeout)
+    )
+    chunks = await collect_reasoning(
+        adapter, reasoning_snapshot("reasoning_content"), HarnessRuntimeSettings(model_max_attempts=2)
+    )
+    assert requests == 2
+    assert chunks[0].reasoning_delta == "思考一半"
+    assert chunks[1].reasoning_interrupted is True
+    assert any(c.text_delta == "重来后回答" for c in chunks)
+
+
+def test_passthrough_none_strips_assistant_reasoning():
+    """回传方式 none 时 assistant 消息上的思考文本被清除。"""
+    messages = [
+        {"role": "user", "content": "问题"},
+        {"role": "assistant", "content": "", "reasoning_content": "旧思考", "tool_calls": []},
+    ]
+    assert OpenAICompatibleAdapter._apply_passthrough(messages, "none", "reasoning_content") == [
+        {"role": "user", "content": "问题"},
+        {"role": "assistant", "content": "", "tool_calls": []},
+    ]
+
+
+def test_passthrough_empty_and_original_map_fields():
+    """empty 补空字段，original 原样回传并按格式映射字段名。"""
+    messages = [
+        {"role": "assistant", "content": "", "reasoning_content": "旧思考", "tool_calls": []},
+    ]
+  

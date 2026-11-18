@@ -122,6 +122,7 @@ class TokenUsage(BaseModel):
     prompt_tokens: int | None = Field(default=None, ge=0)
     completion_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
     known: bool = False
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
@@ -139,6 +140,7 @@ class TokenUsage(BaseModel):
             prompt_tokens=add(self.prompt_tokens, other.prompt_tokens),
             completion_tokens=add(self.completion_tokens, other.completion_tokens),
             total_tokens=add(self.total_tokens, other.total_tokens),
+            reasoning_tokens=add(self.reasoning_tokens, other.reasoning_tokens),
             known=self.known or other.known,
         )
 
@@ -163,8 +165,11 @@ class ModelChunk(BaseModel):
     """
 
     text_delta: str | None = None
+    reasoning_delta: str | None = None
+    reasoning_interrupted: bool = False
     tool_calls: list[ToolCall] = Field(default_factory=list)
     usage: TokenUsage | None = None
+    reasoning_tokens: int | None = Field(default=None, ge=0)
     finish: bool = False
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
