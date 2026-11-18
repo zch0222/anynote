@@ -1,9 +1,9 @@
 package com.anynote.ai.controller;
 
-import com.anynote.ai.model.dto.EmbeddingModelConfigUpdateDTO;
+import com.anynote.ai.model.dto.LogicalModelConfigUpdateDTO;
 import com.anynote.ai.model.dto.ModelProviderCreateDTO;
 import com.anynote.ai.model.dto.ModelProviderUpdateDTO;
-import com.anynote.ai.model.vo.EmbeddingModelConfigVO;
+import com.anynote.ai.model.vo.LogicalModelConfigVO;
 import com.anynote.ai.model.vo.ModelProviderAdminVO;
 import com.anynote.ai.security.SystemAdminGuard;
 import com.anynote.ai.service.LogicalModelService;
@@ -72,29 +72,35 @@ public class ModelProviderAdminController {
     }
 
     /**
-     * 查询运行时 Embedding 模型绑定配置。
+     * 查询运行时逻辑模型配置。
      *
-     * @return 当前 Embedding 模型配置
+     * @param logicalName 逻辑模型用途名（agent_main、fast、embedding）
+     * @return 当前逻辑模型配置
      */
-    @Operation(summary = "查询 Embedding 模型配置")
-    @GetMapping("/logical/embedding")
-    public ResData<EmbeddingModelConfigVO> getEmbeddingConfig() {
+    @Operation(summary = "查询逻辑模型配置",
+            description = "按逻辑模型用途名查询运行时绑定配置，用途名仅接受 agent_main、fast、embedding")
+    @GetMapping("/logical/{logicalName}")
+    public ResData<LogicalModelConfigVO> getLogicalConfig(
+            @Parameter(description = "逻辑模型用途名") @PathVariable String logicalName) {
         systemAdminGuard.requireAdmin();
-        return ResUtil.success(logicalModelService.getEmbeddingConfig());
+        return ResUtil.success(logicalModelService.getConfig(logicalName));
     }
 
     /**
-     * 更新运行时 Embedding 模型绑定配置。
+     * 更新运行时逻辑模型配置。
      *
+     * @param logicalName 逻辑模型用途名（agent_main、fast、embedding）
      * @param dto 更新请求
-     * @return 更新后的 Embedding 模型配置
+     * @return 更新后的逻辑模型配置
      */
-    @Operation(summary = "更新 Embedding 模型配置")
-    @PutMapping("/logical/embedding")
-    public ResData<EmbeddingModelConfigVO> updateEmbeddingConfig(
-            @Valid @RequestBody EmbeddingModelConfigUpdateDTO dto) {
+    @Operation(summary = "更新逻辑模型配置",
+            description = "按逻辑模型用途名更新运行时绑定配置；进行中的运行继续使用开跑时的配置")
+    @PutMapping("/logical/{logicalName}")
+    public ResData<LogicalModelConfigVO> updateLogicalConfig(
+            @Parameter(description = "逻辑模型用途名") @PathVariable String logicalName,
+            @Valid @RequestBody LogicalModelConfigUpdateDTO dto) {
         LoginUser operator = systemAdminGuard.requireAdmin();
-        return ResUtil.success(logicalModelService.updateEmbeddingConfig(dto, operator.getUserId()));
+        return ResUtil.success(logicalModelService.updateConfig(logicalName, dto, operator.getUserId()));
     }
 
     /**

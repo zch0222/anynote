@@ -1,6 +1,5 @@
 package com.anynote.ai.model.vo;
 
-import com.anynote.ai.properties.ModelCatalogProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,8 +12,8 @@ import java.util.Map;
 /**
  * 模型供应商配置快照，供内部调用方（Python AI 服务）整体拉取。
  *
- * <p>{@link #version} 由「供应商行 version 的最大值、逻辑模型版本与检索参数版本之和」与 Nacos 映射版本拼接而成，格式为
- * {@code ${providersVersion}:${mappingVersion}}；空表时 providersVersion 为 0。
+ * <p>{@link #version} 由「供应商行 version 的最大值、各逻辑模型 version 之和与检索参数版本」相加而成；
+ * 逻辑模型映射唯一来源是数据库 {@code a_logical_model}，不再读取 Nacos。空表时各部分为 0。
  * 调用方可据此比对缓存是否过期。{@link #providers} 中的 {@code apiKey} 已是解密后的明文，
  * 本端点只允许内部签名调用。</p>
  *
@@ -28,9 +27,9 @@ import java.util.Map;
 public class ModelProviderSnapshotVO {
 
     /**
-     * 快照版本号，格式 {@code providersVersion:mappingVersion}。
+     * 快照版本号，各配置来源版本之和。
      */
-    @Schema(description = "快照版本号，格式 providersVersion:mappingVersion，空表时 providersVersion 为 0")
+    @Schema(description = "快照版本号：供应商、逻辑模型与检索参数版本之和，任一变更即变化")
     private String version;
 
     /**
@@ -40,16 +39,65 @@ public class ModelProviderSnapshotVO {
     private List<ProviderVO> providers;
 
     /**
-     * Nacos 中的逻辑模型映射，原样下发。
+     * 数据库 a_logical_model 中的逻辑模型映射，按逻辑名称升序。
      */
-    @Schema(description = "逻辑模型名到供应商模型的映射")
-    private Map<String, ModelCatalogProperties.LogicalModel> logicalModels;
+    @Schema(description = "逻辑模型名到供应商模型的映射，唯一来源是数据库")
+    private Map<String, LogicalModelVO> logicalModels;
 
     /**
      * 知识检索运行参数，运行开始时读取一次。
      */
     @Schema(description = "知识检索运行参数")
     private RetrievalSettingVO retrieval;
+
+    /**
+     * 单个逻辑模型映射。
+     *
+     * @author 称霸幼儿园
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "逻辑模型映射")
+    public static class LogicalModelVO {
+
+        /**
+         * 供应商标识，对应 {@code a_model_provider.provider_key}。
+         */
+        @Schema(description = "供应商标识")
+        private String provider;
+
+        /**
+         * 供应商侧实际模型名。
+         */
+        @Schema(description = "供应商侧模型名")
+        private String model;
+
+        /**
+         * 是否启用。
+         */
+        @Schema(description = "是否启用")
+        private Boolean enabled;
+
+        /**
+         * 期望向量维度（仅 embedding）。
+         */
+        @Schema(description = "期望向量维度（仅 embedding）")
+        private Integer dimensions;
+
+        /**
+         * 推理输出格式。
+         */
+        @Schema(description = "推理输出格式：none / reasoning_content / reasoning / think_tag")
+        private String reasoningFormat;
+
+        /**
+         * 推理回传方式。
+         */
+        @Schema(description = "推理回传方式：none / empty / original")
+        private String reasoningPassthrough;
+    }
 
     /**
      * 单个供应商快照，包含解密后的 API Key。

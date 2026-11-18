@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 运行时逻辑模型配置映射器。
  *
@@ -20,4 +22,11 @@ public interface LogicalModelConfigMapper extends BaseMapper<LogicalModelConfigP
      * @return 配置实体，不存在返回 null
      */
     LogicalModelConfigPO selectByLogicalName(@Param("logicalName") String logicalName);
+
+    /**
+     * 查询全部逻辑模型绑定，按逻辑名称升序。
+     *
+     * @return 配置实体列表
+     */
+    List<LogicalModelConfigPO> selectAll();
 }

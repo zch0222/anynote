@@ -39,7 +39,7 @@ public class ModelProviderController {
      */
     @InnerAuth
     @Operation(summary = "获取模型供应商配置快照",
-            description = "返回快照版本、供应商内部明文凭据与 Nacos 逻辑模型映射")
+            description = "返回快照版本、供应商内部明文凭据与数据库逻辑模型映射")
     @GetMapping("/snapshot")
     public ResData<ModelProviderSnapshotVO> snapshot() {
         return ResUtil.success(modelProviderService.snapshot());

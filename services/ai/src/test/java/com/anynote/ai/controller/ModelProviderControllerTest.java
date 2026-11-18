@@ -1,7 +1,6 @@
 package com.anynote.ai.controller;
 
 import com.anynote.ai.model.vo.ModelProviderSnapshotVO;
-import com.anynote.ai.properties.ModelCatalogProperties;
 import com.anynote.ai.service.ModelProviderService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -52,13 +51,18 @@ class ModelProviderControllerTest {
                 .dataEgressAllowed(true)
                 .enabled(true)
                 .build();
-        ModelCatalogProperties.LogicalModel logicalModel = new ModelCatalogProperties.LogicalModel();
-        logicalModel.setProvider("openai");
-        logicalModel.setModel("gpt-4o");
-        Map<String, ModelCatalogProperties.LogicalModel> logicalModels = new LinkedHashMap<>();
+        ModelProviderSnapshotVO.LogicalModelVO logicalModel =
+                ModelProviderSnapshotVO.LogicalModelVO.builder()
+                        .provider("openai")
+                        .model("gpt-4o")
+                        .enabled(true)
+                        .reasoningFormat("none")
+                        .reasoningPassthrough("none")
+                        .build();
+        Map<String, ModelProviderSnapshotVO.LogicalModelVO> logicalModels = new LinkedHashMap<>();
         logicalModels.put("fast", logicalModel);
         when(modelProviderService.snapshot()).thenReturn(ModelProviderSnapshotVO.builder()
-                .version("3:1")
+                .version("3:0")
                 .providers(List.of(provider))
                 .logicalModels(logicalModels)
                 .build());
@@ -67,6 +71,7 @@ class ModelProviderControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("00000"))
                 .andExpect(jsonPath("$.data.providers[0].apiKey").value("sk-plain"))
-                .andExpect(jsonPath("$.data.logicalModels.fast.model").value("gpt-4o"));
+                .andExpect(jsonPath("$.data.logicalModels.fast.model").value("gpt-4o"))
+                .andExpect(jsonPath("$.data.logicalModels.fast.reasoningFormat").value("none"));
     }
 }

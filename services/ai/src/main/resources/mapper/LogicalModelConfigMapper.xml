@@ -10,6 +10,8 @@
         <result property="providerKey" column="provider_key" />
         <result property="modelName" column="model_name" />
         <result property="dimensions" column="dimensions" />
+        <result property="reasoningFormat" column="reasoning_format" />
+        <result property="reasoningPassthrough" column="reasoning_passthrough" />
         <result property="enabled" column="enabled" />
         <result property="version" column="version" />
         <result property="createBy" column="create_by" />
@@ -18,13 +20,25 @@
         <result property="updateTime" column="update_time" />
     </resultMap>
 
+    <sql id="allColumns">
+        id, logical_name, provider_key, model_name, dimensions,
+        reasoning_format, reasoning_passthrough,
+        enabled, version, create_by, update_by, create_time, update_time
+    </sql>
+
     <select id="selectByLogicalName" resultMap="LogicalModelConfigResultMap">
         SELECT
-            id, logical_name, provider_key, model_name, dimensions,
-            enabled, version, create_by, update_by, create_time, update_time
+            <include refid="allColumns" />
         FROM a_logical_model
         WHERE logical_name = #{logicalName}
         LIMIT 1
+    </select>
+
+    <select id="selectAll" resultMap="LogicalModelConfigResultMap">
+        SELECT
+            <include refid="allColumns" />
+        FROM a_logical_model
+        ORDER BY logical_name ASC
     </select>
 
 </mapper>

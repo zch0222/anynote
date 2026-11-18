@@ -6,10 +6,10 @@ import com.anynote.ai.model.dto.ModelProviderCreateDTO;
 import com.anynote.ai.model.dto.ModelProviderUpdateDTO;
 import com.anynote.ai.model.po.LogicalModelConfigPO;
 import com.anynote.ai.model.po.ModelProviderPO;
+import com.anynote.ai.model.vo.LogicalModelConfigVO;
 import com.anynote.ai.model.vo.ModelProviderAdminVO;
 import com.anynote.ai.model.vo.ModelProviderSnapshotVO;
 import com.anynote.ai.model.vo.RetrievalSettingVO;
-import com.anynote.ai.properties.ModelCatalogProperties;
 import com.anynote.ai.security.credential.AesGcmCipher;
 import com.anynote.ai.service.ModelProviderService;
 import com.anynote.ai.service.RetrievalSettingService;
@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * 模型供应商目录与凭据管理实现。
+ * 模型供应商目录与凭据管理实现；逻辑模型映射唯一来源是 a_logical_model。
  *
  * @author 称霸幼儿园
  */
@@ -41,8 +41,6 @@ public class ModelProviderServiceImpl implements ModelProviderService {
     private static final String DEFAULT_PROTOCOL = "openai_compatible";
 
     private final ModelProviderMapper modelProviderMapper;
-
-    private final ModelCatalogProperties modelCatalogProperties;
 
     private final AesGcmCipher aesGcmCipher;
 
@@ -56,53 +54,46 @@ public class ModelProviderServiceImpl implements ModelProviderService {
      * 构造器注入（兼容既有单测）。
      *
      * @param modelProviderMapper 供应商目录 Mapper
-     * @param modelCatalogProperties Nacos 逻辑模型映射配置
      * @param aesGcmCipher 凭据加解密组件
      * @param gson 模型清单 JSON 序列化器
      */
     public ModelProviderServiceImpl(ModelProviderMapper modelProviderMapper,
-                                    ModelCatalogProperties modelCatalogProperties,
                                     AesGcmCipher aesGcmCipher,
                                     Gson gson) {
-        this(modelProviderMapper, modelCatalogProperties, aesGcmCipher, gson, null, null);
+        this(modelProviderMapper, aesGcmCipher, gson, null, null);
     }
 
     /**
-     * 构造器注入。
+     * 构造器注入（兼容既有单测）。
      *
      * @param modelProviderMapper 供应商目录 Mapper
-     * @param modelCatalogProperties Nacos 逻辑模型映射配置
      * @param aesGcmCipher 凭据加解密组件
      * @param gson 模型清单 JSON 序列化器
      * @param logicalModelConfigMapper 运行时逻辑模型配置 Mapper，可为空
      */
     public ModelProviderServiceImpl(ModelProviderMapper modelProviderMapper,
-                                    ModelCatalogProperties modelCatalogProperties,
                                     AesGcmCipher aesGcmCipher,
                                     Gson gson,
                                     LogicalModelConfigMapper logicalModelConfigMapper) {
-        this(modelProviderMapper, modelCatalogProperties, aesGcmCipher, gson, logicalModelConfigMapper, null);
+        this(modelProviderMapper, aesGcmCipher, gson, logicalModelConfigMapper, null);
     }
 
     /**
      * 构造器注入。
      *
      * @param modelProviderMapper 供应商目录 Mapper
-     * @param modelCatalogProperties Nacos 逻辑模型映射配置
      * @param aesGcmCipher 凭据加解密组件
      * @param gson 模型清单 JSON 序列化器
-     * @param logicalModelConfigMapper 运行时逻辑模型配置 Mapper，可为空
+     * @param logicalModelConfigMapper 运行时逻辑模型配置 Mapper，可为空（为空时快照不含逻辑模型）
      * @param retrievalSettingService 检索参数服务，可为空（为空时下发默认值）
      */
     @Autowired
     public ModelProviderServiceImpl(ModelProviderMapper modelProviderMapper,
-                                    ModelCatalogProperties modelCatalogProperties,
                                     AesGcmCipher aesGcmCipher,
                                     Gson gson,
                                     LogicalModelConfigMapper logicalModelConfigMapper,
                                     RetrievalSettingService retrievalSettingService) {
         this.modelProviderMapper = modelProviderMapper;
-        this.modelCatalogProperties = modelCatalogProperties;
         this.aesGcmCipher = aesGcmCipher;
         this.gson = gson;
         this.logicalModelConfigMapper = logicalModelConfigMapper;
@@ -121,31 +112,13 @@ public class ModelProviderServiceImpl implements ModelProviderService {
         List<ModelProviderSnapshotVO.ProviderVO> providerVOS = providers.stream()
                 .map(this::toProviderVO)
                 .toList();
-        Map<String, ModelCatalogProperties.LogicalModel> logicalModels = new LinkedHashMap<>();
-        if (modelCatalogProperties.getLogical() != null) {
-            modelCatalogProperties.getLogical().forEach((name, item) -> {
-                if (item != null) {
-                    ModelCatalogProperties.LogicalModel copy = new ModelCatalogProperties.LogicalModel();
-                    copy.setProvider(item.getProvider());
-                    copy.setModel(item.getModel());
-                    copy.setEnabled(item.getEnabled());
-                    copy.setDimensions(item.getDimensions());
-                    logicalModels.put(name, copy);
-                }
-            });
-        }
+        Map<String, ModelProviderSnapshotVO.LogicalModelVO> logicalModels = new LinkedHashMap<>();
         long logicalVersion = 0L;
         if (logicalModelConfigMapper != null) {
-            LogicalModelConfigPO embeddingConfig = logicalModelConfigMapper
-                    .selectByLogicalName(LogicalModelServiceImpl.LOGICAL_EMBEDDING);
-            if (embeddingConfig != null) {
-                ModelCatalogProperties.LogicalModel override = new ModelCatalogProperties.LogicalModel();
-                override.setProvider(embeddingConfig.getProviderKey());
-                override.setModel(embeddingConfig.getModelName());
-                override.setEnabled(Integer.valueOf(1).equals(embeddingConfig.getEnabled()));
-                override.setDimensions(embeddingConfig.getDimensions());
-                logicalModels.put(LogicalModelServiceImpl.LOGICAL_EMBEDDING, override);
-                logicalVersion = embeddingConfig.getVersion() == null ? 0L : embeddingConfig.getVersion();
+            List<LogicalModelConfigPO> rows = logicalModelConfigMapper.selectAll();
+            for (LogicalModelConfigPO row : rows) {
+                logicalModels.put(row.getLogicalName(), toLogicalVO(row));
+                logicalVersion += row.getVersion() == null ? 0L : row.getVersion();
             }
         }
         RetrievalSettingVO retrieval = retrievalSettingService == null
@@ -153,10 +126,27 @@ public class ModelProviderServiceImpl implements ModelProviderService {
         long retrievalVersion = retrieval.getVersion() == null ? 0L : retrieval.getVersion();
         long combinedVersion = providersVersion + logicalVersion + retrievalVersion;
         return ModelProviderSnapshotVO.builder()
-                .version(combinedVersion + ":" + modelCatalogProperties.getMappingVersion())
+                .version(combinedVersion + ":" + 0)
                 .providers(providerVOS)
                 .logicalModels(logicalModels)
                 .retrieval(retrieval)
+                .build();
+    }
+
+    /**
+     * 转换逻辑模型行为快照逻辑模型条目。
+     *
+     * @param row 逻辑模型持久化对象
+     * @return 快照逻辑模型条目
+     */
+    private ModelProviderSnapshotVO.LogicalModelVO toLogicalVO(LogicalModelConfigPO row) {
+        return ModelProviderSnapshotVO.LogicalModelVO.builder()
+                .provider(row.getProviderKey() == null ? "" : row.getProviderKey())
+                .model(row.getModelName() == null ? "" : row.getModelName())
+                .enabled(Integer.valueOf(1).equals(row.getEnabled()))
+                .dimensions(row.getDimensions())
+                .reasoningFormat(row.getReasoningFormat() == null ? "none" : row.getReasoningFormat())
+                .reasoningPassthrough(row.getReasoningPassthrough() == null ? "none" : row.getReasoningPassthrough())
                 .build();
     }
 

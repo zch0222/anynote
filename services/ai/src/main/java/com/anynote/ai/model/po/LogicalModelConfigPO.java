@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 import java.util.Date;
 
 /**
- * 运行时逻辑模型绑定持久化实体（如 embedding）。
+ * 运行时逻辑模型绑定持久化实体（agent_main、fast、embedding）。
  *
  * @author 称霸幼儿园
  */
@@ -28,6 +28,8 @@ public class LogicalModelConfigPO {
     private String providerKey;
     private String modelName;
     private Integer dimensions;
+    private String reasoningFormat;
+    private String reasoningPassthrough;
     private Integer enabled;
     private Long version;
     private Long createBy;

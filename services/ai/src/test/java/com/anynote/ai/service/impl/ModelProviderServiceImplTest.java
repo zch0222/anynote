@@ -1,12 +1,11 @@
 package com.anynote.ai.service.impl;
 
+import com.anynote.ai.mapper.LogicalModelConfigMapper;
 import com.anynote.ai.mapper.ModelProviderMapper;
-import com.anynote.ai.model.dto.ModelProviderCreateDTO;
-import com.anynote.ai.model.dto.ModelProviderUpdateDTO;
+import com.anynote.ai.model.po.LogicalModelConfigPO;
 import com.anynote.ai.model.po.ModelProviderPO;
 import com.anynote.ai.model.vo.ModelProviderAdminVO;
 import com.anynote.ai.model.vo.ModelProviderSnapshotVO;
-import com.anynote.ai.properties.ModelCatalogProperties;
 import com.anynote.ai.security.credential.AesGcmCipher;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.core.web.enums.ResCode;
@@ -21,9 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,7 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * {@link ModelProviderServiceImpl} 的快照、CRUD 与凭据边界单测。
+ * {@link ModelProviderServiceImpl} 的快照、CRUD 与凭据边界单测；快照逻辑模型唯一来源是数据库。
  *
  * @author 称霸幼儿园
  */
@@ -49,7 +46,8 @@ class ModelProviderServiceImplTest {
     @Mock
     private ModelProviderMapper modelProviderMapper;
 
-    private ModelCatalogProperties modelCatalogProperties;
+    @Mock
+    private LogicalModelConfigMapper logicalModelConfigMapper;
 
     private AesGcmCipher aesGcmCipher;
 
@@ -57,9 +55,8 @@ class ModelProviderServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        modelCatalogProperties = new ModelCatalogProperties();
         aesGcmCipher = new AesGcmCipher(() -> TEST_MASTER_KEY);
-        modelProviderService = new ModelProviderServiceImpl(modelProviderMapper, modelCatalogProperties,
+        modelProviderService = new ModelProviderServiceImpl(modelProviderMapper,
                 aesGcmCipher, new Gson());
     }
 
@@ -93,40 +90,65 @@ class ModelProviderServiceImplTest {
     }
 
     @Test
-    @DisplayName("空表快照返回 0:0 与空列表")
+    @DisplayName("空表快照返回 0 与空列表")
     void snapshotShouldReturnEmptySnapshotWhenTableEmpty() {
         when(modelProviderMapper.selectAll()).thenReturn(Collections.emptyList());
-        ModelProviderSnapshotVO snapshot = modelProviderService.snapshot();
+        when(logicalModelConfigMapper.selectAll()).thenReturn(Collections.emptyList());
+        ModelProviderSnapshotVO snapshot = withLogicalMapper().snapshot();
         assertEquals("0:0", snapshot.getVersion());
         assertTrue(snapshot.getProviders().isEmpty());
         assertTrue(snapshot.getLogicalModels().isEmpty());
     }
 
+    /**
+     * 快照逻辑模型只来自 a_logical_model 全表，带推理配置且版本按各行 version 求和。
+     */
     @Test
-    @DisplayName("内部快照解密凭据并合并逻辑映射")
-    void snapshotShouldDecryptProvidersAndMergeLogicalModels() {
-        modelCatalogProperties.setMappingVersion(7);
-        ModelCatalogProperties.LogicalModel logicalModel = new ModelCatalogProperties.LogicalModel();
-        logicalModel.setProvider("openai");
-        logicalModel.setModel("gpt-4o");
-        Map<String, ModelCatalogProperties.LogicalModel> logical = new LinkedHashMap<>();
-        logical.put("fast", logicalModel);
-        modelCatalogProperties.setLogical(logical);
+    @DisplayName("快照逻辑模型来自数据库全表并携带推理配置")
+    void snapshotShouldTakeLogicalModelsFromDatabaseOnly() {
         when(modelProviderMapper.selectAll()).thenReturn(List.of(
                 providerPO(1L, "openai", "sk-openai", 3L, 1),
                 providerPO(2L, "backup", "sk-backup", 9L, 0)));
-        ModelProviderSnapshotVO snapshot = modelProviderService.snapshot();
-        assertEquals("9:7", snapshot.getVersion());
+        when(logicalModelConfigMapper.selectAll()).thenReturn(List.of(
+                logicalRow("agent_main", "openai", "gpt-4o", null, "reasoning_content", "empty", 1, 4L),
+                logicalRow("embedding", "openai", "text-embedding-3-small", 1024, "none", "none", 1, 2L)));
+        ModelProviderSnapshotVO snapshot = withLogicalMapper().snapshot();
+
+        assertEquals("15:0", snapshot.getVersion());
         assertEquals("sk-openai", snapshot.getProviders().get(0).getApiKey());
         assertFalse(new Gson().toJson(snapshot).contains("sk-openai"));
         assertFalse(snapshot.getProviders().get(1).getEnabled());
-        assertEquals("gpt-4o", snapshot.getLogicalModels().get("fast").getModel());
+
+        ModelProviderSnapshotVO.LogicalModelVO main = snapshot.getLogicalModels().get("agent_main");
+        assertEquals("openai", main.getProvider());
+        assertEquals("gpt-4o", main.getModel());
+        assertTrue(main.getEnabled());
+        assertEquals("reasoning_content", main.getReasoningFormat());
+        assertEquals("empty", main.getReasoningPassthrough());
+
+        ModelProviderSnapshotVO.LogicalModelVO embedding = snapshot.getLogicalModels().get("embedding");
+        assertEquals(1024, embedding.getDimensions());
+        assertEquals("none", embedding.getReasoningFormat());
+    }
+
+    /**
+     * 未注入逻辑模型 Mapper 时快照不含任何逻辑模型（兼容旧构造器）。
+     */
+    @Test
+    @DisplayName("无逻辑模型 Mapper 时快照逻辑模型为空")
+    void snapshotWithoutLogicalMapperReturnsEmptyLogicalModels() {
+        when(modelProviderMapper.selectAll()).thenReturn(
+                List.of(providerPO(1L, "openai", "sk-plain", 2L, 1)));
+        ModelProviderSnapshotVO snapshot = modelProviderService.snapshot();
+        assertTrue(snapshot.getLogicalModels().isEmpty());
+        assertEquals("2:0", snapshot.getVersion());
     }
 
     @Test
     @DisplayName("管理列表不包含 API Key 或密文")
     void listShouldReturnNonSensitiveViews() {
-        when(modelProviderMapper.selectAll()).thenReturn(List.of(providerPO(1L, "openai", "sk-secret", 3L, 1)));
+        when(modelProviderMapper.selectAll()).thenReturn(
+                List.of(providerPO(1L, "openai", "sk-secret", 3L, 1)));
         List<ModelProviderAdminVO> result = modelProviderService.list();
         String json = new Gson().toJson(result);
         assertEquals("openai", result.get(0).getProviderKey());
@@ -138,7 +160,8 @@ class ModelProviderServiceImplTest {
     @Test
     @DisplayName("新增供应商加密 Key 并记录管理员 ID")
     void createShouldEncryptKeyAndRecordOperator() {
-        ModelProviderCreateDTO dto = new ModelProviderCreateDTO();
+        com.anynote.ai.model.dto.ModelProviderCreateDTO dto =
+                new com.anynote.ai.model.dto.ModelProviderCreateDTO();
         dto.setProviderKey("openai");
         dto.setDisplayName("OpenAI");
         dto.setBaseUrl("https://api.openai.com/v1");
@@ -160,8 +183,10 @@ class ModelProviderServiceImplTest {
     @Test
     @DisplayName("新增重复标识返回已确认错误且不写库")
     void createShouldRejectDuplicateProviderKey() {
-        when(modelProviderMapper.selectByProviderKey("openai")).thenReturn(providerPO(1L, "openai", "old", 1L, 1));
-        ModelProviderCreateDTO dto = new ModelProviderCreateDTO();
+        when(modelProviderMapper.selectByProviderKey("openai"))
+                .thenReturn(providerPO(1L, "openai", "old", 1L, 1));
+        com.anynote.ai.model.dto.ModelProviderCreateDTO dto =
+                new com.anynote.ai.model.dto.ModelProviderCreateDTO();
         dto.setProviderKey("openai");
         dto.setDisplayName("OpenAI");
         dto.setBaseUrl("https://api.openai.com/v1");
@@ -182,7 +207,7 @@ class ModelProviderServiceImplTest {
             updated.set(invocation.getArgument(0));
             return 1;
         });
-        ModelProviderUpdateDTO dto = updateDTO();
+        com.anynote.ai.model.dto.ModelProviderUpdateDTO dto = updateDTO();
         dto.setApiKey(" ");
         ModelProviderAdminVO result = modelProviderService.update("openai", dto, 42L);
         assertNull(updated.get().getApiKeyCipher());
@@ -202,7 +227,7 @@ class ModelProviderServiceImplTest {
             updated.set(invocation.getArgument(0));
             return 1;
         });
-        ModelProviderUpdateDTO dto = updateDTO();
+        com.anynote.ai.model.dto.ModelProviderUpdateDTO dto = updateDTO();
         dto.setApiKey("sk-new");
         modelProviderService.update("openai", dto, 42L);
         assertEquals("sk-new", aesGcmCipher.decrypt(updated.get().getApiKeyCipher()));
@@ -233,54 +258,14 @@ class ModelProviderServiceImplTest {
     @Test
     @DisplayName("供应商请求 toString 不包含 API Key")
     void dtoToStringShouldExcludeApiKey() {
-        ModelProviderCreateDTO create = new ModelProviderCreateDTO();
+        com.anynote.ai.model.dto.ModelProviderCreateDTO create =
+                new com.anynote.ai.model.dto.ModelProviderCreateDTO();
         create.setApiKey("sk-secret");
-        ModelProviderUpdateDTO update = new ModelProviderUpdateDTO();
+        com.anynote.ai.model.dto.ModelProviderUpdateDTO update =
+                new com.anynote.ai.model.dto.ModelProviderUpdateDTO();
         update.setApiKey("sk-secret");
         assertFalse(create.toString().contains("sk-secret"));
         assertFalse(update.toString().contains("sk-secret"));
-    }
-
-    /**
-     * 快照合入数据库运行时 embedding 绑定，并在 providersVersion 大于 logicalVersion 时依然推进版本号。
-     */
-    @Test
-    @DisplayName("快照合并数据库 embedding 配置并保证联合版本号变化")
-    void snapshotMergesRuntimeEmbeddingOverrideAndAdvancesVersion() {
-        com.anynote.ai.mapper.LogicalModelConfigMapper logicalMapper =
-                org.mockito.Mockito.mock(com.anynote.ai.mapper.LogicalModelConfigMapper.class);
-        com.anynote.ai.properties.ModelCatalogProperties catalogProps =
-                new com.anynote.ai.properties.ModelCatalogProperties();
-        catalogProps.setMappingVersion(1);
-        com.anynote.ai.properties.ModelCatalogProperties.LogicalModel nacosEmbedding =
-                new com.anynote.ai.properties.ModelCatalogProperties.LogicalModel();
-        nacosEmbedding.setProvider("old-provider");
-        nacosEmbedding.setModel("old-model");
-        catalogProps.setLogical(java.util.Map.of("embedding", nacosEmbedding));
-
-        ModelProviderServiceImpl snapshotService = new ModelProviderServiceImpl(
-                modelProviderMapper, catalogProps, aesGcmCipher, new com.google.gson.Gson(), logicalMapper);
-
-        when(modelProviderMapper.selectAll()).thenReturn(List.of(
-                providerPO(1L, "openai", "sk-plain", 5L, 1)));
-        when(logicalMapper.selectByLogicalName("embedding")).thenReturn(
-                com.anynote.ai.model.po.LogicalModelConfigPO.builder()
-                        .logicalName("embedding")
-                        .providerKey("openai")
-                        .modelName("text-embedding-3-small")
-                        .dimensions(1024)
-                        .enabled(1)
-                        .version(1L)
-                        .build());
-
-        com.anynote.ai.model.vo.ModelProviderSnapshotVO snapshot = snapshotService.snapshot();
-        assertEquals("6:1", snapshot.getVersion());
-        com.anynote.ai.properties.ModelCatalogProperties.LogicalModel merged =
-                snapshot.getLogicalModels().get("embedding");
-        assertEquals("openai", merged.getProvider());
-        assertEquals("text-embedding-3-small", merged.getModel());
-        assertEquals(true, merged.getEnabled());
-        assertEquals(1024, merged.getDimensions());
     }
 
     /**
@@ -291,13 +276,15 @@ class ModelProviderServiceImplTest {
     void snapshotMergesRetrievalSettings() {
         com.anynote.ai.service.RetrievalSettingService retrievalService =
                 org.mockito.Mockito.mock(com.anynote.ai.service.RetrievalSettingService.class);
-        com.anynote.ai.model.vo.RetrievalSettingVO saved = RetrievalSettingServiceImpl.defaults().toBuilder()
-                .rrfK(30).version(3L).build();
+        com.anynote.ai.model.vo.RetrievalSettingVO saved =
+                RetrievalSettingServiceImpl.defaults().toBuilder()
+                        .rrfK(30).version(3L).build();
         when(retrievalService.get()).thenReturn(saved);
-        ModelProviderServiceImpl snapshotService = new ModelProviderServiceImpl(modelProviderMapper,
-                modelCatalogProperties, aesGcmCipher, new Gson(), null, retrievalService);
-        when(modelProviderMapper.selectAll()).thenReturn(List.of(providerPO(1L, "openai", "sk-plain", 2L, 1)));
+        when(modelProviderMapper.selectAll())
+                .thenReturn(List.of(providerPO(1L, "openai", "sk-plain", 2L, 1)));
 
+        ModelProviderServiceImpl snapshotService = new ModelProviderServiceImpl(modelProviderMapper,
+                aesGcmCipher, new Gson(), null, retrievalService);
         ModelProviderSnapshotVO snapshot = snapshotService.snapshot();
 
         assertEquals("5:0", snapshot.getVersion());
@@ -319,8 +306,30 @@ class ModelProviderServiceImplTest {
         assertFalse(snapshot.getRetrieval().getRerankEnabled());
     }
 
-    private ModelProviderUpdateDTO updateDTO() {
-        ModelProviderUpdateDTO dto = new ModelProviderUpdateDTO();
+    private ModelProviderServiceImpl withLogicalMapper() {
+        return new ModelProviderServiceImpl(modelProviderMapper,
+                aesGcmCipher, new Gson(), logicalModelConfigMapper);
+    }
+
+    private LogicalModelConfigPO logicalRow(String logicalName, String providerKey, String model,
+                                            Integer dimensions, String reasoningFormat,
+                                            String reasoningPassthrough, int enabled, long version) {
+        return LogicalModelConfigPO.builder()
+                .id(1L)
+                .logicalName(logicalName)
+                .providerKey(providerKey)
+                .modelName(model)
+                .dimensions(dimensions)
+                .reasoningFormat(reasoningFormat)
+                .reasoningPassthrough(reasoningPassthrough)
+                .enabled(enabled)
+                .version(version)
+                .build();
+    }
+
+    private com.anynote.ai.model.dto.ModelProviderUpdateDTO updateDTO() {
+        com.anynote.ai.model.dto.ModelProviderUpdateDTO dto =
+                new com.anynote.ai.model.dto.ModelProviderUpdateDTO();
         dto.setDisplayName("OpenAI-新");
         dto.setProtocol("openai_compatible");
         dto.setBaseUrl("https://api.openai.com/v2");

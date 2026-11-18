@@ -146,54 +146,92 @@ class ModelProviderAdminControllerTest {
     }
 
     /**
-     * 运行时 Embedding 逻辑模型查询与更新接口校验系统管理员身份并传递操作人 id。
+     * 运行时逻辑模型查询与更新接口校验系统管理员身份、路径逻辑名并传递操作人 id。
      */
     @Test
-    @DisplayName("Embedding 运行时配置读写接口校验管理员身份并传递操作人")
-    void logicalEmbeddingEndpointsShouldRequireAdminAndPassOperator() throws Exception {
+    @DisplayName("逻辑模型读写接口校验管理员身份、路径逻辑名并传递操作人")
+    void logicalConfigEndpointsShouldRequireAdminAndPassOperator() throws Exception {
         com.anynote.ai.service.LogicalModelService logicalModelService =
                 org.mockito.Mockito.mock(com.anynote.ai.service.LogicalModelService.class);
         org.springframework.test.web.servlet.MockMvc logicalMvc =
                 org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
-                        new ModelProviderAdminController(modelProviderService, systemAdminGuard, logicalModelService))
+                                new ModelProviderAdminController(modelProviderService, systemAdminGuard, logicalModelService))
                         .build();
 
-        com.anynote.ai.model.vo.EmbeddingModelConfigVO vo = com.anynote.ai.model.vo.EmbeddingModelConfigVO.builder()
-                .logicalName("embedding")
+        com.anynote.ai.model.vo.LogicalModelConfigVO vo = com.anynote.ai.model.vo.LogicalModelConfigVO.builder()
+                .logicalName("agent_main")
                 .providerKey("openai")
-                .model("text-embedding-3-small")
-                .dimensions(1536)
+                .model("gpt-4o")
+                .reasoningFormat("reasoning_content")
+                .reasoningPassthrough("empty")
                 .enabled(true)
                 .version(2L)
                 .build();
         when(systemAdminGuard.requireAdmin()).thenReturn(loginUser);
         when(loginUser.getUserId()).thenReturn(42L);
-        when(logicalModelService.getEmbeddingConfig()).thenReturn(vo);
-        when(logicalModelService.updateEmbeddingConfig(
-                any(com.anynote.ai.model.dto.EmbeddingModelConfigUpdateDTO.class), eq(42L)))
+        when(logicalModelService.getConfig("agent_main")).thenReturn(vo);
+        when(logicalModelService.updateConfig(
+                eq("agent_main"), any(com.anynote.ai.model.dto.LogicalModelConfigUpdateDTO.class), eq(42L)))
                 .thenReturn(vo);
 
-        logicalMvc.perform(get("/v1/admin/model-providers/logical/embedding"))
+        logicalMvc.perform(get("/v1/admin/model-providers/logical/agent_main"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.providerKey").value("openai"))
-                .andExpect(jsonPath("$.data.dimensions").value(1536));
+                .andExpect(jsonPath("$.data.reasoningFormat").value("reasoning_content"));
 
-        logicalMvc.perform(put("/v1/admin/model-providers/logical/embedding")
+        logicalMvc.perform(put("/v1/admin/model-providers/logical/agent_main")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "providerKey":"openai",
-                                  "model":"text-embedding-3-small",
-                                  "dimensions":1536,
+                                  "model":"gpt-4o",
+                                  "reasoningFormat":"reasoning_content",
+                                  "reasoningPassthrough":"empty",
                                   "enabled":true
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.model").value("text-embedding-3-small"))
+                .andExpect(jsonPath("$.data.model").value("gpt-4o"))
                 .andExpect(jsonPath("$.data.version").value(2));
 
-        verify(logicalModelService).updateEmbeddingConfig(
-                any(com.anynote.ai.model.dto.EmbeddingModelConfigUpdateDTO.class), eq(42L));
+        verify(logicalModelService).updateConfig(
+                eq("agent_main"), any(com.anynote.ai.model.dto.LogicalModelConfigUpdateDTO.class), eq(42L));
+    }
+
+    /**
+     * 路径逻辑名不在白名单（agent_main、fast、embedding）时校验注解先拒绝非法枚举字段。
+     */
+    @Test
+    @DisplayName("非法推理格式返回参数错误且不调用服务")
+    void logicalConfigShouldRejectInvalidReasoningFormat() throws Exception {
+        com.anynote.ai.service.LogicalModelService logicalModelService =
+                org.mockito.Mockito.mock(com.anynote.ai.service.LogicalModelService.class);
+        org.springframework.test.web.servlet.MockMvc logicalMvc =
+                org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+                                new ModelProviderAdminController(modelProviderService, systemAdminGuard, logicalModelService))
+                        .setValidator(validator())
+                        .build();
+
+        logicalMvc.perform(put("/v1/admin/model-providers/logical/agent_main")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "providerKey":"openai",
+                                  "model":"gpt-4o",
+                                  "reasoningFormat":"auto",
+                                  "enabled":true
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verify(logicalModelService, never()).updateConfig(
+                any(), any(com.anynote.ai.model.dto.LogicalModelConfigUpdateDTO.class), any());
+    }
+
+    private LocalValidatorFactoryBean validator() throws Exception {
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        return validator;
     }
 
     private ModelProviderAdminVO providerVO() {
