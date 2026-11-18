@@ -1,5 +1,7 @@
 package com.anynote.ai.service.impl;
 
+import com.anynote.ai.api.enums.ChatConversationType;
+import com.anynote.ai.api.enums.ChatRole;
 import com.anynote.ai.api.model.po.ChatConversation;
 import com.anynote.ai.api.model.po.ChatMessage;
 import com.anynote.ai.harness.HarnessClient;
@@ -332,6 +334,36 @@ class AgentRunServiceImplTest {
         verify(eventMapper).insert(any(AgentRunEventPO.class));
         verify(messageMapper).updateById(org.mockito.ArgumentMatchers.argThat((ChatMessage message) ->
                 "答案[1]".equals(message.getContent()) && "ANSWERED".equals(message.getOutcome())));
+    }
+
+    /**
+     * 历史回答的引用编号与标题随消息发送给 Harness。
+     */
+    @Test
+    void sendsHistoricalCitationsToHarness() {
+        stubSuccessfulRun();
+        when(conversationService.getById(42L)).thenReturn(ChatConversation.builder()
+                .id(42L)
+                .createBy(9L)
+                .type(ChatConversationType.KNOWLEDGE_RETRIEVAL.getValue())
+                .build());
+        when(messageMapper.selectConversationMessages(42L)).thenReturn(List.of(ChatMessage.builder()
+                .orderIndex(0)
+                .content("旧回答[1]")
+                .role(ChatRole.ASSISTANT.getValue())
+                .type(ChatConversationType.KNOWLEDGE_RETRIEVAL.getValue())
+                .citations("[{\"index\":1,\"title\":\"旧笔记\"}]")
+                .build()));
+
+        service.createRun(AgentRunRequestDTO.builder().conversationId(42L).input("新问题").build(), context());
+
+        org.mockito.ArgumentCaptor<HarnessRunRequestDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(HarnessRunRequestDTO.class);
+        verify(harnessClient).streamAgentRun(any(), captor.capture(), any());
+        HarnessRunRequestDTO.Message history = captor.getValue().getHistory().get(0);
+        assertThat(history.getCitations()).hasSize(1);
+        assertThat(history.getCitations().get(0).getIndex()).isEqualTo(1);
+        assertThat(history.getCitations().get(0).getTitle()).isEqualTo("旧笔记");
     }
 
     /**

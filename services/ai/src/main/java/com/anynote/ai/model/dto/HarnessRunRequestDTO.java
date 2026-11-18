@@ -49,5 +49,23 @@ public class HarnessRunRequestDTO {
         private String role;
 
         private String content;
+
+        private List<Citation> citations;
+
+        /**
+         * 历史回答在原轮次中的引用。
+         *
+         * @author 称霸幼儿园
+         */
+        @Data
+        @Builder
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class Citation {
+
+            private Integer index;
+
+            private String title;
+        }
     }
 }

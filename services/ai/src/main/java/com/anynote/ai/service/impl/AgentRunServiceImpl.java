@@ -643,9 +643,40 @@ public class AgentRunServiceImpl implements AgentRunService {
             history.add(HarnessRunRequestDTO.Message.builder()
                     .role(role)
                     .content(message.getContent())
+                    .citations(toHarnessCitations(message))
                     .build());
         }
         return history;
+    }
+
+    /**
+     * 将持久化引用转换为 Harness 历史引用。
+     *
+     * @param message 历史消息
+     * @return 正整数编号及其来源标题
+     */
+    private List<HarnessRunRequestDTO.Message.Citation> toHarnessCitations(ChatMessage message) {
+        List<HarnessRunRequestDTO.Message.Citation> citations = new ArrayList<>();
+        try {
+            for (Map<String, Object> item : readCitations(message)) {
+                Object rawIndex = item.get("index");
+                if (!(rawIndex instanceof Number)) {
+                    continue;
+                }
+                int index = ((Number) rawIndex).intValue();
+                if (index <= 0) {
+                    continue;
+                }
+                Object title = item.get("title");
+                citations.add(HarnessRunRequestDTO.Message.Citation.builder()
+                        .index(index)
+                        .title(title == null ? null : String.valueOf(title))
+                        .build());
+            }
+            return citations;
+        } catch (RuntimeException ignored) {
+            return List.of();
+        }
     }
 
     private List<Map<String, Object>> readCitations(ChatMessage answer) {
