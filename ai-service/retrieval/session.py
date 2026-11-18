@@ -271,6 +271,7 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
     def __init__(self, store: RetrievalSessionStore, prefetch_tool: ToolSpec | None = None):
         self._store = store
         self._prefetch_tool = prefetch_tool
+        self._logger = get_logger(__name__)
 
     async def handle(self, context: MiddlewareContext) -> MiddlewareDecision:
         """准备权限范围、预取首轮证据并在运行结束时释放会话。
@@ -286,6 +287,7 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
 
         if context.hook == Hook.BEFORE_RUN:
             session = self._store.for_run(run)
+            await self._recheck_history(run, session)
             try:
                 scope = await session.scope()
             except Exception:
@@ -304,6 +306,64 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
         if context.hook == Hook.AFTER_RUN:
             self._store.release(context.run.run_id)
         return MiddlewareDecision()
+
+    async def _recheck_history(self, run: RunContext, session: RetrievalSession) -> None:
+        """开跑前按当前权限复核历史回答引用的条目（T2）。
+
+        引用了不可读条目的历史回答整条不进上下文；用户消息保留。
+        note 不可用时 fail-closed：全部历史不进上下文。
+
+        :param run: 当前运行
+        :param session: 检索会话
+        """
+        history = list(run.request.history)
+        if not history:
+            return
+        assistant_refs: dict[int, list[tuple[str, str | None]]] = {}
+        for position, message in enumerate(history):
+            if message.role != "assistant":
+                continue
+            refs = [
+                (citation.ref, citation.subtype)
+                for citation in message.citations
+                if citation.ref
+            ]
+            if refs:
+                assistant_refs[position] = refs
+        if not assistant_refs and not any(m.role == "assistant" for m in history):
+            return
+        unique: list[tuple[str, str | None]] = []
+        seen: set[tuple[str, str | None]] = set()
+        for refs in assistant_refs.values():
+            for ref in refs:
+                if ref not in seen:
+                    seen.add(ref)
+                    unique.append(ref)
+        try:
+            readable = await session.authorize(unique)
+        except (FatalActionError, InternalServiceError, ToolExecutionError) as error:
+            self._logger.warning(
+                "历史权限复核不可用，按 fail-closed 舍弃历史 runId=%s type=%s",
+                run.run_id,
+                type(error).__name__,
+            )
+            run.request.history = [m for m in history if m.role != "assistant"]
+            run.history = list(run.request.history)
+            return
+        kept: list[ChatMessage] = []
+        for position, message in enumerate(history):
+            if message.role == "assistant":
+                refs = assistant_refs.get(position)
+                if refs and any(ref not in readable for ref in refs):
+                    self._logger.info(
+                        "历史回答引用已不可读，整条不进上下文 runId=%s position=%d",
+                        run.run_id,
+                        position,
+                    )
+                    continue
+            kept.append(message)
+        run.request.history = kept
+        run.history = list(kept)
 
     async def _prefetch(self, context: MiddlewareContext) -> None:
         """以原始问题执行一次检索并写入证据工作区。

@@ -29,6 +29,7 @@ import com.anynote.system.api.model.bo.LoginUser;
 import com.anynote.core.exception.BusinessException;
 import com.google.gson.Gson;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -137,6 +138,47 @@ class AgentRunServiceImplTest {
                 return emitterOverride == null ? super.newEmitter() : emitterOverride;
             }
         };
+    }
+
+    /**
+     * 历史引用随运行请求下发基础引用与附属类型，供 Python 开跑前复核。
+     */
+    @Test
+    @DisplayName("历史引用下发 ref 与 subtype")
+    void harnessHistoryCarriesRefAndSubtype() {
+        ChatMessage message = new ChatMessage();
+        message.setRole(1);
+        message.setContent("旧回答");
+        message.setCitations("[" +
+                "{\"index\":1,\"sourceId\":\"note:12\",\"title\":\"可读笔记\"}," +
+                "{\"index\":2,\"sourceId\":\"mooc_item:5#transcript\",\"title\":\"字幕\"}," +
+                "{\"index\":0,\"sourceId\":\"ignored\"}," +
+                "{\"title\":\"无编号\"}" +
+                "]");
+        java.lang.reflect.Method method;
+        try {
+            method = AgentRunServiceImpl.class.getDeclaredMethod("toHarnessCitations", ChatMessage.class);
+        } catch (NoSuchMethodException error) {
+            throw new IllegalStateException(error);
+        }
+        method.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.List<HarnessRunRequestDTO.Message.Citation> citations =
+                (java.util.List<HarnessRunRequestDTO.Message.Citation>) invokePrivate(method, message);
+
+        assertThat(citations).hasSize(2);
+        assertThat(citations.get(0).getRef()).isEqualTo("note:12");
+        assertThat(citations.get(0).getSubtype()).isNull();
+        assertThat(citations.get(1).getRef()).isEqualTo("mooc_item:5");
+        assertThat(citations.get(1).getSubtype()).isEqualTo("transcript");
+    }
+
+    private Object invokePrivate(java.lang.reflect.Method method, Object... args) {
+        try {
+            return method.invoke(service, args);
+        } catch (ReflectiveOperationException error) {
+            throw new IllegalStateException(error);
+        }
     }
 
     /**

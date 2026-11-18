@@ -19,6 +19,7 @@ from retrieval.models import NOT_FOUND_MESSAGE, SEARCH_UNAVAILABLE_MESSAGE
 from retrieval.session import RetrievalSession
 from retrieval.settings import RetrievalSettings
 from tests.knowledge_fakes import FakeIndexReader, FakeKnowledgeClient, snapshot
+from tests.conftest import make_run
 
 
 def _session(client: FakeKnowledgeClient, scope: RunScope | None = None,
@@ -159,3 +160,88 @@ async def test_knowledge_client_user_endpoints_send_token_and_parse():
     assert all(token == "tok" for _path, token, _body in seen)
     assert seen[0][2] == {"knowledgeBaseIds": None, "refs": None}
     assert seen[2][2] == {"knowledgeBaseIds": [1]}
+
+
+async def test_history_recheck_drops_unreadable_answers():
+    """引用不可读条目的历史回答整条不进上下文，用户消息保留。"""
+    from harness.middleware import Hook, MiddlewareContext
+    from harness.models import ChatMessage, HistoryCitation
+    from retrieval.session import RetrievalSessionMiddleware, RetrievalSessionStore
+
+    client = FakeKnowledgeClient()
+    client.allow("note:12")
+    store = RetrievalSessionStore(client, None)
+    middleware = RetrievalSessionMiddleware(store)
+    run = make_run(history=[
+        ChatMessage(role="user", content="第一个问题"),
+        ChatMessage(role="assistant", content="回答 A", citations=[
+            HistoryCitation(index=1, title="可读笔记", ref="note:12"),
+        ]),
+        ChatMessage(role="user", content="第二个问题"),
+        ChatMessage(role="assistant", content="回答 B", citations=[
+            HistoryCitation(index=1, title="失权笔记", ref="note:34"),
+        ]),
+        ChatMessage(role="user", content="第三个问题"),
+    ])
+    run.agent = type(run.agent)(**{**run.agent.model_dump(), "name": "knowledge-retrieval"})
+    context = MiddlewareContext(run=run, hook=Hook.BEFORE_RUN)
+    await middleware.handle(context)
+
+    roles = [(m.role, m.content) for m in run.history]
+    assert ("assistant", "回答 A") in roles
+    assert ("assistant", "回答 B") not in roles
+    assert sum(1 for r, _ in roles if r == "user") == 3
+    authorize_calls = [c for c in client.calls if c[0] == "authorize"]
+    assert authorize_calls and {ref for (ref, _s) in authorize_calls[0][1]} == {"note:12", "note:34"}
+
+
+async def test_history_recheck_fail_closed_when_note_unavailable():
+    """note 不可用时全部历史不进上下文（fail-closed），用户问题保留。"""
+    from harness.middleware import Hook, MiddlewareContext
+    from harness.models import ChatMessage, HistoryCitation
+    from retrieval.session import RetrievalSessionMiddleware, RetrievalSessionStore
+
+    client = FakeKnowledgeClient()
+    store = RetrievalSessionStore(client, None)
+    middleware = RetrievalSessionMiddleware(store)
+    run = make_run(history=[
+        ChatMessage(role="user", content="问题"),
+        ChatMessage(role="assistant", content="旧回答", citations=[
+            HistoryCitation(index=1, title="标题", ref="note:12"),
+        ]),
+    ])
+    run.agent = type(run.agent)(**{**run.agent.model_dump(), "name": "knowledge-retrieval"})
+    context = MiddlewareContext(run=run, hook=Hook.BEFORE_RUN)
+    # 复核失败 fail-closed 只舍弃历史；error 只影响 authorize，随后 scope 正常
+    original_authorize = client.authorize
+
+    async def failing_authorize(access_token, items):
+        raise InternalServiceError("anynote-note", "boom", "A0500")
+
+    client.authorize = failing_authorize
+    try:
+        await middleware.handle(context)
+    finally:
+        client.authorize = original_authorize
+
+    assert [(m.role, m.content) for m in run.history] == [("user", "问题")]
+
+
+async def test_history_without_citations_unchanged_and_no_authorize_call():
+    """无引用历史不触发复核，也不改变内容。"""
+    from harness.middleware import Hook, MiddlewareContext
+    from harness.models import ChatMessage
+    from retrieval.session import RetrievalSessionMiddleware, RetrievalSessionStore
+
+    client = FakeKnowledgeClient()
+    store = RetrievalSessionStore(client, None)
+    middleware = RetrievalSessionMiddleware(store)
+    run = make_run(history=[
+        ChatMessage(role="user", content="问题"),
+        ChatMessage(role="assistant", content="没引用的回答"),
+    ])
+    context = MiddlewareContext(run=run, hook=Hook.BEFORE_RUN)
+    await middleware.handle(context)
+
+    assert len(run.history) == 2
+    assert not [c for c in client.calls if c[0] == "authorize"]

@@ -37,13 +37,15 @@ class RunOutcome(StrEnum):
 
 
 class HistoryCitation(BaseModel):
-    """历史回答在原轮次中使用的引用编号与标题。
+    """历史回答在原轮次中使用的引用编号、标题与来源标识。
 
     @author 称霸幼儿园
     """
 
     index: int = Field(ge=1)
     title: str | None = None
+    ref: str | None = None
+    subtype: str | None = None
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 

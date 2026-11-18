@@ -668,15 +668,35 @@ public class AgentRunServiceImpl implements AgentRunService {
                     continue;
                 }
                 Object title = item.get("title");
+                String[] refParts = splitSourceId(item.get("sourceId"));
                 citations.add(HarnessRunRequestDTO.Message.Citation.builder()
                         .index(index)
                         .title(title == null ? null : String.valueOf(title))
+                        .ref(refParts[0])
+                        .subtype(refParts[1])
                         .build());
             }
             return citations;
         } catch (RuntimeException ignored) {
             return List.of();
         }
+    }
+
+    /**
+     * 把落库引用的 sourceId 拆为基础引用与附属类型。
+     *
+     * @param sourceId 实体键，如 note:12 或 mooc_item:5#transcript
+     * @return 首元素为 ref，次元素为 subtype（可空）
+     */
+    private String[] splitSourceId(Object sourceId) {
+        if (!(sourceId instanceof String value) || value.isBlank()) {
+            return new String[]{null, null};
+        }
+        int hash = value.indexOf('#');
+        if (hash < 0) {
+            return new String[]{value, null};
+        }
+        return new String[]{value.substring(0, hash), value.substring(hash + 1)};
     }
 
     private List<Map<String, Object>> readCitations(ChatMessage answer) {

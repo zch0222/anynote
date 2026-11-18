@@ -66,6 +66,18 @@ public class HarnessRunRequestDTO {
             private Integer index;
 
             private String title;
+
+            /**
+             * 引用实体的基础引用，如 note:12；Python 用它在开跑前复核可读性。
+             */
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            private String ref;
+
+            /**
+             * 慕课条目附属类型（transcript / summary）。
+             */
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            private String subtype;
         }
     }
 }
