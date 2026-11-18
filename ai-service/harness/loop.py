@@ -112,7 +112,7 @@ class Harness:
                 *self._custom_middlewares,
                 NoProgressMiddleware(),
                 RunViewMiddlewareShared(self._view),
-                TraceMiddleware(events),
+                TraceMiddleware(events, view=self._view),
             ],
             events=events,
         )
@@ -568,6 +568,11 @@ class Harness:
             await self._finish(context, events)
 
     async def _finish(self, context: RunContext, events: EventBus) -> None:
+        if self._view is not None:
+            await events.emit(
+                "trace.dependencies",
+                {"dependencies": self._view.dependencies()},
+            )
         await events.emit(
             "run.finished",
             {

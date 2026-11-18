@@ -405,4 +405,5 @@ class ContextBuilder:
             token_count=self._counter.count(content),
             transform=layer.transform,
             content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+            content=content,
         )

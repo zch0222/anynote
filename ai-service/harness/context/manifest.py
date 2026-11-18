@@ -23,6 +23,7 @@ class ManifestEntry(BaseModel):
     token_count: int
     transform: str
     content_hash: str
+    content: str | None = None
 
     model_config = ConfigDict(
         alias_generator=to_camel,
