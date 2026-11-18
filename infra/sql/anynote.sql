@@ -78,6 +78,7 @@ CREATE TABLE `a_chat_message` (
   `run_id` varchar(64) DEFAULT NULL COMMENT '关联的 Agent 运行标识',
   `citations` json DEFAULT NULL COMMENT '结构化引用',
   `answer_notices` json DEFAULT NULL COMMENT '回答标注',
+  `process` json DEFAULT NULL COMMENT '过程视图（思考、工具行、过程说明，读取时按当前权限复核）',
   `outcome` varchar(32) DEFAULT NULL COMMENT 'Agent 运行结果类型',
   `role` tinyint(1) NOT NULL COMMENT '角色: 0.用户 1.bot',
   `type` tinyint(1) NOT NULL COMMENT '0.文档rag',
@@ -1160,6 +1161,8 @@ CREATE TABLE IF NOT EXISTS `a_logical_model` (
   `provider_key` varchar(64)     NULL DEFAULT NULL COMMENT '关联 a_model_provider.provider_key',
   `model_name`   varchar(128)    NULL DEFAULT NULL COMMENT '供应商侧模型名',
   `dimensions`   int             NULL DEFAULT NULL COMMENT '期望向量维度（1..2048），为空时自动探测',
+  `reasoning_format` varchar(32) NOT NULL DEFAULT 'none' COMMENT '推理输出格式：none / reasoning_content / reasoning / think_tag',
+  `reasoning_passthrough` varchar(32) NOT NULL DEFAULT 'none' COMMENT '同轮后续请求的推理回传方式：none 不回传 / empty 空字段 / original 原样回传',
   `enabled`      tinyint         NOT NULL DEFAULT 0 COMMENT '是否启用（0 停用 1 启用）',
   `version`      bigint          NOT NULL DEFAULT 1 COMMENT '版本号，每次更新 +1',
   `create_by`    bigint unsigned NOT NULL DEFAULT 0 COMMENT '创建者',
@@ -1243,10 +1246,26 @@ CREATE TABLE IF NOT EXISTS `a_agent_run_event` (
   `run_id` varchar(64) NOT NULL COMMENT '运行标识',
   `seq` bigint unsigned NOT NULL COMMENT '运行内事件序号',
   `type` varchar(64) NOT NULL COMMENT '事件类型',
-  `content` json NOT NULL COMMENT '事件或 Trace 元数据，不含回答正文与引用原文',
+  `content` json NOT NULL COMMENT '事件或 Trace 数据；开关开启后含回答草稿与工具参数、原始结果',
   `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '记录时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_agent_run_event_seq` (`run_id`, `seq`),
   KEY `idx_agent_run_event_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='AI Agent 运行事件与 Trace（保留 30 天）';
+  COMMENT='AI Agent 运行事件与 Trace（永久保留）';
+
+--
+-- 2026-11-18 Agent 运行 Trace 管理端访问留痕（M17，永久保留）
+-- 建表语句已同步到 infra/sql/migrations/2026-11-18-agent-trace-view.sql；本段可重复执行。
+--
+
+CREATE TABLE IF NOT EXISTS `a_agent_trace_access` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `run_id` varchar(64) NOT NULL COMMENT '运行标识',
+  `admin_user_id` bigint unsigned NOT NULL COMMENT '查看 Trace 的系统管理员',
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '查看时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_agent_trace_access_run` (`run_id`),
+  KEY `idx_agent_trace_access_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Agent 运行 Trace 管理端访问留痕（永久保留）';
