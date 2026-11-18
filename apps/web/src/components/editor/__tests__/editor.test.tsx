@@ -53,6 +53,14 @@ describe("TiptapEditor", () => {
     expect(container.querySelector(".ProseMirror")?.getAttribute("contenteditable")).toBe("false");
   });
 
+  it("aiAnswer 预设不渲染工具栏且不可编辑", async () => {
+    const { container } = render(<TiptapEditorImpl preset="aiAnswer" value="回答" />);
+
+    expect(screen.queryByRole("toolbar")).toBeNull();
+    await waitFor(() => expect(container.querySelector(".ProseMirror")).not.toBeNull());
+    expect(container.querySelector(".ProseMirror")?.getAttribute("contenteditable")).toBe("false");
+  });
+
   it("内容变化时回调最新 Markdown", async () => {
     const onChange = vi.fn();
     const ready = vi.fn();

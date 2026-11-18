@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/components/editor/TiptapEditor", () => ({
-  TiptapEditor: ({ value }: { value: string }) => <div>{value}</div>,
+  TiptapEditor: ({ value, preset }: { value: string; preset: string }) => (
+    <div data-testid="answer-editor" data-preset={preset}>
+      {value}
+    </div>
+  ),
 }));
 import { CitationAnswer } from "../citation-answer";
 
@@ -14,6 +18,14 @@ import { CitationAnswer } from "../citation-answer";
  * @author 称霸幼儿园
  */
 describe("CitationAnswer", () => {
+  /** 无引用回答也使用 AI 专用预设，且不显示空来源列表。 */
+  it("无引用时仅渲染回答正文", () => {
+    render(<CitationAnswer content="普通回答" variant="desktop" citations={[]} />);
+
+    expect(screen.getByTestId("answer-editor").getAttribute("data-preset")).toBe("aiAnswer");
+    expect(screen.queryByTestId("citation-list")).toBeNull();
+  });
+
   /** 引用展示片段和标记，并使用移动端站内路由。 */
   it("展示来源并导航到对应端的页面", () => {
     render(

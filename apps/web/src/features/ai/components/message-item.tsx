@@ -1,6 +1,5 @@
 "use client";
 
-import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { type Citation, type CitationVariant, parseCitations } from "@/lib/ai/citations";
 import { memo } from "react";
 import type { AnswerNotice } from "../schemas";
@@ -65,15 +64,14 @@ export const MessageItem = memo(function MessageItem({
             {message.content}
             <StreamCaret />
           </p>
-        ) : message.content && citations.length > 0 ? (
+        ) : message.content ? (
           <CitationAnswer
             content={message.content}
             citations={citations}
             variant={variant}
             onCitation={onCitation}
+            answerNotices={message.answerNotices}
           />
-        ) : message.content ? (
-          <TiptapEditor preset="readonly" value={message.content} className="border-0" />
         ) : message.outcome === "CANCELLED" ? (
           <p className="text-sm text-label-secondary">已取消</p>
         ) : (

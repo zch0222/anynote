@@ -21,7 +21,7 @@ import {
 import type { Extensions } from "@tiptap/core";
 
 /**
- * `readonly`：笔记预览、AI 输出渲染、Wikis 浏览。
+ * `readonly`：笔记预览与 Wikis 浏览。
  * 保留全部渲染能力（代码高亮 / 公式 / 表格 / 图片 / 自定义节点），去掉交互扩展、Slash 菜单与历史。
  */
 export function readonly(): Extensions {

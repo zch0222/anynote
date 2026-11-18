@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 // TiptapEditor 是 dynamic(ssr:false) 组件，在 jsdom 里只渲染 loading 骨架；
-// 用桩替换以断言「完成后用 readonly 编辑器渲染」这一行为。
+// 用桩替换以断言完成后的 AI 回答预设。
 vi.mock("@/components/editor/TiptapEditor", () => ({
   TiptapEditor: ({ value, preset }: { value: string; preset: string }) => (
     <div data-testid="tiptap-editor-stub" data-preset={preset}>
@@ -26,10 +28,10 @@ describe("MessageItem", () => {
     expect(screen.queryByTestId("tiptap-editor-stub")).toBeNull();
   });
 
-  it("助手消息完成后用 readonly 编辑器渲染 Markdown", () => {
+  it("助手消息完成后统一用 aiAnswer 渲染 Markdown", () => {
     render(<MessageItem message={{ id: "3", role: 1, content: "**完成**" }} />);
     const editor = screen.getByTestId("tiptap-editor-stub");
-    expect(editor.getAttribute("data-preset")).toBe("readonly");
+    expect(editor.getAttribute("data-preset")).toBe("aiAnswer");
     expect(editor.textContent).toBe("**完成**");
   });
 

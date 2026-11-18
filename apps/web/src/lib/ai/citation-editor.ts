@@ -1,39 +1,43 @@
 import type { Editor } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { type Citation, type CitationVariant, citationHref } from "./citations";
 
-/** 为回答中普通文本的引用编号添加站内链接，跳过代码和现有链接。
- * @param editor 只读回答编辑器
+/**
+ * 将解析出的引用节点转为站内链接，并按回答标注隐藏无效编号。
+ *
+ * @param editor AI 回答编辑器
  * @param citations 已校验引用
  * @param variant 客户端路由类型
+ * @param citationsRemoved 是否带有无效引用移除标注
  * @author 称霸幼儿园
  */
-export function linkCitationReferences(
+export function applyCitationReferences(
   editor: Editor,
   citations: Citation[],
   variant: CitationVariant,
+  citationsRemoved: boolean,
 ): void {
   const links = new Map(citations.map((item) => [item.index, citationHref(item, variant)]));
   const mark = editor.schema.marks.link;
   if (!mark) return;
-  const transaction = editor.state.tr;
-  editor.state.doc.descendants((node, position, parent) => {
-    if (node.type.name === "codeBlock") return false;
-    if (
-      !node.isText ||
-      !node.text ||
-      parent?.type.name === "codeBlock" ||
-      node.marks.some((item) => item.type.name === "code" || item.type.name === "link")
-    )
-      return;
-    for (const match of node.text.matchAll(/\[(\d+)\]/g)) {
-      const href = links.get(Number(match[1]));
-      if (!href) continue;
-      transaction.addMark(
-        position + match.index,
-        position + match.index + match[0].length,
-        mark.create({ href, target: "_self" }),
-      );
-    }
+
+  const matches: Array<{ position: number; node: ProseMirrorNode }> = [];
+  editor.state.doc.descendants((node, position) => {
+    if (node.type.name === "aiCitation") matches.push({ position, node });
   });
+  const transaction = editor.state.tr;
+  for (const { position, node } of matches.sort((left, right) => right.position - left.position)) {
+    const index = Number(node.attrs.index);
+    const href = links.get(index);
+    if (href) {
+      transaction.replaceWith(
+        position,
+        position + node.nodeSize,
+        editor.schema.text(`[${index}]`, [mark.create({ href, target: "_self" })]),
+      );
+    } else if (citationsRemoved && !links.has(index)) {
+      transaction.delete(position, position + node.nodeSize);
+    }
+  }
   if (transaction.docChanged) editor.view.dispatch(transaction);
 }

@@ -2,16 +2,17 @@ import type { Editor } from "@tiptap/core";
 import { Schema } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
 import { describe, expect, it, vi } from "vitest";
-import { linkCitationReferences } from "../citation-editor";
+import { applyCitationReferences } from "../citation-editor";
 import { findSectionPosition, scrollToNoteCitation } from "../note-location";
 
 const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
-    paragraph: { group: "block", content: "text*" },
+    paragraph: { group: "block", content: "inline*" },
     heading: { group: "block", content: "text*", attrs: { level: { default: 1 } } },
     codeBlock: { group: "block", content: "text*" },
-    text: {},
+    aiCitation: { group: "inline", inline: true, atom: true, attrs: { index: {} } },
+    text: { group: "inline" },
   },
   marks: { link: { attrs: { href: {}, target: { default: "_self" } } }, code: {} },
 });
@@ -41,27 +42,69 @@ describe("引用编辑器定位", () => {
     expect(nodeDOM).toHaveBeenCalledWith(4);
     expect(scroll).toHaveBeenCalledWith({ block: "center" });
   });
-  /** 普通正文可点击，代码中的同样编号保持代码原文。 */
-  it("仅链接普通文本中的有效编号", () => {
+  /** 有效引用节点转为站内链接，未知编号在没有移除标注时保留。 */
+  it("链接有效引用并保留未确认编号", () => {
     const doc = schema.nodeFromJSON({
       type: "doc",
       content: [
-        { type: "paragraph", content: [{ type: "text", text: "答案[1] [2]" }] },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "答案" },
+            { type: "aiCitation", attrs: { index: 1 } },
+            { type: "text", text: " " },
+            { type: "aiCitation", attrs: { index: 2 } },
+          ],
+        },
         { type: "codeBlock", content: [{ type: "text", text: "[1]" }] },
-        { type: "paragraph", content: [{ type: "text", text: "[1]", marks: [{ type: "code" }] }] },
       ],
     });
     const state = EditorState.create({ schema, doc });
     const dispatch = vi.fn();
-    linkCitationReferences(
+
+    applyCitationReferences(
       { schema, state, view: { dispatch } } as unknown as Editor,
       [{ index: 1, sourceType: "note", sourceId: "note:5", kbId: 3 }],
       "mobile",
+      false,
     );
+
     const result = dispatch.mock.calls[0]?.[0].doc.toJSON();
+    expect(result.content[0].content[1].text).toBe("[1]");
     expect(result.content[0].content[1].marks[0].attrs.href).toBe("/m/notes/3/5");
-    expect(result.content[1].content[0].marks).toBeUndefined();
-    expect(result.content[2].content[0].marks).toEqual([{ type: "code" }]);
+    expect(result.content[0].content[3].type).toBe("aiCitation");
+    expect(result.content[1].content[0].text).toBe("[1]");
+  });
+
+  /** 带移除标注时只隐藏不在引用列表中的编号。 */
+  it("隐藏带移除标注的无效编号", () => {
+    const doc = schema.nodeFromJSON({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "aiCitation", attrs: { index: 1 } },
+            { type: "text", text: "与" },
+            { type: "aiCitation", attrs: { index: 2 } },
+          ],
+        },
+      ],
+    });
+    const state = EditorState.create({ schema, doc });
+    const dispatch = vi.fn();
+
+    applyCitationReferences(
+      { schema, state, view: { dispatch } } as unknown as Editor,
+      [{ index: 1, sourceType: "note", sourceId: "note:5", kbId: 3 }],
+      "desktop",
+      true,
+    );
+
+    const result = dispatch.mock.calls[0]?.[0].doc.toJSON();
+    expect(result.content[0].content).toHaveLength(2);
+    expect(result.content[0].content[0].text).toBe("[1]");
+    expect(result.content[0].content[1].text).toBe("与");
   });
 
   /** 相同标题在不同章中使用完整路径定位。 */

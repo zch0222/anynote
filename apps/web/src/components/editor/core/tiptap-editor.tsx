@@ -3,11 +3,7 @@
 import { BubbleMenuPortal } from "@/components/editor/core/bubble-menu";
 import { Toolbar, type ToolbarVariant } from "@/components/editor/core/toolbar";
 import type { UploadFn } from "@/components/editor/extensions/anynote-image";
-import {
-  type CollaborationBinding,
-  type PresetName,
-  presets,
-} from "@/components/editor/presets";
+import { type CollaborationBinding, type PresetName, presets } from "@/components/editor/presets";
 import { getMarkdown } from "@anynote/editor-core";
 // KaTeX 布局样式 + 自托管字体（public/fonts/katex）；编辑器样式表
 import "@/styles/katex.css";
@@ -17,7 +13,7 @@ import { type Editor, EditorContent, useEditor } from "@tiptap/react";
 import { useEffect, useRef } from "react";
 
 export type TiptapEditorProps = {
-  /** 三套预设之一。 */
+  /** 编辑器预设名。 */
   preset: PresetName;
   /** Markdown 字符串（受控）。 */
   value: string;
@@ -93,9 +89,9 @@ export function TiptapEditorImpl(props: TiptapEditorProps) {
   /** 不渲染常驻工具条（设计稿的桌面编辑器形态）。 */
   const hasNoToolbar = toolbarVariant === "none";
 
-  // readonly 预设不含交互与 undo 扩展：强制只读并跳过 Toolbar / BubbleMenu，
+  // 只读预设不含交互与 undo 扩展：强制只读并跳过 Toolbar / BubbleMenu，
   // 否则工具栏对不存在的命令（can().undo()）求值会直接抛错、炸掉整个 React 树。
-  const isReadonlyPreset = preset === "readonly";
+  const isReadonlyPreset = preset === "readonly" || preset === "aiAnswer";
   const effectiveEditable = isReadonlyPreset ? false : editable;
 
   const lastEmitted = useRef(value);

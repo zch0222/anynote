@@ -2,7 +2,7 @@ import type { UploadFn } from "@/components/editor/extensions/anynote-image";
 import type * as Y from "yjs";
 
 /** 编辑器预设名。 */
-export type PresetName = "full" | "minimal" | "readonly" | "collaborative";
+export type PresetName = "full" | "minimal" | "readonly" | "collaborative" | "aiAnswer";
 
 /**
  * 协同绑定。provider 只被 CollaborationCaret 用来读 awareness，
