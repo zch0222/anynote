@@ -41,7 +41,7 @@ import {
 	useModelProvidersQuery,
 	useUpdateModelProviderMutation,
 } from "../use-model-providers";
-import { EmbeddingModelSettings } from "./embedding-model-settings";
+import { LogicalModelCard } from "./logical-model-settings";
 
 export function ModelProviderSettings() {
 	const providers = useModelProvidersQuery();
@@ -103,7 +103,15 @@ export function ModelProviderSettings() {
 				</>
 			)}
 
-			<EmbeddingModelSettings providers={providers.data ?? []} />
+			<LogicalModelCard
+				logicalName="agent_main"
+				providers={providers.data ?? []}
+			/>
+			<LogicalModelCard logicalName="fast" providers={providers.data ?? []} />
+			<LogicalModelCard
+				logicalName="embedding"
+				providers={providers.data ?? []}
+			/>
 
 			{formOpen ? (
 				<ProviderFormDialog
