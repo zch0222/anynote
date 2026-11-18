@@ -36,6 +36,13 @@ class HarnessRuntimeSettings(BaseModel):
     large_result_preview_chars: int = Field(default=500, ge=50, le=10000)
     model_max_attempts: int = Field(default=2, ge=1, le=5)
     prefetch_enabled: bool = False
+    reasoning_view_enabled: bool = False
+    step_note_enabled: bool = False
+    trace_fulltext_enabled: bool = False
+    reasoning_batch_chars: int = Field(default=64, ge=8, le=2000)
+    reasoning_batch_interval_ms: int = Field(default=100, ge=20, le=2000)
+    process_reasoning_max_chars: int = Field(default=8000, ge=500, le=200000)
+    trace_result_max_chars: int = Field(default=10000, ge=500, le=100000)
 
     model_config = ConfigDict(
         alias_generator=_kebab_case,

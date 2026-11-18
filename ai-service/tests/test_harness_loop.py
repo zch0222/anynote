@@ -158,3 +158,196 @@ async def test_caller_cancellation_stops_model_and_finishes_cancelled():
     assert events[-1].data["outcome"] == "CANCELLED"
     assert run.state == RunState.CANCELLED
     assert model.calls
+
+
+async def test_reasoning_events_emitted_when_view_enabled():
+    """开关打开时思考增量与结束事件进入用户视图。"""
+    model = ScriptedModel(
+        [
+            ScriptStep(
+                [
+                    ModelChunk(reasoning_delta="先想一下"),
+                    ModelChunk(reasoning_delta="再想一下"),
+                    ModelChunk(text_delta="答案", finish=True),
+                ]
+            )
+        ]
+    )
+    run = make_run(runtime=HarnessRuntimeSettings(reasoning_view_enabled=True))
+    events = visible(await collect_events(make_harness(model), run))
+    deltas = [e for e in events if e.type == "reasoning.delta"]
+    finished = [e for e in events if e.type == "reasoning.finished"]
+    assert deltas and all("blockId" in e.data for e in deltas)
+    assert len(finished) == 1
+    assert finished[0].data["status"] == "done"
+    assert finished[0].data["durationMs"] >= 0
+    assert any(e.type == "text.delta" for e in events)
+
+
+async def test_reasoning_events_silent_when_view_disabled():
+    """开关关闭时不发任何思考事件（Trace 记录不变）。"""
+    model = ScriptedModel(
+        [
+            ScriptStep(
+                [
+                    ModelChunk(reasoning_delta="思考"),
+                    ModelChunk(text_delta="答案", finish=True),
+                ]
+            )
+        ]
+    )
+    run = make_run(runtime=HarnessRuntimeSettings(reasoning_view_enabled=False))
+    events = visible(await collect_events(make_harness(model), run))
+    assert not [e for e in events if e.type.startswith("reasoning.")]
+
+
+async def test_step_note_emitted_for_tool_turn_text():
+    """结构化模式下工具轮的过程说明整段发出。"""
+    from harness.models import AgentDefinition
+    from agents.minimal.agent import load_minimal_agent
+
+    registry = ToolRegistry()
+
+    async def handler(_args, _action):
+        return ToolOutput(content="结果")
+
+    registry.register(
+        ToolSpec(
+            name="noop_tool",
+            summary="无操作",
+            description="测试工具",
+            args_model=SearchArgs,
+            handler=handler,
+        )
+    )
+    agent = AgentDefinition(
+        **{
+            **load_minimal_agent().model_dump(),
+            "tools": ["noop_tool"],
+            "terminal_tool": "agent_finish",
+        }
+    )
+    model = ScriptedModel(
+        [
+            ScriptStep(
+                [
+                    ModelChunk(reasoning_delta="想想"),
+                    ModelChunk(
+                        tool_calls=[
+                            ToolCall(call_id="c1", name="noop_tool", arguments={"query": "q"}),
+                        ]
+                    ),
+                    ModelChunk(
+                        text_delta="先看看目录",
+                        finish=True,
+                    ),
+                ]
+            ),
+            ScriptStep(
+                [
+                    ModelChunk(
+                        tool_calls=[
+                            ToolCall(
+                                call_id="c2",
+                                name="agent_finish",
+                                arguments={"outcome": "ANSWERED", "answer": "最终回答"},
+                            ),
+                        ],
+                        finish=True,
+                    ),
+                ]
+            ),
+        ]
+    )
+    run = make_run(runtime=HarnessRuntimeSettings(reasoning_view_enabled=True, step_note_enabled=True))
+    run.agent = agent
+    harness = make_harness(model, registry=registry)
+    events = visible(await collect_events(harness, run))
+    notes = [e for e in events if e.type == "step.note"]
+    assert len(notes) == 1
+    assert notes[0].data["text"] == "先看看目录"
+    assert "noteId" in notes[0].data
+
+
+async def test_tool_target_and_result_projection():
+    """工具事件带对象标签与结果摘要，名称只取自可见证据。"""
+    from harness.models import EvidenceItem
+
+    registry = ToolRegistry()
+
+    async def handler(_args, _action):
+        return ToolOutput(
+            content="结果",
+            evidence=[
+                EvidenceItem(
+                    evidence_id="E1",
+                    source_type="note",
+                    source_id="note:12",
+                    content="正文",
+                    title="复习提纲",
+                    kb_id=3,
+                    kb_name="课程库",
+                    locator={"heading": "2.1"},
+                )
+            ],
+        )
+
+    registry.register(
+        ToolSpec(
+            name="kb_search",
+            summary="检索知识库",
+            description="测试工具",
+            args_model=SearchArgs,
+            handler=handler,
+        )
+    )
+    model = ScriptedModel(
+        [
+            ScriptStep(
+                [
+                    ModelChunk(
+                        tool_calls=[
+                            ToolCall(call_id="c1", name="kb_search", arguments={"query": "期末复习"}),
+                        ],
+                        finish=True,
+                    ),
+                ]
+            ),
+            ScriptStep(
+                [
+                    ModelChunk(
+                        tool_calls=[
+                            ToolCall(
+                                call_id="c2",
+                                name="agent_finish",
+                                arguments={"outcome": "ANSWERED", "answer": "最终回答"},
+                            ),
+                        ],
+                        finish=True,
+                    ),
+                ]
+            ),
+        ]
+    )
+    from agents.minimal.agent import load_minimal_agent
+    from harness.models import AgentDefinition
+
+    agent = AgentDefinition(
+        **{
+            **load_minimal_agent().model_dump(),
+            "tools": ["kb_search"],
+            "terminal_tool": "agent_finish",
+        }
+    )
+    run = make_run(runtime=HarnessRuntimeSettings(reasoning_view_enabled=True))
+    run.agent = agent
+    events = visible(await collect_events(make_harness(model, registry=registry), run))
+    started = [e for e in events if e.type == "tool.started"][0]
+    finished = [e for e in events if e.type == "tool.finished"][0]
+    assert started.data["target"] == {"label": "期末复习", "resolved": True}
+    assert finished.data["target"] == {"label": "期末复习", "resolved": True}
+    assert finished.data["result"]["count"] == 1
+    item = finished.data["result"]["items"][0]
+    assert item["ref"] == "note:12"
+    assert item["title"] == "复习提纲"
+    assert item["kbName"] == "课程库"
