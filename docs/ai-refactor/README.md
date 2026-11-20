@@ -1,6 +1,6 @@
 # AI 模块重构
 
-> 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-18
+> 文档版本：v0.2（技术验证稿） | 创建 2026-11-12 | 更新 2026-11-21
 > 状态：**D1–D17、P1/P2 均已拍板；无生产环境；M16.0–M16.5 已完成；M16.4 按调整后的验收范围关闭，真实语义评测移至 M16.8；M16.6 的索引依赖已就绪**
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 测试节](../../README.md#测试)、[`README.md` Git 工作流](../../README.md#git-工作流)、
 > [`docs/refactor/FRONTEND_MILESTONES.md`](../refactor/FRONTEND_MILESTONES.md) M7.6（AI 流式全链路的后端缺口，本方案解除）
@@ -57,7 +57,8 @@ AI 相关模块（`services/ai`、`ai-service/` 以及连带的 Feign 契约与�
 | [M16_4_REPAIR_ACCEPTANCE.md](./M16_4_REPAIR_ACCEPTANCE.md) | **修复验收记录**：本次最终代码的可重跑命令、固定九类与时延结果、原始输出、清理及真实语义未覆盖项 |
 | [KNOWLEDGE_AGENT_V3_PLAN.md](./KNOWLEDGE_AGENT_V3_PLAN.md) | **知识库 Agent 版本 3 方案**（2026-11-17 已实施并完成 57 次真实模型重放）：首轮预取默认关闭、纯文本回复即申请完成、校验分级与回答标注、失败按类别给文案，附顺带发现的问题 |
 | [KNOWLEDGE_AGENT_V3_CODE_REVIEW.md](./KNOWLEDGE_AGENT_V3_CODE_REVIEW.md) | **版本 3 代码实现评估**（2026-11-17）：结论良好；问题清单 1 高 3 中 8 低，代码下标问题已于 2026-11-18 修复，其余问题不在本批范围 |
-| [AGENT_TRACE_VIEW_PLAN.md](./AGENT_TRACE_VIEW_PLAN.md) | **Agent 运行过程展示方案**（2026-11-17 草案，T1–T8 待拍板，未开工）：对话界面实时展示思考流与工具调用，管理控制台查看完整 Trace，用户页面暂不展示轨迹；脱敏在服务端按读者投影完成，思考过程不出现用户无权访问的文档 |
+| [AGENT_TRACE_VIEW_PLAN.md](./AGENT_TRACE_VIEW_PLAN.md) | **Agent 运行过程展示方案**（T1–T8 已于 2026-11-18 拍板；M17.0–M17.4 已实现，M17.5、M17.6 未开始）：对话界面实时展示思考流与工具调用，管理控制台查看完整 Trace，用户页面暂不展示轨迹；脱敏在服务端按读者投影完成，思考过程不出现用户无权访问的文档 |
+| [AGENT_TRACE_VIEW_CODE_REVIEW.md](./AGENT_TRACE_VIEW_CODE_REVIEW.md) | **运行过程展示（M17）实现评估与修复方案**（2026-11-21）：结构符合方案，但有 8 处阻断级缺陷，包括跨用户思考串流、Trace 全文开关失效、刷新回放不可用；含逐项修复方案、验收标准、修复批次与开关打开前置条件。修复并通过门禁前不打开任何开关，修复未开工 |
 | [AGENT_OUTPUT_TEXT_PLAN.md](./AGENT_OUTPUT_TEXT_PLAN.md) | **Agent 回答文本处理优化方案**（2026-11-18 已拍板并实现；离线、单测与真实栈验证完成，真实模型重放待主密钥）：后端保留普通回答原文，引用编号前后端在解析阶段按同一规则识别；外链新标签打开，图片只放行同源对象地址；删除专用澄清终态并补历史引用说明；不动笔记模块 |
 | [索引完整性修复契约](../../.claude/openspec/changes/2026-11-15-indexing-integrity-repair.md) | **已确认契约**：写入/对账完整性、版本重建、向量开关、结构切分、水位和用户可见说明 |
 

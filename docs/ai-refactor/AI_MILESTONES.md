@@ -946,6 +946,10 @@ Python 全量多轮在 455 passed、20 skipped 与 1 failed、454 passed 之间�
 **遗留项（M17.5/M17.6）**：管理控制台前端（`/settings/ai-runs`）未开始；Playwright 用例、真实推理模型重放（主密钥恢复后）、
 开关逐项打开与体量实测未执行。逐文件清单见 [`docs/changelist/2026-11-19-agent-process-area.md`](../changelist/2026-11-19-agent-process-area.md)。
 
+**实现评估（2026-11-21）**：发现 8 处阻断级缺陷，包括跨用户思考串流、全文开关关闭时 Trace 仍写原文、刷新回放不可用。
+修复方案、验收标准与开关打开前置条件见 [AGENT_TRACE_VIEW_CODE_REVIEW.md](./AGENT_TRACE_VIEW_CODE_REVIEW.md)。
+修复批次 R1–R5 完成并通过其中门禁前，不打开任何开关，M17.5、M17.6 不开工；上表各项的验证结论以该评估为准。
+
 ---
 
 ## M16.9 清理
