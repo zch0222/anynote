@@ -6,6 +6,7 @@ name: ${COMPOSE_PROJECT_NAME:-anynote}
 # 该文件从 infra/.env.dev.local.example 拷贝，只放开发用 AI 凭据主密钥）：
 #   docker compose --env-file .env.dev.local -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
 # 覆盖 Next.js、协同服务与 9 个 Spring 应用；中间件保持原值。
+# Web 构建/运行来源与协同握手来源固定为 localhost，避免 shell 覆盖造成 BFF Origin 校验不一致。
 
 x-app-dev: &app-dev
   restart: "no"
@@ -14,8 +15,14 @@ x-app-dev: &app-dev
 services:
   anynote-web:
     <<: *app-dev
+    build:
+      args:
+        NEXT_PUBLIC_APP_URL: http://localhost:3000
+        NEXT_PUBLIC_COLLAB_WS_URL: ws://localhost:1234
     environment:
       DEPLOYMENT_ENV: development
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_COLLAB_WS_URL: ws://localhost:1234
   anynote-gateway:
     <<: *app-dev
   anynote-auth:
@@ -42,3 +49,5 @@ services:
     <<: *app-dev
   anynote-collab:
     <<: *app-dev
+    environment:
+      COLLAB_ALLOWED_ORIGINS: http://localhost:3000

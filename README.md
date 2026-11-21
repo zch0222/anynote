@@ -191,9 +191,9 @@ docker compose --env-file infra/.env.dev.local \
 - `--env-file infra/.env.dev.local`：compose 忽略本地 `.env`，避免 IDEA 用 host 覆盖污染容器，并注入开发用 AI 凭据主密钥
 - `docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便 `docker logs` 排查；中间件保留原 restart 策略
 - `--build`：首次或代码变更时必带；后续仅起容器可省
-- 浏览器访问 `https://192.168.3.90:3000/login`（容器外 Nginx 监听内网 IP，回源 `WEB_BIND_IP:3000`）；先停止占用 3000 的宿主机 `next start` / `next dev`。前端健康检查访问 `/login`。前端镜像不含 Nginx。
-  - `NEXT_PUBLIC_APP_URL` 已默认为 `https://192.168.3.90:3000`，BFF 的 Origin 校验只认这个来源；改用别的地址访问必须在 `up` 时用环境变量覆盖并**重新构建**镜像。
-  - 该地址用**自签名证书**提供 TLS，证书与 CA 在 Nginx 的 `conf/certs/`（生成与导入步骤见该目录的 README）。**必须用 HTTPS**：明文 HTTP 的内网 IP 不是 secure context，`crypto.subtle` 与 `crypto.randomUUID` 不可用，协同建文档、笔记图片上传、Chat PDF 上传会直接崩在浏览器本地、连请求都发不出去。
+- 浏览器固定访问 `http://localhost:3000/login`；先停止占用 3000 的宿主机 `next start` / `next dev`。前端健康检查访问 `/login`，前端镜像不含 Nginx，本机开发不需要另配 Nginx 或自签名证书。
+  - dev override 已把 `NEXT_PUBLIC_APP_URL=http://localhost:3000` 同时固定为构建参数和运行时配置，并把协同地址固定为 `NEXT_PUBLIC_COLLAB_WS_URL=ws://localhost:1234`、`COLLAB_ALLOWED_ORIGINS=http://localhost:3000`。这些值不读取 shell 覆盖，避免 BFF 的 Origin 校验与浏览器来源不一致。
+  - `http://localhost` 属于浏览器信任的 secure context，`crypto.subtle` 与 `crypto.randomUUID` 可用；不要再改用旧的内网 HTTPS 地址。
 - 前端默认运行生产构建；只重建前端可用同一组 `-f` 参数执行 `up -d --build --no-deps anynote-web`。构建与运行目录隔离，不挂载宿主机 `.next`。
 
 启动约需 60–120 秒。
@@ -447,9 +447,9 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同服务均保留命名�
 | `ANYNOTE_AI_CREDENTIAL_KEY` | _(空)_ | AI 模型供应商凭据的 AES-256-GCM 主密钥（Base64 编码的 32 字节）；未配置时凭据相关端点报错 |
 | `APP_IMAGE_PREFIX` | `anynote` | Docker 镜像名前缀 |
 | `APP_IMAGE_TAG` | `local` | 生产必须显式设置发布标签 |
-| `NEXT_PUBLIC_APP_URL` | `https://192.168.3.90:3000` | 公开来源，构建时内联，生产要求 HTTPS |
-| `NEXT_PUBLIC_COLLAB_WS_URL` | `wss://192.168.3.90:3000/collab` | 生产为同源 `wss://域名/collab` |
-| `COLLAB_ALLOWED_ORIGINS` | `https://192.168.3.90:3000` | 协同服务允许的握手来源，必须与 `NEXT_PUBLIC_APP_URL` 同源（精确匹配，写错一位即 403） |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | 公开来源，构建时内联；dev 固定此值，生产必须显式改为 HTTPS 域名 |
+| `NEXT_PUBLIC_COLLAB_WS_URL` | `ws://localhost:1234` | dev 固定此值，生产必须显式改为同源 `wss://域名/collab` |
+| `COLLAB_ALLOWED_ORIGINS` | `http://localhost:3000` | 协同服务允许的握手来源，必须与 `NEXT_PUBLIC_APP_URL` 同源（精确匹配，写错一位即 403） |
 | `COLLAB_TOKEN_SECRET` | 开发密钥 | 生产必须独立生成至少 32 字符，web/collab 共用 |
 | `ANYNOTE_INTERNAL_SECRET` | 开发密钥（随仓库公开） | 服务间内部调用签名密钥，生产必须独立生成至少 32 字符，Java 服务与 collab 共用 |
 | `WEB_BIND_IP` / `COLLAB_BIND_IP` / `GATEWAY_BIND_IP` | `127.0.0.1` | 只发布外部 Nginx 所需入口 |
@@ -569,8 +569,8 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同服务均保留命名�
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `INTERNAL_API_URL` | `http://localhost:8080` | BFF 转发到网关的地址（**服务端专用**，不进浏览器包） |
-| `NEXT_PUBLIC_APP_URL` | `https://192.168.3.90:3000` | 浏览器侧的自身源，用于 Origin 校验 |
-| `NEXT_PUBLIC_COLLAB_WS_URL` | `wss://192.168.3.90:3000/collab` | 协同服务地址；容器化部署应指向 Nginx 上的 ws 反代路径 |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | 浏览器侧的自身源，用于 Origin 校验；本地开发固定此值 |
+| `NEXT_PUBLIC_COLLAB_WS_URL` | `ws://localhost:1234` | 协同服务地址；本地开发固定此值，生产部署改为 Nginx 上的 WSS 反代路径 |
 | `COLLAB_TOKEN_SECRET` | `anynote-collab-dev-secret` | 签发协同令牌的 HMAC 密钥，**必须与 `anynote-collab` 容器一致**，生产必改 |
 | `DESKTOP_EXCHANGE_KEY` | _(未设置)_ | 桌面端令牌交换密钥。**纯 Web 部署不要配**——不配即关闭该端点 |
 | `DESKTOP_ALLOWED_ORIGINS` | `tauri://localhost,...` | 允许调用令牌交换的来源，仅在上一项已配置时生效 |
@@ -714,18 +714,8 @@ node apps/web/scripts/ui-capture.mjs                 # 真实构建上截图 + �
 注意事项：
 
 - **E2E 每轮新建一个随机 `e2e` 前缀账号**并把登录态存到 `apps/web/e2e/.auth/`（已 gitignore）。账号不删（后端无注销端点），不要在生产环境跑。
-- **默认跑在 `http://localhost:3000`**，compose 的 `NEXT_PUBLIC_APP_URL` 保持默认值即可。若要跑自签 HTTPS 域名（如 `https://192.168.3.90:3000`），**必须同时重建镜像**：`NEXT_PUBLIC_APP_URL` 是构建期内联的，而 BFF 的 `checkOrigin` 会拿它与请求 Origin 逐字比对，两者不一致时所有 BFF 端点都返回 403（表现为登录、CLI 授权全挂）。
-- **协同用例需要 `anynote-collab` 容器在跑**，否则 `/docs` 停在「连接中」。`crypto.randomUUID()` 只在 secure context 下存在，所以 `E2E_BASE_URL` 必须是 `https://192.168.3.90:3000`（自签名证书已就绪，见「启动指南」场景 A）；此时按上一条把镜像也构到该域名。
-- **跑 HTTPS 自签名站点需要让 Node 信任本地 CA**（Playwright 的 `global-setup` 与 CLI 子进程都走 Node 的 TLS 栈），否则注册/登录请求直接失败。两种方式任选：
-
-  ```bash
-  # 方式一：让 Node 信任本地 CA（不改任何代码，推荐）
-  NODE_EXTRA_CA_CERTS="C:/Users/YXLMz/software/nginx-1.31.5/conf/certs/ca.crt" \
-  E2E_BASE_URL=https://192.168.3.90:3000 \
-  pnpm --filter web test:e2e
-  ```
-
-  浏览器侧不需要额外配置——CA 已导入 Windows「受信任的根证书颁发机构」，Chromium 直接信任。`playwright.config.ts` 只在 `E2E_BASE_URL` 显式为 `https:` 时才设 `ignoreHTTPSErrors`；显式给了该变量时也不再尝试拉起本地 `next start`（自签地址上的健康检查必然超时）。
+- **本地 E2E 固定跑在 `http://localhost:3000`**，dev override 已固定 `NEXT_PUBLIC_APP_URL`，不要再通过环境变量改用旧的内网 HTTPS 地址。`NEXT_PUBLIC_APP_URL` 是构建期内联的，而 BFF 的 `checkOrigin` 会拿它与请求 Origin 逐字比对，两者不一致时所有 BFF 写端点都返回 403（表现为 AI、登录、CLI 授权全挂）。
+- **协同用例需要 `anynote-collab` 容器在跑**，否则 `/docs` 停在「连接中」。`http://localhost` 是 secure context，`crypto.randomUUID()` 可用；`E2E_BASE_URL` 保持默认或显式设为 `http://localhost:3000` 即可，不需要本地 CA 或 `NODE_EXTRA_CA_CERTS`。
 - **图片上传用例需要 MinIO 桶已建好**：先 `minio-init` 跑到 `minio-init done`，并确认 Redis 里的 `MIN_IO_CONFIG` 带真实凭据（改完 `sys_config` 要 `restart anynote-modules-system`，见 [`docs/minio/MINIO_PLAN.md`](docs/minio/MINIO_PLAN.md) §2.8 / §6.4）。**`MIN_IO_CONFIG.publicEndPoint` 必须是 `https://192.168.3.90:9000`**：预签名 URL 的 Host 计入 SigV4 签名，且页面在 https 下时浏览器会拦掉指向 `http://` 的混合内容，分片 PUT 会被直接 block。
 - **默认构建不开笔记协同**（`NEXT_PUBLIC_COLLAB_NOTES` 不设即单人保存）：`collab.spec.ts` 里依赖协同的两组会探测当前构建（打开一篇笔记，看有没有去换协同令牌），没开就自动跳过。要跑协同用例，先以 `NEXT_PUBLIC_COLLAB_NOTES=1` 重建 `anynote-web`。
 - **协同服务落库的联调与故障演练**（`collab-persist.spec.ts`、`mobile-collab-persist.spec.ts`）要求协同容器以 `COLLAB_SERVER_PERSIST=true` 运行、web 镜像以 `NEXT_PUBLIC_COLLAB_NOTES=1` 构建；开关没开时整组自动跳过。演练会直接操作**本机 Docker**（`kill -9` / `stop` / `pause` 协同与 note 容器、在 MySQL 容器里执行 SQL），容器名可用 `E2E_COLLAB_CONTAINER` / `E2E_NOTE_CONTAINER` / `E2E_MYSQL_CONTAINER` 覆盖，只能对开发栈跑。

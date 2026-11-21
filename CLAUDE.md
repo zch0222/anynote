@@ -58,6 +58,7 @@ Anynote 是 **polyglot monorepo**，三种语言栈通过 pnpm workspace + Turbo
 
 - **dev 场景 `docker compose` 命令必须加 `--env-file infra/.env.dev.local`**（首次从 `infra/.env.dev.local.example` 拷贝并填写，不入库，只放开发用 AI 凭据主密钥 `ANYNOTE_AI_CREDENTIAL_KEY`）。原因：`infra/.env.idea`（IDEA 在宿主机跑 Java 时用）含 `127.0.0.1` 类 host 覆盖；若被 compose 自动加载，`ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 广播错误地址，容器内 app 连不上 broker；主密钥缺失或更换会让已保存的模型供应商 Key 无法解密。
 - **prod 必须显式 `--env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.prod.yaml`**，不带 dev override。生产关闭业务服务/中间件宿主机端口，使用 `restart: unless-stopped`，只给容器外 Nginx 发布**回环**入口 web:3000 / collab:1234 / gateway:8080（gateway 仅供 `api.YOUR_DOMAIN` 反代，见下方「CLI 直连 Gateway」）。
+- **本地 Web 来源固定**：开发、浏览器验收与 E2E 一律使用 `http://localhost:3000`，协同地址使用 `ws://localhost:1234`。`docker-compose.dev.yaml` 已强制固定 Web 构建参数、运行时来源及 `COLLAB_ALLOWED_ORIGINS`，不得再通过 shell 或 `.env` 改成旧的内网 HTTPS 地址。BFF 会精确比对 Origin，来源不一致会让所有写请求在到达 Java 前返回 403，表现为 AI、登录、CLI 授权等不可用。
 - **dev 全栈推荐命令**：
 
   ```bash
