@@ -10,15 +10,17 @@ description: 在 anynote 仓库里跑本地全栈、生成 OpenAPI 类型、执�
 ## 启动全栈（dev）
 
 ```bash
-docker compose --env-file=/dev/null \
+docker compose --env-file infra/.env.dev.local \
   -f infra/docker-compose.yaml \
   -f infra/docker-compose.dev.yaml \
   up -d --build
 ```
 
-⚠️ **`--env-file=/dev/null` 不能省**。`infra/.env.idea` 是给"IDEA 在宿主机跑 Java"用的，
+⚠️ **`--env-file infra/.env.dev.local` 不能省**（首次 `cp infra/.env.dev.local.example infra/.env.dev.local`，
+用 `openssl rand -base64 32` 填 `ANYNOTE_AI_CREDENTIAL_KEY`）。`infra/.env.idea` 是给"IDEA 在宿主机跑 Java"用的，
 里面有 `127.0.0.1` 一类 host 覆盖；被 compose 自动加载后 `ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1`
 会让 broker 广播错误地址，容器里的 app 连不上 broker，现象是启动卡住而不是报错。
+主密钥缺失或更换后，已保存的模型供应商 Key 无法解密，智能体运行会失败。
 
 ⚠️ 生产部署是另一套命令（显式 `--env-file infra/.env` + `docker-compose.prod.yaml`），
 不要把 dev override 带上去。
@@ -36,7 +38,7 @@ curl -sf http://localhost:1234/healthz             # 协同服务是 /healthz，
 
 ```bash
 cd services && mvn -o install -pl <模块> -am -DskipTests
-cd .. && docker compose --env-file=/dev/null \
+cd .. && docker compose --env-file infra/.env.dev.local \
   -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml \
   up -d --build anynote-modules-<模块>
 ```

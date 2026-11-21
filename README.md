@@ -130,7 +130,7 @@ Claude Code / Codex 若没立刻出现，新开一个会话即可。
 
 | 场景 | 适用 | 关键差异 |
 |------|------|---------|
-| [A. Dev Docker 全栈](#场景-adev-docker-全栈推荐日常使用) | 日常本机开发，最快 | `--env-file=/dev/null` + `docker-compose.dev.yaml` override |
+| [A. Dev Docker 全栈](#场景-adev-docker-全栈推荐日常使用) | 日常本机开发，最快 | `--env-file infra/.env.dev.local` + `docker-compose.dev.yaml` override |
 | [B. IDEA / 宿主机跑 Java](#场景-bidea--宿主机跑-java混合模式) | 想在 IDE 里 debug Java 服务 | 只起中间件，IDEA Run Config 接 `.env.idea` |
 | [C. 生产部署](#场景-c生产部署) | 对外暴露的环境 | `--env-file infra/.env` + prod override + 容器外 Nginx |
 
@@ -142,16 +142,18 @@ Claude Code / Codex 若没立刻出现，新开一个会话即可。
 |------|------|:----:|:----:|
 | `infra/.env.example` | 生产密码、域名、镜像标签样板（必填值留空） | ✅ | ❌ |
 | `infra/.env.idea.example` | **IDEA / 宿主机直接跑 Java** 时把中间件 host 改成 `127.0.0.1` | ✅ | ❌ |
+| `infra/.env.dev.local.example` | **Dev Docker 全栈**样板，只含开发用 AI 凭据主密钥 | ✅ | ❌ |
 | `infra/.env` | 从生产样板拷贝出的部署实例 | ❌ | 生产命令显式 `--env-file infra/.env` |
 | `infra/.env.idea` | IDEA Java 的宿主机地址配置 | ❌ | **不能交给 Compose** |
+| `infra/.env.dev.local` | 从 dev 样板拷贝出的本机实例 | ❌ | dev 命令显式 `--env-file infra/.env.dev.local` |
 | `apps/web/.env.example` → `.env.local` | 宿主机 Next.js 开发，`.env.local` 不入库 | 样板 ✅ | ❌，由 Next.js 加载 |
 
 **踩坑提示**：`.env.idea` 文件名不是 `.env`，所以 docker compose 默认不会加载。但如果你不慎把它重命名成 `.env`，里面的 `ROCKETMQ_BROKER_ADVERTISE_IP=127.0.0.1` 会让 broker 容器向 namesrv 广播错误地址，结果是其它容器内的 app 无法连接 broker，MQ listener 启动失败。
 
 **强制约束**：
 
-- **场景 A（dev）**：所有 `docker compose` 命令统一加 `--env-file=/dev/null`，强制 compose 只使用 YAML 内置默认值。
-- **场景 C（prod）**：必须读 `infra/.env`（含真密码），**不要加** `--env-file=/dev/null`。
+- **场景 A（dev）**：所有 `docker compose` 命令统一加 `--env-file infra/.env.dev.local`，compose 不再自动读 `.env`，除该文件里的开发用主密钥外只使用 YAML 内置默认值。
+- **场景 C（prod）**：必须读 `infra/.env`（含真密码），**不要加** `--env-file infra/.env.dev.local`。
 
 ---
 
@@ -160,6 +162,15 @@ Claude Code / Codex 若没立刻出现，新开一个会话即可。
 > Next.js、协同服务、9 个 Java 服务、Python Harness 和中间件进入 Compose。Java JAR 仍需预先构建；Harness 注册服务名由 Nacos 配置 `anynote.ai.harness.service-name` 指定。Whisper 使用独立服务名 `anynote-ai-whisper`，仅在 `--profile whisper` 下启动。
 
 **前置**：Docker >= 24 + Compose >= 2.24.4、Maven / JDK 21。前端依赖和生产构建全部在镜像内完成。下列 shell 命令在 Linux / macOS / WSL 执行；Windows 原生 Compose 的空环境文件用 `--env-file=NUL`。
+
+#### A.0 准备 dev 环境文件（首次）
+
+```bash
+cp infra/.env.dev.local.example infra/.env.dev.local
+# 填写 ANYNOTE_AI_CREDENTIAL_KEY：openssl rand -base64 32
+```
+
+主密钥用于加解密模型供应商的 API Key，更换后需在「设置 → 模型供应商」重新填写已保存的 Key。
 
 #### A.1 构建 Java 服务 JAR
 
@@ -171,13 +182,13 @@ pnpm services:build
 #### A.2 启动全栈
 
 ```bash
-docker compose --env-file=/dev/null \
+docker compose --env-file infra/.env.dev.local \
   -f infra/docker-compose.yaml \
   -f infra/docker-compose.dev.yaml \
   up -d --build
 ```
 
-- `--env-file=/dev/null`：强制 compose 忽略本地 `.env`，避免 IDEA 用 host 覆盖污染容器
+- `--env-file infra/.env.dev.local`：compose 忽略本地 `.env`，避免 IDEA 用 host 覆盖污染容器，并注入开发用 AI 凭据主密钥
 - `docker-compose.dev.yaml`：app 容器 `restart: "no"`，启动失败立即 `Exited`，方便 `docker logs` 排查；中间件保留原 restart 策略
 - `--build`：首次或代码变更时必带；后续仅起容器可省
 - 浏览器访问 `https://192.168.3.90:3000/login`（容器外 Nginx 监听内网 IP，回源 `WEB_BIND_IP:3000`）；先停止占用 3000 的宿主机 `next start` / `next dev`。前端健康检查访问 `/login`。前端镜像不含 Nginx。
@@ -191,7 +202,7 @@ docker compose --env-file=/dev/null \
 
 ```bash
 # 容器状态
-docker compose --env-file=/dev/null \
+docker compose --env-file infra/.env.dev.local \
   -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml ps
 # 所有服务 STATUS 应显示 healthy
 
@@ -235,7 +246,7 @@ pnpm --filter @anynote/api-client typecheck
 #### A.5 前端容器热更新（可选）
 
 ```bash
-docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml -f infra/docker-compose.web-dev.yaml up -d --build --no-deps anynote-web
+docker compose --env-file infra/.env.dev.local -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml -f infra/docker-compose.web-dev.yaml up -d --build --no-deps anynote-web
 ```
 
 `src/`、`public/` 和 Next/TS 配置只读挂载，依赖、生成类型与 `.next` 留在容器。修改依赖、锁文件或 OpenAPI baseline 后重新 build。恢复生产构建时去掉 `web-dev` 覆盖文件，仍需 `up -d --build --no-deps anynote-web`；切换构建目标不能只用 `restart`。
@@ -244,11 +255,11 @@ docker compose --env-file=/dev/null -f infra/docker-compose.yaml -f infra/docker
 
 ```bash
 # 停止全部容器（保留数据）
-docker compose --env-file=/dev/null \
+docker compose --env-file infra/.env.dev.local \
   -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml down
 
 # 同时删除数据卷（清空 MySQL / ES / MinIO / Nacos / RocketMQ store；慎用）
-docker compose --env-file=/dev/null \
+docker compose --env-file infra/.env.dev.local \
   -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml down -v
 ```
 
@@ -414,7 +425,7 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同服务均保留命名�
 ---
 ## 环境变量参考
 
-容器变量在 `infra/.env` 中设置，宿主机前端变量在 `apps/web/.env.local` 中设置（由 `infra/docker-compose-middleware.yaml` 与 `infra/docker-compose.yaml` 读取）。**dev 推荐用 `--env-file=/dev/null` 强制走 YAML 默认值**，避免与 `infra/.env.idea` 混淆（详见 [环境变量文件总览](#环境变量文件总览必读)）。未设置时使用括号内的默认值。
+容器变量在 `infra/.env` 中设置，宿主机前端变量在 `apps/web/.env.local` 中设置（由 `infra/docker-compose-middleware.yaml` 与 `infra/docker-compose.yaml` 读取）。**dev 推荐用 `--env-file infra/.env.dev.local`，除开发用主密钥外走 YAML 默认值**，避免与 `infra/.env.idea` 混淆（详见 [环境变量文件总览](#环境变量文件总览必读)）。未设置时使用括号内的默认值。
 
 ### 必须修改（安全敏感）
 

@@ -2,7 +2,7 @@
 
 启动步骤统一维护在 [仓库 README](../../README.md#启动指南)，网络架构见 [部署网络图](../../docs/deployment-network.md)。需要 Docker Engine >= 24、Compose >= 2.24.4。
 
-- 日常全栈：`--env-file=/dev/null` + `infra/docker-compose.yaml` + `infra/docker-compose.dev.yaml`，包含 Next.js 前端与协同服务。
+- 日常全栈：`--env-file infra/.env.dev.local`（从 `infra/.env.dev.local.example` 拷贝）+ `infra/docker-compose.yaml` + `infra/docker-compose.dev.yaml`，包含 Next.js 前端与协同服务。
 - 容器 HMR：再叠加 `infra/docker-compose.web-dev.yaml`。只挂载源代码，依赖和 `.next` 不与宿主机共享。
 - IDEA：中间件配置叠加 `infra/docker-compose.middleware-idea.yaml`，Java 导入 `infra/.env.idea`，宿主机前端读取 `apps/web/.env.local`。
 - 生产：显式 `--env-file infra/.env` + base + `infra/docker-compose.prod.yaml`。配置必须填写生产域名、密钥、镜像标签和 Nacos 配置目录；不要用 dev 配置发版。
