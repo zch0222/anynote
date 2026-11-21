@@ -151,6 +151,14 @@ CLI 的见 [`apps/cli/README.md`](./apps/cli/README.md)。
 - **认证**：token 仅存 httpOnly Cookie，通过 Next Route Handler（BFF）转发；前端 JS 永远拿不到 token
 - **编辑器**：新前端**统一 TipTap**，废弃 Milkdown / Wangeditor / Vditor / Muya（详见 `docs/refactor/FRONTEND_REFACTOR_PLAN.md` 第六章）
 
+#### 下拉框与弹层（防止深色主题回归）
+
+- **禁止原生 `<select>` / `<option>`**：页面、设置表单和编辑器 NodeView 一律使用 `@/components/ui/select`（Base UI/shadcn）。原生弹层由浏览器与操作系统绘制，不能可靠消费项目的深浅色语义 Token；不得以“控件简单”或“减少 JS”为由绕开。
+- **弹层必须整体上色**：背景与文字分别使用 `bg-popover` / `text-popover-foreground` 等语义 Token。禁止只给触发器上色、写死白底/黑字，或用 `dark:` 补丁掩盖原生弹层问题。
+- **交互测试必须覆盖弹层**：新增或修改下拉框时，使用 `@/test/select` 的 `selectThemedOption` 走真实指针事件序列，断言选项位于带语义前景/背景色的组件弹层中，并覆盖本场景的值映射、占位与禁用行为。自定义 combobox 的 E2E 断言语义值或可见文本，不得沿用原生 `<select>` 的操作方式。
+- **可见 UI 必须做浏览器验收**：至少检查深色主题，涉及主题或弹层时深浅两态都要展开核对；同时检查选中项和至少一个未选中项，不能只截图关闭状态的触发器。无法执行真实浏览器检查时，必须在交付说明中明确写“未验证”，不得以 jsdom 通过代替视觉验收。
+- **共享弹层受体积门禁约束**：在首屏共享模块引入或调整 Select/Popover/Menu 运行时后，必须跑生产构建与 `pnpm --filter web bundle:budget`；已有懒加载不得为简化代码改回静态引入。
+
 ### Python AI 服务
 
 - **配置**：`core/config.py` 的 `Settings(BaseSettings)` 读环境变量；通过 `get_settings()` 的 `@lru_cache` 单例注入
@@ -330,6 +338,7 @@ CLAUDE.md 不是事实源，而是 **指针 + 约束集合**。具体规范分�
 - ❌ `return null` 占位未实现端点（应 `throw new NotImplementedException(...)`）
 - ❌ 在 `application.yml` 改运行时配置（应改 Nacos）
 - ❌ 新前端用 Milkdown / Wangeditor / Vditor / Muya（统一 TipTap）
+- ❌ 前端新增或恢复原生 `<select>` / `<option>`（统一 `@/components/ui/select`，弹层测试与深浅色验收见「前端 → 下拉框与弹层」）
 - ❌ 前端手写 fetch / axios 直调后端（必须走 `@anynote/api-client` + BFF 代理）
 - ❌ 前端把 token 写到 `document.cookie` / localStorage / sessionStorage（必须 httpOnly Cookie）。**例外一**：`apps/web/src/lib/desktop/bridge.ts` 的桌面壳场景，由里程碑 M8.2 授权，且写入前校验确实处在 Tauri 壳中。**例外二**：`apps/cli` 把凭据写 `<configDir>/credentials.json`（POSIX 0600，Windows 无等价保护），由 `.claude/openspec/changes/2026-09-12-cli-credential-storage.md` 授权——CLI 没有 Cookie jar，且刷新必须走跨进程文件锁；不想落盘用 `ANYNOTE_TOKEN`
 - ❌ CLI 命令改动后不重新生成 `docs/cli/COMMANDS.md` 与 `.claude/skills/anynote-cli/reference/commands.md` 就提交（`pnpm --filter @anynote/cli manifest:write`，CI 的 `cli` job 会卡 diff）
