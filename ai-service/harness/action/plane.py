@@ -118,7 +118,7 @@ class ActionPlane:
         """将完整行动结果压缩成可写回状态的观察。
 
         超过展示长度的结果全文留在工作区。JSON 对象结果压成同一长度内的结构化预览，保留元数据与完整条目；
-        其他结果按 ``large_result_preview_chars`` 截取。
+        其他结果按 ``large_result_preview_chars`` 截取。观察记下本次调用登记的证据编号，不进入模型上下文。
 
         :param run: 当前运行
         :param result: 完整行动结果
@@ -141,6 +141,7 @@ class ActionPlane:
             retryable=result.retryable,
             duration_ms=result.duration_ms,
             action_key=result.action_key,
+            evidence_ids=[item.evidence_id for item in result.evidence],
             diagnostics=result.diagnostics,
         )
         run.observations.append(observation)

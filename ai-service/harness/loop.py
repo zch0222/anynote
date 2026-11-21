@@ -4,7 +4,7 @@
 """
 
 import asyncio
-import time
+import dataclasses
 import uuid
 
 from pydantic import ValidationError
@@ -24,14 +24,13 @@ from harness.middleware import (
     HarnessMiddleware,
     Hook,
     MiddlewareChain,
-    MiddlewareContext,
     MiddlewareDecision,
 )
 from harness.models import RunContext, RunOutcome, RunState, TokenUsage, ToolExchange
 from harness.state import RunStateMachine
 from harness.trace.middleware import TraceMiddleware
 from harness.view.events import ReasoningBlock
-from harness.view.middleware import RunViewMiddleware, _target_label
+from harness.view.middleware import RunViewMiddleware
 from harness.verify.framework import VerificationIssue, VerificationReport, VerifierFramework
 from models.base import ChatModel
 from models.catalog import ModelError
@@ -41,24 +40,6 @@ EMPTY_MODEL_OUTPUT_MESSAGE = "模型没有返回内容，请重试"
 FINISH_WITH_TOOLS_HINT = "agent_finish 需要单独调用；本轮已先执行其他工具，请看过结果后再提交。"
 MULTIPLE_FINISH_HINT = "agent_finish 每轮只能调用一次，请重新提交。"
 INVALID_FINISH_HINT = "agent_finish 参数不合法（{details}），请按工具定义重新提交。"
-
-
-class RunViewMiddlewareShared(HarnessMiddleware):
-    """把共享的过程记录器挂到中间件链。
-
-    @author 称霸幼儿园
-    """
-
-    def __init__(self, view: RunViewMiddleware):
-        self._view = view
-
-    async def handle(self, context: MiddlewareContext) -> MiddlewareDecision:
-        """转发到共享过程记录器。
-
-        :param context: 中间件输入
-        :return: 始终放行
-        """
-        return await self._view.handle(context)
 
 
 def _validation_details(error: ValidationError, limit: int = 3) -> str:
@@ -96,7 +77,6 @@ class Harness:
         self._builder = context_builder or ContextBuilder(model)
         self._custom_middlewares = middlewares or []
         self._logger = get_logger(__name__)
-        self._view: RunViewMiddleware | None = None
 
     async def run(self, context: RunContext, events: EventBus) -> None:
         """运行到完成、失败或取消终态。
@@ -105,14 +85,15 @@ class Harness:
         :param events: 运行事件总线
         """
         machine = RunStateMachine()
-        self._view = RunViewMiddleware(events)
+        view = RunViewMiddleware(events, self._registry)
+        context.process_view = view
         chain = MiddlewareChain(
             [
                 BudgetMiddleware(),
                 *self._custom_middlewares,
                 NoProgressMiddleware(),
-                RunViewMiddlewareShared(self._view),
-                TraceMiddleware(events, view=self._view),
+                view,
+                TraceMiddleware(events, view=view),
             ],
             events=events,
         )
@@ -251,12 +232,15 @@ class Harness:
                             **(citation_scan.trace_attributes() if citation_scan else {}),
                         },
                     )
-                    await chain.invoke(Hook.AFTER_VERIFY, context, report)
                     if not report.passed and not repair_exhausted:
-                        context.verification_attempts += 1
-                        context.hints.append(
-                            self._repair_hint(report.issues, context.workspace.evidence)
+                        report = dataclasses.replace(
+                            report,
+                            repair_hint=self._repair_hint(report.issues, context.workspace.evidence),
                         )
+                    await chain.invoke(Hook.AFTER_VERIFY, context, report)
+                    if report.repair_hint is not None:
+                        context.verification_attempts += 1
+                        context.hints.append(report.repair_hint)
                         context.answer = ""
                         await self._transition(context, events, machine, chain, RunState.RUNNING)
                         continue
@@ -292,17 +276,20 @@ class Harness:
                     await self._finish_short_circuit(context, events, machine, chain, decision)
                     return
                 report = self._verifier.verify(context)
+                if not report.passed and context.verification_attempts == 0:
+                    report = dataclasses.replace(
+                        report,
+                        repair_hint="结果验证未通过: " + ",".join(issue.code for issue in report.issues),
+                    )
                 await chain.invoke(Hook.AFTER_VERIFY, context, report)
                 if report.passed:
                     context.outcome = RunOutcome.ANSWERED
                     await self._transition(context, events, machine, chain, RunState.COMPLETED)
                     await self._finish(context, events)
                     return
-                if context.verification_attempts == 0:
+                if report.repair_hint is not None:
                     context.verification_attempts += 1
-                    context.hints.append(
-                        "结果验证未通过: " + ",".join(issue.code for issue in report.issues)
-                    )
+                    context.hints.append(report.repair_hint)
                     context.answer = ""
                     await self._transition(context, events, machine, chain, RunState.RUNNING)
                     continue
@@ -356,7 +343,7 @@ class Harness:
         buffered_text = []
         usage = TokenUsage()
         structured = context.agent.terminal_tool is not None
-        view = self._view
+        view: RunViewMiddleware = context.process_view
         block: ReasoningBlock | None = None
         async for chunk in self._model.stream(
             context.request.model or context.agent.main_model,
@@ -367,27 +354,23 @@ class Harness:
             bool(context.request.scope or context.workspace.evidence or context.tool_exchanges),
         ):
             self._check_cancelled(context)
-            if chunk.reasoning_interrupted:
-                if view is not None and block is not None:
-                    block.close(time.monotonic(), "interrupted")
-                    if context.runtime.reasoning_view_enabled:
-                        await events.emit("reasoning.finished", {
-                            "blockId": block.block_id,
-                            "durationMs": block.duration_ms,
-                            "status": "interrupted",
-                        })
-                    block = None
-                if view is not None:
-                    await view.mark_retry(context)
+            if chunk.retry_attempt is not None:
+                view.record_attempt(context.model_turns, chunk.retry_attempt)
+                if chunk.reasoning_interrupted:
+                    if block is not None:
+                        await view.finish_reasoning_block(block, "interrupted")
+                        block = None
+                    await view.mark_retry(chunk.retry_attempt)
                 continue
-            if chunk.reasoning_delta and view is not None:
+            if chunk.reasoning_delta:
                 if block is None:
                     block = ReasoningBlock(
                         block_id=uuid.uuid4().hex[:16],
                         turn=context.model_turns,
                     )
-                await view.note_reasoning(context, context.model_turns, chunk.reasoning_delta, block, first=len(block.text) == 0)
+                await view.note_reasoning(context, block, chunk.reasoning_delta)
             if chunk.text_delta:
+                view.note_output(context.model_turns)
                 if structured:
                     buffered_text.append(chunk.text_delta)
                 else:
@@ -400,14 +383,14 @@ class Harness:
                     finish_calls.append(call)
                 else:
                     calls.append(call)
-        if view is not None and block is not None:
-            await view.finish_reasoning_block(context, block)
+        if block is not None:
+            await view.finish_reasoning_block(block, "done")
         if not structured:
             return calls, usage, None, None
         context.answer = ""
         text = "".join(buffered_text)
-        if view is not None and text.strip() and calls:
-            await view.note_step(context, context.model_turns, text)
+        if text.strip() and calls:
+            await view.note_step(context.model_turns, text)
         if not finish_calls:
             if calls and not context.force_finish:
                 return calls, usage, None, None
@@ -472,40 +455,24 @@ class Harness:
         return "\n".join(lines)
 
     async def _act(self, context: RunContext, events: EventBus, calls):
-        specs = [self._registry.get(call.name) for call in calls]
-        # 用户视图的工具事件由过程投影统一生成（带 target 与 result），核心循环只负责执行
-        if self._view is None:
-            for call, spec in zip(calls, specs, strict=True):
-                await events.emit(
-                    "tool.started",
-                    {
-                        "callId": call.call_id,
-                        "name": call.name,
-                        "summary": spec.summary if spec else call.name,
-                    },
-                )
+        """执行一轮工具调用并写回观察；用户视图的工具事件由过程投影生成。
+
+        :param context: 当前运行
+        :param events: 运行事件总线
+        :param calls: 本轮工具调用
+        :return: 观察结果
+        """
         results = await asyncio.gather(
             *(self._action.execute(context, call) for call in calls)
         )
         observations = []
         context.tool_calls += len(results)
         for result in results:
-            observation = self._action.observe(context, result)
-            observations.append(observation)
-            if self._view is None:
-                await events.emit(
-                    "tool.finished",
-                    {
-                        "callId": result.call_id,
-                        "name": result.tool_name,
-                        "status": result.status.value,
-                        "hitCount": len(result.evidence),
-                        "durationMs": result.duration_ms,
-                        "errorCategory": result.error_category.value if result.error_category else None,
-                        "retryable": result.retryable,
-                    },
-                )
-        context.tool_exchanges.append(ToolExchange(calls=list(calls), observations=observations))
+            observations.append(self._action.observe(context, result))
+        reasoning = context.process_view.reasoning_text(context.model_turns)
+        context.tool_exchanges.append(
+            ToolExchange(calls=list(calls), observations=observations, reasoning=reasoning or None)
+        )
         return observations
 
     async def _add_usage(self, context: RunContext, events: EventBus, usage: TokenUsage) -> None:
@@ -568,11 +535,17 @@ class Harness:
             await self._finish(context, events)
 
     async def _finish(self, context: RunContext, events: EventBus) -> None:
-        if self._view is not None:
-            await events.emit(
-                "trace.dependencies",
-                {"dependencies": self._view.dependencies()},
-            )
+        """运行收尾：投影补发未结束的过程事件，写依赖清单并发出完成事件。
+
+        :param context: 当前运行
+        :param events: 运行事件总线
+        """
+        view: RunViewMiddleware = context.process_view
+        await view.close(context)
+        await events.emit(
+            "trace.dependencies",
+            {"dependencies": view.dependencies(context)},
+        )
         await events.emit(
             "run.finished",
             {
@@ -582,6 +555,8 @@ class Harness:
                 "answerNotices": context.answer_notices,
                 "unfinished": context.last_hints if context.outcome == RunOutcome.FAILED else [],
                 "usage": context.usage.model_dump(mode="json", by_alias=True),
+                "toolCalls": context.tool_calls,
+                "firstOutputMs": view.first_output_ms(context),
             },
         )
 

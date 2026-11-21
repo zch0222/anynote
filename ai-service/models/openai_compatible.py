@@ -58,11 +58,6 @@ class _ThinkTagState:
         self._phase = self._PROBING
         self._pending = ""
 
-    @property
-    def active(self) -> bool:
-        """返回是否仍处于思考剥离阶段。"""
-        return self._phase != self._TEXT
-
     def feed(self, text: str) -> tuple[str | None, str | None]:
         """喂入一个正文增量。
 
@@ -95,24 +90,29 @@ class _ThinkTagState:
             self._phase = self._TEXT
             return reasoning, rest
         keep = self._split_open_tail(buffer)
-        self._pending = buffer[len(keep):] if keep is not None else ""
-        return keep, None
+        self._pending = buffer[len(keep):]
+        return keep or None, None
 
-    def finish(self) -> tuple[str | None, bool]:
-        """流结束时收尾。
+    def finish(self) -> tuple[str | None, str | None]:
+        """流结束时收尾：未闭合的思考整段算思考；仍在判定开头标签时，扣住的文字原样算正文。
 
-        :return: （剩余思考文本, 本轮是否有正文）
+        :return: （剩余思考文本, 剩余正文文本），任一可为空
         """
+        pending = self._pending or None
+        self._pending = ""
         if self._phase == self._REASONING:
-            return self._pending, False
-        return None, self._phase == self._TEXT
+            return pending, None
+        if self._phase == self._PROBING:
+            self._phase = self._TEXT
+            return None, pending
+        return None, None
 
     @staticmethod
-    def _split_open_tail(buffer: str) -> str | None:
+    def _split_open_tail(buffer: str) -> str:
         """保留可能是半个闭合标签的尾部，其余作为思考输出。
 
         :param buffer: 未闭合的思考缓冲
-        :return: 可立即输出的思考文本，尾部待定时为 None
+        :return: 可立即输出的思考文本，可能为空串
         """
         for size in range(len(THINK_CLOSE) - 1, 0, -1):
             if buffer.endswith(THINK_CLOSE[:size]):
@@ -155,7 +155,7 @@ class OpenAICompatibleAdapter:
         deadline = time.monotonic() + runtime.total_timeout_s
         messages = self._apply_passthrough(messages, passthrough, reasoning_format)
         for attempt in range(runtime.model_max_attempts):
-            output_state = {"produced": False, "reasoning_only": False}
+            output_state = {"body_emitted": False, "reasoning_emitted": False}
             try:
                 async for chunk in self._stream_once(
                     provider,
@@ -170,12 +170,13 @@ class OpenAICompatibleAdapter:
                     yield chunk
                 return
             except ModelError as error:
-                body_produced = output_state["produced"] and not output_state["reasoning_only"]
-                can_retry = error.retryable and not body_produced
+                can_retry = error.retryable and not output_state["body_emitted"]
                 if not can_retry or attempt + 1 >= runtime.model_max_attempts:
                     raise
-                if output_state["produced"]:
-                    yield ModelChunk(reasoning_interrupted=True)
+                yield ModelChunk(
+                    retry_attempt=attempt + 2,
+                    reasoning_interrupted=output_state["reasoning_emitted"],
+                )
 
     @staticmethod
     def _apply_passthrough(
@@ -185,8 +186,8 @@ class OpenAICompatibleAdapter:
     ) -> list[dict[str, Any]]:
         """按逻辑模型配置处理 assistant 消息上的推理回传字段。
 
-        Harness 会把当轮思考文本以 ``reasoning_content`` 键挂在 assistant 工具调用消息上；
-        本方法按回传方式转换或清除该字段。
+        上下文构建器把该轮思考全文以 ``reasoning_content`` 键挂在 assistant 工具调用消息上；
+        本方法按回传方式原样回传（字段名随推理格式映射）、改成空字段或清除。
 
         :param messages: 编译后的模型输入
         :param passthrough: 回传方式（none / empty / original）
@@ -221,6 +222,20 @@ class OpenAICompatibleAdapter:
         output_state: dict[str, bool],
         reasoning_format: str = "none",
     ) -> AsyncIterator[ModelChunk]:
+        """发起一次流式请求。
+
+        output_state 记录本次请求是否已产出正文（正文增量或工具调用片段）与思考增量，供重试判断。
+
+        :param provider: 供应商配置
+        :param model: 实际模型名
+        :param messages: 模型输入
+        :param tools: 工具定义
+        :param runtime: 超时配置
+        :param deadline: 总时长截止时刻
+        :param output_state: 本次请求的产出标记
+        :param reasoning_format: 推理输出格式
+        :return: 模型输出异步序列
+        """
         body: dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -291,22 +306,21 @@ class OpenAICompatibleAdapter:
                         )
                         if text or reasoning or has_tool:
                             first_produced = True
-                            if not output_state["produced"]:
-                                output_state["produced"] = True
-                                output_state["reasoning_only"] = not (text or has_tool)
+                        if has_tool:
+                            output_state["body_emitted"] = True
                         if reasoning:
+                            output_state["reasoning_emitted"] = True
                             yield ModelChunk(reasoning_delta=reasoning)
                         if think_state is not None and text:
                             think_text, plain_text = think_state.feed(text)
                             if think_text:
-                                if not output_state["produced"]:
-                                    output_state["produced"] = True
-                                    output_state["reasoning_only"] = True
+                                output_state["reasoning_emitted"] = True
                                 yield ModelChunk(reasoning_delta=think_text)
                             if plain_text:
-                                output_state["reasoning_only"] = False
+                                output_state["body_emitted"] = True
                                 yield ModelChunk(text_delta=plain_text)
                         elif text:
+                            output_state["body_emitted"] = True
                             yield ModelChunk(text_delta=text)
                 finally:
                     await response.aclose()
@@ -320,10 +334,12 @@ class OpenAICompatibleAdapter:
             raise ModelServiceError(retryable=True) from error
         except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError) as error:
             raise ModelServiceError(retryable=False) from error
-        if think_state is not None and think_state.active:
-            tail, _has_text = think_state.finish()
-            if tail:
-                yield ModelChunk(reasoning_delta=tail)
+        if think_state is not None:
+            reasoning_tail, text_tail = think_state.finish()
+            if reasoning_tail:
+                yield ModelChunk(reasoning_delta=reasoning_tail)
+            if text_tail:
+                yield ModelChunk(text_delta=text_tail)
         calls = []
         for index in sorted(fragments):
             fragment = fragments[index]

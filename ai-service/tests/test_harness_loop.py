@@ -160,8 +160,8 @@ async def test_caller_cancellation_stops_model_and_finishes_cancelled():
     assert model.calls
 
 
-async def test_reasoning_events_emitted_when_view_enabled():
-    """开关打开时思考增量与结束事件进入用户视图。"""
+async def test_reasoning_events_emitted_to_user_view():
+    """思考增量与结束事件进入用户视图，增量拼接等于思考全文。"""
     model = ScriptedModel(
         [
             ScriptStep(
@@ -173,32 +173,16 @@ async def test_reasoning_events_emitted_when_view_enabled():
             )
         ]
     )
-    run = make_run(runtime=HarnessRuntimeSettings(reasoning_view_enabled=True))
+    run = make_run()
     events = visible(await collect_events(make_harness(model), run))
     deltas = [e for e in events if e.type == "reasoning.delta"]
     finished = [e for e in events if e.type == "reasoning.finished"]
-    assert deltas and all("blockId" in e.data for e in deltas)
+    assert "".join(e.data["delta"] for e in deltas) == "先想一下再想一下"
+    assert {e.data["id"] for e in deltas} == {finished[0].data["id"]}
     assert len(finished) == 1
     assert finished[0].data["status"] == "done"
     assert finished[0].data["durationMs"] >= 0
     assert any(e.type == "text.delta" for e in events)
-
-
-async def test_reasoning_events_silent_when_view_disabled():
-    """开关关闭时不发任何思考事件（Trace 记录不变）。"""
-    model = ScriptedModel(
-        [
-            ScriptStep(
-                [
-                    ModelChunk(reasoning_delta="思考"),
-                    ModelChunk(text_delta="答案", finish=True),
-                ]
-            )
-        ]
-    )
-    run = make_run(runtime=HarnessRuntimeSettings(reasoning_view_enabled=False))
-    events = visible(await collect_events(make_harness(model), run))
-    assert not [e for e in events if e.type.startswith("reasoning.")]
 
 
 async def test_step_note_emitted_for_tool_turn_text():
@@ -259,14 +243,14 @@ async def test_step_note_emitted_for_tool_turn_text():
             ),
         ]
     )
-    run = make_run(runtime=HarnessRuntimeSettings(reasoning_view_enabled=True, step_note_enabled=True))
+    run = make_run()
     run.agent = agent
     harness = make_harness(model, registry=registry)
     events = visible(await collect_events(harness, run))
     notes = [e for e in events if e.type == "step.note"]
     assert len(notes) == 1
     assert notes[0].data["text"] == "先看看目录"
-    assert "noteId" in notes[0].data
+    assert "id" in notes[0].data
 
 
 async def test_tool_target_and_result_projection():
@@ -339,7 +323,7 @@ async def test_tool_target_and_result_projection():
             "terminal_tool": "agent_finish",
         }
     )
-    run = make_run(runtime=HarnessRuntimeSettings(reasoning_view_enabled=True))
+    run = make_run()
     run.agent = agent
     events = visible(await collect_events(make_harness(model, registry=registry), run))
     started = [e for e in events if e.type == "tool.started"][0]
@@ -354,7 +338,7 @@ async def test_tool_target_and_result_projection():
 
 
 async def test_tool_result_count_uses_diagnostics():
-    """结果计数优先取工具诊断（kb_read 字数），取不到时回退证据条数。"""
+    """结果计数优先取工具诊断（kb_read 字数），取不到时回退本次调用登记的证据条数。"""
     from harness.models import EvidenceItem
 
     registry = ToolRegistry()
@@ -424,10 +408,11 @@ async def test_tool_result_count_uses_diagnostics():
             "terminal_tool": "agent_finish",
         }
     )
-    run = make_run(runtime=HarnessRuntimeSettings(reasoning_view_enabled=True))
+    run = make_run()
     run.agent = agent
     events = visible(await collect_events(make_harness(model, registry=registry), run))
-    results = {e.data["callId"]: e.data["result"] for e in events if e.type == "tool.finished"}
+    results = {e.data["id"]: e.data["result"] for e in events if e.type == "tool.finished"}
     assert results["c1"]["count"] == 5300
-    assert results["c2"]["count"] == 1
+    assert results["c2"]["count"] == 0
+    assert results["c2"]["items"] == []
 

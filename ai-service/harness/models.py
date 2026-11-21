@@ -37,21 +37,21 @@ class RunOutcome(StrEnum):
 
 
 class HistoryCitation(BaseModel):
-    """历史回答在原轮次中使用的引用编号、标题与来源标识。
+    """历史回答在原轮次中使用的引用编号与标题。
 
     @author 称霸幼儿园
     """
 
     index: int = Field(ge=1)
     title: str | None = None
-    ref: str | None = None
-    subtype: str | None = None
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 class ChatMessage(BaseModel):
     """会话消息。
+
+    dependencies 是历史回答所在运行的依赖清单（实体键，如 note:12、mooc_item:5#transcript）。
 
     @author 称霸幼儿园
     """
@@ -60,6 +60,7 @@ class ChatMessage(BaseModel):
     content: str
     summary: bool = False
     citations: list[HistoryCitation] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -163,12 +164,16 @@ class ToolCall(BaseModel):
 class ModelChunk(BaseModel):
     """模型流式输出片段。
 
+    retry_attempt 只出现在适配器重试前发出的片段上，取值为即将开始的尝试序号；
+    reasoning_interrupted 表示上一次尝试已输出的思考因重试而中断。
+
     @author 称霸幼儿园
     """
 
     text_delta: str | None = None
     reasoning_delta: str | None = None
     reasoning_interrupted: bool = False
+    retry_attempt: int | None = Field(default=None, ge=2)
     tool_calls: list[ToolCall] = Field(default_factory=list)
     usage: TokenUsage | None = None
     reasoning_tokens: int | None = Field(default=None, ge=0)
@@ -255,6 +260,7 @@ class Observation(BaseModel):
     retryable: bool = False
     duration_ms: int = 0
     action_key: str = Field(default="", exclude=True)
+    evidence_ids: list[str] = Field(default_factory=list, exclude=True)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
@@ -263,11 +269,14 @@ class Observation(BaseModel):
 class ToolExchange(BaseModel):
     """一轮模型发起的工具调用及其观察结果。
 
+    reasoning 是该轮模型输出的思考全文，供按逻辑模型配置回传给后续请求。
+
     @author 称霸幼儿园
     """
 
     calls: list[ToolCall] = Field(default_factory=list)
     observations: list[Observation] = Field(default_factory=list)
+    reasoning: str | None = None
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -343,7 +352,11 @@ class RunWorkspace:
 
 @dataclass
 class RunContext:
-    """单次运行的可变状态，只能由核心循环提交变更。"""
+    """单次运行的可变状态，只能由核心循环提交变更。
+
+    scope_knowledge_bases 是本次运行检索范围内的知识库名称（知识库标识到名称）；
+    process_view 是本次运行的过程投影（harness.view.middleware.RunViewMiddleware）。
+    """
 
     request: RunRequest
     agent: AgentDefinition
@@ -369,6 +382,8 @@ class RunContext:
     error_category: str | None = None
     error_message: str | None = None
     scope_summary: str | None = None
+    scope_knowledge_bases: dict[int, str] = field(default_factory=dict)
+    process_view: Any = field(default=None, repr=False)
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     action_signatures: list[str] = field(default_factory=list)
     evidence_fingerprints: list[str] = field(default_factory=list)

@@ -231,6 +231,7 @@ class ContextBuilder:
 
         预算不足时从最早一轮开始收缩 tool 消息内容，调用与结果始终成对保留；
         JSON 对象结果按条目收缩并保留 count 等元数据，其他结果按字符截取。
+        该轮有思考时以 ``reasoning_content`` 键挂在 assistant 消息上，由模型适配器按回传方式转换或清除。
 
         :param exchanges: 按轮记录的工具交互
         :param budget: 工具交互可用的 token 预算
@@ -281,23 +282,24 @@ class ContextBuilder:
         for exchange in exchanges:
             if not exchange.calls:
                 continue
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [
-                        {
-                            "id": call.call_id,
-                            "type": "function",
-                            "function": {
-                                "name": call.name,
-                                "arguments": json.dumps(call.arguments, ensure_ascii=False),
-                            },
-                        }
-                        for call in exchange.calls
-                    ],
-                }
-            )
+            assistant: dict[str, Any] = {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": call.call_id,
+                        "type": "function",
+                        "function": {
+                            "name": call.name,
+                            "arguments": json.dumps(call.arguments, ensure_ascii=False),
+                        },
+                    }
+                    for call in exchange.calls
+                ],
+            }
+            if exchange.reasoning:
+                assistant["reasoning_content"] = exchange.reasoning
+            messages.append(assistant)
             for call in exchange.calls:
                 name, content, transform = results[call.call_id]
                 wrapped = f"{EVIDENCE_BEGIN}\n{content}\n{EVIDENCE_END}"

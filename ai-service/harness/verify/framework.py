@@ -21,10 +21,11 @@ class VerificationIssue:
 
 @dataclass(frozen=True)
 class VerificationReport:
-    """一次验证的汇总结果。"""
+    """一次验证的汇总结果；未通过且还能修复时 repair_hint 是追加给下一轮模型的修复提示。"""
 
     issues: list[VerificationIssue] = field(default_factory=list)
     diagnostics: dict[str, Any] = field(default_factory=dict)
+    repair_hint: str | None = None
 
     @property
     def passed(self) -> bool:

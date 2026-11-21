@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import json
 
 import httpx
 import pytest
@@ -465,4 +466,166 @@ def test_passthrough_empty_and_original_map_fields():
     messages = [
         {"role": "assistant", "content": "", "reasoning_content": "旧思考", "tool_calls": []},
     ]
-  
+    assert OpenAICompatibleAdapter._apply_passthrough(messages, "empty", "reasoning_content") == [
+        {"role": "assistant", "content": "", "reasoning_content": "", "tool_calls": []},
+    ]
+    assert OpenAICompatibleAdapter._apply_passthrough(messages, "original", "reasoning") == [
+        {"role": "assistant", "content": "", "reasoning": "旧思考", "tool_calls": []},
+    ]
+    assert OpenAICompatibleAdapter._apply_passthrough(messages, "original", "reasoning_content") == [
+        {"role": "assistant", "content": "", "reasoning_content": "旧思考", "tool_calls": []},
+    ]
+
+
+def _line(delta: dict) -> bytes:
+    """把一个增量对象编码成一行 SSE。"""
+    return f"data: {json.dumps({'choices': [{'delta': delta}]}, ensure_ascii=False)}\n\n".encode()
+
+
+REASONING_LINES = {
+    "reasoning_content": _line({"reasoning_content": "思考"}),
+    "reasoning": _line({"reasoning": "思考"}),
+    "think_tag": _line({"content": "<think>思考"}),
+}
+BODY_LINES = {
+    "reasoning_content": _line({"content": "正文前半段"}),
+    "reasoning": _line({"content": "正文前半段"}),
+    "think_tag": _line({"content": "</think>正文前半段"}),
+}
+TOOL_LINE = _line({"tool_calls": [{"index": 0, "id": "c1", "function": {"name": "kb", "arguments": "{"}}]})
+
+
+def _broken_adapter(first_lines: list[bytes]):
+    """构造首个请求输出指定片段后断流、第二个请求输出完整回答的适配器。
+
+    :param first_lines: 首个请求在断流前输出的 SSE 行
+    :return: （适配器, 请求计数器）
+    """
+    counter = {"requests": 0}
+
+    class FirstBrokenStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            for line in first_lines:
+                yield line
+            raise httpx.ReadError("broken")
+
+    def handler(_request):
+        counter["requests"] += 1
+        if counter["requests"] == 1:
+            return httpx.Response(200, stream=FirstBrokenStream())
+        return httpx.Response(200, stream=_StreamOnce(sse(json.dumps(
+            {"choices": [{"delta": {"content": "完整回答"}}]}, ensure_ascii=False))))
+
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=timeout)
+    )
+    return adapter, counter
+
+
+@pytest.mark.parametrize("fmt", ["reasoning_content", "reasoning", "think_tag"])
+async def test_reasoning_only_break_retries_once(fmt):
+    """只输出了思考就断流：重试一次，发一个中断片段，最终正文只来自第二次请求。"""
+    adapter, counter = _broken_adapter([REASONING_LINES[fmt]])
+    chunks = await collect_reasoning(adapter, reasoning_snapshot(fmt), HarnessRuntimeSettings(model_max_attempts=2))
+    assert counter["requests"] == 2
+    interrupted = [chunk for chunk in chunks if chunk.reasoning_interrupted]
+    assert len(interrupted) == 1
+    assert interrupted[0].retry_attempt == 2
+    assert "".join(chunk.text_delta or "" for chunk in chunks) == "完整回答"
+
+
+@pytest.mark.parametrize("fmt", ["reasoning_content", "reasoning", "think_tag"])
+async def test_break_after_body_is_never_retried(fmt):
+    """思考后已出现正文再断流：不重试，抛模型服务错误，只发一次请求。"""
+    adapter, counter = _broken_adapter([REASONING_LINES[fmt], BODY_LINES[fmt]])
+    with pytest.raises(ModelServiceError):
+        await collect_reasoning(adapter, reasoning_snapshot(fmt), HarnessRuntimeSettings(model_max_attempts=2))
+    assert counter["requests"] == 1
+
+
+@pytest.mark.parametrize("fmt", ["reasoning_content", "reasoning", "think_tag"])
+async def test_break_after_tool_fragment_is_never_retried(fmt):
+    """思考后已出现工具调用片段再断流：不重试。"""
+    adapter, counter = _broken_adapter([REASONING_LINES[fmt], TOOL_LINE])
+    with pytest.raises(ModelServiceError):
+        await collect_reasoning(adapter, reasoning_snapshot(fmt), HarnessRuntimeSettings(model_max_attempts=2))
+    assert counter["requests"] == 1
+
+
+async def test_retry_without_output_sends_attempt_marker_without_interrupt():
+    """没有任何输出时的重试也发出带尝试序号的片段，但不标记思考中断。"""
+    adapter, counter = _broken_adapter([])
+    chunks = await collect_reasoning(adapter, reasoning_snapshot("reasoning_content"),
+                                     HarnessRuntimeSettings(model_max_attempts=2))
+    assert counter["requests"] == 2
+    markers = [chunk for chunk in chunks if chunk.retry_attempt is not None]
+    assert [(chunk.retry_attempt, chunk.reasoning_interrupted) for chunk in markers] == [(2, False)]
+
+
+async def test_think_tag_answer_that_is_only_a_tag_prefix_is_kept():
+    """整段回答只是开启标签的严格前缀（如单个 <）时，原样作为正文输出。"""
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(200, stream=_StreamOnce(sse(
+                    json.dumps({"choices": [{"delta": {"content": "<"}}]}))))
+            ),
+            timeout=timeout,
+        )
+    )
+    chunks = await collect_reasoning(adapter, reasoning_snapshot("think_tag"))
+    assert "".join(chunk.text_delta or "" for chunk in chunks) == "<"
+    assert not any(chunk.reasoning_delta for chunk in chunks)
+
+
+@pytest.mark.parametrize(
+    ("fmt", "passthrough", "field", "expected"),
+    [
+        ("reasoning_content", "original", "reasoning_content", "第一轮思考"),
+        ("reasoning", "original", "reasoning", "第一轮思考"),
+        ("reasoning_content", "empty", "reasoning_content", ""),
+        ("reasoning_content", "none", None, None),
+    ],
+)
+async def test_harness_passes_turn_reasoning_back_by_passthrough(fmt, passthrough, field, expected):
+    """第二次模型请求的 assistant 工具调用消息按回传方式带上第一轮思考，字段名随推理格式映射。"""
+    from harness.action.registry import ToolOutput, ToolRegistry, ToolSpec
+    from tests.conftest import collect_events, make_harness, make_run
+    from tests.test_action import SearchArgs
+
+    bodies: list[dict] = []
+    reasoning_key = "reasoning" if fmt == "reasoning" else "reasoning_content"
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        if len(bodies) == 1:
+            content = b"".join([
+                _line({reasoning_key: "第一轮思考"}),
+                _line({"tool_calls": [{"index": 0, "id": "c1",
+                                       "function": {"name": "kb", "arguments": "{\"query\":\"q\"}"}}]}),
+                b"data: [DONE]\n\n",
+            ])
+        else:
+            content = sse(json.dumps({"choices": [{"delta": {"content": "答案"}}]}, ensure_ascii=False))
+        return httpx.Response(200, stream=_StreamOnce(content))
+
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=timeout)
+    )
+    registry = ToolRegistry()
+
+    async def tool(_args, _action):
+        return ToolOutput(content="结果")
+
+    registry.register(ToolSpec("kb", "检索", "测试", SearchArgs, tool))
+    run = make_run(["kb"])
+    run.model_snapshot = reasoning_snapshot(fmt, passthrough)
+    await collect_events(make_harness(adapter, registry), run)
+    assert len(bodies) == 2
+    assistant = next(item for item in bodies[1]["messages"] if item["role"] == "assistant")
+    other = {"reasoning", "reasoning_content"} - {field}
+    if field is None:
+        assert "reasoning" not in assistant and "reasoning_content" not in assistant
+    else:
+        assert assistant[field] == expected
+        assert not other & set(assistant)

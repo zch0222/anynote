@@ -69,6 +69,7 @@ class ToolCallRecord:
     status: str | None = None
     duration_ms: int = 0
     error_category: str | None = None
+    retryable: bool = False
     content: str = ""
     evidence: list[EvidenceItem] = field(default_factory=list)
     diagnostics: dict[str, Any] = field(default_factory=dict)

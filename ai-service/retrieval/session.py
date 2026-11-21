@@ -17,7 +17,7 @@ from harness.action.plane import FatalActionError, ToolExecutionError
 from harness.action.policy import BoundAction
 from harness.action.registry import ToolSpec
 from harness.middleware import HarnessMiddleware, Hook, MiddlewareContext, MiddlewareDecision
-from harness.models import ActionErrorCategory, RunContext, RunScope
+from harness.models import ActionErrorCategory, ChatMessage, RunContext, RunScope
 from models.catalog import ModelCatalogSnapshot
 from retrieval.evidence import EvidenceRegistry
 from retrieval.index_reader import KnowledgeIndexReader
@@ -294,6 +294,7 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
                 run.scope_summary = self._scope_summary(run.request.scope, None)
                 raise
             run.scope_summary = self._scope_summary(run.request.scope, scope)
+            run.scope_knowledge_bases = {item.kb_id: item.name for item in scope.knowledge_bases if item.name}
         elif (
             context.hook == Hook.BEFORE_PREPARE
             and self._prefetch_tool is not None
@@ -308,37 +309,22 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
         return MiddlewareDecision()
 
     async def _recheck_history(self, run: RunContext, session: RetrievalSession) -> None:
-        """开跑前按当前权限复核历史回答引用的条目（T2）。
+        """开跑前按当前权限复核历史回答所在运行的依赖清单（T2）。
 
-        引用了不可读条目的历史回答整条不进上下文；用户消息保留。
-        note 不可用时 fail-closed：全部历史不进上下文。
+        依赖清单里有不可读条目的历史回答整条不进上下文；用户消息保留。
+        note 不可用时 fail-closed：全部历史回答不进上下文。
 
         :param run: 当前运行
         :param session: 检索会话
         """
         history = list(run.request.history)
-        if not history:
-            return
-        assistant_refs: dict[int, list[tuple[str, str | None]]] = {}
+        dependencies: dict[int, list[tuple[str, str | None]]] = {}
         for position, message in enumerate(history):
-            if message.role != "assistant":
-                continue
-            refs = [
-                (citation.ref, citation.subtype)
-                for citation in message.citations
-                if citation.ref
-            ]
-            if refs:
-                assistant_refs[position] = refs
-        if not assistant_refs and not any(m.role == "assistant" for m in history):
+            if message.role == "assistant" and message.dependencies:
+                dependencies[position] = [self._split_key(key) for key in message.dependencies]
+        if not dependencies:
             return
-        unique: list[tuple[str, str | None]] = []
-        seen: set[tuple[str, str | None]] = set()
-        for refs in assistant_refs.values():
-            for ref in refs:
-                if ref not in seen:
-                    seen.add(ref)
-                    unique.append(ref)
+        unique = list(dict.fromkeys(item for items in dependencies.values() for item in items))
         try:
             readable = await session.authorize(unique)
         except (FatalActionError, InternalServiceError, ToolExecutionError) as error:
@@ -347,23 +333,30 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
                 run.run_id,
                 type(error).__name__,
             )
-            run.request.history = [m for m in history if m.role != "assistant"]
-            run.history = list(run.request.history)
-            return
-        kept: list[ChatMessage] = []
-        for position, message in enumerate(history):
-            if message.role == "assistant":
-                refs = assistant_refs.get(position)
-                if refs and any(ref not in readable for ref in refs):
+            kept = [message for message in history if message.role != "assistant"]
+        else:
+            kept: list[ChatMessage] = []
+            for position, message in enumerate(history):
+                if any(item not in readable for item in dependencies.get(position, [])):
                     self._logger.info(
-                        "历史回答引用已不可读，整条不进上下文 runId=%s position=%d",
+                        "历史回答的依赖已不可读，整条不进上下文 runId=%s position=%d",
                         run.run_id,
                         position,
                     )
                     continue
-            kept.append(message)
+                kept.append(message)
         run.request.history = kept
         run.history = list(kept)
+
+    @staticmethod
+    def _split_key(key: str) -> tuple[str, str | None]:
+        """把实体键拆成基础引用与附属类型。
+
+        :param key: 实体键，如 note:12 或 mooc_item:5#transcript
+        :return: （基础引用, 附属类型）
+        """
+        ref, _, subtype = key.partition("#")
+        return ref, subtype or None
 
     async def _prefetch(self, context: MiddlewareContext) -> None:
         """以原始问题执行一次检索并写入证据工作区。
@@ -378,7 +371,7 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
             await context.events.emit(
                 "tool.started",
                 {
-                    "callId": call_id,
+                    "id": call_id,
                     "name": self._prefetch_tool.name,
                     "summary": self._prefetch_tool.summary,
                 },
@@ -405,7 +398,7 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
                 ]
             )
             result = {
-                "callId": call_id,
+                "id": call_id,
                 "name": self._prefetch_tool.name,
                 "status": "PARTIAL" if output.partial else "SUCCESS",
                 "hitCount": len(output.evidence or []),
@@ -416,7 +409,7 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
         except ToolExecutionError as error:
             context.run.hints.append(f"首轮检索未完成：{error}")
             result = {
-                "callId": call_id,
+                "id": call_id,
                 "name": self._prefetch_tool.name,
                 "status": "FAILED",
                 "hitCount": 0,
@@ -427,7 +420,7 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
         except TimeoutError:
             context.run.hints.append("首轮检索未完成：TOOL_TIMEOUT")
             result = {
-                "callId": call_id,
+                "id": call_id,
                 "name": self._prefetch_tool.name,
                 "status": "FAILED",
                 "hitCount": 0,
