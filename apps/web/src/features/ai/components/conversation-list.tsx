@@ -33,7 +33,12 @@ export type ConversationListProps = {
   activeId: number;
 };
 
-/** 左侧会话列表：新建 / 重命名 / 删除，分页「加载更多」。 */
+/**
+ * 左侧会话列表，支持新建、重命名、删除与分页。
+ *
+ * @param props 当前会话 id
+ * @author 称霸幼儿园
+ */
 export function ConversationList({ activeId }: ConversationListProps) {
   const router = useRouter();
   const conversations = useConversationsInfinite();
@@ -58,19 +63,21 @@ export function ConversationList({ activeId }: ConversationListProps) {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="p-3">
+    <div className="flex h-full min-h-0 flex-col bg-sidebar">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-separator px-4">
+        <p className="text-sm font-medium text-label">AI 对话</p>
         <Button
-          variant="outline"
-          className="w-full justify-start"
+          variant="ghost"
+          size="icon-sm"
           onClick={() => router.push("/ai/chat")}
+          aria-label="新对话"
+          title="新对话"
           data-testid="conversation-new"
         >
           <Plus className="size-4" aria-hidden="true" />
-          新对话
         </Button>
       </div>
-      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-3" aria-label="会话列表">
+      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-3" aria-label="会话列表">
         {conversations.isPending ? (
           <ListRowsSkeleton count={4} />
         ) : conversations.isError ? (
@@ -83,15 +90,17 @@ export function ConversationList({ activeId }: ConversationListProps) {
           rows.map((summary) => (
             <div
               key={summary.id}
-              className={`group flex items-center gap-1 rounded-lg px-2 py-2 text-sm transition-colors ${
-                summary.id === activeId ? "bg-accent-soft text-accent" : "hover:bg-fill-hover"
+              className={`group flex min-h-10 items-center gap-1 rounded-lg px-1.5 transition-colors ${
+                summary.id === activeId
+                  ? "bg-fill-hover text-label"
+                  : "text-label-secondary hover:bg-fill-hover/70"
               }`}
               data-testid={`conversation-item-${summary.id}`}
               data-active={summary.id === activeId ? "true" : "false"}
             >
               <button
                 type="button"
-                className="min-h-10 min-w-0 flex-1 cursor-pointer truncate text-left outline-none"
+                className="min-h-9 min-w-0 flex-1 cursor-pointer truncate rounded-md text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 title={summary.title ?? "未命名会话"}
                 onClick={() => {
                   router.push(`/ai/chat/${summary.id}`);
@@ -105,7 +114,7 @@ export function ConversationList({ activeId }: ConversationListProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-9 shrink-0 md:size-7 md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
+                      className="size-9 shrink-0 md:size-7 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
                       disabled={deleteMutation.isPending}
                     />
                   }

@@ -29,6 +29,8 @@ import { toast } from "sonner";
  *
  * 桌面把它压在左栏里，手机上左栏是 `hidden md:block`——等于完全不可达（P0-2）。
  * 重命名 / 删除改走底部动作表：桌面那个入口是 hover 才出现的，触摸端点不到。
+ *
+ * @author 称霸幼儿园
  */
 export function MobileConversationList() {
   const conversations = useConversationsInfinite();
@@ -50,6 +52,7 @@ export function MobileConversationList() {
   return (
     <MobileScreen
       title="AI 对话"
+      tone="paper"
       actions={
         <Link
           href="/m/ai/chat/new"
@@ -61,7 +64,7 @@ export function MobileConversationList() {
         </Link>
       }
     >
-      <div className="space-y-4 p-4" data-testid="mobile-conversations">
+      <div className="p-3" data-testid="mobile-conversations">
         {conversations.isPending ? (
           <ListRowsSkeleton count={2} />
         ) : conversations.isError ? (
@@ -69,22 +72,22 @@ export function MobileConversationList() {
             会话加载失败：{conversations.error.message}
           </p>
         ) : rows.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-6 text-center">
+          <div className="flex min-h-64 flex-col items-center justify-center px-6 py-12 text-center">
             <MessageSquare className="mx-auto size-8 text-label-secondary" aria-hidden="true" />
             <p className="mt-3 text-sm font-medium">还没有历史会话</p>
             <p className="mt-1 text-sm text-label-secondary">从右上角开一段新对话。</p>
           </div>
         ) : (
-          <ul className="divide-y overflow-hidden rounded-xl border bg-surface">
+          <ul className="space-y-1">
             {rows.map((summary) => (
               <li
                 key={summary.id}
-                className="flex items-center"
+                className="flex min-h-12 items-center rounded-xl hover:bg-fill-hover focus-within:bg-fill-hover"
                 data-testid={`conversation-item-${summary.id}`}
               >
                 <Link
                   href={`/m/ai/chat/${summary.id}`}
-                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2 text-sm outline-none focus-visible:bg-fill-hover"
+                  className="flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2 text-sm outline-none focus-visible:bg-fill-hover"
                 >
                   <MessageSquare
                     className="size-4 shrink-0 text-label-secondary"
@@ -96,7 +99,7 @@ export function MobileConversationList() {
                   type="button"
                   aria-label={`会话「${summary.title ?? "未命名会话"}」操作`}
                   onClick={() => setActing(summary)}
-                  className="flex size-11 shrink-0 items-center justify-center text-label-secondary outline-none focus-visible:bg-fill-hover"
+                  className="mr-1 flex size-11 shrink-0 items-center justify-center rounded-lg text-label-secondary outline-none hover:bg-fill-hover focus-visible:bg-fill-hover"
                 >
                   <MoreHorizontal className="size-4" aria-hidden="true" />
                 </button>
@@ -108,7 +111,7 @@ export function MobileConversationList() {
         {conversations.hasNextPage ? (
           <Button
             variant="outline"
-            className="min-h-11 w-full"
+            className="mt-3 min-h-11 w-full"
             disabled={conversations.isFetchingNextPage}
             onClick={() => {
               void conversations.fetchNextPage();

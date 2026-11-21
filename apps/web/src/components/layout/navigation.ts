@@ -192,16 +192,18 @@ export function isRouteActive(pathname: string, href: string) {
 /**
  * 满幅路由：内容区**不留内边距**，由页面自己吃到视口边缘的页面。
  *
- * 只有笔记编辑器与笔记历史版本：设计稿里它们的顶栏分隔线与正文底色一直延伸到
- * 侧栏右侧与窗口右缘，外面再套一层 20/32px 的留白，正文就成了一块浮在灰底上的卡片——
- * 与「占满剩余所有空间」正好相反。历史版本（D-16）是左右两栏各自满幅，
- * 同样不能有外层留白。
+ * 包括笔记编辑器、笔记历史版本与 AI 对话；会话详情只接受数字 id，其他 AI 页面仍走文档流。
  *
- * 必须按**数字段**判定：`/notes/7/42` 是编辑器，而 `/notes/7/overview`、
- * `/notes/7/members` 这些二级页是普通文档流页面，仍然要有留白。
+ * @param pathname 当前桌面路由路径
+ * @returns 是否由页面自己管理满幅高度与滚动
+ * @author 称霸幼儿园
  */
 export function isFullBleedRoute(pathname: string): boolean {
-  return /^\/notes\/\d+\/\d+$/.test(pathname) || /^\/notes\/\d+\/\d+\/history$/.test(pathname);
+  return (
+    /^\/notes\/\d+\/\d+$/.test(pathname) ||
+    /^\/notes\/\d+\/\d+\/history$/.test(pathname) ||
+    /^\/ai\/chat(?:\/\d+)?$/.test(pathname)
+  );
 }
 
 /**

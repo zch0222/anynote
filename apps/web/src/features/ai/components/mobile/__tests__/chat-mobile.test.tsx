@@ -102,4 +102,12 @@ describe("MobileChat", () => {
     renderWithProviders(<MobileChat conversationId={9} />);
     expect(screen.getByTestId("mobile-back")).toBeInTheDocument();
   });
+
+  /** 对话容器建立 Flex 高度链，使输入区贴底而消息区内部滚动。 */
+  it("对话面板占满移动内容区", () => {
+    mockDetail({ isPending: false, isError: false, data: undefined });
+    renderWithProviders(<MobileChat conversationId={9} />);
+
+    expect(screen.getByTestId("mobile-chat")).toHaveClass("flex", "flex-1", "flex-col");
+  });
 });

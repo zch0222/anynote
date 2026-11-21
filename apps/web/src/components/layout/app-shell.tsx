@@ -22,7 +22,7 @@ import { WorkspaceSession } from "./workspace-session";
  * 回到桌面发现侧栏莫名展开了。
  *
  * 内容区的内边距分两种形态（见 `isFullBleedRoute`）：文档流页面留白，
- * 编辑器类页面满幅——后者的顶栏分隔线与正文底色要一直铺到窗口右缘。
+ * 编辑器与对话类页面满幅，顶栏分隔线与正文底色一直铺到窗口右缘。
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();

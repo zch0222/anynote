@@ -4,8 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/components/editor/TiptapEditor", () => ({
-  TiptapEditor: ({ value, preset }: { value: string; preset: string }) => (
-    <div data-testid="answer-editor" data-preset={preset}>
+  TiptapEditor: ({
+    value,
+    preset,
+    className,
+  }: { value: string; preset: string; className?: string }) => (
+    <div data-testid="answer-editor" data-preset={preset} data-classname={className}>
       {value}
     </div>
   ),
@@ -69,6 +73,24 @@ describe("CitationAnswer", () => {
     expect(onCitation).toHaveBeenCalledOnce();
     expect(push).not.toHaveBeenCalled();
     expect(screen.getByText("第 2 页")).toBeVisible();
+  });
+
+  /** 对话正文按内容撑开，文档问答保留编辑器默认高度。 */
+  it("仅在对话场景取消回答正文的最小高度", () => {
+    const { rerender } = render(
+      <CitationAnswer
+        content="短回答"
+        variant="desktop"
+        citations={[]}
+        presentation="conversation"
+      />,
+    );
+    expect(screen.getByTestId("answer-editor").getAttribute("data-classname")).toContain("min-h-0");
+
+    rerender(<CitationAnswer content="短回答" variant="desktop" citations={[]} />);
+    expect(screen.getByTestId("answer-editor").getAttribute("data-classname")).not.toContain(
+      "min-h-0",
+    );
   });
 
   /** 空片段仍显示标题与定位，不渲染空引用块。 */

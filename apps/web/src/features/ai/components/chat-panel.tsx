@@ -1,12 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { NEW_CONVERSATION_KEY, aiQueryKeys } from "@/features/ai/query-keys";
+import { aiQueryKeys } from "@/features/ai/query-keys";
 import { type SendArgs, useChatSession, useChatStreamStore } from "@/features/ai/use-chat-stream";
 import type { Citation, CitationVariant } from "@/lib/ai/citations";
+import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import { AlertCircle, ArrowDown, RotateCcw, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { scopeDocId } from "../schemas";
 import { ChatInput } from "./chat-input";
 import { ChatScopeSelect } from "./chat-scope-select";
@@ -24,13 +25,20 @@ export type ChatPanelProps = {
   onCitation?: ((citation: Citation) => boolean) | undefined;
   /** 流结束后刷新会话列表等外部数据。 */
   onSettled?: () => void;
-  /** 新会话拿到 conversationId 时回调（聊天页据此迁移 key 并回填路由）。 */
+  /** 新会话拿到 conversationId 时回调。 */
   onConversationCreated?: (conversationId: number) => void;
   placeholder?: string | undefined;
   emptyHint?: string | undefined;
+  /** 桌面对话页头显示的会话标题。 */
+  conversationTitle?: string;
 };
 
-/** 右侧聊天面板：消息流 + 输入区。流式状态由全局 store 持有，切页不丢。 */
+/**
+ * AI 消息流与输入区，支持独立对话和文档问答两种布局。
+ *
+ * @param props 会话状态来源、历史状态、引用与布局属性
+ * @author 称霸幼儿园
+ */
 export function ChatPanel({
   sessionKey,
   docId: requestedDocId,
@@ -43,16 +51,19 @@ export function ChatPanel({
   onConversationCreated,
   placeholder,
   emptyHint,
+  conversationTitle,
 }: ChatPanelProps) {
   const session = useChatSession(sessionKey);
   const docId = requestedDocId ?? scopeDocId(session.scope);
+  const conversation = !docId;
   const send = useChatStreamStore((state) => state.send);
   const abort = useChatStreamStore((state) => state.abort);
   const setScope = useChatStreamStore((state) => state.setScope);
   const queryClient = useQueryClient();
 
   const viewportRef = useRef<HTMLDivElement>(null);
-  const stickToBottomRef = useRef(true);
+  const scrollingToLatestRef = useRef(false);
+  const [followingLatest, setFollowingLatest] = useState(true);
 
   useEffect(() => {
     if (!docId && !session.scope) {
@@ -60,16 +71,21 @@ export function ChatPanel({
     }
   }, [docId, session.scope, initialBaseId, sessionKey, setScope]);
 
-  // 用户向上翻阅时不强拉底部；重新贴近底部后恢复跟随
   useEffect(() => {
-    if (session.messages.length === 0 || !stickToBottomRef.current) {
+    if (sessionKey.length === 0) return;
+    scrollingToLatestRef.current = false;
+    setFollowingLatest(true);
+  }, [sessionKey]);
+
+  useEffect(() => {
+    if (session.messages.length === 0 || !followingLatest || scrollingToLatestRef.current) {
       return;
     }
     const viewport = viewportRef.current;
     if (viewport) {
       viewport.scrollTop = viewport.scrollHeight;
     }
-  }, [session.messages]);
+  }, [session.messages, followingLatest]);
 
   const handleSend = useCallback(
     (prompt: string) => {
@@ -93,7 +109,8 @@ export function ChatPanel({
       if (conversationId > 0) {
         args.conversationId = conversationId;
       }
-      stickToBottomRef.current = true;
+      scrollingToLatestRef.current = false;
+      setFollowingLatest(true);
       void send(args);
     },
     [
@@ -115,87 +132,175 @@ export function ChatPanel({
     }
   }, [session.messages, handleSend]);
 
+  const scrollToLatest = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    scrollingToLatestRef.current = true;
+    setFollowingLatest(true);
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+  }, []);
+
+  const handleScroll = (element: HTMLDivElement) => {
+    const nearLatest = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+    if (scrollingToLatestRef.current) {
+      if (!nearLatest) return;
+      scrollingToLatestRef.current = false;
+    }
+    setFollowingLatest(nearLatest);
+  };
+
   const streaming = session.status === "streaming";
   const historyUnavailable = session.messages.length === 0 && historyStatus !== "ready";
+  const hero = conversation && session.messages.length === 0 && !historyUnavailable;
+  const presentation = conversation ? "conversation" : "document";
+
+  const messageContent = (
+    <>
+      {historyUnavailable ? (
+        historyStatus === "pending" ? (
+          <p className="text-sm text-label-secondary">加载中…</p>
+        ) : (
+          <div role="alert" className="space-y-2 text-sm text-danger">
+            <p>服务暂时不可用，请稍后重试</p>
+            <Button variant="outline" size="sm" onClick={onReloadHistory}>
+              重试
+            </Button>
+          </div>
+        )
+      ) : null}
+      {!historyUnavailable && session.messages.length === 0 ? (
+        conversation ? (
+          <div className="flex flex-col items-center text-center" data-testid="chat-empty">
+            <span className="mb-5 flex size-12 items-center justify-center rounded-2xl bg-accent-soft text-accent">
+              <Sparkles className="size-6" aria-hidden="true" />
+            </span>
+            <h2 className="text-[1.625rem] leading-8 font-medium text-label">
+              {emptyHint ?? "开始新的对话"}
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-label-secondary">
+              AI 回复支持 Markdown：代码块、表格与公式。
+            </p>
+          </div>
+        ) : (
+          <div className="py-16 text-center">
+            <p className="text-lg font-medium">{emptyHint ?? "开始新的对话"}</p>
+            <p className="mt-2 text-sm text-label-secondary">就当前文档提问，回答基于文档内容。</p>
+          </div>
+        )
+      ) : null}
+      {session.messages.map((message) => (
+        <MessageItem
+          key={message.id}
+          message={message}
+          variant={variant}
+          onCitation={onCitation}
+          presentation={presentation}
+        />
+      ))}
+      {session.status === "error" && session.error ? (
+        <div
+          className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
+          data-testid="chat-error"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span className="flex-1">{session.error}</span>
+          <Button variant="outline" size="sm" onClick={handleRetry}>
+            <RotateCcw className="size-3.5" aria-hidden="true" />
+            重试
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+
+  const scopeControl = conversation ? (
+    <ChatScopeSelect
+      scope={session.scope ?? { knowledgeBaseIds: [], refs: [] }}
+      disabled={streaming || historyUnavailable}
+      onChange={(scope) => setScope(sessionKey, scope)}
+    />
+  ) : undefined;
+
+  const composer = (
+    <div
+      className={cn(
+        conversation
+          ? "relative mx-auto w-full max-w-[50rem] shrink-0 px-4 pt-1 pb-3"
+          : "mx-auto w-full max-w-3xl px-4 pb-4",
+      )}
+    >
+      {conversation && !followingLatest && session.messages.length > 0 ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="absolute -top-10 right-4 z-10 size-9 bg-surface shadow-card"
+          aria-label="回到最新"
+          title="回到最新"
+          onClick={scrollToLatest}
+        >
+          <ArrowDown className="size-4" aria-hidden="true" />
+        </Button>
+      ) : null}
+      <ChatInput
+        streaming={streaming}
+        disabled={historyUnavailable}
+        onSend={handleSend}
+        onStop={() => {
+          abort(sessionKey);
+        }}
+        placeholder={placeholder}
+        presentation={presentation}
+        controls={scopeControl}
+      />
+      <p className="mt-2 text-center text-xs text-label-secondary">内容由 AI 生成，请注意甄别</p>
+    </div>
+  );
+
+  if (!conversation) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <p className="border-b px-4 py-2 text-sm text-label-secondary">检索范围：当前资料</p>
+        <div
+          ref={viewportRef}
+          className="min-h-0 flex-1 overflow-y-auto"
+          onScroll={(event) => handleScroll(event.currentTarget)}
+        >
+          <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6" data-testid="message-list">
+            {messageContent}
+          </div>
+        </div>
+        {composer}
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {docId ? (
-        <p className="border-b px-4 py-2 text-sm text-label-secondary">检索范围：当前资料</p>
-      ) : (
-        <ChatScopeSelect
-          scope={session.scope ?? { knowledgeBaseIds: [], refs: [] }}
-          disabled={streaming || historyUnavailable}
-          onChange={(scope) => setScope(sessionKey, scope)}
-        />
-      )}
-      <div
-        ref={viewportRef}
-        className="min-h-0 flex-1 overflow-y-auto"
-        onScroll={(event) => {
-          const element = event.currentTarget;
-          stickToBottomRef.current =
-            element.scrollHeight - element.scrollTop - element.clientHeight < 48;
-        }}
-      >
-        <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6" data-testid="message-list">
-          {historyUnavailable ? (
-            historyStatus === "pending" ? (
-              <p className="text-sm text-label-secondary">加载中…</p>
-            ) : (
-              <div role="alert" className="space-y-2 text-sm text-danger">
-                <p>服务暂时不可用，请稍后重试</p>
-                <Button variant="outline" size="sm" onClick={onReloadHistory}>
-                  重试
-                </Button>
-              </div>
-            )
-          ) : null}
-          {session.messages.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-lg font-medium">{emptyHint ?? "开始新的对话"}</p>
-              <p className="mt-2 text-sm text-label-secondary">
-                {docId
-                  ? "就当前文档提问，回答基于文档内容。"
-                  : "AI 回复支持 Markdown：代码块、表格与公式。"}
-              </p>
-            </div>
-          ) : (
-            session.messages.map((message) => (
-              <MessageItem
-                key={message.id}
-                message={message}
-                variant={variant}
-                onCitation={onCitation}
-              />
-            ))
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-surface">
+      {variant === "desktop" && conversationTitle ? (
+        <header className="flex h-14 shrink-0 items-center border-b border-separator px-6">
+          <h1 className="min-w-0 truncate text-sm font-medium text-label" title={conversationTitle}>
+            {conversationTitle}
+          </h1>
+        </header>
+      ) : null}
+      <div className={cn("flex min-h-0 flex-1 flex-col", hero && "justify-center")}>
+        <div
+          ref={viewportRef}
+          className={cn(
+            "overflow-y-auto overscroll-contain",
+            hero ? "max-h-full" : "min-h-0 flex-1",
           )}
-          {session.status === "error" && session.error ? (
-            <div
-              className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
-              data-testid="chat-error"
-            >
-              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              <span className="flex-1">{session.error}</span>
-              <Button variant="outline" size="sm" onClick={handleRetry}>
-                <RotateCcw className="size-3.5" aria-hidden="true" />
-                重试
-              </Button>
-            </div>
-          ) : null}
+          onScroll={(event) => handleScroll(event.currentTarget)}
+        >
+          <div
+            className={cn("mx-auto w-full max-w-3xl px-4", hero ? "py-2" : "space-y-6 py-6")}
+            data-testid="message-list"
+          >
+            {messageContent}
+          </div>
         </div>
-      </div>
-      <div className="mx-auto w-full max-w-3xl px-4 pb-4">
-        <ChatInput
-          streaming={streaming}
-          disabled={historyUnavailable}
-          onSend={handleSend}
-          onStop={() => {
-            abort(sessionKey);
-          }}
-          placeholder={placeholder}
-        />
-        <p className="mt-2 text-center text-xs text-label-secondary">内容由 AI 生成，请注意甄别</p>
+        {composer}
       </div>
     </div>
   );

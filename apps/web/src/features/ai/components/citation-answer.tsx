@@ -9,6 +9,7 @@ import {
   citationHref,
   citationLabel,
 } from "@/lib/ai/citations";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AnswerNotice } from "../schemas";
@@ -24,12 +25,14 @@ export function CitationAnswer({
   variant,
   onCitation,
   answerNotices,
+  presentation = "document",
 }: {
   content: string;
   citations: Citation[];
   variant: CitationVariant;
   onCitation?: ((citation: Citation) => boolean) | undefined;
   answerNotices?: readonly AnswerNotice[] | undefined;
+  presentation?: "document" | "conversation";
 }) {
   const router = useRouter();
   return (
@@ -50,7 +53,7 @@ export function CitationAnswer({
       <TiptapEditor
         preset="aiAnswer"
         value={content}
-        className="border-0"
+        className={cn("border-0", presentation === "conversation" && "[&_.ProseMirror]:min-h-0!")}
         onReady={(editor) =>
           applyCitationReferences(
             editor,

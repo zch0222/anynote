@@ -15,11 +15,10 @@ export type ChatPageProps = {
 };
 
 /**
- * AI 聊天页：左侧会话列表 + 右侧消息流。
+ * AI 聊天页：左侧会话列表与右侧消息流。
  *
- * 新会话的消息流挂在固定 key（NEW_CONVERSATION_KEY）上，首条消息完成后
- * 从流式 chunk 拿到 conversationId：把会话迁移到正式 key 并回填路由，
- * 全程不重发请求、不丢消息。
+ * @param props 路由会话 id 与初始知识库 id
+ * @author 称霸幼儿园
  */
 export function ChatPage({ conversationId, initialBaseId }: ChatPageProps) {
   const router = useRouter();
@@ -42,13 +41,16 @@ export function ChatPage({ conversationId, initialBaseId }: ChatPageProps) {
   }, [detail.data, conversationId, hydrate]);
 
   return (
-    <div className="flex h-[calc(100svh-9rem)] min-h-0" data-testid="chat-page">
-      <aside className="hidden w-64 shrink-0 border-r md:block">
+    <div className="flex min-h-0 flex-1 bg-surface" data-testid="chat-page">
+      <aside className="hidden w-72 shrink-0 border-r border-separator bg-sidebar md:block">
         <ConversationList activeId={conversationId ?? 0} />
       </aside>
-      <main className="min-w-0 flex-1">
+      <main className="flex min-w-0 flex-1 flex-col">
         <ChatPanel
           sessionKey={sessionKey}
+          conversationTitle={
+            conversationId ? (detail.data?.conversation?.title ?? "对话") : "新对话"
+          }
           initialBaseId={initialBaseId}
           historyStatus={
             !conversationId || detail.data ? "ready" : detail.isError ? "error" : "pending"

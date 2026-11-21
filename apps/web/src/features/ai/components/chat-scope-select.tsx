@@ -23,8 +23,8 @@ export function ChatScopeSelect({
   const id = useId();
   const selected = scope.knowledgeBaseIds[0];
   return (
-    <div className="space-y-2 border-b px-4 py-2">
-      <div className="flex items-center gap-3 text-sm">
+    <div className="min-w-0 space-y-1">
+      <div className="flex min-w-0 items-center gap-2 text-xs">
         <label htmlFor={id} className="shrink-0 text-label-secondary">
           检索范围
         </label>
@@ -33,7 +33,7 @@ export function ChatScopeSelect({
           aria-label="检索范围"
           value={selected ?? "all"}
           disabled={disabled || bases.isPending}
-          className="min-h-10 min-w-0 flex-1 rounded-lg border bg-surface px-2 text-label outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-8 min-w-0 max-w-56 flex-1 rounded-md border-0 bg-transparent px-1.5 text-xs text-label outline-none hover:bg-fill-hover focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           onChange={(event) =>
             onChange({
               knowledgeBaseIds: event.target.value === "all" ? [] : [Number(event.target.value)],

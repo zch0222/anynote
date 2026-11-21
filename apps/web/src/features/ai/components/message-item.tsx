@@ -1,6 +1,7 @@
 "use client";
 
 import { type Citation, type CitationVariant, parseCitations } from "@/lib/ai/citations";
+import { cn } from "@/lib/utils";
 import { memo } from "react";
 import type { AnswerNotice } from "../schemas";
 import type { StreamMessage } from "../use-chat-stream";
@@ -17,21 +18,31 @@ const ANSWER_NOTICE_TEXT: Record<AnswerNotice, string> = {
 /**
  * 显示用户消息、运行进度与带引用的助手回答。
  *
+ * @param props 消息内容、引用回调与展示场景
  * @author 称霸幼儿园
  */
 export const MessageItem = memo(function MessageItem({
   message,
   variant = "desktop",
   onCitation,
+  presentation = "document",
 }: {
   message: StreamMessage;
   variant?: CitationVariant;
   onCitation?: ((citation: Citation) => boolean) | undefined;
+  presentation?: "document" | "conversation";
 }) {
+  const conversation = presentation === "conversation";
   if (message.role === 0) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-xl rounded-br-sm bg-accent px-4 py-2.5 text-sm whitespace-pre-wrap text-accent-foreground">
+        <div
+          className={cn(
+            conversation
+              ? "max-w-[82%] rounded-2xl bg-fill-hover px-4 py-2.5 text-sm leading-6 whitespace-pre-wrap text-label"
+              : "max-w-[85%] rounded-xl rounded-br-sm bg-accent px-4 py-2.5 text-sm whitespace-pre-wrap text-accent-foreground",
+          )}
+        >
           {message.content}
         </div>
       </div>
@@ -43,11 +54,11 @@ export const MessageItem = memo(function MessageItem({
 
   return (
     <div
-      className="flex gap-3"
+      className={conversation ? "min-w-0" : "flex gap-3"}
       data-state={thinking ? "thinking" : message.streaming ? "streaming" : "done"}
     >
-      <AiAvatar thinking={thinking} />
-      <div className="min-w-0 flex-1 space-y-1">
+      {conversation ? null : <AiAvatar thinking={thinking} />}
+      <div className={conversation ? "min-w-0 space-y-2" : "min-w-0 flex-1 space-y-1"}>
         {message.process && message.process.items.length > 0 ? (
           <ProcessArea
             process={message.process}
@@ -68,7 +79,11 @@ export const MessageItem = memo(function MessageItem({
         {thinking ? (
           <output
             data-testid="assistant-thinking"
-            className="flex items-center gap-2 rounded-lg bg-block px-3 py-2.5 text-sm text-label-secondary"
+            className={cn(
+              conversation
+                ? "flex items-center gap-2 py-1 text-sm text-label-secondary"
+                : "flex items-center gap-2 rounded-lg bg-block px-3 py-2.5 text-sm text-label-secondary",
+            )}
           >
             <span>{message.progress ?? "正在准备"}</span>
             <ThinkingDots className="ml-auto inline-flex items-center gap-1" />
@@ -89,6 +104,7 @@ export const MessageItem = memo(function MessageItem({
             variant={variant}
             onCitation={onCitation}
             answerNotices={message.answerNotices}
+            presentation={presentation}
           />
         ) : message.outcome === "CANCELLED" ? (
           <p className="text-sm text-label-secondary">已取消</p>

@@ -22,6 +22,8 @@ export type MobileChatProps = {
  *
  * 新会话的 key 迁移与路由回填也与桌面一致：首条消息完成后从流式 chunk 拿到
  * conversationId，把会话迁到正式 key 并 replace 路由，全程不重发请求。
+ *
+ * @author 称霸幼儿园
  */
 export function MobileChat({ conversationId, initialBaseId }: MobileChatProps) {
   const router = useRouter();
@@ -46,8 +48,8 @@ export function MobileChat({ conversationId, initialBaseId }: MobileChatProps) {
   const title = conversationId ? (detail.data?.conversation?.title ?? "对话") : "新对话";
 
   return (
-    <MobileScreen title={title} back="/m/ai/chat" fill contentClassName="min-h-0">
-      <div className="min-h-0 flex-1" data-testid="mobile-chat">
+    <MobileScreen title={title} back="/m/ai/chat" fill tone="paper" contentClassName="min-h-0">
+      <div className="flex min-h-0 flex-1 flex-col" data-testid="mobile-chat">
         <ChatPanel
           sessionKey={sessionKey}
           initialBaseId={initialBaseId}

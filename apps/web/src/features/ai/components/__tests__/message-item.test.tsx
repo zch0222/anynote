@@ -15,6 +15,11 @@ vi.mock("@/components/editor/TiptapEditor", () => ({
 
 import { MessageItem } from "@/features/ai/components/message-item";
 
+/**
+ * 对话消息展示测试。
+ *
+ * @author 称霸幼儿园
+ */
 describe("MessageItem", () => {
   it("用户消息渲染纯文本气泡", () => {
     render(<MessageItem message={{ id: "1", role: 0, content: "帮我总结" }} />);
@@ -73,5 +78,16 @@ describe("MessageItem", () => {
       />,
     );
     expect(screen.queryByTestId("answer-notices")).toBeNull();
+  });
+
+  /** 对话页使用中性用户气泡，文档问答默认样式保持不变。 */
+  it("按展示场景隔离用户气泡样式", () => {
+    const { rerender } = render(
+      <MessageItem message={{ id: "7", role: 0, content: "问题" }} presentation="conversation" />,
+    );
+    expect(screen.getByText("问题")).toHaveClass("bg-fill-hover");
+
+    rerender(<MessageItem message={{ id: "7", role: 0, content: "问题" }} />);
+    expect(screen.getByText("问题")).toHaveClass("bg-accent");
   });
 });

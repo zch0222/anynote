@@ -64,8 +64,7 @@ describe("满幅路由", () => {
   /**
    * 满幅＝内容区不加内边距，由页面自己吃到视口边缘。
    *
-   * 只有笔记编辑器：设计稿里它的顶栏分隔线与正文底色一直延伸到侧栏右侧与窗口右缘，
-   * 外面再套一层留白，正文就变成"灰底上浮着的一张卡片"，与"编辑器占满剩余所有空间"相反。
+   * 笔记编辑器、历史版本与 AI 对话由页面管理满幅高度；其他页面保留文档流留白。
    */
   it("笔记编辑器与笔记历史版本（两段数字，可带 history）满幅", () => {
     expect(isFullBleedRoute("/notes/7/42")).toBe(true);
@@ -90,13 +89,27 @@ describe("满幅路由", () => {
     expect(isFullBleedRoute("/notes/7/tasks")).toBe(false);
   });
 
+  /**
+   * AI 对话使用满幅内容区，其他 AI 页面保持文档流。
+   *
+   * @author 称霸幼儿园
+   */
+  it("AI 对话列表与数字会话详情满幅", () => {
+    expect(isFullBleedRoute("/ai/chat")).toBe(true);
+    expect(isFullBleedRoute("/ai/chat/9")).toBe(true);
+    expect(isFullBleedRoute("/ai/pdf")).toBe(false);
+    expect(isFullBleedRoute("/ai/workflow")).toBe(false);
+  });
+
   it("按整段数字判定，不接受非数字或尾随段", () => {
     // 字面量 "notes" 曾经被 `[baseId]/[noteId]` 当 id 吃掉然后 notFound()，
     // 判定口径必须与路由一致：只有纯数字才算命中
     expect(isFullBleedRoute("/notes/abc/def")).toBe(false);
     expect(isFullBleedRoute("/notes/7/42/extra")).toBe(false);
     expect(isFullBleedRoute("/notes/7/42/")).toBe(false);
-    expect(isFullBleedRoute("/ai/chat")).toBe(false);
+    expect(isFullBleedRoute("/ai/chat/abc")).toBe(false);
+    expect(isFullBleedRoute("/ai/chat/9/extra")).toBe(false);
+    expect(isFullBleedRoute("/ai/chat/")).toBe(false);
     expect(isFullBleedRoute("/")).toBe(false);
   });
 });

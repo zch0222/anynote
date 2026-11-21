@@ -1,8 +1,13 @@
 import { ChatInput } from "@/features/ai/components/chat-input";
 import { renderWithProviders } from "@/test/render";
-import { fireEvent } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+/**
+ * 对话输入组件交互测试。
+ *
+ * @author 称霸幼儿园
+ */
 describe("ChatInput", () => {
   it("输入后点击发送，回调携带去除首尾空白的 prompt 并清空输入框", () => {
     const onSend = vi.fn();
@@ -59,5 +64,22 @@ describe("ChatInput", () => {
     expect(queryByTestId("chat-send")).toBeNull();
     fireEvent.click(getByTestId("chat-stop"));
     expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  /** 对话布局在输入卡片底部渲染检索控件。 */
+  it("对话布局渲染底部控件并保留发送入口", () => {
+    renderWithProviders(
+      <ChatInput
+        streaming={false}
+        presentation="conversation"
+        controls={<span>检索控件</span>}
+        onSend={vi.fn()}
+        onStop={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("检索控件")).toBeVisible();
+    expect(screen.getByTestId("chat-send")).toBeVisible();
+    expect(screen.getByTestId("chat-input").closest("form")).toHaveClass("rounded-2xl");
   });
 });
