@@ -3,7 +3,9 @@
 > 文档版本：v0.1 | 创建 2026-11-17 | 更新 2026-11-21（同步实施状态）
 > 状态：**T1–T8 已于 2026-11-18 拍板**，结论见 [OpenSpec 提案](../../.claude/openspec/changes/2026-11-18-agent-trace-view.md)，其中 T4 改为永久保留，与 §9 的推荐不同。
 > M17.0–M17.4 已实现，M17.5、M17.6 未开始。2026-11-21 实现评估发现 8 处阻断级缺陷，
-> 修复方案与验收标准见 [AGENT_TRACE_VIEW_CODE_REVIEW.md](./AGENT_TRACE_VIEW_CODE_REVIEW.md)；**修复并通过门禁前不打开 §5.9 的任何开关**。
+> 修复方案与验收标准见 [AGENT_TRACE_VIEW_CODE_REVIEW.md](./AGENT_TRACE_VIEW_CODE_REVIEW.md)，**2026-11-21 已按破坏性升级实施修复**：
+> §5.9 的 Nacos 开关全部去掉（思考流、过程说明、Trace 全文一直开启），事件与过程视图行统一用 `id`，契约以
+> [OpenSpec 2026-11-21](../../.claude/openspec/changes/2026-11-21-agent-trace-view-repair.md) 为准；真实推理模型验收（M17.6）完成前不给任何逻辑模型配置推理格式。
 > 正文仍是方案原文（2026-11-18 并入了回答文本方案的 P1、P2、P3、P7 渲染与解析约束），实施与方案的差异以 OpenSpec、里程碑记录和评估文档为准
 > 起因：在对话界面实时展示 Agent 的思考过程和工具调用；后台控制台查看完整 Trace；用户页面暂不展示轨迹。
 > 面向用户的任何内容，包括思考过程，都不能出现该用户无权访问的文档

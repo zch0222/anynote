@@ -950,6 +950,30 @@ Python 全量多轮在 455 passed、20 skipped 与 1 failed、454 passed 之间�
 修复方案、验收标准与开关打开前置条件见 [AGENT_TRACE_VIEW_CODE_REVIEW.md](./AGENT_TRACE_VIEW_CODE_REVIEW.md)。
 修复批次 R1–R5 完成并通过其中门禁前，不打开任何开关，M17.5、M17.6 不开工；上表各项的验证结论以该评估为准。
 
+### M17 评估修复（2026-11-21）
+
+按评估文档实施 R1–R5，并按当天拍板做破坏性升级：去掉 Nacos 的过程展示开关（思考流、过程说明、Trace 全文一直开启）；
+事件与过程视图行统一用 `id`；Java 去掉白名单，每种对外事件一个数据类（不再用 `Map<String, Object>`），注册为 OpenAPI 命名 schema；
+会话历史只按依赖清单复核；思考截断字数移到供应商表 `process_reasoning_max_chars`；`a_agent_run` 新增供应商、工具调用次数、首字时间，
+后两项也随 `run.finished` 与过程视图在对话界面展示。逐项结果见 [评估文档第 0 节](./AGENT_TRACE_VIEW_CODE_REVIEW.md#0-修复记录2026-11-21)，
+契约见 [OpenSpec 2026-11-21](../../.claude/openspec/changes/2026-11-21-agent-trace-view-repair.md)。
+
+**开发环境**：迁移 `2026-11-21-agent-trace-view-repair.sql` 已在本机开发库执行；D1、D2 执行前计数（`a_chat_message.process` 非空、
+2026-11-19 01:16 之后的 `trace.context`）均为 0，未删除任何行；本机 Nacos 的 `anynote-ai-harness.yml`、`anynote-ai-dev.yml`
+已按仓库文件重新发布（去掉上一次未提交修复尝试写入的 `tool-detail-enabled`、`anynote.ai.harness.process-reasoning-max-chars`，
+以及 ai-dev 里仓库早已删除的 `anynote.ai.models` 旧映射）；note、ai、harness 镜像按本批代码重建并重启。
+
+**真实栈核对（评估文档 8.3，不需要主密钥）**：用临时注册的测试账号在本机 Docker 开发栈执行，原始结果在本机 `tmp/m17-repair-check/report.json`。
+
+| 项 | 结果 |
+|---|---|
+| 批量可读性端点 | 以账号 A 身份直接调用 `/internal/v1/knowledge/authorize-batch`：提交 A 的笔记、B 的私有笔记、A 所在的 B 库、格式错误的 `note:abc`，返回 `00000`，`readable` 只含 A 的笔记与 B 库；经 `services/ai` 会话详情发起的复核结果一致 |
+| 管理端 | 系统管理员读取列表（`pageSize=999` 返回 100 条，共 125 条）、详情与事件均为 `00000`，事件 `content` 为 JSON 对象；普通用户请求三个管理端点均返回 `A0301` |
+| 回放 | 把共享样例写进测试会话的助手消息：桌面与 `/m` 刷新后思考、工具、说明、重试四类行齐全，完成行为「已完成，用时 18 秒 · 首字 0.3 秒 · 工具调用 1 次 · 检索 1 次」，结果条目链接分别为桌面与 `/m` 路由；把 A 移出 B 库后刷新，显示「部分内容你已无权访问，思考过程已隐藏」，思考与过程说明不再出现，B 库条目消失、A 的笔记保留 |
+
+**未完成**：Playwright 桌面与移动端用例（主密钥已放在 `infra/.env.dev.local`，需先重新填写 stepfun 的 Key；执行说明见 [AGENT_TRACE_VIEW_E2E.md](./AGENT_TRACE_VIEW_E2E.md)）；
+评估文档 8.4（真实推理模型并发、断流、体量、逐模型核对）仍属 M17.6；管理控制台前端（M17.5）未开始。
+
 ---
 
 ## M16.9 清理
