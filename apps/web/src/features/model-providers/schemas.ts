@@ -8,6 +8,7 @@ export const modelProviderSchema = z.object({
   models: z.array(z.string()),
   dataEgressAllowed: z.boolean(),
   enabled: z.boolean(),
+  processReasoningMaxChars: z.number().int(),
   version: z.number(),
   createTime: z.string().nullish(),
   updateTime: z.string().nullish(),
@@ -26,7 +27,11 @@ export type ProviderFormValue = {
   models: string;
   dataEgressAllowed: boolean;
   enabled: boolean;
+  processReasoningMaxChars: string;
 };
+
+/** 思考截断字数的默认值，与数据库列默认值一致。 */
+export const DEFAULT_PROCESS_REASONING_MAX_CHARS = 8000;
 
 export function emptyProviderForm(): ProviderFormValue {
   return {
@@ -38,6 +43,7 @@ export function emptyProviderForm(): ProviderFormValue {
     models: "",
     dataEgressAllowed: false,
     enabled: true,
+    processReasoningMaxChars: String(DEFAULT_PROCESS_REASONING_MAX_CHARS),
   };
 }
 
@@ -51,7 +57,21 @@ export function toProviderForm(provider: ModelProvider): ProviderFormValue {
     models: provider.models.join(","),
     dataEgressAllowed: provider.dataEgressAllowed,
     enabled: provider.enabled,
+    processReasoningMaxChars: String(provider.processReasoningMaxChars),
   };
+}
+
+/**
+ * 解析思考截断字数，只接受 500 到 200000 之间的整数。
+ *
+ * @param value 表单输入
+ * @returns 合法时为整数，否则为 null
+ */
+export function parseProcessReasoningMaxChars(value: string): number | null {
+  const text = value.trim();
+  if (!/^\d+$/.test(text)) return null;
+  const parsed = Number(text);
+  return parsed >= 500 && parsed <= 200000 ? parsed : null;
 }
 
 export function isValidProviderBaseUrl(value: string): boolean {
@@ -82,6 +102,9 @@ export function validateProviderForm(value: ProviderFormValue, creating: boolean
     return "接口基地址必须是有效的 HTTP 或 HTTPS 地址";
   }
   if (creating && !value.apiKey.trim()) return "请输入 API Key";
+  if (parseProcessReasoningMaxChars(value.processReasoningMaxChars) === null) {
+    return "思考截断字数必须为 500 到 200000 之间的整数";
+  }
   return null;
 }
 

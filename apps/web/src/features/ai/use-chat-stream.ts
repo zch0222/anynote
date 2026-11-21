@@ -1,14 +1,9 @@
 "use client";
 
 import { type Citation, parseCitations } from "@/lib/ai/citations";
-import {
-  EMPTY_PROCESS,
-  type ProcessResultItem,
-  type ProcessState,
-  applyRunEvent,
-} from "@/lib/ai/process";
+import { EMPTY_PROCESS, type ProcessState, applyRunEvent, readResultItems } from "@/lib/ai/process";
 import { runProgress } from "@/lib/ai/run-progress";
-import { streamAiSse, toAiRunErrorMessage } from "@/lib/ai/sse";
+import { type AiRunEvent, streamAiSse, toAiRunErrorMessage } from "@/lib/ai/sse";
 import { type StoreApi, type UseBoundStore, create } from "zustand";
 import {
   type AnswerNotice,
@@ -44,6 +39,10 @@ export type StreamMessage = {
   process?: ProcessState;
   /** 过程区完成后展示的总耗时（毫秒）。 */
   durationMs?: number;
+  /** 模型发起的工具调用次数（运行结束后才有）。 */
+  toolCalls?: number;
+  /** 从运行开始到首个思考或正文增量的毫秒数（运行结束后才有）。 */
+  firstOutputMs?: number;
   /** 落库过程视图的隐藏提示（撤权后回放时显示）。 */
   processHiddenNotice?: string;
 };
@@ -182,7 +181,37 @@ function ensureChatStreamStore(): ChatStreamStore {
 
         let failed = false;
         let finished = false;
+        let aborted = false;
         const startedAtMs = Date.now();
+        // 思考增量按动画帧合并后再写入 store，其他事件到来前先写完已缓冲的增量，保持顺序。
+        const pendingReasoning: AiRunEvent[] = [];
+        let cancelFrame: (() => void) | null = null;
+        const flushReasoning = () => {
+          cancelFrame?.();
+          cancelFrame = null;
+          if (pendingReasoning.length === 0) return;
+          const batch = pendingReasoning.splice(0);
+          set((current) => {
+            const session = current.sessions[activeRun.key];
+            if (!session) return current;
+            return {
+              sessions: {
+                ...current.sessions,
+                [activeRun.key]: {
+                  ...session,
+                  messages: session.messages.map((message) =>
+                    message.id === assistantId
+                      ? {
+                          ...message,
+                          process: batch.reduce(applyRunEvent, message.process ?? EMPTY_PROCESS),
+                        }
+                      : message,
+                  ),
+                },
+              },
+            };
+          });
+        };
         try {
           await streamAiSse({
             path: args.docId ? "/rag/query/docs/v1" : "/v1/agent/runs",
@@ -202,6 +231,12 @@ function ensureChatStreamStore(): ChatStreamStore {
                 },
             signal: controller.signal,
             onEvent: (event) => {
+              if (event.type === "reasoning.delta") {
+                pendingReasoning.push(event);
+                cancelFrame ??= scheduleFrame(flushReasoning);
+                return;
+              }
+              flushReasoning();
               set((current) => {
                 const session = current.sessions[activeRun.key];
                 if (!session) return current;
@@ -247,6 +282,14 @@ function ensureChatStreamStore(): ChatStreamStore {
                             : {}),
                           ...(event.type === "run.finished"
                             ? { durationMs: Date.now() - startedAtMs }
+                            : {}),
+                          ...(event.type === "run.finished" &&
+                          typeof event.data.toolCalls === "number"
+                            ? { toolCalls: event.data.toolCalls }
+                            : {}),
+                          ...(event.type === "run.finished" &&
+                          typeof event.data.firstOutputMs === "number"
+                            ? { firstOutputMs: event.data.firstOutputMs }
                             : {}),
                         };
                       }),
@@ -360,7 +403,8 @@ function ensureChatStreamStore(): ChatStreamStore {
             });
           }
         } catch (error) {
-          failed = !abortError(error);
+          aborted = abortError(error);
+          failed = !aborted;
           if (failed) {
             set((current) => {
               const session = current.sessions[activeRun.key];
@@ -376,9 +420,16 @@ function ensureChatStreamStore(): ChatStreamStore {
             });
           }
         } finally {
+          flushReasoning();
           if (controllers.get(activeRun.key) === activeRun) {
             controllers.delete(activeRun.key);
           }
+          // 没收到终态事件就结束的流：用户中止记为已停止，否则记为失败。
+          const endedOutcome = finished
+            ? undefined
+            : activeRun.cancelRequested || aborted
+              ? "CANCELLED"
+              : "FAILED";
           set((current) => {
             const session = current.sessions[activeRun.key];
             if (!session) {
@@ -392,9 +443,12 @@ function ensureChatStreamStore(): ChatStreamStore {
                   // 终态事件未提供错误说明时使用已确认的运行失败文案。
                   error: failed && !session.error ? toAiRunErrorMessage(null) : session.error,
                   status: failed ? "error" : "idle",
-                  messages: session.messages.map((message) =>
-                    message.streaming ? { ...message, streaming: false } : message,
-                  ),
+                  messages: session.messages.map((message) => {
+                    if (message.id === assistantId && endedOutcome) {
+                      return { ...message, streaming: false, outcome: endedOutcome };
+                    }
+                    return message.streaming ? { ...message, streaming: false } : message;
+                  }),
                 },
               },
             };
@@ -444,11 +498,10 @@ function ensureChatStreamStore(): ChatStreamStore {
                     ...(() => {
                       const restored = hydrateProcess(message.process);
                       if (!restored) return {};
+                      const metrics = hydrateMetrics(message.process);
                       return {
                         process: restored,
-                        ...(typeof hydrateDurationMs(message.process) === "number"
-                          ? { durationMs: hydrateDurationMs(message.process) }
-                          : {}),
+                        ...metrics,
                         ...(restored.hidden
                           ? {
                               processHiddenNotice:
@@ -540,22 +593,39 @@ export function docSessionKey(docId: number): string {
   return `doc${docId}`;
 }
 
+/**
+ * 在下一个动画帧执行回调；没有动画帧时退化为 16 毫秒定时器。
+ *
+ * @param callback 回调
+ * @returns 取消函数
+ */
+function scheduleFrame(callback: () => void): () => void {
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    const handle = window.requestAnimationFrame(() => callback());
+    return () => window.cancelAnimationFrame(handle);
+  }
+  const handle = setTimeout(callback, 16);
+  return () => clearTimeout(handle);
+}
+
 /** 落库过程视图恢复为过程状态（只取可展示行；隐藏时空文本行丢弃）。 */
 function hydrateProcess(raw: unknown): (ProcessState & { hidden?: boolean }) | null {
   if (typeof raw !== "object" || raw === null) return null;
   const record = raw as Record<string, unknown>;
   const hidden = record.hidden === true;
-  const items = Array.isArray(record.items) ? (record.items as ProcessItemLike[]) : [];
+  const items = Array.isArray(record.items) ? (record.items as unknown[]) : [];
   const mapped: ProcessState["items"] = [];
   for (const entry of items) {
     if (typeof entry !== "object" || entry === null) continue;
     const item = entry as Record<string, unknown>;
-    if (item.type === "reasoning" && typeof item.blockId === "string") {
+    const id = typeof item.id === "string" ? item.id : null;
+    if (id === null) continue;
+    if (item.type === "reasoning") {
       const text = typeof item.text === "string" ? item.text : "";
       if (hidden && !text) continue;
       mapped.push({
         type: "reasoning",
-        blockId: item.blockId,
+        id,
         text,
         status:
           item.status === "interrupted"
@@ -565,39 +635,37 @@ function hydrateProcess(raw: unknown): (ProcessState & { hidden?: boolean }) | n
               : "done",
         durationMs: typeof item.durationMs === "number" ? item.durationMs : undefined,
       });
-    } else if (item.type === "note" && typeof item.text === "string") {
-      if (hidden && !item.text) continue;
-      mapped.push({ type: "note", text: item.text });
+    } else if (item.type === "note") {
+      const text = typeof item.text === "string" ? item.text : "";
+      if (!text) continue;
+      mapped.push({ type: "note", id, text });
     } else if (item.type === "retry") {
-      mapped.push({ type: "retry" });
-    } else if (
-      item.type === "tool" &&
-      typeof item.callId === "string" &&
-      typeof item.name === "string"
-    ) {
+      mapped.push({ type: "retry", id });
+    } else if (item.type === "tool" && typeof item.name === "string") {
+      const target =
+        typeof item.target === "object" && item.target !== null
+          ? (item.target as Record<string, unknown>)
+          : null;
+      const result =
+        typeof item.result === "object" && item.result !== null
+          ? (item.result as Record<string, unknown>)
+          : null;
       mapped.push({
         type: "tool",
-        callId: item.callId,
+        id,
         name: item.name,
         target:
-          typeof item.target === "object" && item.target !== null
-            ? {
-                label: String((item.target as Record<string, unknown>).label ?? ""),
-                resolved: (item.target as Record<string, unknown>).resolved === true,
-              }
+          target && typeof target.label === "string"
+            ? { label: target.label, resolved: target.resolved === true }
             : null,
         status: typeof item.status === "string" ? item.status : "SUCCESS",
         durationMs: typeof item.durationMs === "number" ? item.durationMs : undefined,
-        result:
-          typeof item.result === "object" && item.result !== null
-            ? {
-                count:
-                  typeof (item.result as Record<string, unknown>).count === "number"
-                    ? ((item.result as Record<string, unknown>).count as number)
-                    : 0,
-                items: readResultItems((item.result as Record<string, unknown>).items),
-              }
-            : undefined,
+        result: result
+          ? {
+              count: typeof result.count === "number" ? result.count : 0,
+              items: readResultItems(result.items),
+            }
+          : undefined,
       });
     }
   }
@@ -609,25 +677,6 @@ function hydrateProcess(raw: unknown): (ProcessState & { hidden?: boolean }) | n
   };
 }
 
-/** 读取工具结果条目（隐藏复核后仅剩可读条目）。 */
-function readResultItems(value: unknown): ProcessResultItem[] {
-  if (!Array.isArray(value)) return [];
-  const items: ProcessResultItem[] = [];
-  for (const entry of value) {
-    if (typeof entry !== "object" || entry === null) continue;
-    const record = entry as Record<string, unknown>;
-    const item: ProcessResultItem = {};
-    if (typeof record.ref === "string") item.ref = record.ref;
-    if (typeof record.title === "string") item.title = record.title;
-    if (typeof record.kbName === "string") item.kbName = record.kbName;
-    if (typeof record.locator === "object" && record.locator !== null) {
-      item.locator = record.locator as Record<string, unknown>;
-    }
-    items.push(item);
-  }
-  return items;
-}
-
 /** 落库过程视图的隐藏提示文案。 */
 function hydrateHiddenNotice(raw: unknown): string | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
@@ -635,11 +684,15 @@ function hydrateHiddenNotice(raw: unknown): string | undefined {
   return typeof notice === "string" ? notice : undefined;
 }
 
-/** 落库过程视图的总耗时（毫秒）。 */
-function hydrateDurationMs(raw: unknown): number | undefined {
-  if (typeof raw !== "object" || raw === null) return undefined;
-  const durationMs = (raw as Record<string, unknown>).durationMs;
-  return typeof durationMs === "number" ? durationMs : undefined;
+/** 落库过程视图的运行指标：总耗时、工具调用次数与首字时间（毫秒）。 */
+function hydrateMetrics(
+  raw: unknown,
+): Partial<Pick<StreamMessage, "durationMs" | "toolCalls" | "firstOutputMs">> {
+  if (typeof raw !== "object" || raw === null) return {};
+  const record = raw as Record<string, unknown>;
+  return {
+    ...(typeof record.durationMs === "number" ? { durationMs: record.durationMs } : {}),
+    ...(typeof record.toolCalls === "number" ? { toolCalls: record.toolCalls } : {}),
+    ...(typeof record.firstOutputMs === "number" ? { firstOutputMs: record.firstOutputMs } : {}),
+  };
 }
-
-type ProcessItemLike = Record<string, unknown>;

@@ -1,10 +1,14 @@
 "use client";
 
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
-import { activitySummary, toolAction, toolResultSummary } from "@/lib/ai/process";
-import type { ProcessItem, ProcessState } from "@/lib/ai/process";
+import { type CitationVariant, citationHref } from "@/lib/ai/citations";
+import { completedHead, toolAction, toolTrailing } from "@/lib/ai/process";
+import type { ProcessItem, ProcessResultItem, ProcessState } from "@/lib/ai/process";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+
+const UNREADABLE_TITLE = "未找到或无权访问的内容";
 
 /**
  * 运行过程区：整轮控件、思考行、工具行与过程说明。
@@ -15,18 +19,25 @@ export function ProcessArea({
   process,
   streaming,
   durationMs,
+  toolCalls,
+  firstOutputMs,
   failed,
   cancelled,
+  variant = "desktop",
 }: {
   process: ProcessState;
   streaming: boolean;
   durationMs?: number | undefined;
+  toolCalls?: number | undefined;
+  firstOutputMs?: number | undefined;
   failed?: boolean | undefined;
   cancelled?: boolean | undefined;
+  variant?: CitationVariant | undefined;
 }) {
   const items = process.items;
   const rootRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   useEffect(() => {
@@ -54,18 +65,28 @@ export function ProcessArea({
     setCollapsed(true);
   }, [collapsedByDefault]);
 
-  const head = streaming
-    ? `思考中 · ${elapsedSeconds} 秒`
-    : failed
-      ? "失败"
-      : cancelled
-        ? "已停止"
-        : `已完成，用时 ${Math.round((durationMs ?? 0) / 1000)} 秒`;
-  const summary = streaming ? null : activitySummary(items);
+  const status = failed
+    ? "失败"
+    : cancelled
+      ? "已停止"
+      : completedHead(durationMs, firstOutputMs, toolCalls, items);
+  const head = streaming ? `思考中 · ${elapsedSeconds} 秒` : status;
+  // 移动端运行中只显示整轮控件和最新一行，点按展开全部。
+  const latestOnly = variant === "mobile" && streaming && !showAll;
+  const visibleItems = latestOnly ? items.slice(-1) : items;
 
   if (items.length === 0) {
     return null;
   }
+
+  const toggle = () => {
+    if (variant === "mobile" && streaming) {
+      setShowAll((prev) => !prev);
+      return;
+    }
+    setCollapsed((prev) => !prev);
+  };
+  const expanded = latestOnly ? false : !collapsed;
 
   return (
     <div
@@ -73,28 +94,34 @@ export function ProcessArea({
       className="rounded-lg border border-separator/60 bg-block/60"
       data-testid="process-area"
     >
+      <span className="sr-only" aria-live="polite" data-testid="process-announcer">
+        {streaming ? "思考中" : status}
+      </span>
       <button
         type="button"
-        aria-expanded={!collapsed}
-        onClick={() => setCollapsed((prev) => !prev)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-label-secondary"
+        aria-expanded={expanded}
+        onClick={toggle}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-label-secondary"
         data-testid="process-toggle"
       >
-        {collapsed ? (
-          <ChevronRight aria-hidden="true" className="size-3.5" />
+        {expanded ? (
+          <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
         ) : (
-          <ChevronDown aria-hidden="true" className="size-3.5" />
+          <ChevronRight aria-hidden="true" className="size-3.5 shrink-0" />
         )}
-        <span>{head}</span>
-        {summary ? <span className="min-w-0 truncate">· {summary}</span> : null}
+        <span className="min-w-0 truncate">{head}</span>
         {streaming ? (
-          <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+          <span
+            aria-hidden="true"
+            className="ml-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent motion-safe:animate-pulse"
+            data-testid="process-pulse"
+          />
         ) : null}
       </button>
-      {collapsed ? null : (
+      {collapsed && !latestOnly ? null : (
         <ul className="space-y-1 px-3 pb-3">
-          {items.map((item, index) => (
-            <ProcessRow key={processRowKey(item, index)} item={item} />
+          {visibleItems.map((item, index) => (
+            <ProcessRow key={processRowKey(item, index)} item={item} variant={variant} />
           ))}
         </ul>
       )}
@@ -106,10 +133,11 @@ export function ProcessArea({
  * 过程区中的一行。
  *
  * @param item 过程行
+ * @param variant 桌面或移动端
  *
  * @author 称霸幼儿园
  */
-function ProcessRow({ item }: { item: ProcessItem }) {
+function ProcessRow({ item, variant }: { item: ProcessItem; variant: CitationVariant }) {
   if (item.type === "reasoning") {
     return <ReasoningRow item={item} />;
   }
@@ -134,7 +162,7 @@ function ProcessRow({ item }: { item: ProcessItem }) {
       </li>
     );
   }
-  return <ToolRow item={item} />;
+  return <ToolRow item={item} variant={variant} />;
 }
 
 /**
@@ -177,18 +205,26 @@ function ReasoningRow({ item }: { item: Extract<ProcessItem, { type: "reasoning"
 }
 
 /**
- * 工具行：动作、对象、结果摘要；展开列出结果条目。
+ * 工具行：动作、对象、结果摘要或失败标识、耗时；展开列出结果条目，条目链接沿用引用卡片的路由。
  *
  * @param item 工具行
+ * @param variant 桌面或移动端
  *
  * @author 称霸幼儿园
  */
-function ToolRow({ item }: { item: Extract<ProcessItem, { type: "tool" }> }) {
-  const summary = toolResultSummary(item.name, item.result);
+function ToolRow({
+  item,
+  variant,
+}: {
+  item: Extract<ProcessItem, { type: "tool" }>;
+  variant: CitationVariant;
+}) {
+  const trailing = toolTrailing(item);
   const entries = item.result?.items ?? [];
   const [open, setOpen] = useState(false);
+  const failed = item.status === "FAILED";
   return (
-    <li className="py-0.5" data-testid="process-tool">
+    <li className="py-0.5" data-testid="process-tool" data-status={item.status}>
       <button
         type="button"
         aria-expanded={open || undefined}
@@ -200,25 +236,68 @@ function ToolRow({ item }: { item: Extract<ProcessItem, { type: "tool" }> }) {
         <span className="shrink-0">{toolAction(item.name)}</span>
         {item.target ? <span className="min-w-0 truncate">· {item.target.label}</span> : null}
         {item.status === "running" ? (
-          <span className="ml-auto inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-        ) : (
-          <span className="ml-auto shrink-0">
-            {summary ? `${summary}${entries.length > 0 ? " ·" : ""}` : null}
+          <span
+            aria-hidden="true"
+            className="ml-auto inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent motion-safe:animate-pulse"
+            data-testid="process-tool-pulse"
+          />
+        ) : trailing ? (
+          <span
+            className={`ml-auto shrink-0 ${failed ? "text-danger" : ""}`}
+            data-testid="process-tool-trailing"
+          >
+            {trailing}
           </span>
-        )}
+        ) : null}
       </button>
       {open && entries.length > 0 ? (
         <ul className="mt-1 ml-5 space-y-0.5" data-testid="process-tool-items">
           {entries.map((entry, index) => (
-            <li key={`${entry.ref ?? "item"}-${index}`} className="text-xs text-label-secondary">
-              <span className="truncate">
-                {entry.title || "未找到或无权访问的内容"}
-                {entry.kbName ? ` · ${entry.kbName}` : ""}
-              </span>
-            </li>
+            <ResultEntry key={`${entry.ref ?? "item"}-${index}`} entry={entry} variant={variant} />
           ))}
         </ul>
       ) : null}
+    </li>
+  );
+}
+
+/**
+ * 工具结果条目：能生成站内链接时可点击，链接沿用引用卡片的桌面与移动端路由。
+ *
+ * @param entry 结果条目
+ * @param variant 桌面或移动端
+ *
+ * @author 称霸幼儿园
+ */
+function ResultEntry({ entry, variant }: { entry: ProcessResultItem; variant: CitationVariant }) {
+  const title = entry.title || UNREADABLE_TITLE;
+  const href = entry.ref
+    ? citationHref(
+        {
+          index: 1,
+          sourceType: entry.ref.split(":", 1)[0] ?? "",
+          sourceId: entry.ref,
+          kbId: entry.kbId ?? null,
+          locator: entry.locator ?? null,
+        },
+        variant,
+      )
+    : null;
+  return (
+    <li className="text-xs text-label-secondary">
+      {href ? (
+        <Link
+          href={href}
+          prefetch={false}
+          className="truncate text-accent hover:underline"
+          data-testid="process-tool-item-link"
+        >
+          {title}
+        </Link>
+      ) : (
+        <span className="truncate">{title}</span>
+      )}
+      {entry.kbName ? <span>{` · ${entry.kbName}`}</span> : null}
     </li>
   );
 }
@@ -249,14 +328,12 @@ function firstNonEmptyLine(text: string): string | null {
 }
 
 /**
- * 生成过程行的稳定键：有标识用标识，无标识回退序号。
+ * 生成过程行的稳定键：类型加行标识，无标识回退序号。
  *
  * @param item 过程行
  * @param index 行序号
  * @returns React key
  */
 function processRowKey(item: ProcessItem, index: number): string {
-  if (item.type === "reasoning") return `reasoning-${item.blockId}-${index}`;
-  if (item.type === "tool") return `tool-${item.callId}-${index}`;
-  return `${item.type}-${index}`;
+  return item.id ? `${item.type}-${item.id}` : `${item.type}-${index}`;
 }

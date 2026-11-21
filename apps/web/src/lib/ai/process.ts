@@ -12,30 +12,32 @@ export type ProcessResultItem = {
   ref?: string;
   title?: string;
   kbName?: string;
+  kbId?: number;
   locator?: Record<string, unknown>;
 };
 
 export type ProcessResult = { count: number; items: ProcessResultItem[] };
 
+/** 过程行：type 与 id 一起标识一行。 */
 export type ProcessItem =
   | {
       type: "reasoning";
-      blockId: string;
+      id: string;
       text: string;
       status: "streaming" | "done" | "interrupted";
       durationMs?: number | undefined;
     }
   | {
       type: "tool";
-      callId: string;
+      id: string;
       name: string;
       target?: ProcessTarget | null | undefined;
       status: string;
       durationMs?: number | undefined;
       result?: ProcessResult | undefined;
     }
-  | { type: "note"; text: string }
-  | { type: "retry" };
+  | { type: "note"; id: string; text: string }
+  | { type: "retry"; id: string };
 
 export type ProcessState = {
   /** 是否开始累积（收到首个过程事件后置 true）。 */
@@ -81,13 +83,13 @@ export function applyRunEvent(state: ProcessState, event: AiRunEvent): ProcessSt
   const items = [...state.items];
   switch (event.type) {
     case "reasoning.delta": {
-      const blockId = readString(event.data.blockId) ?? "";
+      const id = readString(event.data.id) ?? "";
       const delta = readString(event.data.delta) ?? "";
-      const index = findReasoningIndex(items, blockId);
+      const index = findItemIndex(items, "reasoning", id);
       if (index < 0) {
         items.push({
           type: "reasoning",
-          blockId,
+          id,
           text: delta,
           status: "streaming",
         });
@@ -100,13 +102,13 @@ export function applyRunEvent(state: ProcessState, event: AiRunEvent): ProcessSt
       return { active: true, items };
     }
     case "reasoning.finished": {
-      const blockId = readString(event.data.blockId) ?? "";
-      const index = findReasoningIndex(items, blockId);
+      const id = readString(event.data.id) ?? "";
+      const index = findItemIndex(items, "reasoning", id);
       const current = index >= 0 ? items[index] : undefined;
       if (current?.type === "reasoning") {
         const finished: Extract<ProcessItem, { type: "reasoning" }> = {
           type: "reasoning",
-          blockId: current.blockId,
+          id: current.id,
           text: current.text,
           status: readString(event.data.status) === "interrupted" ? "interrupted" : "done",
           durationMs: readNumber(event.data.durationMs),
@@ -118,23 +120,23 @@ export function applyRunEvent(state: ProcessState, event: AiRunEvent): ProcessSt
     case "step.note": {
       const text = readString(event.data.text);
       if (text) {
-        items.push({ type: "note", text });
+        items.push({ type: "note", id: readString(event.data.id) ?? "", text });
       }
       return { active: true, items };
     }
     case "model.retry":
-      items.push({ type: "retry" });
+      items.push({ type: "retry", id: readString(event.data.id) ?? "" });
       return { active: true, items };
     case "tool.started": {
-      const callId = readString(event.data.callId) ?? "";
-      const index = findToolIndex(items, callId);
+      const id = readString(event.data.id) ?? "";
+      const index = findItemIndex(items, "tool", id);
       const existing = index >= 0 ? items[index] : undefined;
       const next: Extract<ProcessItem, { type: "tool" }> =
         existing?.type === "tool"
           ? { ...existing }
           : {
               type: "tool",
-              callId,
+              id,
               name: readString(event.data.name) ?? "",
               status: "running",
             };
@@ -147,15 +149,15 @@ export function applyRunEvent(state: ProcessState, event: AiRunEvent): ProcessSt
       return { active: true, items };
     }
     case "tool.finished": {
-      const callId = readString(event.data.callId) ?? "";
-      const index = findToolIndex(items, callId);
+      const id = readString(event.data.id) ?? "";
+      const index = findItemIndex(items, "tool", id);
       const existing = index >= 0 ? items[index] : undefined;
       const next: Extract<ProcessItem, { type: "tool" }> =
         existing?.type === "tool"
           ? { ...existing }
           : {
               type: "tool",
-              callId,
+              id,
               name: readString(event.data.name) ?? "",
               status: "running",
             };
@@ -218,6 +220,57 @@ export function toolResultSummary(name: string, result: ProcessResult | undefine
 }
 
 /**
+ * 把毫秒数格式化为保留一位小数的秒数文案。
+ *
+ * @param ms 毫秒数
+ * @returns 如「0.8 秒」
+ */
+export function formatSeconds(ms: number): string {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)} 秒`;
+}
+
+/**
+ * 生成完成后整轮控件的文案：总用时、首字时间、工具调用次数与活动摘要，用「 · 」连接。
+ *
+ * @param durationMs 运行总耗时（毫秒）
+ * @param firstOutputMs 首字时间（毫秒），没有时不显示
+ * @param toolCalls 工具调用次数，没有时不显示
+ * @param items 过程行
+ * @returns 如「已完成，用时 18 秒 · 首字 1.2 秒 · 工具调用 3 次 · 检索 1 次、阅读 1 篇」
+ */
+export function completedHead(
+  durationMs: number | undefined,
+  firstOutputMs: number | undefined,
+  toolCalls: number | undefined,
+  items: ProcessItem[],
+): string {
+  const parts = [`已完成，用时 ${Math.round((durationMs ?? 0) / 1000)} 秒`];
+  if (typeof firstOutputMs === "number") parts.push(`首字 ${formatSeconds(firstOutputMs)}`);
+  if (typeof toolCalls === "number") parts.push(`工具调用 ${toolCalls} 次`);
+  const activity = activitySummary(items);
+  if (activity) parts.push(activity);
+  return parts.join(" · ");
+}
+
+/**
+ * 生成工具行尾部文案：失败标识或结果摘要，加耗时，用「 · 」连接，没有内容时为空。
+ *
+ * @param item 工具行
+ * @returns 尾部文案
+ */
+export function toolTrailing(item: Extract<ProcessItem, { type: "tool" }>): string | null {
+  const parts: string[] = [];
+  if (item.status === "FAILED") {
+    parts.push("失败");
+  } else {
+    const summary = toolResultSummary(item.name, item.result);
+    if (summary) parts.push(summary);
+  }
+  if (typeof item.durationMs === "number") parts.push(formatSeconds(item.durationMs));
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/**
  * 统计活动摘要（完成后收起行尾部）。
  *
  * @param items 过程行
@@ -240,12 +293,8 @@ export function activitySummary(items: ProcessItem[]): string | null {
   return parts.length > 0 ? parts.join("、") : null;
 }
 
-function findReasoningIndex(items: ProcessItem[], blockId: string): number {
-  return items.findIndex((item) => item.type === "reasoning" && item.blockId === blockId);
-}
-
-function findToolIndex(items: ProcessItem[], callId: string): number {
-  return items.findIndex((item) => item.type === "tool" && item.callId === callId);
+function findItemIndex(items: ProcessItem[], type: ProcessItem["type"], id: string): number {
+  return items.findIndex((item) => item.type === type && item.id === id);
 }
 
 function readString(value: unknown): string | undefined {
@@ -270,10 +319,30 @@ function readResult(value: unknown): ProcessResult | undefined {
   }
   const record = value as Record<string, unknown>;
   const count = readNumber(record.count) ?? 0;
-  const items = Array.isArray(record.items)
-    ? record.items.filter(
-        (entry): entry is ProcessResultItem => typeof entry === "object" && entry !== null,
-      )
-    : [];
-  return { count, items };
+  return { count, items: readResultItems(record.items) };
+}
+
+/**
+ * 读取工具结果条目，只保留已登记的字段。
+ *
+ * @param value 不可信的结果条目数组
+ * @returns 结果条目
+ */
+export function readResultItems(value: unknown): ProcessResultItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: ProcessResultItem[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const record = entry as Record<string, unknown>;
+    const item: ProcessResultItem = {};
+    if (typeof record.ref === "string") item.ref = record.ref;
+    if (typeof record.title === "string") item.title = record.title;
+    if (typeof record.kbName === "string") item.kbName = record.kbName;
+    if (typeof record.kbId === "number") item.kbId = record.kbId;
+    if (typeof record.locator === "object" && record.locator !== null) {
+      item.locator = record.locator as Record<string, unknown>;
+    }
+    items.push(item);
+  }
+  return items;
 }

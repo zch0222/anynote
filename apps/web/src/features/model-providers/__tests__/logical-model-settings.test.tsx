@@ -25,6 +25,7 @@ const providers: ModelProvider[] = [
     models: ["text-embedding-3-small", "gpt-4o"],
     dataEgressAllowed: true,
     enabled: true,
+    processReasoningMaxChars: 8000,
     version: 1,
   },
   {
@@ -35,6 +36,7 @@ const providers: ModelProvider[] = [
     models: ["bge-m3"],
     dataEgressAllowed: false,
     enabled: true,
+    processReasoningMaxChars: 8000,
     version: 1,
   },
 ];

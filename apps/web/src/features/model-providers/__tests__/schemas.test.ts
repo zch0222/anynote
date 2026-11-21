@@ -4,6 +4,7 @@ import {
   emptyProviderForm,
   isValidProviderBaseUrl,
   parseEmbeddingDimensions,
+  parseProcessReasoningMaxChars,
   parseProviderModels,
   toLogicalForm,
   toProviderForm,
@@ -43,10 +44,31 @@ describe("模型供应商表单", () => {
       models: ["gpt-4o"],
       dataEgressAllowed: true,
       enabled: true,
+      processReasoningMaxChars: 8000,
       version: 2,
     });
     expect(form.apiKey).toBe("");
     expect(form.models).toBe("gpt-4o");
+    expect(form.processReasoningMaxChars).toBe("8000");
+  });
+
+  it("思考截断字数只接受 500 到 200000 之间的整数", () => {
+    expect(parseProcessReasoningMaxChars("500")).toBe(500);
+    expect(parseProcessReasoningMaxChars(" 200000 ")).toBe(200000);
+    expect(parseProcessReasoningMaxChars("499")).toBeNull();
+    expect(parseProcessReasoningMaxChars("200001")).toBeNull();
+    expect(parseProcessReasoningMaxChars("8000.5")).toBeNull();
+    expect(parseProcessReasoningMaxChars("")).toBeNull();
+    const form = {
+      ...emptyProviderForm(),
+      providerKey: "openai",
+      displayName: "OpenAI",
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: "sk",
+      processReasoningMaxChars: "abc",
+    };
+    expect(validateProviderForm(form, true)).toBe("思考截断字数必须为 500 到 200000 之间的整数");
+    expect(validateProviderForm({ ...form, processReasoningMaxChars: "8000" }, true)).toBeNull();
   });
 });
 
@@ -59,6 +81,7 @@ const providers = [
     models: ["bge-m3"],
     dataEgressAllowed: false,
     enabled: true,
+    processReasoningMaxChars: 8000,
     version: 1,
   },
   {
@@ -69,6 +92,7 @@ const providers = [
     models: ["text-embedding-3-small", "gpt-4o"],
     dataEgressAllowed: true,
     enabled: true,
+    processReasoningMaxChars: 8000,
     version: 1,
   },
 ];

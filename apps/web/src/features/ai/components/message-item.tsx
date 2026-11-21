@@ -52,9 +52,12 @@ export const MessageItem = memo(function MessageItem({
           <ProcessArea
             process={message.process}
             streaming={Boolean(message.streaming)}
-            durationMs={message.durationMs === undefined ? undefined : message.durationMs}
+            durationMs={message.durationMs}
+            toolCalls={message.toolCalls}
+            firstOutputMs={message.firstOutputMs}
             failed={message.outcome === "FAILED"}
             cancelled={message.outcome === "CANCELLED"}
+            variant={variant}
           />
         ) : null}
         {message.processHiddenNotice ? (

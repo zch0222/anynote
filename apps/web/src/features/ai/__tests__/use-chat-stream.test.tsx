@@ -1,5 +1,28 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/** 读取 Java 侧维护的过程视图共享样例（services/ai/src/test/resources/fixtures）。 */
+function processFixture(name: string): Record<string, unknown> {
+  return JSON.parse(
+    readFileSync(
+      join(
+        process.cwd(),
+        "..",
+        "..",
+        "services",
+        "ai",
+        "src",
+        "test",
+        "resources",
+        "fixtures",
+        name,
+      ),
+      "utf8",
+    ),
+  ) as Record<string, unknown>;
+}
 
 // streamAiSse 的行为在 sse.test.ts / 集成测试覆盖；这里 mock 掉网络层，
 // 专注 store 状态机（乐观追加、事件处理、回填、取消、错误）。
@@ -340,6 +363,86 @@ describe("chat stream store", () => {
     expect(session?.status).toBe("error");
     expect(session?.error).toBe("服务暂时不可用，请稍后重试");
     expect(session?.messages[1]?.content).toBe("部分回答");
+    expect(session?.messages[1]?.outcome).toBe("FAILED");
+    expect(session?.messages[1]?.streaming).toBe(false);
+  });
+
+  it("用户中止后流在终态事件前结束时记为已停止", async () => {
+    let endStream: (() => void) | undefined;
+    streamAiSseMock.mockImplementation(({ onEvent }) => {
+      onEvent(event("run.started", {}, 1));
+      return new Promise<void>((resolve) => {
+        endStream = resolve;
+      });
+    });
+    const pending = useChatStreamStore.getState().send({ key: "new", prompt: "q" });
+    useChatStreamStore.getState().abort("new");
+    endStream?.();
+    await pending;
+
+    expect(useChatStreamStore.getState().sessions.new?.messages[1]?.outcome).toBe("CANCELLED");
+  });
+
+  it("思考增量按动画帧合并写入，其他事件到来前先写完已缓冲的增量", async () => {
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const cancel = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    let finishStream: (() => void) | undefined;
+    streamAiSseMock.mockImplementation(({ onEvent }) => {
+      onEvent(event("run.started", {}, 1));
+      return new Promise<void>((resolve) => {
+        finishStream = () => {
+          onEvent(event("run.finished", { outcome: "ANSWERED" }, 9));
+          resolve();
+        };
+      });
+    });
+    try {
+      const pending = useChatStreamStore.getState().send({ key: "new", prompt: "q" });
+      const onEvent = streamAiSseMock.mock.calls[0]?.[0].onEvent;
+      if (!onEvent) throw new Error("期望事件回调");
+      const reasoningText = () => {
+        const item = useChatStreamStore.getState().sessions.new?.messages[1]?.process?.items[0];
+        return item?.type === "reasoning" ? item.text : undefined;
+      };
+      onEvent(event("reasoning.delta", { id: "b1", delta: "先" }, 2));
+      onEvent(event("reasoning.delta", { id: "b1", delta: "想" }, 3));
+      expect(frames).toHaveLength(1);
+      expect(reasoningText()).toBeUndefined();
+
+      frames[0]?.(0);
+      expect(reasoningText()).toBe("先想");
+
+      onEvent(event("reasoning.delta", { id: "b1", delta: "再想" }, 4));
+      onEvent(event("reasoning.finished", { id: "b1", durationMs: 10, status: "done" }, 5));
+      const item = useChatStreamStore.getState().sessions.new?.messages[1]?.process?.items[0];
+      expect(item).toMatchObject({ type: "reasoning", text: "先想再想", status: "done" });
+
+      finishStream?.();
+      await pending;
+    } finally {
+      raf.mockRestore();
+      cancel.mockRestore();
+    }
+  });
+
+  it("run.finished 带回工具调用次数与首字时间", async () => {
+    streamAiSseMock.mockImplementation(async ({ onEvent }) => {
+      onEvent(event("run.started", {}, 1));
+      onEvent(event("tool.started", { id: "c1", name: "kb_search", summary: "检索知识库" }, 2));
+      onEvent(event("run.finished", { outcome: "ANSWERED", toolCalls: 3, firstOutputMs: 1200 }, 3));
+    });
+
+    await useChatStreamStore.getState().send({ key: "new", prompt: "q" });
+
+    expect(useChatStreamStore.getState().sessions.new?.messages[1]).toMatchObject({
+      toolCalls: 3,
+      firstOutputMs: 1200,
+      outcome: "ANSWERED",
+    });
   });
 
   it("hydrate 灌入服务端历史（role 0/1），幂等不覆盖已有内容", () => {
@@ -390,10 +493,10 @@ describe("chat stream store", () => {
             durationMs: 18230,
             hidden: false,
             items: [
-              { type: "reasoning", blockId: "b1", text: "先想想", status: "done", durationMs: 100 },
+              { type: "reasoning", id: "b1", text: "先想想", status: "done", durationMs: 100 },
               {
                 type: "tool",
-                callId: "c1",
+                id: "c1",
                 name: "kb_search",
                 status: "SUCCESS",
                 durationMs: 820,
@@ -403,9 +506,8 @@ describe("chat stream store", () => {
                   items: [{ ref: "note:12", title: "提纲", kbName: "课程库" }],
                 },
               },
-              { type: "note", text: "先看看目录" },
+              { type: "note", id: "n1", text: "先看看目录" },
             ],
-            dependencies: ["note:12"],
           },
         },
       ],
@@ -438,9 +540,9 @@ describe("chat stream store", () => {
             hidden: true,
             hiddenNotice: "部分内容你已无权访问，思考过程已隐藏",
             items: [
-              { type: "reasoning", blockId: "b1", text: null, status: "done" },
-              { type: "note", text: null },
-              { type: "retry" },
+              { type: "reasoning", id: "b1", status: "done" },
+              { type: "note", id: "n1" },
+              { type: "retry", id: "r1" },
             ],
           },
         },
@@ -450,7 +552,82 @@ describe("chat stream store", () => {
     const message = useChatStreamStore.getState().sessions.c3?.messages[0];
     expect(message?.processHiddenNotice).toBe("部分内容你已无权访问，思考过程已隐藏");
     // 空文本的思考与说明行丢弃，只剩重试行
-    expect(message?.process?.items).toEqual([{ type: "retry" }]);
+    expect(message?.process?.items).toEqual([{ type: "retry", id: "r1" }]);
+  });
+
+  it("回放 Java 落库共享样例：四类行与工具行字段全部恢复", () => {
+    useChatStreamStore.getState().clear("c4");
+    useChatStreamStore.getState().hydrate(
+      "c4",
+      [
+        {
+          id: 31,
+          role: 1,
+          content: "答",
+          citations: [],
+          answerNotices: [],
+          process: processFixture("agent-process-view.json"),
+        },
+      ],
+      4,
+    );
+    const message = useChatStreamStore.getState().sessions.c4?.messages[0];
+    expect(message?.process?.items.map((item) => item.type)).toEqual([
+      "reasoning",
+      "tool",
+      "note",
+      "retry",
+      "reasoning",
+    ]);
+    expect(message?.process?.items.map((item) => item.id)).toEqual(["b1", "c1", "n1", "r1", "b2"]);
+    expect(message?.process?.items[1]).toEqual({
+      type: "tool",
+      id: "c1",
+      name: "kb_search",
+      status: "SUCCESS",
+      durationMs: 820,
+      target: { label: "期末复习 · 课程库", resolved: true },
+      result: {
+        count: 5,
+        items: [
+          {
+            ref: "note:12",
+            title: "数据结构复习提纲",
+            kbName: "课程库",
+            kbId: 3,
+            locator: { sectionPath: "第2章/2.1", startLine: 10 },
+          },
+          { ref: "doc:7", title: "往年试卷", kbName: "课程库", kbId: 3, locator: { pageStart: 2 } },
+        ],
+      },
+    });
+    expect(message).toMatchObject({ durationMs: 18230, toolCalls: 1, firstOutputMs: 350 });
+    expect(message?.processHiddenNotice).toBeUndefined();
+  });
+
+  it("回放 Java 隐藏视图共享样例：文字行丢弃，工具行只剩可读条目并显示隐藏提示", () => {
+    useChatStreamStore.getState().clear("c5");
+    useChatStreamStore.getState().hydrate(
+      "c5",
+      [
+        {
+          id: 41,
+          role: 1,
+          content: "答",
+          citations: [],
+          answerNotices: [],
+          process: processFixture("agent-process-view.hidden.json"),
+        },
+      ],
+      5,
+    );
+    const message = useChatStreamStore.getState().sessions.c5?.messages[0];
+    expect(message?.processHiddenNotice).toBe("部分内容你已无权访问，思考过程已隐藏");
+    expect(message?.process?.items.map((item) => item.type)).toEqual(["tool", "retry"]);
+    const tool = message?.process?.items[0];
+    if (tool?.type !== "tool") throw new Error("期望工具行");
+    expect(tool.target).toBeNull();
+    expect(tool.result?.items.map((item) => item.ref)).toEqual(["note:12"]);
   });
 
   it("renameKey 迁移会话（新会话回填场景）且 clear 清空", () => {

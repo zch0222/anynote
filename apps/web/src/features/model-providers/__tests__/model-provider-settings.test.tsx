@@ -30,6 +30,7 @@ const provider = {
   models: ["gpt-4o"],
   dataEgressAllowed: true,
   enabled: true,
+  processReasoningMaxChars: 8000,
   version: 1,
 };
 
@@ -109,6 +110,29 @@ describe("模型供应商管理页面", () => {
     });
     fireEvent.click(screen.getByTestId("provider-save"));
     await waitFor(() => expect(hooks.create.mutateAsync).toHaveBeenCalled());
+  });
+
+  it("思考截断字数默认 8000，越界时显示已确认校验文案且不提交", () => {
+    renderWithProviders(<ModelProviderSettings />);
+    fireEvent.click(screen.getByTestId("provider-create"));
+    expect(screen.getByTestId("provider-reasoning-max-chars-input")).toHaveValue("8000");
+    expect(screen.getByText("刷新后回放的思考过程超过该字数时截断")).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId("provider-key-input"), { target: { value: "openai" } });
+    fireEvent.change(screen.getByTestId("provider-name-input"), { target: { value: "OpenAI" } });
+    fireEvent.change(screen.getByTestId("provider-url-input"), {
+      target: { value: "https://api.openai.com/v1" },
+    });
+    fireEvent.change(screen.getByTestId("provider-key-secret-input"), {
+      target: { value: "sk-test" },
+    });
+    fireEvent.change(screen.getByTestId("provider-reasoning-max-chars-input"), {
+      target: { value: "499" },
+    });
+    fireEvent.click(screen.getByTestId("provider-save"));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "思考截断字数必须为 500 到 200000 之间的整数",
+    );
+    expect(hooks.create.mutateAsync).not.toHaveBeenCalled();
   });
 
   it("删除必须二次确认", async () => {

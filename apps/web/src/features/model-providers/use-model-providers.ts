@@ -40,6 +40,7 @@ function createBody(value: ProviderFormValue) {
     models: parseProviderModels(value.models),
     dataEgressAllowed: value.dataEgressAllowed,
     enabled: value.enabled,
+    processReasoningMaxChars: Number(value.processReasoningMaxChars.trim()),
   };
 }
 

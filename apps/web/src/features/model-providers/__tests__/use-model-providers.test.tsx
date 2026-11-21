@@ -27,6 +27,7 @@ const provider = {
   models: ["gpt-4o"],
   dataEgressAllowed: true,
   enabled: true,
+  processReasoningMaxChars: 8000,
   version: 1,
 };
 
@@ -71,6 +72,7 @@ describe("模型供应商数据访问", () => {
     expect(api.POST.mock.calls[0]?.[0]).toBe("/v1/admin/model-providers");
     expect(api.POST.mock.calls[0]?.[1].body.models).toEqual(["gpt-4o"]);
     expect(api.POST.mock.calls[0]?.[1].body.apiKey).toBe("sk-test");
+    expect(api.POST.mock.calls[0]?.[1].body.processReasoningMaxChars).toBe(8000);
   });
 
   it("更新空 Key 不发送替换凭据", async () => {

@@ -352,6 +352,18 @@ function ProviderFormDialog({
 							多个模型名请用英文逗号分隔。
 						</p>
 					</ProviderField>
+					<ProviderField label="思考截断字数" htmlFor="provider-reasoning-max-chars">
+						<Input
+							id="provider-reasoning-max-chars"
+							inputMode="numeric"
+							value={form.processReasoningMaxChars}
+							onChange={(event) => set("processReasoningMaxChars", event.target.value)}
+							data-testid="provider-reasoning-max-chars-input"
+						/>
+						<p className="text-xs text-label-secondary">
+							刷新后回放的思考过程超过该字数时截断
+						</p>
+					</ProviderField>
 				</div>
 				<div className="space-y-3">
 					<ProviderCheckbox
