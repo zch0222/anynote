@@ -15,10 +15,6 @@ harness:
   large-result-preview-chars: 500
   model-max-attempts: 2
   prefetch-enabled: false
-  reasoning-view-enabled: false
-  step-note-enabled: false
-  trace-fulltext-enabled: false
   reasoning-batch-chars: 64
   reasoning-batch-interval-ms: 100
-  process-reasoning-max-chars: 8000
   trace-result-max-chars: 10000
