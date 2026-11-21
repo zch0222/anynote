@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * run.finished 事件数据：运行终态、证据、回答标注、用量、工具调用次数与首字时间。
+ * run.finished 事件数据：运行终态、证据、回答标注、用量、工具调用次数、首字时间与总耗时。
  *
  * @author 称霸幼儿园
  */
@@ -45,4 +45,7 @@ public class AgentRunFinishedEventVO {
 
     @Schema(description = "从运行开始到首个思考或正文增量的毫秒数")
     private Long firstOutputMs;
+
+    @Schema(description = "运行总耗时毫秒数，与运行记录及过程视图落库值一致")
+    private Long durationMs;
 }

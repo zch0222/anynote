@@ -438,6 +438,7 @@ class AgentRunServiceImplTest {
         AgentRunFinishedEventVO runFinished = (AgentRunFinishedEventVO) captured.data("run.finished").get(0);
         assertThat(runFinished.getToolCalls()).isEqualTo(1);
         assertThat(runFinished.getFirstOutputMs()).isEqualTo(350L);
+        assertThat(runFinished.getDurationMs()).isNotNull().isGreaterThanOrEqualTo(0L);
         verify(eventMapper, times(1)).insert(any(AgentRunEventPO.class));
     }
 

@@ -543,6 +543,7 @@ public class AgentRunServiceImpl implements AgentRunService {
         setup.run().setDurationMs(Math.max(0L, now.getTime() - setup.run().getStartedAt().getTime()));
         setup.run().setToolCalls(finished.getToolCalls());
         setup.run().setFirstOutputMs(finished.getFirstOutputMs());
+        finished.setDurationMs(setup.run().getDurationMs());
         state.process.setDurationMs(setup.run().getDurationMs());
         state.process.setToolCalls(finished.getToolCalls());
         state.process.setFirstOutputMs(finished.getFirstOutputMs());
