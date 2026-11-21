@@ -503,7 +503,7 @@ test.describe("05 品牌启动 Brand boot", () => {
 });
 
 test.describe("04 AI 流式 Streaming", () => {
-  test("首 token 未到达时给「思考中」+ 三点动效（不是一行静态文字）", async ({ page }) => {
+  test("首 token 未到达时给「正在准备」+ 三点动效（不是一行静态文字）", async ({ page }) => {
     await page.goto("/ai/chat");
     const composer = page.getByPlaceholder(/输入消息/);
     await expect(composer).toBeVisible({ timeout: 30_000 });
@@ -518,7 +518,7 @@ test.describe("04 AI 流式 Streaming", () => {
 
     const thinking = page.getByTestId("assistant-thinking");
     await expect(thinking).toBeVisible({ timeout: 30_000 });
-    await expect(thinking).toContainText("思考中");
+    await expect(thinking).toContainText("正在准备");
     /*
      * 必须是可播报的状态，不能只是一个视觉动画。
      *
@@ -526,7 +526,7 @@ test.describe("04 AI 流式 Streaming", () => {
      * 状态容器用的是 `<output>`，它的 status 角色来自 HTML 隐式语义，
      * 元素上并没有 `role` 属性。用 `getByRole` 才是"读屏器看到的是什么"。
      */
-    await expect(page.getByRole("status").filter({ hasText: "思考中" })).toHaveCount(1);
+    await expect(page.getByRole("status").filter({ hasText: "正在准备" })).toHaveCount(1);
 
     // 三点存在且真的在动（0.15s 错峰、1.2s 循环）
     const dots = await page.evaluate(() => {
@@ -542,7 +542,7 @@ test.describe("04 AI 流式 Streaming", () => {
         };
       });
     });
-    expect(dots, "「思考中」缺少三点动效，静态文字会让用户以为卡住").not.toBeNull();
+    expect(dots, "「正在准备」缺少三点动效，静态文字会让用户以为卡住").not.toBeNull();
     expect(dots).toHaveLength(3);
     for (const dot of dots ?? []) {
       expect(dot.animationName).toBe("think-dot");
@@ -563,7 +563,8 @@ test.describe("04 AI 流式 Streaming", () => {
      * 前端收到增量即进入 streaming 态，正是要验的那一帧。
      */
     await page.route("**/api/proxy/ai/**", async (route) => {
-      const body = 'data: {"code":"00000","data":{"message":"正在","status":"doing"}}\n\n';
+      const body =
+        'id: 1\nevent: text.delta\ndata: {"seq":1,"runId":"run-loading-caret","ts":"2026-11-21T00:00:00Z","type":"text.delta","data":{"delta":"正在"}}\n\n';
       await route.fulfill({
         status: 200,
         headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
@@ -624,6 +625,7 @@ test.describe("04 AI 流式 Streaming", () => {
 
 test.describe("加载态的版式约束", () => {
   test("骨架形状与宿主一致：画廊骨架是三列网格，与真卡片同断点", async ({ page }) => {
+    await ensureKnowledgeBase(page, BASE_NAME);
     await page.goto("/notes");
     await expect(page.getByTestId("kb-gallery-grid")).toBeVisible({ timeout: 30_000 });
     const realColumns = await computedGridColumns(page, '[data-testid="kb-gallery-grid"]');
