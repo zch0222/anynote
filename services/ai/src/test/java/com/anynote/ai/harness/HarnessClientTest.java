@@ -2,11 +2,11 @@ package com.anynote.ai.harness;
 
 import com.anynote.ai.harness.dto.FastApiChatCompletionsDTO;
 import com.anynote.ai.harness.dto.HarnessRunCancelDTO;
+import com.anynote.ai.harness.vo.HarnessRunEventVO;
 import com.anynote.ai.harness.dto.FastApiWhisperTranscriptionDTO;
 import com.anynote.ai.harness.vo.FastApiChatCompletionsVO;
 import com.anynote.ai.harness.vo.FastApiWhisperTranscriptionVO;
 import com.anynote.ai.model.dto.HarnessRunRequestDTO;
-import com.anynote.ai.model.vo.AgentRunEventVO;
 import com.anynote.ai.properties.AiHarnessProperties;
 import com.anynote.ai.properties.AiWhisperProperties;
 import com.anynote.ai.run.AiCallContext;
@@ -159,7 +159,7 @@ class HarnessClientTest {
                         + "{\"seq\":1,\"runId\":\"run-1\",\"ts\":\"2026-11-15T00:00:00Z\","
                         + "\"type\":\"run.started\",\"data\":{\"agent\":\"knowledge-retrieval\"}}\n\n",
                         MediaType.TEXT_EVENT_STREAM));
-        List<AgentRunEventVO> events = new ArrayList<>();
+        List<HarnessRunEventVO> events = new ArrayList<>();
 
         harnessClient.streamAgentRun(callContext, HarnessRunRequestDTO.builder()
                 .runId("run-1")
@@ -171,6 +171,7 @@ class HarnessClientTest {
         assertThat(events).hasSize(1);
         assertThat(events.get(0).getRunId()).isEqualTo("run-1");
         assertThat(events.get(0).getType()).isEqualTo("run.started");
+        assertThat(events.get(0).getData().get("agent").getAsString()).isEqualTo("knowledge-retrieval");
     }
 
     /**

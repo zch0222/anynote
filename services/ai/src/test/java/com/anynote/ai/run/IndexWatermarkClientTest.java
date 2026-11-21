@@ -1,5 +1,6 @@
 package com.anynote.ai.run;
 
+import com.anynote.ai.model.vo.AgentIndexWatermarkVO;
 import com.anynote.ai.properties.AiIndexerProperties;
 import com.google.gson.Gson;
 import org.junit.jupiter.api.AfterEach;
@@ -11,7 +12,6 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -43,24 +43,24 @@ class IndexWatermarkClientTest {
     }
 
     /**
-     * 只返回 Worker 明确公开的水位字段并转换为 camelCase。
+     * 只保留水位类上登记的字段，Worker 的蛇形字段名转换为对应属性。
      */
     @Test
     void returnsOnlyApprovedWatermarkFields() {
         server.expect(requestTo("http://anynote-ai-indexer/healthz"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("""
-                        {"status":"ok","watermark":{"processed_cursor":"c1","lag_records":2,
-                        "private_field":"hidden"}}
+                        {"status":"ok","watermark":{"processed_cursor":41,"lag_records":2,
+                        "chunker_version":"v1","private_field":"hidden"}}
                         """, MediaType.APPLICATION_JSON));
 
-        Map<String, Object> snapshot = client.snapshot();
+        AgentIndexWatermarkVO snapshot = client.snapshot();
 
-        assertThat(snapshot).containsEntry("status", "ok");
-        Map<?, ?> watermark = (Map<?, ?>) snapshot.get("watermark");
-        assertThat(watermark.get("processedCursor")).isEqualTo("c1");
-        assertThat(watermark.get("lagRecords")).isEqualTo(2.0);
-        assertThat(watermark.containsKey("private_field")).isFalse();
+        assertThat(snapshot.getStatus()).isEqualTo("ok");
+        assertThat(snapshot.getWatermark().getProcessedCursor()).isEqualTo(41L);
+        assertThat(snapshot.getWatermark().getLagRecords()).isEqualTo(2L);
+        assertThat(snapshot.getWatermark().getChunkerVersion()).isEqualTo("v1");
+        assertThat(snapshot.getWatermark().getLatestCursor()).isNull();
         server.verify();
     }
 
@@ -72,10 +72,10 @@ class IndexWatermarkClientTest {
         server.expect(requestTo("http://anynote-ai-indexer/healthz"))
                 .andRespond(withException(new IOException("connection failed")));
 
-        Map<String, Object> snapshot = client.snapshot();
+        AgentIndexWatermarkVO snapshot = client.snapshot();
 
-        assertThat(snapshot).containsEntry("status", "unavailable");
-        assertThat(snapshot.get("watermark")).isEqualTo(Map.of());
+        assertThat(snapshot.getStatus()).isEqualTo("unavailable");
+        assertThat(snapshot.getWatermark()).isEqualTo(new AgentIndexWatermarkVO.Fields());
         server.verify();
     }
 }

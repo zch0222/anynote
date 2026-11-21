@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "durationMs": 18230,
+  "toolCalls": 1,
+  "firstOutputMs": 350,
+  "items": [
+    {
+      "type": "reasoning",
+      "id": "b1",
+      "text": "先看用户有哪些和课程相关的知识库",
+      "status": "done",
+      "durationMs": 2100
+    },
+    {
+      "type": "tool",
+      "id": "c1",
+      "status": "SUCCESS",
+      "durationMs": 820,
+      "name": "kb_search",
+      "target": {
+        "label": "期末复习 · 课程库",
+        "resolved": true
+      },
+      "result": {
+        "count": 5,
+        "items": [
+          {
+            "ref": "note:12",
+            "title": "数据结构复习提纲",
+            "kbName": "课程库",
+            "kbId": 3,
+            "locator": {
+              "sectionPath": "第2章/2.1",
+              "startLine": 10
+            }
+          },
+          {
+            "ref": "doc:7",
+            "title": "往年试卷",
+            "kbName": "课程库",
+            "kbId": 3,
+            "locator": {
+              "pageStart": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "note",
+      "id": "n1",
+      "text": "先看看提纲"
+    },
+    {
+      "type": "retry",
+      "id": "r1"
+    },
+    {
+      "type": "reasoning",
+      "id": "b2",
+      "text": "再读一下原文",
+      "status": "interrupted",
+      "durationMs": 300
+    }
+  ],
+  "dependencies": [
+    "note:12",
+    "doc:7"
+  ]
+}

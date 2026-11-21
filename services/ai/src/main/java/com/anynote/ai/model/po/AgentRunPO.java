@@ -37,6 +37,11 @@ public class AgentRunPO {
 
     private String model;
 
+    /**
+     * 逻辑模型绑定的供应商标识。
+     */
+    private String provider;
+
     private String state;
 
     private String outcome;
@@ -44,6 +49,16 @@ public class AgentRunPO {
     private String tokenUsage;
 
     private Long durationMs;
+
+    /**
+     * 模型发起的工具调用次数。
+     */
+    private Integer toolCalls;
+
+    /**
+     * 从运行开始到首个思考或正文增量的毫秒数。
+     */
+    private Long firstOutputMs;
 
     private Date startedAt;
 

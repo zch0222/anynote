@@ -167,6 +167,7 @@ class ModelProviderServiceImplTest {
         dto.setBaseUrl("https://api.openai.com/v1");
         dto.setApiKey("sk-plain");
         dto.setModels(List.of("m1"));
+        dto.setProcessReasoningMaxChars(6000);
         AtomicReference<ModelProviderPO> inserted = new AtomicReference<>();
         when(modelProviderMapper.selectByProviderKey("openai")).thenReturn(null);
         when(modelProviderMapper.insert(any(ModelProviderPO.class))).thenAnswer(invocation -> {
@@ -177,7 +178,9 @@ class ModelProviderServiceImplTest {
         assertEquals("sk-plain", aesGcmCipher.decrypt(inserted.get().getApiKeyCipher()));
         assertEquals(42L, inserted.get().getCreateBy());
         assertEquals(1L, inserted.get().getVersion());
+        assertEquals(6000, inserted.get().getProcessReasoningMaxChars());
         assertEquals("openai", result.getProviderKey());
+        assertEquals(6000, result.getProcessReasoningMaxChars());
     }
 
     @Test
@@ -215,6 +218,39 @@ class ModelProviderServiceImplTest {
         assertEquals(42L, updated.get().getUpdateBy());
         assertEquals("OpenAI-新", result.getDisplayName());
         assertEquals(List.of("new-model"), result.getModels());
+        assertEquals(9000, updated.get().getProcessReasoningMaxChars());
+    }
+
+    @Test
+    @DisplayName("按逻辑模型解析绑定的供应商与思考截断字数")
+    void resolveLogicalModelReturnsBoundProvider() {
+        ModelProviderServiceImpl service = withLogicalMapper();
+        ModelProviderPO provider = providerPO(10L, "stepfun", "sk", 1L, 1);
+        provider.setProcessReasoningMaxChars(6000);
+        when(logicalModelConfigMapper.selectByLogicalName("agent_main"))
+                .thenReturn(logicalRow("agent_main", "stepfun", "step-5", null, "none", "none", 1, 1L));
+        when(modelProviderMapper.selectByProviderKey("stepfun")).thenReturn(provider);
+
+        com.anynote.ai.model.bo.LogicalModelProviderBO resolved = service.resolveLogicalModel("agent_main");
+
+        assertEquals("stepfun", resolved.getProviderKey());
+        assertEquals(6000, resolved.getProcessReasoningMaxChars());
+    }
+
+    @Test
+    @DisplayName("逻辑模型未绑定或供应商不存在时解析为空")
+    void resolveLogicalModelReturnsNullWhenUnbound() {
+        ModelProviderServiceImpl service = withLogicalMapper();
+        when(logicalModelConfigMapper.selectByLogicalName("fast"))
+                .thenReturn(logicalRow("fast", null, null, null, "none", "none", 0, 1L));
+        when(logicalModelConfigMapper.selectByLogicalName("agent_main"))
+                .thenReturn(logicalRow("agent_main", "gone", "m", null, "none", "none", 1, 1L));
+        when(modelProviderMapper.selectByProviderKey("gone")).thenReturn(null);
+
+        assertNull(service.resolveLogicalModel("fast"));
+        assertNull(service.resolveLogicalModel("agent_main"));
+        assertNull(service.resolveLogicalModel(null));
+        assertNull(modelProviderService.resolveLogicalModel("agent_main"));
     }
 
     @Test
@@ -336,6 +372,7 @@ class ModelProviderServiceImplTest {
         dto.setModels(List.of("new-model"));
         dto.setDataEgressAllowed(false);
         dto.setEnabled(true);
+        dto.setProcessReasoningMaxChars(9000);
         return dto;
     }
 }

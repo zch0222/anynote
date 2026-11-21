@@ -62,7 +62,7 @@ public class AgentRunAdminController {
     @GetMapping
     public ResData<PageBean<AgentRunAdminVO>> listRuns(
             @Parameter(description = "页码") @RequestParam(defaultValue = "1") int pageNum,
-            @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int pageSize,
+            @Parameter(description = "每页条数，上限 100") @RequestParam(defaultValue = "20") int pageSize,
             @Parameter(description = "用户标识") @RequestParam(required = false) Long userId,
             @Parameter(description = "运行标识前缀") @RequestParam(required = false) String runId,
             @Parameter(description = "结果类型") @RequestParam(required = false) String outcome,

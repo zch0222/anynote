@@ -6,8 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Map;
-
 /**
  * Harness 运行事件信封。
  *
@@ -45,8 +43,8 @@ public class AgentRunEventVO {
     private String type;
 
     /**
-     * 事件数据。
+     * 事件数据，按事件类型对应一个数据类（如 AgentToolStartedEventVO）。
      */
-    @Schema(description = "事件数据")
-    private Map<String, Object> data;
+    @Schema(description = "事件数据，结构按事件类型对应 Agent*EventVO 等命名 schema")
+    private Object data;
 }

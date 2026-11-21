@@ -42,6 +42,9 @@ public class ModelProviderAdminVO {
     @Schema(description = "是否启用")
     private Boolean enabled;
 
+    @Schema(description = "过程视图思考全文的截断字数")
+    private Integer processReasoningMaxChars;
+
     @Schema(description = "配置版本号")
     private Long version;
 

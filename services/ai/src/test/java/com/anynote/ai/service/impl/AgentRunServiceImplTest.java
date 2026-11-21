@@ -7,17 +7,22 @@ import com.anynote.ai.api.model.po.ChatMessage;
 import com.anynote.ai.harness.HarnessClient;
 import com.anynote.ai.harness.HarnessClientException;
 import com.anynote.ai.harness.dto.HarnessRunCancelDTO;
+import com.anynote.ai.harness.vo.HarnessRunEventVO;
 import com.anynote.ai.mapper.AgentRunEventMapper;
 import com.anynote.ai.mapper.AgentRunMapper;
 import com.anynote.ai.mapper.ChatConversationMapper;
 import com.anynote.ai.mapper.ChatMessageMapper;
+import com.anynote.ai.model.bo.LogicalModelProviderBO;
 import com.anynote.ai.model.dto.AgentRunRequestDTO;
 import com.anynote.ai.model.dto.HarnessRunRequestDTO;
 import com.anynote.ai.model.po.AgentRunEventPO;
 import com.anynote.ai.model.po.AgentRunPO;
+import com.anynote.ai.model.vo.AgentErrorEventVO;
 import com.anynote.ai.model.vo.AgentRunCancelVO;
 import com.anynote.ai.model.vo.AgentRunEventVO;
+import com.anynote.ai.model.vo.AgentRunFinishedEventVO;
 import com.anynote.ai.model.vo.AgentRunStatusVO;
+import com.anynote.ai.run.AgentRunProcessView;
 import com.anynote.ai.properties.AiHarnessProperties;
 import com.anynote.ai.run.AiCallContext;
 import com.anynote.ai.run.AiRunLimiter;
@@ -25,11 +30,14 @@ import com.anynote.ai.run.DailyRunLimitService;
 import com.anynote.ai.run.IndexWatermarkClient;
 import com.anynote.ai.service.ChatConversationService;
 import com.anynote.ai.service.ChatMessageService;
+import com.anynote.ai.service.ModelProviderService;
 import com.anynote.system.api.model.bo.LoginUser;
 import com.anynote.core.exception.BusinessException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -40,8 +48,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -86,6 +95,8 @@ class AgentRunServiceImplTest {
 
     private TransactionTemplate transactionTemplate;
 
+    private ModelProviderService modelProviderService;
+
     private SseEmitter emitterOverride;
 
     private AgentRunServiceImpl service;
@@ -103,12 +114,14 @@ class AgentRunServiceImplTest {
         indexWatermarkClient = mock(IndexWatermarkClient.class);
         limiter = mock(AiRunLimiter.class);
         transactionTemplate = mock(TransactionTemplate.class);
+        modelProviderService = mock(ModelProviderService.class);
 
         when(conversationService.getBaseMapper()).thenReturn(conversationMapper);
         when(messageService.getBaseMapper()).thenReturn(messageMapper);
         when(limiter.tryAcquire(9L)).thenReturn(true);
         when(dailyLimitService.reserve(9L)).thenReturn("RAG:COUNT:2026-11-15:9");
-        when(indexWatermarkClient.snapshot()).thenReturn(Map.of("status", "ok", "watermark", Map.of()));
+        when(indexWatermarkClient.snapshot()).thenReturn(com.anynote.ai.model.vo.AgentIndexWatermarkVO.builder()
+                .status("ok").build());
         when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(mock(TransactionStatus.class));
@@ -131,6 +144,7 @@ class AgentRunServiceImplTest {
                 dailyLimitService,
                 transactionTemplate,
                 new AiHarnessProperties(),
+                modelProviderService,
                 new Gson(),
                 (Executor) Runnable::run) {
             @Override
@@ -138,47 +152,6 @@ class AgentRunServiceImplTest {
                 return emitterOverride == null ? super.newEmitter() : emitterOverride;
             }
         };
-    }
-
-    /**
-     * 历史引用随运行请求下发基础引用与附属类型，供 Python 开跑前复核。
-     */
-    @Test
-    @DisplayName("历史引用下发 ref 与 subtype")
-    void harnessHistoryCarriesRefAndSubtype() {
-        ChatMessage message = new ChatMessage();
-        message.setRole(1);
-        message.setContent("旧回答");
-        message.setCitations("[" +
-                "{\"index\":1,\"sourceId\":\"note:12\",\"title\":\"可读笔记\"}," +
-                "{\"index\":2,\"sourceId\":\"mooc_item:5#transcript\",\"title\":\"字幕\"}," +
-                "{\"index\":0,\"sourceId\":\"ignored\"}," +
-                "{\"title\":\"无编号\"}" +
-                "]");
-        java.lang.reflect.Method method;
-        try {
-            method = AgentRunServiceImpl.class.getDeclaredMethod("toHarnessCitations", ChatMessage.class);
-        } catch (NoSuchMethodException error) {
-            throw new IllegalStateException(error);
-        }
-        method.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        java.util.List<HarnessRunRequestDTO.Message.Citation> citations =
-                (java.util.List<HarnessRunRequestDTO.Message.Citation>) invokePrivate(method, message);
-
-        assertThat(citations).hasSize(2);
-        assertThat(citations.get(0).getRef()).isEqualTo("note:12");
-        assertThat(citations.get(0).getSubtype()).isNull();
-        assertThat(citations.get(1).getRef()).isEqualTo("mooc_item:5");
-        assertThat(citations.get(1).getSubtype()).isEqualTo("transcript");
-    }
-
-    private Object invokePrivate(java.lang.reflect.Method method, Object... args) {
-        try {
-            return method.invoke(service, args);
-        } catch (ReflectiveOperationException error) {
-            throw new IllegalStateException(error);
-        }
     }
 
     /**
@@ -230,30 +203,17 @@ class AgentRunServiceImplTest {
     @ParameterizedTest
     @MethodSource("failureMessages")
     void mapsHarnessFailureCategoryToApprovedMessage(String category, String expectedMessage) {
-        AgentRunEventVO[] forwardedError = new AgentRunEventVO[1];
-        doAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            Consumer<AgentRunEventVO> consumer = invocation.getArgument(2);
-            HarnessRunRequestDTO request = invocation.getArgument(1);
-            String runId = request.getRunId();
-            forwardedError[0] = event(runId, 1, "error", Map.of(
-                    "category", category,
-                    "retryable", false,
-                    "message", "上游内部信息"));
-            consumer.accept(forwardedError[0]);
-            consumer.accept(event(runId, 2, "run.finished", Map.of(
-                    "state", "FAILED",
-                    "outcome", "FAILED",
-                    "evidence", List.of(),
-                    "answerNotices", List.of(),
-                    "unfinished", List.of(),
-                    "usage", Map.of())));
-            return null;
-        }).when(harnessClient).streamAgentRun(any(), any(), any());
+        CapturingEmitter captured = new CapturingEmitter();
+        emitterOverride = captured;
+        stubEvents(
+                "error", "{\"category\":\"" + category + "\",\"retryable\":false,\"message\":\"上游内部信息\"}",
+                "run.finished", "{\"state\":\"FAILED\",\"outcome\":\"FAILED\",\"evidence\":[],"
+                        + "\"answerNotices\":[],\"unfinished\":[],\"usage\":{}}");
 
         service.createRun(AgentRunRequestDTO.builder().input("问题").build(), context());
 
-        assertThat(forwardedError[0].getData()).containsEntry("message", expectedMessage);
+        AgentErrorEventVO error = (AgentErrorEventVO) captured.data("error").get(0);
+        assertThat(error.getMessage()).isEqualTo(expectedMessage);
     }
 
     /**
@@ -358,7 +318,8 @@ class AgentRunServiceImplTest {
         assertThat(result.getConversationId()).isEqualTo(42L);
         assertThat(result.getAnswer()).isEqualTo("答案[1]");
         assertThat(result.getCitations()).hasSize(1);
-        assertThat(result.getUsage()).containsEntry("totalTokens", 12.0);
+        assertThat(result.getCitations().get(0).getEvidenceId()).isEqualTo("E1");
+        assertThat(result.getUsage().getTotalTokens()).isEqualTo(12L);
     }
 
     /**
@@ -409,48 +370,170 @@ class AgentRunServiceImplTest {
     }
 
     /**
+     * 历史回答所在运行的依赖清单随历史下发给 Harness。
+     */
+    @Test
+    void sendsHistoricalDependenciesToHarness() {
+        stubSuccessfulRun();
+        when(conversationService.getById(42L)).thenReturn(ChatConversation.builder()
+                .id(42L)
+                .createBy(9L)
+                .type(ChatConversationType.KNOWLEDGE_RETRIEVAL.getValue())
+                .build());
+        ChatMessage answer = ChatMessage.builder().orderIndex(1).content("旧回答").role(ChatRole.ASSISTANT.getValue())
+                .type(ChatConversationType.KNOWLEDGE_RETRIEVAL.getValue()).build();
+        answer.setProcess("{\"version\":1,\"items\":[{\"type\":\"retry\",\"id\":\"r1\"}],"
+                + "\"dependencies\":[\"note:12\",\"mooc_item:5#transcript\"]}");
+        when(messageMapper.selectConversationMessages(42L)).thenReturn(List.of(
+                ChatMessage.builder().orderIndex(0).content("旧问题").role(ChatRole.USER.getValue())
+                        .type(ChatConversationType.KNOWLEDGE_RETRIEVAL.getValue()).build(),
+                answer));
+
+        service.createRun(AgentRunRequestDTO.builder().conversationId(42L).input("新问题").build(), context());
+
+        org.mockito.ArgumentCaptor<HarnessRunRequestDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(HarnessRunRequestDTO.class);
+        verify(harnessClient).streamAgentRun(any(), captor.capture(), any());
+        List<HarnessRunRequestDTO.Message> history = captor.getValue().getHistory();
+        assertThat(history.get(0).getDependencies()).isEmpty();
+        assertThat(history.get(1).getDependencies()).containsExactly("note:12", "mooc_item:5#transcript");
+    }
+
+    /**
+     * 转发的事件按数据类输出：未登记的类型不转发，顶层与嵌套对象里的未登记字段都被丢弃，Trace 只落库。
+     */
+    @Test
+    void forwardsTypedEventsAndDropsUnregisteredFields() throws Exception {
+        CapturingEmitter captured = new CapturingEmitter();
+        emitterOverride = captured;
+        stubEvents(
+                "tool.started", "{\"id\":\"c1\",\"name\":\"kb_search\",\"summary\":\"检索知识库\","
+                        + "\"secret\":\"不应下发\",\"target\":{\"label\":\"期末复习\",\"resolved\":true,"
+                        + "\"raw\":\"不应下发\"}}",
+                "tool.finished", "{\"id\":\"c1\",\"name\":\"kb_search\",\"status\":\"SUCCESS\","
+                        + "\"hitCount\":1,\"durationMs\":820,\"errorCategory\":null,\"retryable\":false,"
+                        + "\"diagnostics\":{\"top\":[1]},\"result\":{\"count\":1,\"extra\":1,\"items\":[{"
+                        + "\"ref\":\"note:12\",\"title\":\"提纲\",\"kbName\":\"课程库\",\"kbId\":3,"
+                        + "\"score\":0.9,\"locator\":{\"heading\":\"2.1\",\"_key\":\"x\"}}]}}",
+                "unknown.event", "{\"value\":1}",
+                "trace.action", "{\"name\":\"action.execute\"}",
+                "run.finished", "{\"state\":\"COMPLETED\",\"outcome\":\"ANSWERED\",\"evidence\":[],"
+                        + "\"answerNotices\":[],\"unfinished\":[],\"usage\":{},\"toolCalls\":1,"
+                        + "\"firstOutputMs\":350}");
+
+        service.createRun(AgentRunRequestDTO.builder().input("问题").build(), context());
+
+        assertThat(captured.types()).containsExactly("tool.started", "tool.finished", "run.finished");
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode started = mapper.valueToTree(captured.data("tool.started").get(0));
+        assertThat(fieldNames(started)).containsExactlyInAnyOrder("id", "name", "summary", "target");
+        assertThat(fieldNames(started.get("target"))).containsExactlyInAnyOrder("label", "resolved");
+        JsonNode finished = mapper.valueToTree(captured.data("tool.finished").get(0));
+        assertThat(fieldNames(finished)).containsExactlyInAnyOrder(
+                "id", "name", "status", "hitCount", "durationMs", "retryable", "result");
+        assertThat(fieldNames(finished.get("result"))).containsExactlyInAnyOrder("count", "items");
+        assertThat(fieldNames(finished.get("result").get("items").get(0)))
+                .containsExactlyInAnyOrder("ref", "title", "kbName", "kbId", "locator");
+        assertThat(fieldNames(finished.get("result").get("items").get(0).get("locator"))).containsExactly("heading");
+        AgentRunFinishedEventVO runFinished = (AgentRunFinishedEventVO) captured.data("run.finished").get(0);
+        assertThat(runFinished.getToolCalls()).isEqualTo(1);
+        assertThat(runFinished.getFirstOutputMs()).isEqualTo(350L);
+        verify(eventMapper, times(1)).insert(any(AgentRunEventPO.class));
+    }
+
+    /**
+     * 过程视图落库：行用 id 标识，思考按逻辑模型绑定供应商的上限截断，依赖清单与运行指标写入运行记录。
+     */
+    @Test
+    void persistsProcessViewWithProviderLimitAndRunMetrics() {
+        when(modelProviderService.resolveLogicalModel("agent_main")).thenReturn(LogicalModelProviderBO.builder()
+                .providerKey("stepfun").processReasoningMaxChars(500).build());
+        String longReasoning = "想".repeat(600);
+        stubEvents(
+                "run.started", "{\"agent\":\"knowledge-retrieval\",\"agentVersion\":\"1\",\"model\":\"agent_main\"}",
+                "reasoning.delta", "{\"id\":\"b1\",\"delta\":\"" + longReasoning + "\"}",
+                "reasoning.finished", "{\"id\":\"b1\",\"durationMs\":900,\"status\":\"done\"}",
+                "tool.started", "{\"id\":\"c1\",\"name\":\"kb_read\",\"summary\":\"阅读原文\"}",
+                "trace.dependencies", "{\"dependencies\":[\"note:12\"]}",
+                "run.finished", "{\"state\":\"FAILED\",\"outcome\":\"FAILED\",\"evidence\":[],"
+                        + "\"answerNotices\":[],\"unfinished\":[],\"usage\":{},\"toolCalls\":2,"
+                        + "\"firstOutputMs\":420}");
+
+        service.createRun(AgentRunRequestDTO.builder().input("问题").build(), context());
+
+        org.mockito.ArgumentCaptor<ChatMessage> message = org.mockito.ArgumentCaptor.forClass(ChatMessage.class);
+        verify(messageMapper, atLeastOnce()).updateById(message.capture());
+        AgentRunProcessView stored = new Gson().fromJson(
+                message.getValue().getProcess(), AgentRunProcessView.class);
+        assertThat(stored.getItems().get(0).getId()).isEqualTo("b1");
+        assertThat(stored.getItems().get(0).getText()).isEqualTo("想".repeat(500) + "…（截断）");
+        assertThat(stored.getItems().get(1).getId()).isEqualTo("c1");
+        assertThat(stored.getItems().get(1).getStatus()).isEqualTo("FAILED");
+        assertThat(stored.getDependencies()).containsExactly("note:12");
+        assertThat(stored.getToolCalls()).isEqualTo(2);
+        assertThat(stored.getFirstOutputMs()).isEqualTo(420L);
+        verify(runMapper, atLeastOnce()).updateById(org.mockito.ArgumentMatchers.argThat((AgentRunPO run) ->
+                "stepfun".equals(run.getProvider())
+                        && Integer.valueOf(2).equals(run.getToolCalls())
+                        && Long.valueOf(420L).equals(run.getFirstOutputMs())));
+    }
+
+    /**
      * 配置 Harness 成功流并覆盖回答、引用、用量和 Trace。
      */
     private void stubSuccessfulRun() {
+        stubEvents(
+                "run.started", "{\"agent\":\"knowledge-retrieval\",\"agentVersion\":\"1\"}",
+                "text.delta", "{\"delta\":\"答案[1]\"}",
+                "citation", "{\"index\":1,\"evidenceId\":\"E1\",\"snippet\":\"片段\"}",
+                "usage", "{\"totalTokens\":12,\"known\":true}",
+                "trace.context", "{\"name\":\"context.build\"}",
+                "run.finished", "{\"state\":\"COMPLETED\",\"outcome\":\"ANSWERED\",\"evidence\":[\"E1\"],"
+                        + "\"answerNotices\":[\"UNSOURCED\"],\"unfinished\":[],"
+                        + "\"usage\":{\"totalTokens\":12,\"known\":true}}");
+    }
+
+    /**
+     * 让 Harness 按顺序推送事件。
+     *
+     * @param typeAndData 交替出现的事件类型与 JSON 数据
+     */
+    private void stubEvents(String... typeAndData) {
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
-            Consumer<AgentRunEventVO> consumer = invocation.getArgument(2);
+            Consumer<HarnessRunEventVO> consumer = invocation.getArgument(2);
             HarnessRunRequestDTO request = invocation.getArgument(1);
-            String runId = request.getRunId();
-            consumer.accept(event(runId, 1, "run.started",
-                    Map.of("agent", "knowledge-retrieval", "agentVersion", "1")));
-            consumer.accept(event(runId, 2, "text.delta", Map.of("delta", "答案[1]")));
-            consumer.accept(event(runId, 3, "citation", Map.of("index", 1, "evidenceId", "E1", "snippet", "片段")));
-            consumer.accept(event(runId, 4, "usage", Map.of("totalTokens", 12.0, "known", true)));
-            consumer.accept(event(runId, 5, "trace.context", Map.of("name", "context.build")));
-            consumer.accept(event(runId, 6, "run.finished", Map.of(
-                    "state", "COMPLETED",
-                    "outcome", "ANSWERED",
-                    "evidence", List.of("E1"),
-                    "answerNotices", List.of("UNSOURCED"),
-                    "unfinished", List.of(),
-                    "usage", Map.of("totalTokens", 12.0, "known", true))));
+            for (int index = 0; index < typeAndData.length; index += 2) {
+                consumer.accept(event(request.getRunId(), index / 2 + 1, typeAndData[index], typeAndData[index + 1]));
+            }
             return null;
         }).when(harnessClient).streamAgentRun(any(), any(), any());
     }
 
     /**
-     * 构造一次 Agent 事件。
+     * 构造一次 Python 事件。
      *
      * @param runId 运行标识
      * @param sequence 事件序号
      * @param type 事件类型
-     * @param data 事件数据
+     * @param json 事件数据 JSON
      * @return 事件信封
      */
-    private AgentRunEventVO event(String runId, long sequence, String type, Map<String, Object> data) {
-        return AgentRunEventVO.builder()
+    private HarnessRunEventVO event(String runId, long sequence, String type, String json) {
+        return HarnessRunEventVO.builder()
                 .seq(sequence)
                 .runId(runId)
                 .ts("2026-11-15T00:00:00Z")
                 .type(type)
-                .data(data)
+                .data(JsonParser.parseString(json).getAsJsonObject())
                 .build();
+    }
+
+    private static List<String> fieldNames(JsonNode node) {
+        List<String> names = new ArrayList<>();
+        Iterator<String> iterator = node.fieldNames();
+        iterator.forEachRemaining(names::add);
+        return names;
     }
 
     /**
@@ -462,6 +545,33 @@ class AgentRunServiceImplTest {
         LoginUser user = new LoginUser();
         user.setUserId(9L);
         return new AiCallContext(user, "access-token");
+    }
+
+    /**
+     * 记录发给浏览器的事件。
+     */
+    private static final class CapturingEmitter extends SseEmitter {
+
+        private final List<AgentRunEventVO> events = new ArrayList<>();
+
+        @Override
+        public void send(SseEventBuilder builder) {
+            for (org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter.DataWithMediaType item
+                    : builder.build()) {
+                if (item.getData() instanceof AgentRunEventVO event) {
+                    events.add(event);
+                }
+            }
+        }
+
+        private List<String> types() {
+            return events.stream().map(AgentRunEventVO::getType).toList();
+        }
+
+        private List<Object> data(String type) {
+            return events.stream().filter(event -> type.equals(event.getType())).map(AgentRunEventVO::getData)
+                    .toList();
+        }
     }
 
     private static final class DisconnectingEmitter extends SseEmitter {

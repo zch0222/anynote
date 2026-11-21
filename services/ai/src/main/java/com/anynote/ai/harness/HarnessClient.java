@@ -5,8 +5,8 @@ import com.anynote.ai.harness.dto.HarnessRunCancelDTO;
 import com.anynote.ai.harness.dto.FastApiWhisperTranscriptionDTO;
 import com.anynote.ai.harness.vo.FastApiChatCompletionsVO;
 import com.anynote.ai.harness.vo.FastApiWhisperTranscriptionVO;
+import com.anynote.ai.harness.vo.HarnessRunEventVO;
 import com.anynote.ai.model.dto.HarnessRunRequestDTO;
-import com.anynote.ai.model.vo.AgentRunEventVO;
 import com.anynote.ai.properties.AiHarnessProperties;
 import com.anynote.ai.properties.AiWhisperProperties;
 import com.anynote.ai.run.AiCallContext;
@@ -144,9 +144,9 @@ public class HarnessClient {
      * @param consumer 运行事件回调
      */
     public void streamAgentRun(AiCallContext context, HarnessRunRequestDTO request,
-                               Consumer<AgentRunEventVO> consumer) {
+                               Consumer<HarnessRunEventVO> consumer) {
         streamWithRetry(aiHarnessProperties.getServiceName(), AGENT_RUN_PATH, request, context,
-                data -> consumer.accept(gson.fromJson(data, AgentRunEventVO.class)));
+                data -> consumer.accept(gson.fromJson(data, HarnessRunEventVO.class)));
     }
 
     /**

@@ -8,7 +8,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Agent 运行状态与最终结果。
@@ -38,10 +37,10 @@ public class AgentRunStatusVO {
     private String answer;
 
     @Schema(description = "结构化引用")
-    private List<Map<String, Object>> citations;
+    private List<AgentCitationVO> citations;
 
     @Schema(description = "Token 用量")
-    private Map<String, Object> usage;
+    private AgentUsageVO usage;
 
     @Schema(description = "开始时间")
     private Instant startedAt;

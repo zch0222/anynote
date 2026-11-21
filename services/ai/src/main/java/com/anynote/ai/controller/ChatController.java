@@ -7,11 +7,14 @@ import com.anynote.ai.api.model.dto.ChatConversationListDTO;
 import com.anynote.ai.api.model.dto.ChatConversationUpdateDTO;
 import com.anynote.ai.model.dto.MoocVideoSummarizeDTO;
 import com.anynote.ai.model.dto.NoteTaskSubmissionAnalyzeDTO;
+import com.anynote.ai.model.vo.AgentProcessViewVO;
 import com.anynote.ai.model.vo.ChatCompletionsEventVO;
 import com.anynote.ai.model.vo.ChatConversationInfoVO;
 import com.anynote.ai.model.vo.ChatConversationDetailVO;
 import com.anynote.ai.model.vo.ChatConversationVO;
+import com.anynote.ai.model.vo.ChatMessageVO;
 import com.anynote.ai.run.AiCallContext;
+import com.anynote.ai.run.ProcessViewRecheck;
 import com.anynote.ai.service.ChatService;
 import com.anynote.common.security.token.AccessTokenProvider;
 import com.anynote.common.security.token.TokenUtil;
@@ -34,6 +37,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 
+import java.util.List;
+
 /**
  * AI 对话 Controller。
  *
@@ -52,7 +57,7 @@ public class ChatController {
     private TokenUtil tokenUtil;
 
     @Resource
-    private com.anynote.ai.run.ProcessViewRecheck processViewRecheck;
+    private ProcessViewRecheck processViewRecheck;
 
     @Resource
     private AccessTokenProvider accessTokenProvider;
@@ -87,7 +92,7 @@ public class ChatController {
     }
 
     /**
-     * 会话详情返回前按当前权限复核过程视图（T1）。
+     * 会话详情返回前按当前权限批量复核整段会话的过程视图（T1）。
      *
      * @param conversation 内部会话对象
      * @param detail 待返回的会话详情
@@ -96,12 +101,12 @@ public class ChatController {
         if (conversation.getMessages() == null || detail.getMessages() == null) {
             return;
         }
-        for (int index = 0; index < conversation.getMessages().size(); index++) {
-            com.anynote.ai.model.vo.ChatMessageVO vo = detail.getMessages().get(index);
-            if (vo == null || vo.getProcess() == null) {
-                continue;
+        List<AgentProcessViewVO> views = processViewRecheck.recheckAll(conversation.getMessages());
+        for (int index = 0; index < views.size() && index < detail.getMessages().size(); index++) {
+            ChatMessageVO vo = detail.getMessages().get(index);
+            if (vo != null) {
+                vo.setProcess(views.get(index));
             }
-            vo.setProcess(processViewRecheck.recheck(conversation.getMessages().get(index)));
         }
     }
 

@@ -1,5 +1,6 @@
 package com.anynote.ai.service;
 
+import com.anynote.ai.model.bo.LogicalModelProviderBO;
 import com.anynote.ai.model.dto.ModelProviderCreateDTO;
 import com.anynote.ai.model.dto.ModelProviderUpdateDTO;
 import com.anynote.ai.model.vo.ModelProviderAdminVO;
@@ -61,4 +62,12 @@ public interface ModelProviderService {
      * @param providerKey 供应商标识
      */
     void delete(String providerKey);
+
+    /**
+     * 解析逻辑模型绑定的供应商。
+     *
+     * @param logicalName 逻辑模型名，如 agent_main
+     * @return 绑定的供应商；逻辑模型未绑定或供应商不存在时返回 null
+     */
+    LogicalModelProviderBO resolveLogicalModel(String logicalName);
 }

@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "durationMs": 18230,
+  "hidden": true,
+  "hiddenNotice": "部分内容你已无权访问，思考过程已隐藏",
+  "toolCalls": 1,
+  "firstOutputMs": 350,
+  "items": [
+    {
+      "type": "reasoning",
+      "id": "b1",
+      "status": "done",
+      "durationMs": 2100
+    },
+    {
+      "type": "tool",
+      "id": "c1",
+      "status": "SUCCESS",
+      "durationMs": 820,
+      "name": "kb_search",
+      "result": {
+        "count": 5,
+        "items": [
+          {
+            "ref": "note:12",
+            "title": "数据结构复习提纲",
+            "kbName": "课程库",
+            "kbId": 3,
+            "locator": {
+              "sectionPath": "第2章/2.1",
+              "startLine": 10
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "note",
+      "id": "n1"
+    },
+    {
+      "type": "retry",
+      "id": "r1"
+    },
+    {
+      "type": "reasoning",
+      "id": "b2",
+      "status": "interrupted",
+      "durationMs": 300
+    }
+  ]
+}

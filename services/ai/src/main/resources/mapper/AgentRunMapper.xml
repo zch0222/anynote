@@ -12,25 +12,28 @@
         <result property="agentName" column="agent_name" />
         <result property="agentVersion" column="agent_version" />
         <result property="model" column="model" />
+        <result property="provider" column="provider" />
         <result property="state" column="state" />
         <result property="outcome" column="outcome" />
         <result property="tokenUsage" column="token_usage" />
         <result property="durationMs" column="duration_ms" />
+        <result property="toolCalls" column="tool_calls" />
+        <result property="firstOutputMs" column="first_output_ms" />
         <result property="startedAt" column="started_at" />
         <result property="finishedAt" column="finished_at" />
     </resultMap>
 
     <select id="selectOwned" resultMap="AgentRunResultMap">
-        SELECT id, run_id, conversation_id, user_id, agent_name, agent_version, model,
-               state, outcome, token_usage, duration_ms, started_at, finished_at
+        SELECT id, run_id, conversation_id, user_id, agent_name, agent_version, model, provider,
+               state, outcome, token_usage, duration_ms, tool_calls, first_output_ms, started_at, finished_at
         FROM a_agent_run
         WHERE run_id = #{runId} AND user_id = #{userId}
         LIMIT 1
     </select>
 
     <select id="selectAdminList" resultMap="AgentRunResultMap">
-        SELECT id, run_id, conversation_id, user_id, agent_name, agent_version, model,
-               state, outcome, token_usage, duration_ms, started_at, finished_at
+        SELECT id, run_id, conversation_id, user_id, agent_name, agent_version, model, provider,
+               state, outcome, token_usage, duration_ms, tool_calls, first_output_ms, started_at, finished_at
         FROM a_agent_run
         <where>
             <if test="userId != null">

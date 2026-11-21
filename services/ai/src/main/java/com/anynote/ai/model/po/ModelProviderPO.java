@@ -74,6 +74,11 @@ public class ModelProviderPO {
     private Integer enabled;
 
     /**
+     * 过程视图思考全文的截断字数。
+     */
+    private Integer processReasoningMaxChars;
+
+    /**
      * 版本号，每次更新 +1。
      */
     private Long version;

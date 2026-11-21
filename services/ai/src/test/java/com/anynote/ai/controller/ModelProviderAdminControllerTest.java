@@ -94,7 +94,8 @@ class ModelProviderAdminControllerTest {
                                   "apiKey":"sk-plain",
                                   "models":["gpt-4o"],
                                   "dataEgressAllowed":true,
-                                  "enabled":true
+                                  "enabled":true,
+                                  "processReasoningMaxChars":8000
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -228,6 +229,30 @@ class ModelProviderAdminControllerTest {
                 any(), any(com.anynote.ai.model.dto.LogicalModelConfigUpdateDTO.class), any());
     }
 
+    /**
+     * 思考截断字数缺失或不在 500 到 200000 之间时返回参数错误，提示使用已确认文案，且不调用服务。
+     *
+     * @param value 请求中的思考截断字数
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"499", "200001", "null"})
+    @DisplayName("思考截断字数越界时拒绝")
+    void updateShouldRejectOutOfRangeProcessReasoningMaxChars(String value) throws Exception {
+        org.springframework.test.web.servlet.MvcResult result = mockMvc.perform(put("/v1/admin/model-providers/openai")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateJson("", value)))
+                .andExpect(status().isBadRequest())
+                .andReturn();
+
+        org.assertj.core.api.Assertions.assertThat(result.getResolvedException())
+                .isInstanceOf(org.springframework.web.bind.MethodArgumentNotValidException.class);
+        org.assertj.core.api.Assertions.assertThat(
+                        ((org.springframework.web.bind.MethodArgumentNotValidException) result.getResolvedException())
+                                .getFieldError("processReasoningMaxChars").getDefaultMessage())
+                .isEqualTo("思考截断字数必须为 500 到 200000 之间的整数");
+        verify(modelProviderService, never()).update(any(), any(ModelProviderUpdateDTO.class), any());
+    }
+
     private LocalValidatorFactoryBean validator() throws Exception {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
@@ -243,11 +268,16 @@ class ModelProviderAdminControllerTest {
                 .models(List.of("gpt-4o"))
                 .dataEgressAllowed(true)
                 .enabled(true)
+                .processReasoningMaxChars(8000)
                 .version(3L)
                 .build();
     }
 
     private String updateJson(String apiKey) {
+        return updateJson(apiKey, "8000");
+    }
+
+    private String updateJson(String apiKey, String processReasoningMaxChars) {
         return """
                 {
                   "displayName":"OpenAI",
@@ -256,8 +286,9 @@ class ModelProviderAdminControllerTest {
                   "apiKey":"%s",
                   "models":["gpt-4o"],
                   "dataEgressAllowed":true,
-                  "enabled":true
+                  "enabled":true,
+                  "processReasoningMaxChars":%s
                 }
-                """.formatted(apiKey);
+                """.formatted(apiKey, processReasoningMaxChars);
     }
 }

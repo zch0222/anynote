@@ -7,7 +7,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 管理端 Agent 运行详情：运行摘要与该运行落库的过程视图。
@@ -25,5 +24,5 @@ public class AgentRunAdminDetailVO {
     private AgentRunAdminVO run;
 
     @Schema(description = "该运行落库的过程视图（用户实际看到的内容）")
-    private Map<String, Object> process;
+    private AgentProcessViewVO process;
 }

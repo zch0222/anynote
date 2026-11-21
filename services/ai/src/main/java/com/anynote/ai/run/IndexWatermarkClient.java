@@ -1,6 +1,8 @@
 package com.anynote.ai.run;
 
+import com.anynote.ai.model.vo.AgentIndexWatermarkVO;
 import com.anynote.ai.properties.AiIndexerProperties;
+import com.google.gson.FieldNamingPolicy;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -14,8 +16,6 @@ import org.springframework.web.client.RestClient;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * 读取 Worker 已公开的索引水位白名单字段。
+ * 读取 Worker 已公开的索引水位字段，只保留 {@link AgentIndexWatermarkVO.Fields} 上登记的字段。
  *
  * @author 称霸幼儿园
  */
@@ -34,19 +34,11 @@ public class IndexWatermarkClient {
 
     private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(1);
 
-    private static final Map<String, String> WATERMARK_FIELDS = Map.of(
-            "processed_cursor", "processedCursor",
-            "latest_cursor", "latestCursor",
-            "lag_records", "lagRecords",
-            "last_processed_at", "lastProcessedAt",
-            "last_success_at", "lastSuccessAt",
-            "last_error_type", "lastErrorType",
-            "chunker_version", "chunkerVersion",
-            "embedding_profile_version", "embeddingProfileVersion");
+    private static final String STATUS_UNAVAILABLE = "unavailable";
 
     private final RestClient restClient;
 
-    private final Gson gson;
+    private final Gson snakeCaseGson;
 
     private final ExecutorService probeExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -63,15 +55,17 @@ public class IndexWatermarkClient {
         this.restClient = builder.clone()
                 .baseUrl("http://" + properties.getServiceName())
                 .build();
-        this.gson = gson;
+        this.snakeCaseGson = gson.newBuilder()
+                .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+                .create();
     }
 
     /**
      * 读取索引状态；探针失败时返回不可用状态，不影响运行。
      *
-     * @return Worker 状态与白名单水位字段
+     * @return Worker 状态与水位字段
      */
-    public Map<String, Object> snapshot() {
+    public AgentIndexWatermarkVO snapshot() {
         Future<String> response = probeExecutor.submit(this::readHealthResponse);
         try {
             return parseSnapshot(response.get(PROBE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS));
@@ -109,30 +103,26 @@ public class IndexWatermarkClient {
                         response.getBody(), StandardCharsets.UTF_8));
     }
 
-    private Map<String, Object> parseSnapshot(String body) {
+    private AgentIndexWatermarkVO parseSnapshot(String body) {
         JsonObject root = JsonParser.parseString(body).getAsJsonObject();
         JsonElement status = root.get("status");
         if (status == null || status.isJsonNull() || !status.isJsonPrimitive()) {
             return unavailableSnapshot();
         }
-        Map<String, Object> snapshot = new LinkedHashMap<>();
-        snapshot.put("status", status.getAsString());
-        Map<String, Object> watermark = new LinkedHashMap<>();
         JsonElement rawWatermark = root.get("watermark");
-        if (rawWatermark != null && rawWatermark.isJsonObject()) {
-            JsonObject fields = rawWatermark.getAsJsonObject();
-            WATERMARK_FIELDS.forEach((source, target) -> {
-                JsonElement value = fields.get(source);
-                if (value != null) {
-                    watermark.put(target, gson.fromJson(value, Object.class));
-                }
-            });
-        }
-        snapshot.put("watermark", watermark);
-        return snapshot;
+        AgentIndexWatermarkVO.Fields watermark = rawWatermark != null && rawWatermark.isJsonObject()
+                ? snakeCaseGson.fromJson(rawWatermark, AgentIndexWatermarkVO.Fields.class)
+                : new AgentIndexWatermarkVO.Fields();
+        return AgentIndexWatermarkVO.builder()
+                .status(status.getAsString())
+                .watermark(watermark)
+                .build();
     }
 
-    private Map<String, Object> unavailableSnapshot() {
-        return Map.of("status", "unavailable", "watermark", Map.of());
+    private AgentIndexWatermarkVO unavailableSnapshot() {
+        return AgentIndexWatermarkVO.builder()
+                .status(STATUS_UNAVAILABLE)
+                .watermark(new AgentIndexWatermarkVO.Fields())
+                .build();
     }
 }

@@ -3,7 +3,10 @@ package com.anynote.ai.model.dto;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.ToString;
@@ -52,6 +55,13 @@ public class ModelProviderCreateDTO {
 
     @Schema(description = "是否启用")
     private Boolean enabled;
+
+    @NotNull(message = "思考截断字数必须为 500 到 200000 之间的整数")
+    @Min(value = 500, message = "思考截断字数必须为 500 到 200000 之间的整数")
+    @Max(value = 200000, message = "思考截断字数必须为 500 到 200000 之间的整数")
+    @Schema(description = "过程视图思考全文的截断字数", requiredMode = Schema.RequiredMode.REQUIRED,
+            minimum = "500", maximum = "200000")
+    private Integer processReasoningMaxChars;
 
     /**
      * 校验接口地址的协议与主机。

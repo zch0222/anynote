@@ -53,7 +53,13 @@ public class HarnessRunRequestDTO {
         private List<Citation> citations;
 
         /**
-         * 历史回答在原轮次中的引用。
+         * 历史回答所在运行的依赖清单（实体键），Python 开跑前据此复核可读性。
+         */
+        @JsonInclude(JsonInclude.Include.NON_EMPTY)
+        private List<String> dependencies;
+
+        /**
+         * 历史回答在原轮次中的引用编号与标题。
          *
          * @author 称霸幼儿园
          */
@@ -66,18 +72,6 @@ public class HarnessRunRequestDTO {
             private Integer index;
 
             private String title;
-
-            /**
-             * 引用实体的基础引用，如 note:12；Python 用它在开跑前复核可读性。
-             */
-            @JsonInclude(JsonInclude.Include.NON_NULL)
-            private String ref;
-
-            /**
-             * 慕课条目附属类型（transcript / summary）。
-             */
-            @JsonInclude(JsonInclude.Include.NON_NULL)
-            private String subtype;
         }
     }
 }

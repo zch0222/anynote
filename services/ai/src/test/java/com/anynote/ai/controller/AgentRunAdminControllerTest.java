@@ -1,12 +1,21 @@
 package com.anynote.ai.controller;
 
+import com.anynote.ai.mapper.AgentRunEventMapper;
+import com.anynote.ai.mapper.AgentRunMapper;
+import com.anynote.ai.mapper.AgentTraceAccessMapper;
+import com.anynote.ai.mapper.ChatMessageMapper;
+import com.anynote.ai.model.po.AgentRunEventPO;
+import com.anynote.ai.model.po.AgentRunPO;
 import com.anynote.ai.model.vo.AgentRunAdminDetailVO;
 import com.anynote.ai.model.vo.AgentRunAdminEventVO;
 import com.anynote.ai.model.vo.AgentRunAdminVO;
 import com.anynote.ai.security.SystemAdminGuard;
 import com.anynote.ai.service.AgentRunAdminService;
+import com.anynote.ai.service.impl.AgentRunAdminServiceImpl;
 import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.system.api.model.bo.LoginUser;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -115,6 +124,36 @@ class AgentRunAdminControllerTest {
                 .andExpect(jsonPath("$.data[0].seq").value(101));
 
         verify(agentRunAdminService).listEvents("run-1", 100L, 999, 42L);
+    }
+
+    /**
+     * 经真实 Jackson 转换器输出完整 Trace：content 是 JSON 对象，可按路径取到内部字段，纳秒时间戳不丢精度。
+     */
+    @Test
+    @DisplayName("事件接口经真实 Jackson 转换器输出 JSON 对象")
+    void eventsSerializeJsonContentThroughJackson() throws Exception {
+        AgentRunMapper runMapper = org.mockito.Mockito.mock(AgentRunMapper.class);
+        AgentRunEventMapper eventMapper = org.mockito.Mockito.mock(AgentRunEventMapper.class);
+        long endTimeNano = 1_800_000_000_000_000_001L;
+        when(runMapper.selectOne(any())).thenReturn(AgentRunPO.builder().runId("run-1").build());
+        when(eventMapper.selectRunEvents("run-1", 0L, 100)).thenReturn(List.of(AgentRunEventPO.builder()
+                .runId("run-1").seq(1L).type("trace.model")
+                .content("{\"name\":\"model.call\",\"endTimeUnixNano\":" + endTimeNano
+                        + ",\"attributes\":{\"turn\":1}}")
+                .build()));
+        AgentRunAdminService realService = new AgentRunAdminServiceImpl(runMapper, eventMapper,
+                org.mockito.Mockito.mock(AgentTraceAccessMapper.class),
+                org.mockito.Mockito.mock(ChatMessageMapper.class), new Gson(), new ObjectMapper());
+        when(systemAdminGuard.requireAdmin()).thenReturn(loginUser);
+        when(loginUser.getUserId()).thenReturn(42L);
+        MockMvc realMvc = MockMvcBuilders.standaloneSetup(new AgentRunAdminController(realService, systemAdminGuard))
+                .build();
+
+        realMvc.perform(get("/v1/admin/agent-runs/run-1/events"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].content.name").value("model.call"))
+                .andExpect(jsonPath("$.data[0].content.attributes.turn").value(1))
+                .andExpect(jsonPath("$.data[0].content.endTimeUnixNano").value(endTimeNano));
     }
 
     /**

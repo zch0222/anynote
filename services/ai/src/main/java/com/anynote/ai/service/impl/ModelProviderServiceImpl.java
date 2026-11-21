@@ -2,6 +2,7 @@ package com.anynote.ai.service.impl;
 
 import com.anynote.ai.mapper.LogicalModelConfigMapper;
 import com.anynote.ai.mapper.ModelProviderMapper;
+import com.anynote.ai.model.bo.LogicalModelProviderBO;
 import com.anynote.ai.model.dto.ModelProviderCreateDTO;
 import com.anynote.ai.model.dto.ModelProviderUpdateDTO;
 import com.anynote.ai.model.po.LogicalModelConfigPO;
@@ -178,6 +179,7 @@ public class ModelProviderServiceImpl implements ModelProviderService {
                 .modelsJson(dto.getModels() == null ? "[]" : gson.toJson(dto.getModels()))
                 .dataEgressAllowed(Boolean.TRUE.equals(dto.getDataEgressAllowed()) ? 1 : 0)
                 .enabled(Boolean.FALSE.equals(dto.getEnabled()) ? 0 : 1)
+                .processReasoningMaxChars(dto.getProcessReasoningMaxChars())
                 .version(1L)
                 .createBy(operatorId)
                 .updateBy(operatorId)
@@ -206,6 +208,7 @@ public class ModelProviderServiceImpl implements ModelProviderService {
                 .modelsJson(gson.toJson(dto.getModels()))
                 .dataEgressAllowed(Boolean.TRUE.equals(dto.getDataEgressAllowed()) ? 1 : 0)
                 .enabled(Boolean.TRUE.equals(dto.getEnabled()) ? 1 : 0)
+                .processReasoningMaxChars(dto.getProcessReasoningMaxChars())
                 .version((existing.getVersion() == null ? 0L : existing.getVersion()) + 1)
                 .createBy(existing.getCreateBy())
                 .updateBy(operatorId)
@@ -225,6 +228,25 @@ public class ModelProviderServiceImpl implements ModelProviderService {
         if (modelProviderMapper.deleteById(existing.getId()) == 0) {
             throw notFound();
         }
+    }
+
+    @Override
+    public LogicalModelProviderBO resolveLogicalModel(String logicalName) {
+        if (logicalModelConfigMapper == null || StringUtils.isEmpty(logicalName)) {
+            return null;
+        }
+        LogicalModelConfigPO logicalModel = logicalModelConfigMapper.selectByLogicalName(logicalName);
+        if (logicalModel == null || StringUtils.isEmpty(logicalModel.getProviderKey())) {
+            return null;
+        }
+        ModelProviderPO provider = modelProviderMapper.selectByProviderKey(logicalModel.getProviderKey());
+        if (provider == null) {
+            return null;
+        }
+        return LogicalModelProviderBO.builder()
+                .providerKey(provider.getProviderKey())
+                .processReasoningMaxChars(provider.getProcessReasoningMaxChars())
+                .build();
     }
 
     private ModelProviderPO getRequired(String providerKey) {
@@ -273,6 +295,7 @@ public class ModelProviderServiceImpl implements ModelProviderService {
                 .models(parseModels(provider))
                 .dataEgressAllowed(Integer.valueOf(1).equals(provider.getDataEgressAllowed()))
                 .enabled(Integer.valueOf(1).equals(provider.getEnabled()))
+                .processReasoningMaxChars(provider.getProcessReasoningMaxChars())
                 .version(provider.getVersion())
                 .createTime(provider.getCreateTime())
                 .updateTime(provider.getUpdateTime())

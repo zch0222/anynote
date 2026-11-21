@@ -12,7 +12,6 @@ import lombok.NoArgsConstructor;
 import java.lang.reflect.Type;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 会话消息响应对象，将 JSON 引用与回答标注转换为结构化数组。
@@ -37,13 +36,13 @@ public class ChatMessageVO {
     private String runId;
 
     @Schema(description = "结构化引用")
-    private List<Map<String, Object>> citations;
+    private List<AgentCitationVO> citations;
 
     @Schema(description = "回答标注")
     private List<String> answerNotices;
 
-    @Schema(description = "过程视图（思考、工具行、过程说明；依赖不可读时为空且 hidden 为 true）")
-    private Map<String, Object> process;
+    @Schema(description = "按当前权限复核后的过程视图；无法复核时为空")
+    private AgentProcessViewVO process;
 
     private String outcome;
 
@@ -65,24 +64,22 @@ public class ChatMessageVO {
 
     private String remark;
 
-    private static final Type CITATIONS_TYPE = new TypeToken<List<Map<String, Object>>>() { }.getType();
+    private static final Type CITATIONS_TYPE = new TypeToken<List<AgentCitationVO>>() { }.getType();
 
     private static final Type ANSWER_NOTICES_TYPE = new TypeToken<List<String>>() { }.getType();
 
-    private static final Type PROCESS_TYPE = new TypeToken<Map<String, Object>>() { }.getType();
-
     /**
-     * 将持久化消息转换为接口消息。
+     * 将持久化消息转换为接口消息；过程视图须经读取复核后另行设置。
      *
      * @param message 持久化消息
      * @param gson JSON 解析器
      * @return 接口消息
      */
     public static ChatMessageVO from(ChatMessage message, Gson gson) {
-        List<Map<String, Object>> citations = List.of();
+        List<AgentCitationVO> citations = List.of();
         if (message.getCitations() != null && !message.getCitations().isBlank()) {
             try {
-                List<Map<String, Object>> parsed = gson.fromJson(message.getCitations(), CITATIONS_TYPE);
+                List<AgentCitationVO> parsed = gson.fromJson(message.getCitations(), CITATIONS_TYPE);
                 if (parsed != null) {
                     citations = parsed;
                 }
@@ -101,14 +98,6 @@ public class ChatMessageVO {
                 // 历史消息的非 JSON 标注按空数组返回。
             }
         }
-        Map<String, Object> process = null;
-        if (message.getProcess() != null && !message.getProcess().isBlank()) {
-            try {
-                process = gson.fromJson(message.getProcess(), PROCESS_TYPE);
-            } catch (RuntimeException ignored) {
-                // 历史消息的非 JSON 过程视图按空返回。
-            }
-        }
         return ChatMessageVO.builder()
                 .id(message.getId())
                 .conversationId(message.getConversationId())
@@ -117,7 +106,6 @@ public class ChatMessageVO {
                 .runId(message.getRunId())
                 .citations(citations)
                 .answerNotices(answerNotices)
-                .process(process)
                 .outcome(message.getOutcome())
                 .role(message.getRole())
                 .type(message.getType())

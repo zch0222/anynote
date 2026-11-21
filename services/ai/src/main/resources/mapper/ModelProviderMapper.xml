@@ -14,6 +14,7 @@
         <result column="models" property="modelsJson" jdbcType="VARCHAR"/>
         <result column="data_egress_allowed" property="dataEgressAllowed" jdbcType="TINYINT"/>
         <result column="enabled" property="enabled" jdbcType="TINYINT"/>
+        <result column="process_reasoning_max_chars" property="processReasoningMaxChars" jdbcType="INTEGER"/>
         <result column="version" property="version" jdbcType="BIGINT"/>
         <result column="create_by" property="createBy" jdbcType="BIGINT"/>
         <result column="update_by" property="updateBy" jdbcType="BIGINT"/>
@@ -23,7 +24,8 @@
 
     <sql id="Base_Column_List">
         id, provider_key, display_name, protocol, base_url, api_key_cipher, models,
-        data_egress_allowed, enabled, version, create_by, update_by, create_time, update_time
+        data_egress_allowed, enabled, process_reasoning_max_chars, version, create_by, update_by,
+        create_time, update_time
     </sql>
 
     <select id="selectAll" resultMap="ModelProviderResultMap">

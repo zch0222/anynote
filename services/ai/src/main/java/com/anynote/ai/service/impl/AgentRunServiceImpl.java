@@ -8,30 +8,44 @@ import com.anynote.ai.api.model.po.ChatMessage;
 import com.anynote.ai.harness.HarnessClient;
 import com.anynote.ai.harness.HarnessClientException;
 import com.anynote.ai.harness.dto.HarnessRunCancelDTO;
+import com.anynote.ai.harness.vo.HarnessRunEventVO;
+import com.anynote.ai.harness.vo.HarnessTraceDependenciesVO;
 import com.anynote.ai.mapper.AgentRunEventMapper;
 import com.anynote.ai.mapper.AgentRunMapper;
 import com.anynote.ai.mapper.ChatMessageMapper;
+import com.anynote.ai.model.bo.LogicalModelProviderBO;
 import com.anynote.ai.model.dto.AgentRunRequestDTO;
 import com.anynote.ai.model.dto.AgentRunScopeDTO;
 import com.anynote.ai.model.dto.HarnessRunRequestDTO;
 import com.anynote.ai.model.po.AgentRunEventPO;
 import com.anynote.ai.model.po.AgentRunPO;
+import com.anynote.ai.model.vo.AgentCitationVO;
+import com.anynote.ai.model.vo.AgentErrorEventVO;
+import com.anynote.ai.model.vo.AgentIndexWatermarkVO;
 import com.anynote.ai.model.vo.AgentRunCancelVO;
 import com.anynote.ai.model.vo.AgentRunEventVO;
+import com.anynote.ai.model.vo.AgentRunFinishedEventVO;
+import com.anynote.ai.model.vo.AgentRunStartedEventVO;
 import com.anynote.ai.model.vo.AgentRunStatusVO;
+import com.anynote.ai.model.vo.AgentStateEventVO;
+import com.anynote.ai.model.vo.AgentTextDeltaEventVO;
+import com.anynote.ai.model.vo.AgentUsageVO;
 import com.anynote.ai.properties.AiHarnessProperties;
-import com.anynote.ai.run.AiCallContext;
+import com.anynote.ai.run.AgentRunEventTypes;
 import com.anynote.ai.run.AgentRunProcessView;
-import com.anynote.ai.run.AgentRunEventWhitelist;
+import com.anynote.ai.run.AiCallContext;
 import com.anynote.ai.run.AiRunLimiter;
 import com.anynote.ai.run.DailyRunLimitService;
 import com.anynote.ai.run.IndexWatermarkClient;
 import com.anynote.ai.service.AgentRunService;
 import com.anynote.ai.service.ChatConversationService;
 import com.anynote.ai.service.ChatMessageService;
+import com.anynote.ai.service.ModelProviderService;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.core.web.enums.ResCode;
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -44,9 +58,7 @@ import java.lang.reflect.Type;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -83,9 +95,11 @@ public class AgentRunServiceImpl implements AgentRunService {
 
     private static final int DEFAULT_PROCESS_REASONING_MAX_CHARS = 8000;
 
-    private static final Type MAP_TYPE = new TypeToken<Map<String, Object>>() { }.getType();
+    private static final String TRACE_DEPENDENCIES = "trace.dependencies";
 
-    private static final Type CITATIONS_TYPE = new TypeToken<List<Map<String, Object>>>() { }.getType();
+    private static final String CANCELLED = "CANCELLED";
+
+    private static final Type CITATIONS_TYPE = new TypeToken<List<AgentCitationVO>>() { }.getType();
 
     private final ChatConversationService conversationService;
 
@@ -109,6 +123,8 @@ public class AgentRunServiceImpl implements AgentRunService {
 
     private final AiHarnessProperties harnessProperties;
 
+    private final ModelProviderService modelProviderService;
+
     private final Gson gson;
 
     private final Executor ioExecutor;
@@ -127,6 +143,7 @@ public class AgentRunServiceImpl implements AgentRunService {
      * @param dailyRunLimitService 每日运行次数限制器
      * @param transactionTemplate 短事务模板
      * @param harnessProperties Harness 调用配置
+     * @param modelProviderService 模型供应商服务，用于解析逻辑模型绑定的供应商
      * @param gson JSON 序列化器
      * @param ioExecutor I/O 执行器
      */
@@ -141,6 +158,7 @@ public class AgentRunServiceImpl implements AgentRunService {
                                DailyRunLimitService dailyRunLimitService,
                                TransactionTemplate transactionTemplate,
                                AiHarnessProperties harnessProperties,
+                               ModelProviderService modelProviderService,
                                Gson gson,
                                @Qualifier("ioExecutor") Executor ioExecutor) {
         this.conversationService = conversationService;
@@ -154,6 +172,7 @@ public class AgentRunServiceImpl implements AgentRunService {
         this.dailyRunLimitService = dailyRunLimitService;
         this.transactionTemplate = transactionTemplate;
         this.harnessProperties = harnessProperties;
+        this.modelProviderService = modelProviderService;
         this.gson = gson;
         this.ioExecutor = ioExecutor;
     }
@@ -273,7 +292,7 @@ public class AgentRunServiceImpl implements AgentRunService {
                 .outcome(run.getOutcome())
                 .answer(answer == null ? null : answer.getContent())
                 .citations(readCitations(answer))
-                .usage(readMap(run.getTokenUsage()))
+                .usage(readUsage(run.getTokenUsage()))
                 .startedAt(run.getStartedAt() == null ? null : run.getStartedAt().toInstant())
                 .finishedAt(run.getFinishedAt() == null ? null : run.getFinishedAt().toInstant())
                 .build();
@@ -376,7 +395,7 @@ public class AgentRunServiceImpl implements AgentRunService {
     private void relayRun(String runId, RunSetup setup, AiCallContext context, SseEmitter emitter) {
         RelayState state = new RelayState();
         try {
-            Map<String, Object> watermark = indexWatermarkClient.snapshot();
+            AgentIndexWatermarkVO watermark = indexWatermarkClient.snapshot();
             harnessClient.streamAgentRun(context, setup.harnessRequest(), event ->
                     handleEvent(event, setup, emitter, state, watermark));
             if (!state.finished) {
@@ -393,108 +412,140 @@ public class AgentRunServiceImpl implements AgentRunService {
         }
     }
 
-    private void handleEvent(AgentRunEventVO event, RunSetup setup, SseEmitter emitter,
-                             RelayState state, Map<String, Object> watermark) {
+    /**
+     * 处理一条 Python 事件：Trace 只落库；登记过的事件按数据类解析后累积过程视图并转发给浏览器。
+     *
+     * @param event Python 事件
+     * @param setup 本次运行的持久化对象
+     * @param emitter 浏览器事件流
+     * @param state 转发状态
+     * @param watermark 运行开始时的索引状态
+     */
+    private void handleEvent(HarnessRunEventVO event, RunSetup setup, SseEmitter emitter,
+                             RelayState state, AgentIndexWatermarkVO watermark) {
         if (event == null || event.getType() == null) {
             return;
         }
         state.lastSequence = event.getSeq() == null ? state.lastSequence : event.getSeq();
-        Map<String, Object> data = event.getData() == null
-                ? new LinkedHashMap<>()
-                : new LinkedHashMap<>(event.getData());
-        if (event.getType().startsWith("trace.")) {
-            Map<String, Object> traceData = data;
+        JsonObject raw = event.getData() == null ? new JsonObject() : event.getData();
+        if (AgentRunEventTypes.isTrace(event.getType())) {
             withDbPermit(() -> {
                 eventMapper.insert(AgentRunEventPO.builder()
                         .runId(event.getRunId())
                         .seq(event.getSeq())
                         .type(event.getType())
-                        .content(gson.toJson(traceData))
+                        .content(gson.toJson(raw))
                         .createTime(new Date())
                         .build());
                 return null;
             });
-            if ("trace.dependencies".equals(event.getType())) {
-                state.dependencies.addAll(readStringList(data.get("dependencies")));
+            if (TRACE_DEPENDENCIES.equals(event.getType())) {
+                HarnessTraceDependenciesVO dependencies = gson.fromJson(raw, HarnessTraceDependenciesVO.class);
+                if (dependencies != null && dependencies.getDependencies() != null) {
+                    state.dependencies.addAll(dependencies.getDependencies());
+                }
             }
             return;
         }
-        if (!AgentRunEventWhitelist.allowsType(event.getType())) {
+        Object data = AgentRunEventTypes.parse(event.getType(), raw, gson);
+        if (data == null) {
             return;
         }
-        state.process.accumulate(event.getType(), data);
-        data = AgentRunEventWhitelist.sanitize(event.getType(), data);
-        if ("run.started".equals(event.getType())) {
-            data.put("conversationId", setup.conversationId());
-            data.put("indexWatermark", watermark);
-            Object agent = data.get("agent");
-            Object version = data.get("agentVersion");
-            Object model = data.get("model");
-            if (agent != null) {
-                setup.run().setAgentName(String.valueOf(agent));
+        state.process.accumulate(data);
+        switch (data) {
+            case AgentRunStartedEventVO started -> onRunStarted(started, setup, state, watermark);
+            case AgentTextDeltaEventVO text -> {
+                if (text.getDelta() != null) {
+                    state.answer.append(text.getDelta());
+                }
             }
-            if (version != null) {
-                setup.run().setAgentVersion(String.valueOf(version));
+            case AgentCitationVO citation -> state.citations.add(citation);
+            case AgentStateEventVO runState -> {
+                if (runState.getState() != null) {
+                    setup.run().setState(runState.getState());
+                    withDbPermit(() -> {
+                        runMapper.updateById(setup.run());
+                        return null;
+                    });
+                }
             }
-            if (model != null) {
-                setup.run().setModel(String.valueOf(model));
-            }
-            withDbPermit(() -> {
-                runMapper.updateById(setup.run());
-                return null;
-            });
-        } else if ("text.delta".equals(event.getType())) {
-            Object delta = data.get("delta");
-            if (delta instanceof String value) {
-                state.answer.append(value);
-            }
-        } else if ("citation".equals(event.getType())) {
-            state.citations.add(data);
-        } else if ("state".equals(event.getType())) {
-            Object runState = data.get("state");
-            if (runState != null) {
-                setup.run().setState(String.valueOf(runState));
+            case AgentUsageVO usage -> {
+                state.usage = usage;
+                setup.run().setTokenUsage(gson.toJson(usage));
                 withDbPermit(() -> {
                     runMapper.updateById(setup.run());
                     return null;
                 });
             }
-        } else if ("usage".equals(event.getType())) {
-            state.usage = data;
-            setup.run().setTokenUsage(gson.toJson(data));
-            withDbPermit(() -> {
-                runMapper.updateById(setup.run());
-                return null;
-            });
-        } else if ("error".equals(event.getType())) {
-            Object category = data.get("category");
-            if ("CANCELLED".equals(category)) {
-                return;
+            case AgentErrorEventVO error -> {
+                if (CANCELLED.equals(error.getCategory())) {
+                    return;
+                }
+                error.setMessage(userErrorMessage(error.getCategory()));
             }
-            data.put("message", userErrorMessage(category));
-            event.setData(data);
-        } else if ("run.finished".equals(event.getType())) {
-            persistFinished(setup, state, data);
-            state.finished = true;
+            case AgentRunFinishedEventVO finished -> {
+                persistFinished(setup, state, finished);
+                state.finished = true;
+            }
+            default -> {
+            }
         }
-        sendEvent(emitter, event, data);
+        sendEvent(emitter, event(event.getRunId(), event.getSeq(), event.getType(), event.getTs(), data));
     }
 
-    private void persistFinished(RunSetup setup, RelayState state, Map<String, Object> data) {
-        Date now = new Date();
-        String runState = stringValue(data.get("state"), "FAILED");
-        String outcome = stringValue(data.get("outcome"), "FAILED");
-        Object usage = data.get("usage");
-        if (usage instanceof Map<?, ?>) {
-            state.usage = castMap(usage);
-            setup.run().setTokenUsage(gson.toJson(usage));
+    /**
+     * 运行开始：补会话与索引状态，记录 Agent、模型与逻辑模型绑定的供应商。
+     *
+     * @param started run.started 事件数据
+     * @param setup 本次运行的持久化对象
+     * @param state 转发状态
+     * @param watermark 运行开始时的索引状态
+     */
+    private void onRunStarted(AgentRunStartedEventVO started, RunSetup setup, RelayState state,
+                              AgentIndexWatermarkVO watermark) {
+        started.setConversationId(setup.conversationId());
+        started.setIndexWatermark(watermark);
+        if (started.getAgent() != null) {
+            setup.run().setAgentName(started.getAgent());
         }
-        state.answerNotices = readStringList(data.get("answerNotices"));
+        if (started.getAgentVersion() != null) {
+            setup.run().setAgentVersion(started.getAgentVersion());
+        }
+        if (started.getModel() != null) {
+            setup.run().setModel(started.getModel());
+        }
+        LogicalModelProviderBO provider = withDbPermit(() ->
+                modelProviderService.resolveLogicalModel(started.getModel()));
+        if (provider != null) {
+            setup.run().setProvider(provider.getProviderKey());
+            if (provider.getProcessReasoningMaxChars() != null) {
+                state.reasoningMaxChars = provider.getProcessReasoningMaxChars();
+            }
+        }
+        withDbPermit(() -> {
+            runMapper.updateById(setup.run());
+            return null;
+        });
+    }
+
+    private void persistFinished(RunSetup setup, RelayState state, AgentRunFinishedEventVO finished) {
+        Date now = new Date();
+        String runState = finished.getState() == null ? "FAILED" : finished.getState();
+        String outcome = finished.getOutcome() == null ? "FAILED" : finished.getOutcome();
+        if (finished.getUsage() != null) {
+            state.usage = finished.getUsage();
+            setup.run().setTokenUsage(gson.toJson(finished.getUsage()));
+        }
+        state.answerNotices = finished.getAnswerNotices() == null ? List.of() : finished.getAnswerNotices();
         setup.run().setState(runState);
         setup.run().setOutcome(outcome);
         setup.run().setFinishedAt(now);
         setup.run().setDurationMs(Math.max(0L, now.getTime() - setup.run().getStartedAt().getTime()));
-        state.process.view().setDurationMs(setup.run().getDurationMs());
+        setup.run().setToolCalls(finished.getToolCalls());
+        setup.run().setFirstOutputMs(finished.getFirstOutputMs());
+        state.process.setDurationMs(setup.run().getDurationMs());
+        state.process.setToolCalls(finished.getToolCalls());
+        state.process.setFirstOutputMs(finished.getFirstOutputMs());
         withDbPermitVoid(() -> {
             runMapper.updateById(setup.run());
             saveAnswer(setup.answerMessage(), state, outcome, now);
@@ -511,26 +562,19 @@ public class AgentRunServiceImpl implements AgentRunService {
         if (state.answer.isEmpty()) {
             state.answer.append(SERVICE_UNAVAILABLE_MESSAGE);
         }
-        state.process.view().setDurationMs(setup.run().getDurationMs());
+        state.process.setDurationMs(setup.run().getDurationMs());
         withDbPermitVoid(() -> {
             runMapper.updateById(setup.run());
             saveAnswer(setup.answerMessage(), state, "FAILED", now);
         });
 
         long errorSequence = state.lastSequence + 1;
-        AgentRunEventVO error = event(runId, errorSequence, "error", Map.of(
-                "category", category,
-                "retryable", retryable,
-                "message", SERVICE_UNAVAILABLE_MESSAGE));
-        sendEvent(emitter, error, error.getData());
-        AgentRunEventVO finished = event(runId, errorSequence + 1, "run.finished", Map.of(
-                "state", "FAILED",
-                "outcome", "FAILED",
-                "evidence", List.of(),
-                "answerNotices", List.of(),
-                "unfinished", List.of(),
-                "usage", state.usage));
-        sendEvent(emitter, finished, finished.getData());
+        sendEvent(emitter, event(runId, errorSequence, "error", null, AgentErrorEventVO.builder()
+                .category(category)
+                .retryable(retryable)
+                .message(SERVICE_UNAVAILABLE_MESSAGE)
+                .build()));
+        sendEvent(emitter, event(runId, errorSequence + 1, "run.finished", null, failedRunFinished(state.usage)));
         state.lastSequence = errorSequence + 1;
         state.finished = true;
     }
@@ -540,7 +584,8 @@ public class AgentRunServiceImpl implements AgentRunService {
         answerMessage.setCitations(gson.toJson(state.citations));
         answerMessage.setAnswerNotices(gson.toJson(state.answerNotices));
         answerMessage.setOutcome(outcome);
-        AgentRunProcessView view = state.process.view();
+        AgentRunProcessView view = state.process;
+        view.complete(state.reasoningMaxChars);
         if (view.hasItems()) {
             view.getDependencies().addAll(state.dependencies);
             answerMessage.setProcess(gson.toJson(view));
@@ -551,47 +596,43 @@ public class AgentRunServiceImpl implements AgentRunService {
 
     private SseEmitter immediateFailure(String runId, String category, boolean retryable, String message) {
         SseEmitter emitter = newEmitter();
-        Map<String, Object> errorData = Map.of(
-                "category", category,
-                "retryable", retryable,
-                "message", message);
-        AgentRunEventVO error = event(runId, 1L, "error", errorData);
-        sendEvent(emitter, error, errorData);
-        Map<String, Object> finishedData = Map.of(
-                "state", "FAILED",
-                "outcome", "FAILED",
-                "evidence", List.of(),
-                "answerNotices", List.of(),
-                "unfinished", List.of(),
-                "usage", Map.of());
-        AgentRunEventVO finished = event(runId, 2L, "run.finished", finishedData);
-        sendEvent(emitter, finished, finishedData);
+        sendEvent(emitter, event(runId, 1L, "error", null, AgentErrorEventVO.builder()
+                .category(category)
+                .retryable(retryable)
+                .message(message)
+                .build()));
+        sendEvent(emitter, event(runId, 2L, "run.finished", null, failedRunFinished(null)));
         emitter.complete();
         return emitter;
     }
 
-    private AgentRunEventVO event(String runId, long seq, String type, Map<String, Object> data) {
+    private AgentRunFinishedEventVO failedRunFinished(AgentUsageVO usage) {
+        return AgentRunFinishedEventVO.builder()
+                .state("FAILED")
+                .outcome("FAILED")
+                .evidence(List.of())
+                .answerNotices(List.of())
+                .unfinished(List.of())
+                .usage(usage == null ? new AgentUsageVO() : usage)
+                .build();
+    }
+
+    private AgentRunEventVO event(String runId, Long seq, String type, String ts, Object data) {
         return AgentRunEventVO.builder()
                 .seq(seq)
                 .runId(runId)
-                .ts(Instant.now().toString())
+                .ts(ts == null ? Instant.now().toString() : ts)
                 .type(type)
                 .data(data)
                 .build();
     }
 
-    private void sendEvent(SseEmitter emitter, AgentRunEventVO event, Map<String, Object> data) {
+    private void sendEvent(SseEmitter emitter, AgentRunEventVO event) {
         try {
             emitter.send(SseEmitter.event()
                     .id(String.valueOf(event.getSeq()))
                     .name(event.getType())
-                    .data(AgentRunEventVO.builder()
-                            .seq(event.getSeq())
-                            .runId(event.getRunId())
-                            .ts(event.getTs())
-                            .type(event.getType())
-                            .data(data)
-                            .build()));
+                    .data(event));
         } catch (IOException | IllegalStateException ignored) {
             // 浏览器断开后仍消费上游并完成落库。
         }
@@ -664,6 +705,7 @@ public class AgentRunServiceImpl implements AgentRunService {
                     .role(role)
                     .content(message.getContent())
                     .citations(toHarnessCitations(message))
+                    .dependencies(readDependencies(message))
                     .build());
         }
         return history;
@@ -677,62 +719,57 @@ public class AgentRunServiceImpl implements AgentRunService {
      */
     private List<HarnessRunRequestDTO.Message.Citation> toHarnessCitations(ChatMessage message) {
         List<HarnessRunRequestDTO.Message.Citation> citations = new ArrayList<>();
-        try {
-            for (Map<String, Object> item : readCitations(message)) {
-                Object rawIndex = item.get("index");
-                if (!(rawIndex instanceof Number)) {
-                    continue;
-                }
-                int index = ((Number) rawIndex).intValue();
-                if (index <= 0) {
-                    continue;
-                }
-                Object title = item.get("title");
-                String[] refParts = splitSourceId(item.get("sourceId"));
-                citations.add(HarnessRunRequestDTO.Message.Citation.builder()
-                        .index(index)
-                        .title(title == null ? null : String.valueOf(title))
-                        .ref(refParts[0])
-                        .subtype(refParts[1])
-                        .build());
+        for (AgentCitationVO item : readCitations(message)) {
+            if (item.getIndex() == null || item.getIndex() <= 0) {
+                continue;
             }
-            return citations;
-        } catch (RuntimeException ignored) {
-            return List.of();
+            citations.add(HarnessRunRequestDTO.Message.Citation.builder()
+                    .index(item.getIndex())
+                    .title(item.getTitle())
+                    .build());
         }
+        return citations;
     }
 
     /**
-     * 把落库引用的 sourceId 拆为基础引用与附属类型。
+     * 读取历史回答所在运行落库的依赖清单。
      *
-     * @param sourceId 实体键，如 note:12 或 mooc_item:5#transcript
-     * @return 首元素为 ref，次元素为 subtype（可空）
+     * @param message 历史消息
+     * @return 实体键列表，没有过程视图时为空
      */
-    private String[] splitSourceId(Object sourceId) {
-        if (!(sourceId instanceof String value) || value.isBlank()) {
-            return new String[]{null, null};
+    private List<String> readDependencies(ChatMessage message) {
+        if (message.getProcess() == null || message.getProcess().isBlank()) {
+            return List.of();
         }
-        int hash = value.indexOf('#');
-        if (hash < 0) {
-            return new String[]{value, null};
+        try {
+            AgentRunProcessView view = gson.fromJson(message.getProcess(), AgentRunProcessView.class);
+            return view == null || view.getDependencies() == null ? List.of() : view.getDependencies();
+        } catch (JsonParseException ignored) {
+            return List.of();
         }
-        return new String[]{value.substring(0, hash), value.substring(hash + 1)};
     }
 
-    private List<Map<String, Object>> readCitations(ChatMessage answer) {
+    private List<AgentCitationVO> readCitations(ChatMessage answer) {
         if (answer == null || answer.getCitations() == null || answer.getCitations().isBlank()) {
             return List.of();
         }
-        List<Map<String, Object>> citations = gson.fromJson(answer.getCitations(), CITATIONS_TYPE);
-        return citations == null ? List.of() : citations;
+        try {
+            List<AgentCitationVO> citations = gson.fromJson(answer.getCitations(), CITATIONS_TYPE);
+            return citations == null ? List.of() : citations;
+        } catch (JsonParseException ignored) {
+            return List.of();
+        }
     }
 
-    private Map<String, Object> readMap(String json) {
+    private AgentUsageVO readUsage(String json) {
         if (json == null || json.isBlank()) {
-            return Map.of();
+            return null;
         }
-        Map<String, Object> value = gson.fromJson(json, MAP_TYPE);
-        return value == null ? Map.of() : value;
+        try {
+            return gson.fromJson(json, AgentUsageVO.class);
+        } catch (JsonParseException ignored) {
+            return null;
+        }
     }
 
     /**
@@ -741,8 +778,8 @@ public class AgentRunServiceImpl implements AgentRunService {
      * @param category 上游错误类别
      * @return 用户可见错误文案
      */
-    private String userErrorMessage(Object category) {
-        String value = category == null ? "" : String.valueOf(category);
+    private String userErrorMessage(String category) {
+        String value = category == null ? "" : category;
         if (value.startsWith("BUDGET_")) {
             return BUDGET_EXHAUSTED_MESSAGE;
         }
@@ -756,22 +793,6 @@ public class AgentRunServiceImpl implements AgentRunService {
         };
     }
 
-    private List<String> readStringList(Object value) {
-        if (value instanceof List<?> items) {
-            return items.stream().map(String::valueOf).toList();
-        }
-        return List.of();
-    }
-
-    private String stringValue(Object value, String fallback) {
-        return value == null ? fallback : String.valueOf(value);
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> castMap(Object value) {
-        return (Map<String, Object>) value;
-    }
-
     private record RunSetup(Long conversationId, ChatMessage answerMessage, AgentRunPO run,
                             HarnessRunRequestDTO harnessRequest) {
     }
@@ -780,18 +801,19 @@ public class AgentRunServiceImpl implements AgentRunService {
 
         private final StringBuilder answer = new StringBuilder();
 
-        private final List<Map<String, Object>> citations = new ArrayList<>();
+        private final List<AgentCitationVO> citations = new ArrayList<>();
 
         private final List<String> dependencies = new ArrayList<>();
 
-        private final AgentRunProcessView.Accumulator process =
-                new AgentRunProcessView.Accumulator(new Gson(), DEFAULT_PROCESS_REASONING_MAX_CHARS);
+        private final AgentRunProcessView process = new AgentRunProcessView();
+
+        private int reasoningMaxChars = DEFAULT_PROCESS_REASONING_MAX_CHARS;
 
         private List<String> answerNotices = List.of();
 
         private long lastSequence;
 
-        private Map<String, Object> usage = Map.of();
+        private AgentUsageVO usage;
 
         private boolean finished;
     }

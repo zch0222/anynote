@@ -4,8 +4,6 @@ import com.anynote.ai.api.model.po.ChatMessage;
 import com.google.gson.Gson;
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -24,7 +22,7 @@ class ChatMessageVOTest {
                 .id(1L)
                 .content("答案")
                 .runId("run-1")
-                .citations("[{\"index\":1,\"evidenceId\":\"E1\"}]")
+                .citations("[{\"index\":1,\"evidenceId\":\"E1\",\"locator\":{\"heading\":\"2.1\",\"_key\":\"x\"}}]")
                 .answerNotices("[\"UNSOURCED\"]")
                 .outcome("ANSWERED")
                 .build();
@@ -34,8 +32,23 @@ class ChatMessageVOTest {
         assertThat(result.getRunId()).isEqualTo("run-1");
         assertThat(result.getOutcome()).isEqualTo("ANSWERED");
         assertThat(result.getAnswerNotices()).containsExactly("UNSOURCED");
-        Map<String, Object> citation = result.getCitations().get(0);
-        assertThat(citation).containsEntry("index", 1.0)
-                .containsEntry("evidenceId", "E1");
+        AgentCitationVO citation = result.getCitations().get(0);
+        assertThat(citation.getIndex()).isEqualTo(1);
+        assertThat(citation.getEvidenceId()).isEqualTo("E1");
+        assertThat(citation.getLocator().getHeading()).isEqualTo("2.1");
+    }
+
+    /**
+     * 落库的过程视图不经转换直接下发，必须经读取复核后另行设置。
+     */
+    @Test
+    void doesNotPassThroughPersistedProcessView() {
+        ChatMessage message = ChatMessage.builder()
+                .id(2L)
+                .content("答案")
+                .build();
+        message.setProcess("{\"version\":1,\"items\":[],\"dependencies\":[\"note:1\"]}");
+
+        assertThat(ChatMessageVO.from(message, new Gson()).getProcess()).isNull();
     }
 }
