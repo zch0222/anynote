@@ -281,7 +281,12 @@ function ensureChatStreamStore(): ChatStreamStore {
                             ? { outcome: event.data.outcome }
                             : {}),
                           ...(event.type === "run.finished"
-                            ? { durationMs: Date.now() - startedAtMs }
+                            ? {
+                                durationMs:
+                                  typeof event.data.durationMs === "number"
+                                    ? event.data.durationMs
+                                    : Date.now() - startedAtMs,
+                              }
                             : {}),
                           ...(event.type === "run.finished" &&
                           typeof event.data.toolCalls === "number"

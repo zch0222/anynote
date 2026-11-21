@@ -14,7 +14,7 @@ const REASONING = [
   "知识库列表已经拿到，在这个库里检索一下相关内容。",
   "列表里的知识库足够回答，据此作答并标注引用。",
 ];
-const SEARCH_QUERY = "M17过程展示";
+const SEARCH_QUERY = "ZXQ9 未收录词条";
 const COMPLETED_HEAD = /^已完成，用时 \d+ 秒 · 首字 \d+\.\d 秒 · 工具调用 2 次 · 检索 1 次$/;
 const PROMPT = "M17PROCESS 本次可以检索几个知识库？";
 

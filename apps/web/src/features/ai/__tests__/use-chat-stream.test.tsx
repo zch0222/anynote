@@ -429,11 +429,17 @@ describe("chat stream store", () => {
     }
   });
 
-  it("run.finished 带回工具调用次数与首字时间", async () => {
+  it("run.finished 带回工具调用次数、首字时间与总耗时", async () => {
     streamAiSseMock.mockImplementation(async ({ onEvent }) => {
       onEvent(event("run.started", {}, 1));
       onEvent(event("tool.started", { id: "c1", name: "kb_search", summary: "检索知识库" }, 2));
-      onEvent(event("run.finished", { outcome: "ANSWERED", toolCalls: 3, firstOutputMs: 1200 }, 3));
+      onEvent(
+        event(
+          "run.finished",
+          { outcome: "ANSWERED", toolCalls: 3, firstOutputMs: 1200, durationMs: 4500 },
+          3,
+        ),
+      );
     });
 
     await useChatStreamStore.getState().send({ key: "new", prompt: "q" });
@@ -441,6 +447,7 @@ describe("chat stream store", () => {
     expect(useChatStreamStore.getState().sessions.new?.messages[1]).toMatchObject({
       toolCalls: 3,
       firstOutputMs: 1200,
+      durationMs: 4500,
       outcome: "ANSWERED",
     });
   });
