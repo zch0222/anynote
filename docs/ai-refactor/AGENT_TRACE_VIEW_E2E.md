@@ -1,7 +1,7 @@
 # 运行过程展示（M17）Playwright 端到端验收说明
 
 > 日期：2026-11-21
-> 状态：**待执行**。执行前需在「设置 → 模型供应商」重新填写 stepfun 的 API Key，原因见 [§2.2](#22-执行前必须重新填写-stepfun-的-key)。
+> 状态：**已通过**（2026-11-21 执行，桌面与移动端用例 2/2 通过，六项通过标准全绿）。执行中发现并修复两处测试侧问题（脚本化供应商未剥 `<untrusted-evidence>` 包裹、检索查询与库名重叠命中自身），并统一「用时」口径（`run.finished` 下发服务端 `durationMs`，前端优先采用），变更清单见 [docs/changelist/2026-11-21-agent-trace-view-e2e.md](../changelist/2026-11-21-agent-trace-view-e2e.md)。stepfun 的 Key 已在新主密钥下重新填写，§2.2 前置已满足。
 > 依据：[评估文档](./AGENT_TRACE_VIEW_CODE_REVIEW.md) M8 的验收标准「M17.4 计划中的 Playwright 桌面与移动端用例补齐：用脚本化供应商输出思考增量」；[方案](./AGENT_TRACE_VIEW_PLAN.md) M17.4 验收行。
 > 范围：只验收对话界面的过程展示链路，不调用外部模型；结果写回 [AI_MILESTONES.md](./AI_MILESTONES.md) M17 节与评估文档第 0 节。
 
