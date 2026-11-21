@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toUserMessage } from "@/lib/api/errors";
 import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
@@ -20,8 +27,7 @@ import {
 } from "../schemas";
 import { useLogicalConfigQuery, useUpdateLogicalConfigMutation } from "../use-model-providers";
 
-const SELECT_CLASS =
-  "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-label outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50";
+const SELECT_TRIGGER_CLASS = "h-9 w-full rounded-lg";
 
 const REASONING_FORMAT_OPTIONS: {
   value: LogicalFormValue["reasoningFormat"];
@@ -116,6 +122,18 @@ function LogicalConfigForm({
   const selectedProvider = providers.find((item) => item.providerKey === form.providerKey.trim());
   const providerModels = selectedProvider?.models ?? [];
   const hasUnlistedSavedProvider = Boolean(form.providerKey) && !selectedProvider;
+  const providerOptions: { value: string | null; label: string }[] = [
+    { value: null, label: "请选择模型供应商" },
+    ...(hasUnlistedSavedProvider ? [{ value: form.providerKey, label: form.providerKey }] : []),
+    ...providers.map((provider) => ({
+      value: provider.providerKey,
+      label: `${provider.displayName}（${provider.providerKey}）${provider.enabled ? "" : " - 已停用"}`,
+    })),
+  ];
+  const modelOptions = [
+    { value: "__custom__", label: "手动输入或选择下方模型" },
+    ...providerModels.map((modelName) => ({ value: modelName, label: modelName })),
+  ];
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -158,11 +176,11 @@ function LogicalConfigForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor={`${logicalName}-provider`}>模型供应商</Label>
-          <select
-            id={`${logicalName}-provider`}
-            value={form.providerKey}
-            onChange={(event) => {
-              const nextKey = event.target.value;
+          <Select
+            items={providerOptions}
+            value={form.providerKey || null}
+            onValueChange={(next) => {
+              const nextKey = next ?? "";
               const nextProvider = providers.find((item) => item.providerKey === nextKey);
               setError(null);
               setForm((prev) => ({
@@ -174,20 +192,22 @@ function LogicalConfigForm({
                     : prev.model,
               }));
             }}
-            className={SELECT_CLASS}
-            data-testid={`${logicalName}-provider-select`}
           >
-            <option value="">请选择模型供应商</option>
-            {hasUnlistedSavedProvider ? (
-              <option value={form.providerKey}>{form.providerKey}</option>
-            ) : null}
-            {providers.map((provider) => (
-              <option key={provider.providerKey} value={provider.providerKey}>
-                {provider.displayName}（{provider.providerKey}）
-                {provider.enabled ? "" : " - 已停用"}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              id={`${logicalName}-provider`}
+              className={SELECT_TRIGGER_CLASS}
+              data-testid={`${logicalName}-provider-select`}
+            >
+              <SelectValue placeholder="请选择模型供应商" />
+            </SelectTrigger>
+            <SelectContent>
+              {providerOptions.map((option) => (
+                <SelectItem key={option.value ?? "none"} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {isEmbedding ? (
@@ -205,21 +225,28 @@ function LogicalConfigForm({
         ) : (
           <div className="space-y-1.5">
             <Label htmlFor={`${logicalName}-reasoning-format`}>推理输出格式</Label>
-            <select
-              id={`${logicalName}-reasoning-format`}
+            <Select
+              items={REASONING_FORMAT_OPTIONS}
               value={form.reasoningFormat}
-              onChange={(event) =>
-                set("reasoningFormat", event.target.value as LogicalFormValue["reasoningFormat"])
-              }
-              className={SELECT_CLASS}
-              data-testid={`${logicalName}-reasoning-format-select`}
+              onValueChange={(next) => {
+                if (next) set("reasoningFormat", next);
+              }}
             >
-              {REASONING_FORMAT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                id={`${logicalName}-reasoning-format`}
+                className={SELECT_TRIGGER_CLASS}
+                data-testid={`${logicalName}-reasoning-format-select`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {REASONING_FORMAT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
@@ -227,25 +254,28 @@ function LogicalConfigForm({
           <Label htmlFor={`${logicalName}-model`}>{isEmbedding ? "Embedding 模型" : "模型"}</Label>
           <div className="grid gap-2 sm:grid-cols-2">
             {providerModels.length > 0 ? (
-              <select
-                aria-label="选择模型"
+              <Select
+                items={modelOptions}
                 value={providerModels.includes(form.model) ? form.model : "__custom__"}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (value !== "__custom__") {
-                    set("model", value);
-                  }
+                onValueChange={(next) => {
+                  if (next && next !== "__custom__") set("model", next);
                 }}
-                className={SELECT_CLASS}
-                data-testid={`${logicalName}-model-select`}
               >
-                <option value="__custom__">手动输入或选择下方模型</option>
-                {providerModels.map((modelName) => (
-                  <option key={modelName} value={modelName}>
-                    {modelName}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  aria-label="选择模型"
+                  className={SELECT_TRIGGER_CLASS}
+                  data-testid={`${logicalName}-model-select`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {modelOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : null}
             <Input
               id={`${logicalName}-model`}
@@ -261,24 +291,28 @@ function LogicalConfigForm({
         {!isEmbedding ? (
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor={`${logicalName}-reasoning-passthrough`}>推理回传方式</Label>
-            <select
-              id={`${logicalName}-reasoning-passthrough`}
+            <Select
+              items={REASONING_PASSTHROUGH_OPTIONS}
               value={form.reasoningPassthrough}
-              onChange={(event) =>
-                set(
-                  "reasoningPassthrough",
-                  event.target.value as LogicalFormValue["reasoningPassthrough"],
-                )
-              }
-              className={SELECT_CLASS}
-              data-testid={`${logicalName}-reasoning-passthrough-select`}
+              onValueChange={(next) => {
+                if (next) set("reasoningPassthrough", next);
+              }}
             >
-              {REASONING_PASSTHROUGH_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                id={`${logicalName}-reasoning-passthrough`}
+                className={SELECT_TRIGGER_CLASS}
+                data-testid={`${logicalName}-reasoning-passthrough-select`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {REASONING_PASSTHROUGH_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         ) : null}
       </div>

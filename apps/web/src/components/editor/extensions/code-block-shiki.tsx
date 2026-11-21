@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SUPPORTED_LANGUAGES, prepareHighlight, tokenize } from "@/lib/editor/shiki";
 import { CoreCodeBlock } from "@anynote/editor-core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
@@ -16,6 +23,11 @@ import {
 export const CODE_TOKEN_CLASS = "anynote-code-token";
 
 export const codeBlockShikiKey = new PluginKey<ShikiPluginState>("anynote-code-block-shiki");
+
+const LANGUAGE_OPTIONS = [
+  { value: "", label: "纯文本" },
+  ...SUPPORTED_LANGUAGES.map((language) => ({ value: language, label: language })),
+];
 
 type ShikiPluginState = {
   decorations: DecorationSet;
@@ -119,19 +131,26 @@ function CodeBlockShikiView({ node, updateAttributes, editor }: NodeViewProps) {
     <NodeViewWrapper className="anynote-code-block" data-language={language || "text"}>
       {editor.isEditable ? (
         <div className="anynote-code-block__toolbar" contentEditable={false}>
-          <select
-            aria-label="代码语言"
-            className="anynote-code-block__language"
+          <Select
+            items={LANGUAGE_OPTIONS}
             value={language}
-            onChange={(event) => updateAttributes({ language: event.target.value || null })}
+            onValueChange={(next) => updateAttributes({ language: next || null })}
           >
-            <option value="">纯文本</option>
-            {SUPPORTED_LANGUAGES.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              aria-label="代码语言"
+              size="sm"
+              className="anynote-code-block__language dark:bg-transparent dark:hover:bg-fill-hover"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {LANGUAGE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       ) : null}
       <NodeViewContent<"pre"> as="pre" className="anynote-code-block__editor" />

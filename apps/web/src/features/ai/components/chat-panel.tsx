@@ -7,11 +7,17 @@ import type { Citation, CitationVariant } from "@/lib/ai/citations";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowDown, RotateCcw, Sparkles } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { scopeDocId } from "../schemas";
 import { ChatInput } from "./chat-input";
-import { ChatScopeSelect } from "./chat-scope-select";
 import { MessageItem } from "./message-item";
+
+// 只在会话布局渲染；懒加载避免 Select 弹层进入文档问答的首屏共享包。
+const ChatScopeSelect = dynamic(
+  () => import("./chat-scope-select").then((mod) => mod.ChatScopeSelect),
+  { ssr: false, loading: () => <div className="h-8" aria-hidden="true" /> },
+);
 
 export type ChatPanelProps = {
   /** 会话在流式 store 中的 key。 */

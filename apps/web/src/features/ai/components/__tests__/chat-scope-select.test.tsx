@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { selectThemedOption } from "@/test/select";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../use-chat-scope", () => ({
@@ -16,7 +17,7 @@ import { ChatScopeSelect } from "../chat-scope-select";
  */
 describe("ChatScopeSelect", () => {
   /** 指定库与全部范围使用明确的请求结构。 */
-  it("支持单库和全部范围，运行期间禁用", () => {
+  it("用语义主题弹层支持单库和全部范围，运行期间禁用", async () => {
     const onChange = vi.fn();
     const { rerender } = render(
       <ChatScopeSelect
@@ -25,9 +26,11 @@ describe("ChatScopeSelect", () => {
         onChange={onChange}
       />,
     );
-    fireEvent.change(screen.getByLabelText("检索范围"), { target: { value: "3" } });
+    const trigger = screen.getByRole("combobox", { name: "检索范围" });
+    expect(trigger).toHaveTextContent("全部知识库");
+    await selectThemedOption(trigger, "课程库");
     expect(onChange).toHaveBeenLastCalledWith({ knowledgeBaseIds: [3], refs: [] });
-    fireEvent.change(screen.getByLabelText("检索范围"), { target: { value: "all" } });
+    await selectThemedOption(trigger, "全部知识库");
     expect(onChange).toHaveBeenLastCalledWith({ knowledgeBaseIds: [], refs: [] });
     rerender(
       <ChatScopeSelect scope={{ knowledgeBaseIds: [3], refs: [] }} disabled onChange={onChange} />,

@@ -4,6 +4,7 @@ import type { ChatSession } from "../../src/features/ai/use-chat-stream";
 
 type Fixture = {
   baseId: number;
+  baseName: string;
   emptyBaseId: number;
   emptyBaseName: string;
   noteId: number;
@@ -71,7 +72,8 @@ async function seed(request: APIRequestContext): Promise<Fixture> {
       type: 0,
       cover: "https://anynote.obs.cn-east-3.myhuaweicloud.com/images/knowledge_base_cover.png",
     });
-  const base = await createBase(`M167-${suffix}`);
+  const baseName = `M167-${suffix}`;
+  const base = await createBase(baseName);
   const emptyBaseName = `M167空库-${suffix}`;
   const empty = await createBase(emptyBaseName);
   const noteId = await api(request, "POST", "/api/proxy/note/notes", {
@@ -112,7 +114,7 @@ async function seed(request: APIRequestContext): Promise<Fixture> {
       )
       .toBeGreaterThan(0);
   }
-  return { baseId: base.id, emptyBaseId: empty.id, emptyBaseName, noteId, docId };
+  return { baseId: base.id, baseName, emptyBaseId: empty.id, emptyBaseName, noteId, docId };
 }
 
 /** 在页面提交问题并等待真实运行完成。 */
@@ -165,13 +167,13 @@ export function agentRetrievalTests(mobile: boolean) {
     test("知识库入口问答带引用，刷新后恢复范围并定位笔记小节", async ({ page }, testInfo) => {
       await page.goto(mobile ? `/m/notes/${fixture.baseId}` : `/notes/${fixture.baseId}`);
       await page.getByTestId(mobile ? "mobile-kb-ask-link" : "kb-ask-link").click();
-      await expect(page.getByLabel("检索范围")).toHaveValue(String(fixture.baseId));
+      await expect(page.getByRole("combobox", { name: "检索范围" })).toHaveText(fixture.baseName);
       const { message, request } = await ask(page, "M167NOTECITATION 倒排索引是什么？");
       expect(request.scope).toEqual({ knowledgeBaseIds: [fixture.baseId], refs: [] });
       expect(message.outcome).toBe("ANSWERED");
       await expect(page.getByTestId("citation-list")).toBeVisible();
       await page.reload();
-      await expect(page.getByLabel("检索范围")).toHaveValue(String(fixture.baseId));
+      await expect(page.getByRole("combobox", { name: "检索范围" })).toHaveText(fixture.baseName);
       const inline = page.locator(".anynote-editor__content a").filter({ hasText: "[1]" });
       await expect(inline).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath("citation-answer.png"), fullPage: true });

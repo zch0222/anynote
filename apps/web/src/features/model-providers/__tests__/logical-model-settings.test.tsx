@@ -1,4 +1,5 @@
 import { renderWithProviders } from "@/test/render";
+import { selectThemedOption } from "@/test/select";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -91,9 +92,7 @@ describe("逻辑模型设置卡片", () => {
   it("embedding 支持选择、手动输入模型名并保存", async () => {
     renderWithProviders(<LogicalModelCard logicalName="embedding" providers={providers} />);
     fireEvent.click(screen.getByTestId("embedding-enabled-input"));
-    fireEvent.change(screen.getByTestId("embedding-provider-select"), {
-      target: { value: "openai" },
-    });
+    await selectThemedOption(screen.getByTestId("embedding-provider-select"), "OpenAI（openai）");
     expect(screen.getByTestId("embedding-model-input")).toHaveValue("text-embedding-3-small");
     fireEvent.change(screen.getByTestId("embedding-model-input"), {
       target: { value: "text-embedding-custom" },
@@ -116,12 +115,13 @@ describe("逻辑模型设置卡片", () => {
     expect(toast.success).toHaveBeenCalledWith("模型配置已保存");
   });
 
-  it("embedding 选中未允许数据出境供应商时展示警告并阻止保存", () => {
+  it("embedding 选中未允许数据出境供应商时展示警告并阻止保存", async () => {
     renderWithProviders(<LogicalModelCard logicalName="embedding" providers={providers} />);
     fireEvent.click(screen.getByTestId("embedding-enabled-input"));
-    fireEvent.change(screen.getByTestId("embedding-provider-select"), {
-      target: { value: "private-local" },
-    });
+    await selectThemedOption(
+      screen.getByTestId("embedding-provider-select"),
+      "内网禁止出境（private-local）",
+    );
     expect(screen.getByTestId("embedding-egress-warning")).toHaveTextContent(
       "所选供应商未允许数据出境，无法用于知识向量索引",
     );
@@ -163,24 +163,22 @@ describe("逻辑模型设置卡片", () => {
     fireEvent.click(screen.getByTestId("agent_main-save"));
     expect(screen.getByTestId("agent_main-error")).toHaveTextContent("请选择模型供应商");
 
-    fireEvent.change(screen.getByTestId("agent_main-provider-select"), {
-      target: { value: "openai" },
-    });
+    await selectThemedOption(screen.getByTestId("agent_main-provider-select"), "OpenAI（openai）");
     fireEvent.change(screen.getByTestId("agent_main-model-input"), {
       target: { value: "" },
     });
     fireEvent.click(screen.getByTestId("agent_main-save"));
     expect(screen.getByTestId("agent_main-error")).toHaveTextContent("请选择模型");
 
-    fireEvent.change(screen.getByTestId("agent_main-reasoning-format-select"), {
-      target: { value: "think_tag" },
-    });
-    fireEvent.change(screen.getByTestId("agent_main-reasoning-passthrough-select"), {
-      target: { value: "original" },
-    });
-    fireEvent.change(screen.getByTestId("agent_main-model-input"), {
-      target: { value: "gpt-4o" },
-    });
+    await selectThemedOption(
+      screen.getByTestId("agent_main-reasoning-format-select"),
+      "正文 <think> 标签",
+    );
+    await selectThemedOption(
+      screen.getByTestId("agent_main-reasoning-passthrough-select"),
+      "原样回传",
+    );
+    await selectThemedOption(screen.getByTestId("agent_main-model-select"), "gpt-4o");
     fireEvent.click(screen.getByTestId("agent_main-save"));
     await waitFor(() =>
       expect(hooks.logicalUpdate.mutateAsync).toHaveBeenCalledWith(

@@ -4,7 +4,8 @@ import {
   buildShikiDecorations,
 } from "@/components/editor/extensions/code-block-shiki";
 import { prepareHighlight, resetHighlighterForTest } from "@/lib/editor/shiki";
-import { render, waitFor } from "@testing-library/react";
+import { selectThemedOption } from "@/test/select";
+import { render, screen, waitFor } from "@testing-library/react";
 import type { Editor } from "@tiptap/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -85,6 +86,15 @@ describe("CodeBlockShiki：高亮以装饰形式贴在正文上", () => {
     expect(container.querySelector("pre.anynote-code-block__editor")?.textContent).toContain(
       "const answer = 42;",
     );
+  });
+
+  it("语言弹层使用语义主题色，选择纯文本后清除语言属性", async () => {
+    const { editor } = await renderEditor(TS_BLOCK);
+    expect(editor.state.doc.firstChild?.attrs.language).toBe("ts");
+
+    await selectThemedOption(screen.getByRole("combobox", { name: "代码语言" }), "纯文本");
+
+    await waitFor(() => expect(editor.state.doc.firstChild?.attrs.language).toBeNull());
   });
 
   it("只读编辑器不渲染语言下拉框", async () => {
