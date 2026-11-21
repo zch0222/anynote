@@ -113,13 +113,27 @@ public class KnowledgeAccessServiceImpl implements KnowledgeAccessService {
         }
         java.util.List<String> readable = new java.util.ArrayList<>();
         for (String combined : refs) {
-            KnowledgeRef ref = KnowledgeRef.parseCombined(combined);
-            KnowledgeSourceDocumentVO metadata = knowledgeEntityService.get(ref, false);
-            if (isReadableDocument(loginUser, ref, metadata)) {
+            if (isCombinedReadable(loginUser, combined)) {
                 readable.add(combined);
             }
         }
         return readable;
+    }
+
+    /**
+     * 判断单个复合键是否可读；键格式错误或实体不存在时判为不可读。
+     *
+     * @param loginUser 当前用户
+     * @param combined 复合实体键
+     * @return 是否可读
+     */
+    private boolean isCombinedReadable(LoginUser loginUser, String combined) {
+        try {
+            KnowledgeRef ref = KnowledgeRef.parseCombined(combined);
+            return isReadableDocument(loginUser, ref, knowledgeEntityService.get(ref, false));
+        } catch (BusinessException error) {
+            return false;
+        }
     }
 
     public KnowledgeAuthorizationVO authorize(LoginUser loginUser, KnowledgeAuthorizeDTO request) {

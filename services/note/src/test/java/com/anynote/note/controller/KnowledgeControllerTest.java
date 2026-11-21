@@ -1,6 +1,7 @@
 package com.anynote.note.controller;
 
 import com.anynote.common.security.annotation.InnerAuth;
+import com.anynote.common.security.handler.GlobalExceptionHandler;
 import com.anynote.common.security.token.TokenUtil;
 import com.anynote.note.model.vo.KnowledgeAuthorizationItemVO;
 import com.anynote.note.model.vo.KnowledgeAuthorizationVO;
@@ -29,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.util.List;
 import java.util.Map;
@@ -153,6 +155,39 @@ class KnowledgeControllerTest {
         mockMvc.perform(post("/internal/v1/knowledge/changes").contentType("application/json")
                         .content("{\"entityType\":\"notice\",\"entityId\":8,\"knowledgeBaseId\":2,\"operation\":\"CREATE\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data").value(15L));
+    }
+
+    /**
+     * 复合键批量可读性端点经真实校验器：合法请求成功，空列表、空白键与超过 100 条返回参数错误。
+     */
+    @Test
+    void authorizeBatchPassesRealValidator() throws Exception {
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        MockMvc validated = MockMvcBuilders.standaloneSetup(new KnowledgeController(tokenUtil, accessService,
+                        contentService, outlineService, queryService, entityService, changeService))
+                .setValidator(validator)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+        when(accessService.authorizeCombined(eq(loginUser), any())).thenReturn(List.of("note:1"));
+
+        validated.perform(post("/internal/v1/knowledge/authorize-batch").contentType("application/json")
+                        .content("{\"refs\":[\"note:1\",\"mooc_item:5#transcript\"]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.readable[0]").value("note:1"));
+        validated.perform(post("/internal/v1/knowledge/authorize-batch").contentType("application/json")
+                        .content("{\"refs\":[]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("A0160"));
+        validated.perform(post("/internal/v1/knowledge/authorize-batch").contentType("application/json")
+                        .content("{\"refs\":[\"note:1\",\" \"]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("A0160"));
+        StringBuilder tooMany = new StringBuilder("{\"refs\":[");
+        for (int index = 1; index <= 101; index++) {
+            tooMany.append(index > 1 ? "," : "").append("\"note:").append(index).append('"');
+        }
+        validated.perform(post("/internal/v1/knowledge/authorize-batch").contentType("application/json")
+                        .content(tooMany.append("]}").toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("A0160"));
     }
 
     /**

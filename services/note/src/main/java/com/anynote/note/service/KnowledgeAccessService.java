@@ -65,7 +65,7 @@ public interface KnowledgeAccessService {
     KnowledgeAuthorizationVO authorize(LoginUser loginUser, KnowledgeAuthorizeDTO request);
 
     /**
-     * 按复合实体键批量确认可读性，返回可读键集合。
+     * 按复合实体键批量确认可读性，返回可读键集合；格式错误或实体不存在的键判为不可读。
      *
      * @param loginUser 用户身份
      * @param refs 复合实体键列表（note:12 或 mooc_item:5#transcript），每批最多 100 条

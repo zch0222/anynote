@@ -170,6 +170,24 @@ class KnowledgeAccessServiceImplTest {
     }
 
     /**
+     * 复合键批量可读性：可读笔记、慕课字幕与知识库返回；他人私有笔记、已删除实体与格式错误的键判为不可读，整批不失败。
+     */
+    @Test
+    void authorizeCombinedMarksBadKeysUnreadableWithoutFailingBatch() {
+        mockKnowledgeBase(3L, "库三");
+        mockDocument(document(KnowledgeEntityType.NOTE, 1L, 1L, 7L, "70000", 1), "body", "c1", "m1");
+        mockDocument(document(KnowledgeEntityType.NOTE, 2L, 1L, 8L, "70000", 1), "secret", "c2", "m2");
+        mockDocument(document(KnowledgeEntityType.TRANSCRIPT, 5L, 1L, 8L, "77400", 3), "字幕", "c3", "m3");
+        when(membershipMapper.selectOne(any())).thenReturn(
+                UserKnowledgeBase.builder().userId(7L).knowledgeBaseId(1L).permissions(2).build());
+
+        List<String> readable = service.authorizeCombined(user, List.of(
+                "note:1", "note:2", "mooc_item:5#transcript", "kb:3", "note:9", "note:abc", "unknown:1"));
+
+        assertThat(readable).containsExactly("note:1", "mooc_item:5#transcript", "kb:3");
+    }
+
+    /**
      * 字幕继承所属慕课的权限与成员关系。
      */
     @Test
