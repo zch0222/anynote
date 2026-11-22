@@ -17,15 +17,29 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import type { Conversation } from "@/features/ai/schemas";
 import {
-  useConversationsInfinite,
+  CONVERSATION_GROUP_PREVIEW_SIZE,
+  groupConversations,
+} from "@/features/ai/conversation-groups";
+import type { Conversation } from "@/features/ai/schemas";
+import { useChatKnowledgeBasesQuery } from "@/features/ai/use-chat-scope";
+import {
+  useConversationsQuery,
   useDeleteConversationMutation,
   useRenameConversationMutation,
 } from "@/features/ai/use-conversations";
-import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export type ConversationListProps = {
@@ -34,18 +48,23 @@ export type ConversationListProps = {
 };
 
 /**
- * 左侧会话列表，支持新建、重命名、删除与分页。
+ * 左侧会话列表，按知识库分组并支持新建、重命名、删除与组内分页。
  *
  * @param props 当前会话 id
  * @author 称霸幼儿园
  */
 export function ConversationList({ activeId }: ConversationListProps) {
   const router = useRouter();
-  const conversations = useConversationsInfinite();
+  const conversations = useConversationsQuery();
+  const knowledgeBases = useChatKnowledgeBasesQuery();
   const deleteMutation = useDeleteConversationMutation();
   const [renaming, setRenaming] = useState<Conversation | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set());
+  const [groupLimits, setGroupLimits] = useState<Readonly<Record<string, number>>>({});
 
-  const rows = conversations.data?.pages.flatMap((page) => page.rows) ?? [];
+  const rows = conversations.data;
+  const bases = knowledgeBases.data;
+  const groups = useMemo(() => groupConversations(rows ?? [], bases ?? []), [rows, bases]);
 
   const handleDelete = async (summary: Conversation) => {
     if (!window.confirm(`删除会话「${summary.title ?? "未命名会话"}」？删除后不可恢复。`)) {
@@ -62,10 +81,22 @@ export function ConversationList({ activeId }: ConversationListProps) {
     }
   };
 
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-separator px-4">
-        <p className="text-sm font-medium text-label">AI 对话</p>
+        <p className="text-sm font-medium text-label">对话列表</p>
         <Button
           variant="ghost"
           size="icon-sm"
@@ -77,87 +108,81 @@ export function ConversationList({ activeId }: ConversationListProps) {
           <Plus className="size-4" aria-hidden="true" />
         </Button>
       </div>
-      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-3" aria-label="会话列表">
-        {conversations.isPending ? (
+      <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2 py-3" aria-label="会话列表">
+        {conversations.isPending || knowledgeBases.isPending ? (
           <ListRowsSkeleton count={4} />
         ) : conversations.isError ? (
           <p className="px-2 py-4 text-sm text-danger">
             会话加载失败：{conversations.error.message}
           </p>
-        ) : rows.length === 0 ? (
+        ) : groups.length === 0 ? (
           <p className="px-2 py-4 text-sm text-label-secondary">还没有历史会话</p>
         ) : (
-          rows.map((summary) => (
-            <div
-              key={summary.id}
-              className={`group flex min-h-10 items-center gap-1 rounded-lg px-1.5 transition-colors ${
-                summary.id === activeId
-                  ? "bg-fill-hover text-label"
-                  : "text-label-secondary hover:bg-fill-hover/70"
-              }`}
-              data-testid={`conversation-item-${summary.id}`}
-              data-active={summary.id === activeId ? "true" : "false"}
-            >
-              <button
-                type="button"
-                className="min-h-9 min-w-0 flex-1 cursor-pointer truncate rounded-md text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                title={summary.title ?? "未命名会话"}
-                onClick={() => {
-                  router.push(`/ai/chat/${summary.id}`);
-                }}
-              >
-                {summary.title ?? "未命名会话"}
-              </button>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-9 shrink-0 md:size-7 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
-                      disabled={deleteMutation.isPending}
-                    />
-                  }
-                  aria-label={`会话「${summary.title ?? "未命名会话"}」操作`}
+          groups.map((group) => {
+            const collapsed = collapsedGroups.has(group.key);
+            const limit = groupLimits[group.key] ?? CONVERSATION_GROUP_PREVIEW_SIZE;
+            const visibleRows = group.conversations.slice(0, limit);
+            const allVisible = visibleRows.length === group.conversations.length;
+            return (
+              <section key={group.key} className="space-y-0.5" data-group-key={group.key}>
+                <button
+                  type="button"
+                  className="flex min-h-8 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm font-medium text-label-secondary outline-none transition-colors hover:bg-fill-hover/70 hover:text-label focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-expanded={!collapsed}
+                  onClick={() => toggleGroup(group.key)}
+                  data-testid="conversation-group-toggle"
                 >
-                  <MoreHorizontal className="size-4" aria-hidden="true" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      setRenaming(summary);
-                    }}
-                  >
-                    <Pencil className="size-4" aria-hidden="true" />
-                    重命名
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={() => {
-                      void handleDelete(summary);
-                    }}
-                  >
-                    <Trash2 className="size-4" aria-hidden="true" />
-                    删除
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ))
+                  {collapsed ? (
+                    <Folder className="size-4 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <FolderOpen className="size-4 shrink-0" aria-hidden="true" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate" title={group.label}>
+                    {group.label}
+                  </span>
+                  {collapsed ? (
+                    <ChevronRight className="size-3.5 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
+                  )}
+                </button>
+                {!collapsed ? (
+                  <div className="space-y-0.5">
+                    {visibleRows.map((summary) => (
+                      <ConversationRow
+                        key={summary.id}
+                        summary={summary}
+                        active={summary.id === activeId}
+                        deleteDisabled={deleteMutation.isPending}
+                        onOpen={() => router.push(`/ai/chat/${summary.id}`)}
+                        onRename={() => setRenaming(summary)}
+                        onDelete={() => void handleDelete(summary)}
+                      />
+                    ))}
+                    {group.conversations.length > CONVERSATION_GROUP_PREVIEW_SIZE ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start px-8 text-xs text-label-secondary"
+                        aria-expanded={allVisible}
+                        onClick={() =>
+                          setGroupLimits((current) => ({
+                            ...current,
+                            [group.key]: allVisible
+                              ? CONVERSATION_GROUP_PREVIEW_SIZE
+                              : limit + CONVERSATION_GROUP_PREVIEW_SIZE,
+                          }))
+                        }
+                      >
+                        {allVisible ? "收起" : "显示更多"}
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+            );
+          })
         )}
-        {conversations.hasNextPage ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full"
-            disabled={conversations.isFetchingNextPage}
-            onClick={() => {
-              void conversations.fetchNextPage();
-            }}
-          >
-            加载更多
-          </Button>
-        ) : null}
       </nav>
       {renaming ? (
         <RenameDialog
@@ -169,6 +194,72 @@ export function ConversationList({ activeId }: ConversationListProps) {
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * 单条会话及其打开、重命名和删除操作。
+ *
+ * @param props 会话摘要、选中状态与操作回调
+ * @author 称霸幼儿园
+ */
+function ConversationRow({
+  summary,
+  active,
+  deleteDisabled,
+  onOpen,
+  onRename,
+  onDelete,
+}: {
+  summary: Conversation;
+  active: boolean;
+  deleteDisabled: boolean;
+  onOpen: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className={`group flex min-h-10 items-center gap-1 rounded-lg px-1.5 transition-colors ${
+        active ? "bg-fill-hover text-label" : "text-label-secondary hover:bg-fill-hover/70"
+      }`}
+      data-testid={`conversation-item-${summary.id}`}
+      data-active={active ? "true" : "false"}
+    >
+      <button
+        type="button"
+        className="min-h-9 min-w-0 flex-1 cursor-pointer truncate rounded-md text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        title={summary.title ?? "未命名会话"}
+        onClick={onOpen}
+      >
+        {summary.title ?? "未命名会话"}
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-9 shrink-0 md:size-7 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
+              disabled={deleteDisabled}
+            />
+          }
+          aria-label={`会话「${summary.title ?? "未命名会话"}」操作`}
+        >
+          <MoreHorizontal className="size-4" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onRename}>
+            <Pencil className="size-4" aria-hidden="true" />
+            重命名
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+            <Trash2 className="size-4" aria-hidden="true" />
+            删除
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

@@ -5,6 +5,7 @@ export const aiQueryKeys = {
   all: ["ai"] as const,
   conversations: ["ai", "conversations"] as const,
   conversationList: (pageSize: number) => ["ai", "conversations", "list", pageSize] as const,
+  conversationAll: (pageSize: number) => ["ai", "conversations", "all", pageSize] as const,
   conversationDetail: (conversationId: number) =>
     ["ai", "conversations", "detail", conversationId] as const,
   docs: ["ai", "docs"] as const,

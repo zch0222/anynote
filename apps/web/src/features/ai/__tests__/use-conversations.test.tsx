@@ -11,6 +11,7 @@ import { aiQueryKeys, conversationKey } from "@/features/ai/query-keys";
 import {
   useConversationQuery,
   useConversationsInfinite,
+  useConversationsQuery,
   useDeleteConversationMutation,
   useRenameConversationMutation,
 } from "@/features/ai/use-conversations";
@@ -71,6 +72,36 @@ describe("use-conversations", () => {
       }),
     );
     expect(result.current.hasNextPage).toBe(true);
+  });
+
+  /** 桌面分组列表逐页读取并合并全部会话。 */
+  it("全量会话查询自动读取后续分页", async () => {
+    aiApiMock.GET.mockResolvedValueOnce(envelope(PAGE)).mockResolvedValueOnce(
+      envelope({
+        current: 2,
+        pages: 2,
+        total: 3,
+        rows: [
+          {
+            id: 3,
+            title: "会话三",
+            scope: { knowledgeBaseIds: [3], refs: [] },
+          },
+        ],
+      }),
+    );
+    const { result } = renderHook(() => useConversationsQuery(50), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.map((row) => row.id)).toEqual([1, 2, 3]);
+    expect(aiApiMock.GET).toHaveBeenCalledTimes(2);
+    expect(aiApiMock.GET).toHaveBeenNthCalledWith(
+      2,
+      "/chat/conversations/list",
+      expect.objectContaining({
+        params: { query: { chatConversationListDTO: { page: 2, pageSize: 50 } } },
+      }),
+    );
   });
 
   it("会话详情：id 有效才请求，解析 conversation 与 messages", async () => {
