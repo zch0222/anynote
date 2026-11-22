@@ -1009,3 +1009,41 @@ Python 全量多轮在 455 passed、20 skipped 与 1 failed、454 passed 之间�
 - **测试为何没发现**：`ChatServiceImplTest` 把 `HarnessClient` mock 掉；M16.1 的真实栈验证用的模拟上游实现了该路径，且发生在 M16.2 删除之前。[总体方案 §4.6](./AI_REFACTOR_PLAN.md#46-配置与验收) 里「视频总结全部可用」是 M16.1 当时的验收项，不代表现状。
 - **影响**：新前端 `apps/web` 没有这两个功能的入口，界面上看不到；`apps/web-legacy` 调的 `/api/aiNio/**` 已删除，同样不可用。视频总结是索引中 `summary` 类语料的来源，修复前不会产生新的视频总结，已入库的总结不受影响。
 - **同源残留**：`ChatServiceImpl.relayChat`、`relayNoConversation` 的对外端点已在 M16.6 删除，方法本身仍在并引用 `streamChat`；`FastApiChatCompletionsDTO` / `FastApiChatCompletionsVO`、`ChatStreamAccumulator` 也只服务于这条旧路径。处理上面两个端点时一并清理。
+
+
+---
+
+## M18 PDF OCR 索引与多模态按页读取（2026-11-22）
+
+方案：[PDF_OCR_VISION_PLAN.md](./PDF_OCR_VISION_PLAN.md)；契约：[OpenSpec 2026-11-22](../../.claude/openspec/changes/2026-11-22-pdf-ocr-vision.md)。
+
+### 已实现
+
+- PDF 每页保留文本层；无文本页整页 OCR，有文本且含实际图片的页逐区域 OCR；按 NFKC、边界重叠和文本相似度去重。页数、`content_mode`、`extractor_version`、片段 `extraction_mode/source_region_id` 全链路保留。
+- 索引升级为 schema 4，切分规则升级为 `markdown-blocks-lines-srt-window-v2`，PDF 提取规则为 `pdfplumber-pdfium-rapidocr-v1`；OCR 片段使用 `authority=transcript`，历史 `UNEXTRACTABLE` 在 OCR 开启后允许重试。
+- 新增第八个工具 `kb_view_doc` 与知识检索 Agent 契约 4；视觉调用依次执行开关/预算/能力、供应商出域、`session.gate`、权威版本、受限下载和指定页渲染。
+- Harness 增加一次性多模态图片通道、图片 Token 预算、运行终态字节释放、`visualDispatches` 历史和 `trace.visual`；Java 保存强类型清单，历史权限隐藏时同步移除；管理页仅 `agent_main` 显示视觉开关。
+- 本机开发库已执行 `2026-11-22-pdf-ocr-vision.sql`。源码默认 OCR/视觉均关闭；本机验收显式开启，真实 smoke 通过后才开启 `agent_main.supportsVision`。
+
+### 真实栈与性能记录
+
+- Linux 镜像显式安装 OpenCV 运行库；ONNX 固定 4 个算子内线程、2 个算子间线程。单页实测默认 5.16s、固定线程 4.48s。
+- `doc:77` 逐页 OCR 总计 **119.53s**，单页 **1.55–14.69s**；诊断时子进程 `ru_maxrss=526148KB`。本机 rebuild 需要把验收总超时/虚拟内存上限调为 **300s / 8192MB**，避免高负载超时及 ONNX/Pillow 的 `RLIMIT_AS` 分配失败；仓库默认值未改。
+- file 下载在本机随机出现 `RemoteProtocolError`，FileClient 仅对该错误做最多 3 次尝试。在线大 JPEG 渲染还复现并修复了“父进程先 join、子进程等队列消费”的死锁；修复后第 3 页受限渲染 **1.95s**，输出 2000×1250、122903 字节、6 个图片区域。
+- schema 4 rebuild 成功并保留旧索引直至完整性核验通过。`doc:77` 当前：`index_status=0`、`content_mode=mixed`、`page_count=16`、`chunk_count=19`；19 个片段全部 `extraction_mode=ocr`、`authority=transcript`，页码覆盖 1–16。增量 Worker 与 Harness 最终镜像健康。
+
+### 真实模型验收
+
+- 受控图片 smoke：目标 StepFun 供应商返回 `ANYNOTE VISION 42`，确认真实图像输入可用。
+- 视觉精读运行 `e827bb72-7cf3-4dc3-b178-f7f57b0408b5`：模型调用 `kb_view_doc` 读取第 3 页，五种封面颜色及“增长实验知识库在第二行中间列”均与人工原页一致，引用为 `[1]`，视觉独有事实未附伪造 quote。
+- 该次 `run.finished`、助手消息和 `trace.visual` 均保存同一 `visual-dispatch-01`：第 3 页、当前 contentVersion、JPEG SHA-256 `9671fe86a47b3e89d92bfd3f5177237b5a72adcb4129d4dcadb2c3af27ab77c6`、模型轮 2；第二轮 `trace.model` 通过同一 dispatchId 对账，attempts=1。完整事件及 Harness/Java 日志无 `data:image` 或 JPEG Base64。
+- 无权限真实运行 `f3137313-237b-4aac-b0a2-f6c433fbe8d4`：首次 `kb_view_doc` 在 34ms 内返回 `NOT_FOUND`，最终 `NOT_FOUND`，无视觉发送清单；工具级测试另断言权限失败时文件服务与渲染器零调用。
+- 第一次概括运行 `5c3d4794-58cf-4519-bbaa-b1ce4fd3c44f` 已从 OCR 返回完整资料内容，不再是零片段未找到；但模型写成 `[E34]` 而非 `[34]`，并带 `UNSOURCED`，不记为引用验收通过。已强化数字引用指令；复验运行 `126af673-bd77-42ef-812b-aa22c5aee977` 因模型重复工具以 `NO_PROGRESS` 失败，概括题稳定性仍未关闭。
+
+### 门禁与未关闭项
+
+- 宿主机 Python 全量（含真实 ES 与 RapidOCR）：**556 passed**；真实 ES 集成单独 **21 passed**。
+- Java `mvn -o test -pl ai -am`：reactor 成功，AI 模块 **132 passed**。
+- Web 模型配置定向 **20 passed**；全量 **2157 passed、2 failed**，失败仍为既有任务日期控件 5s 超时，两个文件单独复跑 **45/45 passed**，未修改相关代码。
+- `pnpm typecheck`、本批前端 Biome、OpenAPI 重生成稳定性通过；视觉开关真实 Playwright 深浅色用例 **1/1 passed**。全仓 `pnpm check` 仍被既有虚拟环境/tmp/历史文件 lint 阻断，未扩大范围处理。
+- 当前只配置 `step-5-preview` 对话模型，没有 Embedding 逻辑模型，**真实语义评测未执行**。该项与概括题引用/稳定性仍为 P4 未关闭条件，不把本里程碑视为方案全部验收完成。
