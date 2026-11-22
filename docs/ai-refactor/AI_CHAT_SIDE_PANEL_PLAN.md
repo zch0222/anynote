@@ -794,4 +794,34 @@ flowchart LR
 
 ## 16. 实施记录
 
-（开工后回写：M19.0 验证数据、各里程碑验收结果、与方案的偏差。）
+**2026-11-22：M19.1–M19.6 已实现；M19.7 的 E2E 代码已编写但未执行（Q3-A）。**
+
+### M19.0 验证结论
+
+- **V5（`GET /noteTasks/{id}` 对成员是否可用）**：已核对。端点已存在（`NoteTaskController#getMemberNoteTaskById`），OpenAPI `note.json` 已收录，权限锚定任务所在知识库的 `READ`。侧栏成员视角使用该单条端点；管理员仍用 `GET /admin/noteTasks/{id}`。
+- **V1（首屏体积）**：`pnpm --filter web bundle:budget` 结果为 `/ai/chat` **310.3 KB / 310.0 KB**，超 **0.3 KB**；`/m/*` 247.3 / 250 通过，编辑器 18.0 / 250 通过。已按 §5.8 把 `store.ts`、注册表、全部正文、宽度偏好、布局计算与资源解析移入懒加载块，仍未回到预算内。**2026-11-22 用户确认接受 0.3 KB 超预算，不调整预算；`bundle:budget` 记录为未通过。**
+- **V2（移动返回手势）**：已实现 `pushState` / `popstate` 与单测；Next 15 集成、软键盘贴底与真实浏览器行为**未验证**（本次不跑 E2E）。
+- **V3（笔记嵌入）**：笔记正文复用 `useNoteEditorSession` 与编辑器预设；真实浏览器下浮层层级**未验证**。
+- **V4（移动工具条）**：**未验证**（需要真实浏览器 + Playwright `mobile` 项目）。
+
+### 与方案的偏差（内部实现，用户可见行为不变）
+
+1. **引用解析移到懒加载宿主**：首屏 `SidePanelLinkContext` 传原始引用/工具条目，宿主再调用 `targetFromCitation` / `targetFromToolItem`。`citationHref` 保留直接实现，不再是 `resourceHref` 的薄封装；`citations.test.ts` 未改仍通过。原因是 `resource-target` 解析进入首屏后超出预算。
+2. **宽度偏好不在 `ui-store`**：改为 `features/side-panel/panel-width.ts` 的 `anynote-side-panel-width` 本地键，只被懒加载宿主引用；仍为全局一份、非法值回默认。
+3. **桌面布局由宿主计算**：`computeLayout` 与容器 `ResizeObserver` 在懒加载的 `desktop/host.tsx` 内；`ChatPage` 只接收 `onListVisibleChange` 决定是否临时收起会话列表。宽度规则与 §6.2 表格一致。
+4. **`TabDefinition` 增加 `moreMenu`**：移动端顶部「更多」需要笔记的「历史版本」，由定义提供菜单项，容器不判断业务类型。
+5. **`TabBodyActions` 增加 `registerNewWindow`**：笔记正文登记「先保存再打开新窗口」处理器，移动端顶部按钮与桌面标签头共用；其余类型仍走原生 `window.open` / `<a>`。
+
+### 验收结果
+
+- 本批 22 个测试文件 / **176 条**全部通过（`resource-target`、store、persistence、registry、layout、launcher、tab-bar、resize、mobile-host、六类正文、note-body、`useNoteEditorSession`、`useSaveNote.applyServerVersion`、`VideoPlayer.navigationKey`、点击策略与离开保护）。
+- 全量 `pnpm --filter web test`：196 files / 2245 tests，**2242 passed / 3 failed**；失败为既有任务日期控件 5s 超时（`date-time-field.test.tsx` 2 条、`task-form-page.test.tsx` 1 条），未修改相关代码。
+- `pnpm --filter web typecheck` 通过；本批文件 Biome check 通过。
+- `pnpm --filter web build` 编译与静态页生成成功；末尾 standalone 符号链接复制在 Windows 报 `EPERM`（环境问题，未改代码），`.next` 产物完整可用于 `bundle:budget`。
+- **未执行**：Playwright E2E、Lighthouse、真实浏览器深浅两色与 1920/1440/1280/1024/390×844 视觉验收（Q3-A）。
+
+### 未完成 / 已决定
+
+- **`/ai/chat` 首屏超预算 0.3 KB：2026-11-22 用户确认接受**，不调整预算，代码与测试保持现状；`bundle:budget` 仍为失败状态，作为已知门禁缺口记录。
+- M19.7 的 E2E 用例已写入 `apps/web/e2e/support/agent-retrieval.ts`，本次未执行；V2/V3/V4 的真实浏览器结论待 E2E 阶段回写。
+- 逐文件清单见 [`docs/changelist/2026-11-22-ai-chat-side-panel.md`](../changelist/2026-11-22-ai-chat-side-panel.md)。
