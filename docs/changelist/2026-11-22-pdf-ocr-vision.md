@@ -4,7 +4,7 @@
 
 本批实现 PDF OCR 索引、schema 4、第八个知识工具、临时多模态图片通道、Java 历史/Trace、管理页视觉开关及真实栈验收；不新增公开 REST 端点。
 
-- 文件：**新增 15、修改 85、删除 0，共 100 个**（含本清单）；合计 **+4862 / -187 行**，其中跟踪文件 +1919/-187，新增文件 2943 行。
+- 文件：**新增 15、修改 85、删除 0，共 100 个**（含本清单）；合计 **+4861 / -187 行**，其中跟踪文件 +1919/-187，新增文件 2942 行。
 - 分布：`ai-service` 59、`services` 21、`apps/web` 7、`infra` 5、文档/根规约 6、OpenSpec 1、OpenAPI 1。
 - 编写及复核时 `git diff --stat origin/dev...HEAD` 为空，随后按模块拆分提交；初始未跟踪方案文档已纳入本批。
 - P0–P3 已实现，核心 OCR/rebuild/真实视觉精读通过；真实语义评测与概括题引用/稳定性未关闭，详见 `docs/ai-refactor/AI_MILESTONES.md` M18。
@@ -175,4 +175,4 @@
 
 ## 最终复核
 
-写完后已重跑 `git status --porcelain | sort`、`git diff --stat`、`git diff --stat origin/dev...HEAD`、`git ls-files --others --exclude-standard` 和 `git diff --check`：85 修改、15 新增、0 删除；跟踪文件 +1919/-187，新增文件含本清单共 2943 行，总计 +4862/-187；编写及复核时已提交到分支的 diff 为空，whitespace 检查通过。
+写完后已重跑 `git status --porcelain | sort`、`git diff --stat`、`git diff --stat origin/dev...HEAD`、`git ls-files --others --exclude-standard` 和 `git diff --check`：85 修改、15 新增、0 删除；跟踪文件 +1919/-187，新增文件含本清单共 2942 行，总计 +4861/-187；编写及复核时已提交到分支的 diff 为空，whitespace 检查通过。
