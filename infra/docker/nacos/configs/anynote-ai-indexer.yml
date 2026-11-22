@@ -9,5 +9,11 @@ indexer:
   pdf-parse-timeout-s: 30
   pdf-max-memory-mb: 512
   pdf-max-bytes: 52428800
+  ocr-enabled: false
+  ocr-timeout-s: 120
+  ocr-max-memory-mb: 2048
+  ocr-max-pages: 200
+  ocr-max-regions-per-page: 100
+  ocr-render-scale: 2.0
   es-index-replicas: 0
   es-request-timeout-s: 15

@@ -19,6 +19,9 @@ EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
 FROM online-dependencies AS test
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libxcb1 \
+    && rm -rf /var/lib/apt/lists/*
 COPY ai-service/requirements/test-linux.lock.txt ./requirements/test-linux.lock.txt
 RUN pip install --no-cache-dir -r requirements/test-linux.lock.txt
 COPY ai-service/ ./
@@ -29,6 +32,9 @@ RUN mkdir -p /opt/tiktoken \
 CMD ["pytest"]
 
 FROM online-dependencies AS indexing-dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libxcb1 \
+    && rm -rf /var/lib/apt/lists/*
 COPY ai-service/requirements/indexing-linux.lock.txt ./requirements/indexing-linux.lock.txt
 RUN pip install --no-cache-dir -r requirements/indexing-linux.lock.txt
 

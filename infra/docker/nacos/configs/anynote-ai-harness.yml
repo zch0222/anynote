@@ -18,3 +18,12 @@ harness:
   reasoning-batch-chars: 64
   reasoning-batch-interval-ms: 100
   trace-result-max-chars: 10000
+  visual-read-enabled: false
+  visual-max-pages-per-call: 2
+  visual-max-pages-per-run: 4
+  visual-max-pdf-bytes: 52428800
+  visual-render-concurrency: 2
+  visual-render-timeout-s: 20
+  visual-render-max-memory-mb: 512
+  visual-image-max-bytes: 1572864
+  visual-image-token-estimate: 2000
