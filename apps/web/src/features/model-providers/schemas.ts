@@ -126,6 +126,7 @@ export const logicalModelConfigSchema = z.object({
   dimensions: z.number().int().nullish(),
   reasoningFormat: reasoningFormatSchema.nullish(),
   reasoningPassthrough: reasoningPassthroughSchema.nullish(),
+  supportsVision: z.boolean().default(false),
   enabled: z.boolean().default(false),
   version: z.number().nullish(),
   updateTime: z.string().nullish(),
@@ -166,6 +167,7 @@ export type LogicalFormValue = {
   dimensions: string;
   reasoningFormat: ReasoningFormat;
   reasoningPassthrough: ReasoningPassthrough;
+  supportsVision: boolean;
 };
 
 export function emptyLogicalForm(): LogicalFormValue {
@@ -176,6 +178,7 @@ export function emptyLogicalForm(): LogicalFormValue {
     dimensions: "",
     reasoningFormat: "none",
     reasoningPassthrough: "none",
+    supportsVision: false,
   };
 }
 
@@ -188,6 +191,7 @@ export function toLogicalForm(config?: LogicalModelConfig | null): LogicalFormVa
     dimensions: config.dimensions != null ? String(config.dimensions) : "",
     reasoningFormat: config.reasoningFormat ?? "none",
     reasoningPassthrough: config.reasoningPassthrough ?? "none",
+    supportsVision: Boolean(config.supportsVision),
   };
 }
 

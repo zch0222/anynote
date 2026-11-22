@@ -87,6 +87,7 @@ describe("逻辑模型设置卡片", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("向量索引模型（Embedding）")).toBeInTheDocument();
+    expect(screen.queryByTestId("agent_main-supports-vision-input")).not.toBeInTheDocument();
   });
 
   it("embedding 支持选择、手动输入模型名并保存", async () => {
@@ -158,6 +159,10 @@ describe("逻辑模型设置卡片", () => {
     ).toBeInTheDocument();
     expect(screen.getByTestId("agent_main-reasoning-format-select")).toBeInTheDocument();
     expect(screen.getByTestId("agent_main-reasoning-passthrough-select")).toBeInTheDocument();
+    const visionToggle = screen.getByTestId("agent_main-supports-vision-input");
+    expect(visionToggle).not.toBeChecked();
+    fireEvent.click(visionToggle);
+    expect(visionToggle).toBeChecked();
 
     fireEvent.click(screen.getByTestId("agent_main-enabled-input"));
     fireEvent.click(screen.getByTestId("agent_main-save"));
@@ -188,6 +193,7 @@ describe("逻辑模型设置卡片", () => {
           model: "gpt-4o",
           reasoningFormat: "think_tag",
           reasoningPassthrough: "original",
+          supportsVision: true,
         }),
       ),
     );
@@ -203,5 +209,6 @@ describe("逻辑模型设置卡片", () => {
     expect(
       screen.getByText("关闭后使用该模型的调用将不可用，新对话会启动失败。"),
     ).toBeInTheDocument();
+    expect(screen.queryByTestId("agent_main-supports-vision-input")).not.toBeInTheDocument();
   });
 });

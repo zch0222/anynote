@@ -215,6 +215,7 @@ describe("逻辑模型运行时配置表单", () => {
         dimensions: 1536,
         reasoningFormat: "think_tag",
         reasoningPassthrough: "original",
+        supportsVision: true,
         enabled: true,
         version: 2,
       }),
@@ -225,10 +226,12 @@ describe("逻辑模型运行时配置表单", () => {
       dimensions: "1536",
       reasoningFormat: "think_tag",
       reasoningPassthrough: "original",
+      supportsVision: true,
     });
     expect(
       toLogicalForm({
         logicalName: "fast",
+        supportsVision: false,
         enabled: false,
         version: 0,
       }),

@@ -107,6 +107,7 @@ describe("模型供应商数据访问", () => {
       dimensions: undefined,
       reasoningFormat: "think_tag",
       reasoningPassthrough: "original",
+      supportsVision: true,
       enabled: true,
       version: 1,
     };
@@ -135,6 +136,7 @@ describe("模型供应商数据访问", () => {
       dimensions: "",
       reasoningFormat: "think_tag",
       reasoningPassthrough: "original",
+      supportsVision: true,
     });
     expect(api.PUT.mock.calls[0]?.[0]).toBe("/v1/admin/model-providers/logical/{logicalName}");
     expect(api.PUT.mock.calls[0]?.[1].body).toEqual({
@@ -143,6 +145,7 @@ describe("模型供应商数据访问", () => {
       model: "gpt-4o",
       reasoningFormat: "think_tag",
       reasoningPassthrough: "original",
+      supportsVision: true,
     });
   });
 
@@ -168,6 +171,7 @@ describe("模型供应商数据访问", () => {
       dimensions: "1536",
       reasoningFormat: "none",
       reasoningPassthrough: "none",
+      supportsVision: false,
     });
     expect(api.PUT.mock.calls[0]?.[1].body).toEqual({
       enabled: true,
@@ -176,6 +180,7 @@ describe("模型供应商数据访问", () => {
       dimensions: 1536,
       reasoningFormat: "none",
       reasoningPassthrough: "none",
+      supportsVision: false,
     });
   });
 });

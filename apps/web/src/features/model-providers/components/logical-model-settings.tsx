@@ -173,6 +173,19 @@ function LogicalConfigForm({
             : "关闭后使用该模型的调用将不可用，新对话会启动失败。"}
       </p>
 
+      {logicalName === "agent_main" ? (
+        <label className="flex min-h-8 items-center gap-2 text-footnote text-label">
+          <input
+            type="checkbox"
+            checked={form.supportsVision}
+            onChange={(event) => set("supportsVision", event.target.checked)}
+            className="size-4 accent-accent"
+            data-testid="agent_main-supports-vision-input"
+          />
+          支持页面图像输入
+        </label>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor={`${logicalName}-provider`}>模型供应商</Label>

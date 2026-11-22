@@ -115,10 +115,12 @@ export function useUpdateLogicalConfigMutation(logicalName: string) {
         dimensions?: number;
         reasoningFormat: LogicalFormValue["reasoningFormat"];
         reasoningPassthrough: LogicalFormValue["reasoningPassthrough"];
+        supportsVision: boolean;
       } = {
         enabled: value.enabled,
         reasoningFormat: value.reasoningFormat,
         reasoningPassthrough: value.reasoningPassthrough,
+        supportsVision: value.supportsVision,
       };
       if (providerKey) body.providerKey = providerKey;
       if (model) body.model = model;
