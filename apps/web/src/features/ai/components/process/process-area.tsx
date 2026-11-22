@@ -1,10 +1,11 @@
 "use client";
 
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
+import { shouldHandleSidePanelClick, useSidePanelLink } from "@/features/side-panel/link-context";
 import { type CitationVariant, citationHref } from "@/lib/ai/citations";
 import { completedHead, toolAction, toolTrailing } from "@/lib/ai/process";
 import type { ProcessItem, ProcessResultItem, ProcessState } from "@/lib/ai/process";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -270,7 +271,7 @@ function ToolRow({
  * @author 称霸幼儿园
  */
 function ResultEntry({ entry, variant }: { entry: ProcessResultItem; variant: CitationVariant }) {
-  const title = entry.title || UNREADABLE_TITLE;
+  const open = useSidePanelLink();
   const href = entry.ref
     ? citationHref(
         {
@@ -283,21 +284,40 @@ function ResultEntry({ entry, variant }: { entry: ProcessResultItem; variant: Ci
         variant,
       )
     : null;
+  const title = entry.title || UNREADABLE_TITLE;
   return (
-    <li className="text-xs text-label-secondary">
+    <li className="group/item flex min-w-0 items-center gap-1 text-xs text-label-secondary">
       {href ? (
         <Link
           href={href}
           prefetch={false}
-          className="truncate text-accent hover:underline"
+          className="min-w-0 truncate text-accent hover:underline"
           data-testid="process-tool-item-link"
+          onClick={(event) => {
+            if (!open || !shouldHandleSidePanelClick(event)) return;
+            event.preventDefault();
+            open({ kind: "tool", entry }, { focus: event.detail === 0 });
+          }}
         >
           {title}
         </Link>
       ) : (
-        <span className="truncate">{title}</span>
+        <span className="min-w-0 truncate">{title}</span>
       )}
-      {entry.kbName ? <span>{` · ${entry.kbName}`}</span> : null}
+      {entry.kbName ? <span className="shrink-0">{` · ${entry.kbName}`}</span> : null}
+      {open && href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-side-panel-new-window
+          aria-label={`在新窗口打开「${title}」`}
+          title={`在新窗口打开「${title}」`}
+          className="shrink-0 rounded-sm p-0.5 text-label-tertiary opacity-0 transition-opacity outline-none hover:text-accent focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/item:opacity-100 [@media(pointer:coarse)]:opacity-100"
+        >
+          <ExternalLink className="size-3.5" aria-hidden="true" />
+        </a>
+      ) : null}
     </li>
   );
 }

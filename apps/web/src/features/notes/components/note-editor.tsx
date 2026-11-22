@@ -22,11 +22,12 @@ import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { useMoveNoteMutation } from "@/features/notes/use-move-note";
 import { useNoteEditorSession } from "@/features/notes/use-note-editor-session";
+import { locateFromSearch } from "@/lib/ai/note-location";
 import { formatRelativeTime } from "@/lib/format-time";
 import { Clock, MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 /**
@@ -44,7 +45,11 @@ export function NoteEditor({ baseId, noteId }: { baseId: number; noteId: number 
   const bases = useKnowledgeBasesQuery();
   const remove = useDeleteNoteMutation();
   const move = useMoveNoteMutation();
-  const session = useNoteEditorSession(noteId);
+  const locate = useMemo(() => {
+    const parsed = locateFromSearch(window.location.search);
+    return parsed ? { ...parsed, revision: 0 } : undefined;
+  }, []);
+  const session = useNoteEditorSession(noteId, { locate });
   const {
     note,
     initialContent,

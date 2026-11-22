@@ -1,5 +1,6 @@
 "use client";
 
+import { clearSidePanelStorage } from "@/features/side-panel/storage-keys";
 import { unwrapEnvelope } from "@/lib/api/errors";
 import type { paths } from "@anynote/api-client/src/auth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -25,6 +26,8 @@ export function useLogoutMutation() {
     onSuccess: async () => {
       await queryClient.cancelQueries();
       queryClient.clear();
+      // 右侧栏只存资源标识，也按用户隔离；登出时与其他本地痕迹一起删除
+      clearSidePanelStorage();
       // 笔记的离线副本存在浏览器 IndexedDB 里，退出登录时一并删除，共用电脑上不留正文
       await import("@/lib/collab/local-persistence")
         .then(({ clearAllLocalNotes }) => clearAllLocalNotes())

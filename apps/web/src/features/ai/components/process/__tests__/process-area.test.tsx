@@ -1,3 +1,4 @@
+import { SidePanelLinkContext } from "@/features/side-panel/link-context";
 import { EMPTY_PROCESS } from "@/lib/ai/process";
 import type { ProcessState } from "@/lib/ai/process";
 import { renderWithProviders } from "@/test/render";
@@ -244,5 +245,30 @@ describe("运行过程区", () => {
     expect(screen.getByTestId("process-announcer").textContent).toBe(
       "已完成，用时 5 秒 · 工具调用 1 次 · 检索 1 次",
     );
+  });
+
+  /** 有宿主时结果条目单击进侧栏，修饰键与「在新窗口打开」交给浏览器。 */
+  it("有宿主时结果条目交给侧栏", () => {
+    const open = vi.fn();
+    renderWithProviders(
+      <SidePanelLinkContext.Provider value={open}>
+        <ProcessArea process={sampleProcess()} streaming />
+      </SidePanelLinkContext.Provider>,
+    );
+    openFirstTool();
+    const link = screen.getByTestId("process-tool-item-link");
+
+    fireEvent.click(link, { detail: 1 });
+    expect(open).toHaveBeenLastCalledWith(
+      {
+        kind: "tool",
+        entry: { ref: "note:12", title: "提纲", kbName: "课程库", kbId: 3 },
+      },
+      { focus: false },
+    );
+
+    fireEvent.click(link, { metaKey: true });
+    fireEvent.click(screen.getByRole("link", { name: "在新窗口打开「提纲」" }));
+    expect(open).toHaveBeenCalledOnce();
   });
 });

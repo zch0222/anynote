@@ -36,9 +36,7 @@ describe("引用编辑器定位", () => {
     const scroll = vi.spyOn(heading, "scrollIntoView");
     const nodeDOM = vi.fn(() => heading);
     const editor = { state: { doc }, view: { nodeDOM } } as unknown as Editor;
-    expect(scrollToNoteCitation(editor, `?section=${encodeURIComponent("标题 / 索引")}`, "")).toBe(
-      true,
-    );
+    expect(scrollToNoteCitation(editor, { section: "标题 / 索引" }, "")).toBe(true);
     expect(nodeDOM).toHaveBeenCalledWith(4);
     expect(scroll).toHaveBeenCalledWith({ block: "center" });
   });

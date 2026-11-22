@@ -19,7 +19,12 @@ import {
   useSaveNote,
 } from "@/features/notes/use-save-note";
 import { useSaveShortcut } from "@/features/notes/use-save-shortcut";
-import { scrollToNoteCitation } from "@/lib/ai/note-location";
+import {
+  type NoteCitationLocate,
+  isNewerUpdateTime,
+  locateFromSearch,
+  scrollToNoteCitation,
+} from "@/lib/ai/note-location";
 import { env } from "@/lib/env";
 import { bodyCharCount, ensureLeadingHeading } from "@anynote/editor-core/leading-heading";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
@@ -29,14 +34,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 /** 可写笔记所需的最低权限（`NotePermissions.EDIT`）。低于它不进协同房间。 */
 export const EDIT_PERMISSION = 6;
 
+export type NoteEditorLocate = NoteCitationLocate & { revision: number };
+
+export type NoteEditorSessionOptions = {
+  /** 传入时不再读地址参数；`revision` 变化时重新定位。 */
+  locate?: NoteEditorLocate | undefined;
+  /** 窗口重新可见且保存空闲时同步服务端外部改动。 */
+  syncOnVisible?: boolean | undefined;
+};
+
 /**
  * 笔记编辑页的会话：详情加载、标题、字数、协同运行时、自动保存与编辑器回调。
  *
  * 桌面端与移动端共用这一份接线，两端只负责各自的布局与操作入口。
  *
  * @param noteId 当前笔记 id
+ * @param options 定位与外部改动同步选项
  */
-export function useNoteEditorSession(noteId: number) {
+export function useNoteEditorSession(noteId: number, options: NoteEditorSessionOptions = {}) {
   const note = useNoteQuery(noteId);
   const { title, setTitle, onEditorReady, getTitleForContent } = useNoteTitle();
   /** 编辑器的初始正文，只在切换笔记或放弃本地改动时重置。 */
@@ -46,6 +61,9 @@ export function useNoteEditorSession(noteId: number) {
   const loadedNoteId = useRef<number | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
+  const lastLocateRevision = useRef<number | null>(null);
+  const legacyLocateDone = useRef(false);
 
   /** 协同开关打开且当前用户对该笔记有编辑权时进入协同模式。 */
   const collabEnabled =
@@ -89,6 +107,10 @@ export function useNoteEditorSession(noteId: number) {
     onDiscardLocal: handleDiscardLocal,
   });
   const { scheduleSave } = save;
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const noteRef = useRef(note);
+  noteRef.current = note;
 
   useEffect(() => {
     if (!note.data || loadedNoteId.current === noteId) return;
@@ -225,19 +247,89 @@ export function useNoteEditorSession(noteId: number) {
       editorRef.current = editor;
       onEditorReady(editor);
       setEditorInstance(collaboration ? editor : null);
-      const search = window.location.search;
-      if (new URLSearchParams(search).has("section") || new URLSearchParams(search).has("line")) {
-        const locate = () => {
-          if (scrollToNoteCitation(editor, search, note.data?.content ?? ""))
-            editor.off("update", locate);
-        };
-        requestAnimationFrame(locate);
-        editor.on("update", locate);
-        editor.on("destroy", () => editor.off("update", locate));
-      }
+      setEditorReady(true);
     },
-    [onEditorReady, collaboration, note.data?.content],
+    [onEditorReady, collaboration],
   );
+
+  /** 定位：优先使用传入的定位与导航版本，完整页面仍可从地址参数解析。 */
+  useEffect(() => {
+    if (!editorReady) return;
+    const editor = editorRef.current;
+    if (!editor) return;
+    const locate = options.locate;
+    if (locate) {
+      if (lastLocateRevision.current === locate.revision) return;
+      if (!locate.section && locate.line === undefined) {
+        lastLocateRevision.current = locate.revision;
+        return;
+      }
+      const run = () => {
+        if (scrollToNoteCitation(editor, locate, note.data?.content ?? "")) {
+          lastLocateRevision.current = locate.revision;
+          editor.off("update", run);
+        }
+      };
+      requestAnimationFrame(run);
+      editor.on("update", run);
+      return () => {
+        editor.off("update", run);
+      };
+    }
+    if (legacyLocateDone.current) return;
+    const legacy = typeof window === "undefined" ? null : locateFromSearch(window.location.search);
+    if (!legacy) {
+      legacyLocateDone.current = true;
+      return;
+    }
+    const run = () => {
+      if (scrollToNoteCitation(editor, legacy, note.data?.content ?? "")) {
+        legacyLocateDone.current = true;
+        editor.off("update", run);
+      }
+    };
+    requestAnimationFrame(run);
+    editor.on("update", run);
+    return () => {
+      editor.off("update", run);
+    };
+  }, [editorReady, options.locate, note.data?.content]);
+
+  /** 窗口重新可见且保存空闲时，用服务端更新的版本替换正文与版本基线。 */
+  const syncOnVisible = options.syncOnVisible === true;
+  const syncFromServer = useCallback(async () => {
+    if (!syncOnVisible || collabEnabled) return;
+    const currentSave = saveRef.current;
+    if (
+      currentSave.getStatus() !== "saved" ||
+      currentSave.hasPendingChanges() ||
+      currentSave.conflict
+    ) {
+      return;
+    }
+    const currentNote = noteRef.current;
+    const before = currentNote.data;
+    if (!before) return;
+    const result = await currentNote.refetch();
+    const fresh = result.data;
+    if (!fresh || !isNewerUpdateTime(fresh.updateTime, before.updateTime)) return;
+    currentSave.applyServerVersion({
+      title: fresh.title ?? "",
+      content: fresh.content ?? "",
+      version: toVersion(fresh.updateTime),
+      updateTime: fresh.updateTime ?? null,
+    });
+  }, [syncOnVisible, collabEnabled]);
+
+  useEffect(() => {
+    if (!syncOnVisible) return;
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      void syncFromServer();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [syncOnVisible, syncFromServer]);
 
   /** 图片分片直传；实现只在真的插图时才加载。引用须稳定。 */
   const uploadFn = useMemo<UploadFn>(
@@ -264,6 +356,9 @@ export function useNoteEditorSession(noteId: number) {
     confirmLeave,
   };
 }
+
+/** 笔记编辑会话的返回值，供移动端正文层与侧栏复用。 */
+export type NoteEditorSession = ReturnType<typeof useNoteEditorSession>;
 
 /**
  * 把缓存里这篇笔记的标题换成 `title`。

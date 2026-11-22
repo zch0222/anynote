@@ -14,6 +14,7 @@ vi.mock("@/components/editor/TiptapEditor", () => ({
     </div>
   ),
 }));
+import { SidePanelLinkContext } from "@/features/side-panel/link-context";
 import { CitationAnswer } from "../citation-answer";
 
 /**
@@ -114,5 +115,102 @@ describe("CitationAnswer", () => {
     expect(screen.getByText("[1] 空片段资料")).toBeVisible();
     expect(screen.getByText("第 3 页")).toBeVisible();
     expect(container.querySelector("blockquote")).toBeNull();
+  });
+
+  /** 有宿主时左键单击交给侧栏，键盘触发把焦点带进侧栏。 */
+  it("有宿主时把引用点击交给侧栏", () => {
+    push.mockClear();
+    const open = vi.fn();
+    render(
+      <SidePanelLinkContext.Provider value={open}>
+        <CitationAnswer
+          content="答案[1]"
+          variant="desktop"
+          citations={[
+            { index: 1, sourceType: "note", sourceId: "note:5", kbId: 3, title: "复习笔记" },
+          ]}
+        />
+      </SidePanelLinkContext.Provider>,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "查看引用 1" }), { detail: 1 });
+    expect(open).toHaveBeenLastCalledWith(
+      {
+        kind: "citation",
+        citation: {
+          index: 1,
+          sourceType: "note",
+          sourceId: "note:5",
+          kbId: 3,
+          title: "复习笔记",
+        },
+      },
+      { focus: false },
+    );
+    expect(push).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("link", { name: "查看引用 1" }), { detail: 0 });
+    expect(open).toHaveBeenLastCalledWith(
+      {
+        kind: "citation",
+        citation: {
+          index: 1,
+          sourceType: "note",
+          sourceId: "note:5",
+          kbId: 3,
+          title: "复习笔记",
+        },
+      },
+      { focus: true },
+    );
+  });
+
+  /** 修饰键、中键与「在新窗口打开」保持浏览器原生行为。 */
+  it("修饰键与中键不拦截", () => {
+    push.mockClear();
+    const open = vi.fn();
+    render(
+      <SidePanelLinkContext.Provider value={open}>
+        <CitationAnswer
+          content="答案[1]"
+          variant="desktop"
+          citations={[
+            { index: 1, sourceType: "note", sourceId: "note:5", kbId: 3, title: "复习笔记" },
+          ]}
+        />
+      </SidePanelLinkContext.Provider>,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "查看引用 1" }), { ctrlKey: true });
+    fireEvent.click(screen.getByRole("link", { name: "查看引用 1" }), { button: 1 });
+    fireEvent.click(screen.getByRole("link", { name: "在新窗口打开「复习笔记」" }));
+
+    expect(open).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  /** 页面自己的引用处理优先于侧栏。 */
+  it("onCitation 返回真时不打开侧栏", () => {
+    push.mockClear();
+    const open = vi.fn();
+    const onCitation = vi.fn(() => true);
+    render(
+      <SidePanelLinkContext.Provider value={open}>
+        <CitationAnswer
+          content="答案[1]"
+          variant="desktop"
+          onCitation={onCitation}
+          citations={[
+            { index: 1, sourceType: "note", sourceId: "note:5", kbId: 3, title: "复习笔记" },
+          ]}
+        />
+      </SidePanelLinkContext.Provider>,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "查看引用 1" }));
+
+    expect(onCitation).toHaveBeenCalledOnce();
+    expect(open).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 });

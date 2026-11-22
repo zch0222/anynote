@@ -22,6 +22,7 @@ vi.mock("@/features/ai/use-chat-stream", () => ({
 }));
 
 import { ChatPanel } from "@/features/ai/components/chat-panel";
+import { SidePanelLinkContext } from "@/features/side-panel/link-context";
 import { renderWithProviders } from "@/test/render";
 
 /**
@@ -35,6 +36,19 @@ describe("ChatPanel", () => {
     renderWithProviders(<ChatPanel sessionKey="c1" historyStatus="pending" />);
     expect(screen.getByTestId("chat-input")).toBeDisabled();
     expect(screen.getByText("加载中…")).toBeVisible();
+  });
+
+  /** 有侧栏宿主时给消息列表加标记，离开保护据此跳过。 */
+  it("有侧栏宿主时标记消息列表", () => {
+    const view = renderWithProviders(<ChatPanel sessionKey="c1" />);
+    expect(screen.getByTestId("message-list")).not.toHaveAttribute("data-side-panel-links");
+
+    view.rerender(
+      <SidePanelLinkContext.Provider value={() => {}}>
+        <ChatPanel sessionKey="c1" />
+      </SidePanelLinkContext.Provider>,
+    );
+    expect(screen.getByTestId("message-list")).toHaveAttribute("data-side-panel-links");
   });
 
   /** 历史加载与失败状态只显示自身，不叠加新对话空态。 */

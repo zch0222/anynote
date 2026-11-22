@@ -3,12 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { aiQueryKeys } from "@/features/ai/query-keys";
 import { type SendArgs, useChatSession, useChatStreamStore } from "@/features/ai/use-chat-stream";
+import { useSidePanelLink } from "@/features/side-panel/link-context";
 import type { Citation, CitationVariant } from "@/lib/ai/citations";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowDown, RotateCcw, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { scopeDocId } from "../schemas";
 import { ChatInput } from "./chat-input";
 import { MessageItem } from "./message-item";
@@ -37,6 +38,8 @@ export type ChatPanelProps = {
   emptyHint?: string | undefined;
   /** 桌面对话页头显示的会话标题。 */
   conversationTitle?: string;
+  /** 桌面对话页头右侧的动作区（右侧栏展开按钮等）。 */
+  headerActions?: ReactNode;
 };
 
 /**
@@ -58,6 +61,7 @@ export function ChatPanel({
   placeholder,
   emptyHint,
   conversationTitle,
+  headerActions,
 }: ChatPanelProps) {
   const session = useChatSession(sessionKey);
   const docId = requestedDocId ?? scopeDocId(session.scope);
@@ -66,6 +70,8 @@ export function ChatPanel({
   const abort = useChatStreamStore((state) => state.abort);
   const setScope = useChatStreamStore((state) => state.setScope);
   const queryClient = useQueryClient();
+  const sidePanelLink = useSidePanelLink();
+  const sidePanelLinks = sidePanelLink ? { "data-side-panel-links": "" } : {};
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const scrollingToLatestRef = useRef(false);
@@ -272,7 +278,11 @@ export function ChatPanel({
           className="min-h-0 flex-1 overflow-y-auto"
           onScroll={(event) => handleScroll(event.currentTarget)}
         >
-          <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6" data-testid="message-list">
+          <div
+            className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6"
+            data-testid="message-list"
+            {...sidePanelLinks}
+          >
             {messageContent}
           </div>
         </div>
@@ -284,10 +294,14 @@ export function ChatPanel({
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-surface">
       {variant === "desktop" && conversationTitle ? (
-        <header className="flex h-14 shrink-0 items-center border-b border-separator px-6">
-          <h1 className="min-w-0 truncate text-sm font-medium text-label" title={conversationTitle}>
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-separator px-6">
+          <h1
+            className="min-w-0 flex-1 truncate text-sm font-medium text-label"
+            title={conversationTitle}
+          >
             {conversationTitle}
           </h1>
+          {headerActions}
         </header>
       ) : null}
       <div className={cn("flex min-h-0 flex-1 flex-col", hero && "justify-center")}>
@@ -302,6 +316,7 @@ export function ChatPanel({
           <div
             className={cn("mx-auto w-full max-w-3xl px-4", hero ? "py-2" : "space-y-6 py-6")}
             data-testid="message-list"
+            {...sidePanelLinks}
           >
             {messageContent}
           </div>

@@ -16,6 +16,17 @@ function Page({ active, onNavigate }: { active: boolean; onNavigate: () => void 
       >
         站内链接
       </a>
+      <div data-side-panel-links>
+        <a
+          href="/notes/2"
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigate();
+          }}
+        >
+          侧栏链接
+        </a>
+      </div>
       <a href="https://example.com/x">站外链接</a>
     </>
   );
@@ -62,6 +73,17 @@ describe("useLeaveGuard", () => {
     fireEvent.click(screen.getByText("站内链接"), { metaKey: true });
 
     expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("侧栏标记区域内的链接交给侧栏守卫", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const onNavigate = vi.fn();
+    render(<Page active onNavigate={onNavigate} />);
+
+    fireEvent.click(screen.getByText("侧栏链接"));
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(onNavigate).toHaveBeenCalledOnce();
   });
 
   it("站内确认离开后，紧随其后的整页卸载不再弹第二次确认", () => {

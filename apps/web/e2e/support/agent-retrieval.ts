@@ -163,8 +163,8 @@ export function agentRetrievalTests(mobile: boolean) {
       await api(request, "DELETE", `/api/proxy/note/bases/${fixture.emptyBaseId}`);
     });
 
-    /** 带引用回答、范围持久化与笔记小节跳转。 */
-    test("知识库入口问答带引用，刷新后恢复范围并定位笔记小节", async ({ page }, testInfo) => {
+    /** 带引用回答、范围持久化与侧栏笔记小节定位。 */
+    test("知识库入口问答带引用，刷新后恢复范围并在侧栏定位笔记小节", async ({ page }, testInfo) => {
       await page.goto(mobile ? `/m/notes/${fixture.baseId}` : `/notes/${fixture.baseId}`);
       await page.getByTestId(mobile ? "mobile-kb-ask-link" : "kb-ask-link").click();
       await expect(page.getByRole("combobox", { name: "检索范围" })).toHaveText(fixture.baseName);
@@ -177,11 +177,64 @@ export function agentRetrievalTests(mobile: boolean) {
       const inline = page.locator(".anynote-editor__content a").filter({ hasText: "[1]" });
       await expect(inline).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath("citation-answer.png"), fullPage: true });
+
       await inline.click();
-      await expect(page).toHaveURL(
+      const panel = page.getByTestId(mobile ? "side-panel-mobile" : "side-panel");
+      await expect(panel).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`${mobile ? "/m" : ""}/ai/chat`));
+      await expect(panel.getByRole("heading", { name: "倒排索引", exact: true })).toBeInViewport();
+
+      // 修饰键点击仍是浏览器原生新标签页，地址回到完整页面
+      if (mobile) await page.getByRole("button", { name: "关闭" }).click();
+      const popupPromise = page.context().waitForEvent("page");
+      await inline.click({ modifiers: ["Control"] });
+      const popup = await popupPromise;
+      await popup.waitForLoadState();
+      await expect(popup).toHaveURL(
         new RegExp(`${mobile ? "/m" : ""}/notes/${fixture.baseId}/${fixture.noteId}\\?section=`),
       );
-      await expect(page.getByRole("heading", { name: "倒排索引", exact: true })).toBeInViewport();
+      await popup.close();
+    });
+
+    /** 桌面侧栏：同一资源只开一个标签，刷新后恢复标签与展开状态。 */
+    test("右侧栏同一资源去重并在刷新后恢复", async ({ page }) => {
+      test.skip(mobile, "桌面侧栏用例");
+      await page.goto(`/ai/chat?baseId=${fixture.baseId}`);
+      await page.evaluate(() => {
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith("anynote-ai-side-panel:")) localStorage.removeItem(key);
+        }
+      });
+      await page.reload();
+      await ask(page, "M167NOTECITATION 倒排索引是什么？");
+      const inline = page.locator(".anynote-editor__content a").filter({ hasText: "[1]" });
+      await inline.click();
+      const panel = page.getByTestId("side-panel");
+      await expect(panel).toBeVisible();
+      await expect(panel.getByRole("tab")).toHaveCount(1);
+      await inline.click();
+      await expect(panel.getByRole("tab")).toHaveCount(1);
+
+      await page.reload();
+      await expect(page.getByTestId("side-panel")).toBeVisible();
+      await expect(page.getByTestId("side-panel").getByRole("tab")).toHaveCount(1);
+    });
+
+    /** 桌面 1280 收起会话列表、1024 改为覆盖呈现。 */
+    test("右侧栏在 1280 与 1024 宽度下的布局", async ({ page }) => {
+      test.skip(mobile, "桌面布局用例");
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.goto(`/ai/chat?baseId=${fixture.baseId}`);
+      await ask(page, "M167NOTECITATION 倒排索引是什么？");
+      const inline = page.locator(".anynote-editor__content a").filter({ hasText: "[1]" });
+      await inline.click();
+      const panel = page.getByTestId("side-panel");
+      await expect(panel).toBeVisible();
+      await expect(page.locator('aside:not([aria-label="右侧栏"])')).toBeHidden();
+
+      await page.setViewportSize({ width: 1024, height: 720 });
+      await expect(panel).toHaveClass(/absolute/);
+      await expect(page.locator('aside:not([aria-label="右侧栏"])')).toBeVisible();
     });
 
     /** 空知识库必须返回明确的未找到结果。 */

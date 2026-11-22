@@ -21,12 +21,48 @@ export function findSectionPosition(doc: Node, section: string): number | null {
   return result;
 }
 
-/** 根据引用参数滚动到笔记小节；没有可用定位时保持来源首页。 */
-export function scrollToNoteCitation(editor: Editor, search: string, markdown: string): boolean {
+export type NoteCitationLocate = { section?: string | undefined; line?: number | undefined };
+
+/**
+ * 从地址参数解析笔记定位。
+ *
+ * @param search 地址中的查询串
+ * @returns 小节或行号，均缺失时为空
+ */
+export function locateFromSearch(search: string): NoteCitationLocate | null {
   const params = new URLSearchParams(search);
-  let section = params.get("section");
+  const section = params.get("section") ?? undefined;
   const line = Number(params.get("line"));
-  if (!section && Number.isSafeInteger(line) && line > 0) {
+  const positiveLine = Number.isSafeInteger(line) && line > 0 ? line : undefined;
+  if (!section && positiveLine === undefined) return null;
+  return { section, line: positiveLine };
+}
+
+/**
+ * 判断服务端更新时间是否比本地版本新。
+ *
+ * @param next 服务端更新时间
+ * @param current 本地版本更新时间
+ * @returns 两端都可解析且服务端更新时为真
+ */
+export function isNewerUpdateTime(
+  next: string | null | undefined,
+  current: string | null | undefined,
+): boolean {
+  const nextTime = next ? Date.parse(next) : Number.NaN;
+  const currentTime = current ? Date.parse(current) : Number.NaN;
+  return Number.isFinite(nextTime) && Number.isFinite(currentTime) && nextTime > currentTime;
+}
+
+/** 根据定位参数滚动到笔记小节；没有可用定位时保持来源首页。 */
+export function scrollToNoteCitation(
+  editor: Editor,
+  locate: NoteCitationLocate,
+  markdown: string,
+): boolean {
+  let section = locate.section;
+  const line = locate.line;
+  if (!section && typeof line === "number" && Number.isSafeInteger(line) && line > 0) {
     const stack: Array<{ level: number; title: string }> = [];
     let fence = false;
     for (const text of markdown.split("\n").slice(0, line)) {

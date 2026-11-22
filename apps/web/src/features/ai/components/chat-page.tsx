@@ -3,6 +3,14 @@
 import { NEW_CONVERSATION_KEY, conversationKey } from "@/features/ai/query-keys";
 import { useChatStreamStore } from "@/features/ai/use-chat-stream";
 import { useConversationQuery } from "@/features/ai/use-conversations";
+import {
+  SidePanelExpandButton,
+  SidePanelHost,
+  SidePanelProvider,
+  useSidePanelShell,
+} from "@/features/side-panel/launcher";
+import { renameSidePanelSurface } from "@/features/side-panel/surface-events";
+import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -51,35 +59,90 @@ export function ChatPage({ conversationId, initialBaseId }: ChatPageProps) {
     }
   }, [detail.data, activeConversationId, hydrate]);
 
+  const onConversationCreated = (createdId: number) => {
+    if (activeConversationId) return;
+    const nextPathname = `${CHAT_PATHNAME}/${createdId}`;
+    flushSync(() => {
+      renameKey(newKey, conversationKey({ id: createdId }));
+      renameSidePanelSurface(`chat:${newKey}`, `chat:${conversationKey({ id: createdId })}`);
+      setActiveConversationId(createdId);
+    });
+    window.history.replaceState(window.history.state, "", nextPathname);
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 bg-surface" data-testid="chat-page">
-      <aside className="hidden w-72 shrink-0 border-r border-separator bg-sidebar md:block">
+    <SidePanelProvider>
+      <ChatPageLayout
+        activeConversationId={activeConversationId}
+        sessionKey={sessionKey}
+        initialBaseId={initialBaseId}
+        conversationTitle={
+          activeConversationId ? (detail.data?.conversation?.title ?? "对话") : "新对话"
+        }
+        historyStatus={
+          !activeConversationId || detail.data ? "ready" : detail.isError ? "error" : "pending"
+        }
+        onReloadHistory={() => void detail.refetch()}
+        onConversationCreated={onConversationCreated}
+        emptyHint={activeConversationId ? "继续这段对话" : "开始新的对话"}
+      />
+    </SidePanelProvider>
+  );
+}
+
+function ChatPageLayout({
+  activeConversationId,
+  sessionKey,
+  initialBaseId,
+  conversationTitle,
+  historyStatus,
+  onReloadHistory,
+  onConversationCreated,
+  emptyHint,
+}: {
+  activeConversationId: number | undefined;
+  sessionKey: string;
+  initialBaseId: number | undefined;
+  conversationTitle: string;
+  historyStatus: "pending" | "error" | "ready";
+  onReloadHistory: () => void;
+  onConversationCreated: (conversationId: number) => void;
+  emptyHint: string;
+}) {
+  const shell = useSidePanelShell();
+  const [listVisible, setListVisible] = useState(true);
+
+  return (
+    <div className="relative flex min-h-0 flex-1 bg-surface" data-testid="chat-page">
+      <aside
+        className={cn(
+          "w-72 shrink-0 border-r border-separator bg-sidebar",
+          listVisible ? "hidden md:block" : "hidden",
+        )}
+      >
         <ConversationList activeId={activeConversationId ?? 0} />
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <ChatPanel
           sessionKey={sessionKey}
-          conversationTitle={
-            activeConversationId ? (detail.data?.conversation?.title ?? "对话") : "新对话"
-          }
+          conversationTitle={conversationTitle}
           initialBaseId={initialBaseId}
-          historyStatus={
-            !activeConversationId || detail.data ? "ready" : detail.isError ? "error" : "pending"
-          }
-          onReloadHistory={() => void detail.refetch()}
-          onConversationCreated={(createdId) => {
-            if (!activeConversationId) {
-              const nextPathname = `${CHAT_PATHNAME}/${createdId}`;
-              flushSync(() => {
-                renameKey(newKey, conversationKey({ id: createdId }));
-                setActiveConversationId(createdId);
-              });
-              window.history.replaceState(window.history.state, "", nextPathname);
-            }
-          }}
-          emptyHint={activeConversationId ? "继续这段对话" : "开始新的对话"}
+          historyStatus={historyStatus}
+          onReloadHistory={onReloadHistory}
+          onConversationCreated={onConversationCreated}
+          headerActions={shell && !shell.panelOpen ? <SidePanelExpandButton /> : null}
+          emptyHint={emptyHint}
         />
       </main>
+      {shell?.mounted ? (
+        <SidePanelHost
+          surface={`chat:${sessionKey}`}
+          pending={shell.pending}
+          panelOpen={shell.panelOpen}
+          onPanelOpenChange={shell.setPanelOpen}
+          onListVisibleChange={setListVisible}
+        />
+      ) : null}
     </div>
   );
 }

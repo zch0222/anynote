@@ -3,6 +3,8 @@ import { z } from "zod";
 /**
  * 引用来源与结构化定位。
  *
+ * 首屏只保留生成地址所需的最小逻辑；资源目标解析在懒加载的右侧栏宿主里。
+ *
  * @author 称霸幼儿园
  */
 export const citationSchema = z.object({

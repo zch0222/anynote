@@ -1077,3 +1077,66 @@ describe("useSaveNote：离开拦截的判据", () => {
     expect(result.current.getStatus()).toBe(result.current.status);
   });
 });
+
+describe("useSaveNote：服务端版本替换", () => {
+  /** 空闲时替换正文、标题与版本基线，后续保存携带新版本号。 */
+  it("空闲时替换正文、标题与版本基线", async () => {
+    const onDiscardLocal = vi.fn();
+    const { result, queryClient } = renderHookWithProviders(
+      () => useSaveNote({ noteId: NOTE_ID, initialVersion: "1000", onDiscardLocal }),
+      { queryClient: createPersistentQueryClient() },
+    );
+    queryClient.setQueryData<NoteDetail>(DETAIL_KEY, initialDetail);
+
+    let applied = false;
+    act(() => {
+      applied = result.current.applyServerVersion({
+        title: "服务端新标题",
+        content: "服务端新内容",
+        version: "3000",
+        updateTime: "2026-09-11T04:00:00.000Z",
+      });
+    });
+
+    expect(applied).toBe(true);
+    expect(onDiscardLocal).toHaveBeenCalledWith({
+      title: "服务端新标题",
+      content: "服务端新内容",
+    });
+    expect(queryClient.getQueryData<NoteDetail>(DETAIL_KEY)).toMatchObject({
+      title: "服务端新标题",
+      content: "服务端新内容",
+    });
+    expect(result.current.status).toBe("saved");
+
+    patch.mockResolvedValue(okEnvelope(saveResult({ version: "3000" })));
+    act(() => result.current.scheduleSave({ title: "本地标题", content: "本地内容" }));
+    await act(async () => {
+      await result.current.flush();
+    });
+    expect(patch.mock.calls[0]?.[1]).toMatchObject({
+      body: { title: "本地标题", content: "本地内容", version: "3000" },
+    });
+  });
+
+  /** 有待保存改动时不替换，避免覆盖用户正在编辑的内容。 */
+  it("有待保存改动时不替换", () => {
+    const { result } = renderHookWithProviders(() =>
+      useSaveNote({ noteId: NOTE_ID, initialVersion: "1000", debounceMs: 600_000 }),
+    );
+    act(() => result.current.scheduleSave({ title: "本地", content: "本地" }));
+
+    let applied = true;
+    act(() => {
+      applied = result.current.applyServerVersion({
+        title: "服务端",
+        content: "服务端",
+        version: "3000",
+        updateTime: null,
+      });
+    });
+
+    expect(applied).toBe(false);
+    expect(result.current.status).toBe("pending");
+  });
+});

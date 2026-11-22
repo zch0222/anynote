@@ -1,5 +1,5 @@
 import { render, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const player = vi.hoisted(() => ({
   seek: vi.fn(),
@@ -22,6 +22,12 @@ import { VideoPlayer } from "../video-player";
  *
  * @author 称霸幼儿园
  */
+beforeEach(() => {
+  player.seek.mockClear();
+  player.destroy.mockClear();
+  player.on.mockClear();
+});
+
 describe("VideoPlayer", () => {
   /** 越界时间回到起点，非法时间不提交定位请求。 */
   it.each([120, -1, Number.NaN])("处理无效或越界秒数 %s", async (time) => {
@@ -41,5 +47,28 @@ describe("VideoPlayer", () => {
     expect(player.seek).toHaveBeenCalledWith(12.345);
     unmount();
     expect(player.destroy).toHaveBeenCalledOnce();
+  });
+
+  /** 传 navigationKey 时换时间点只 seek，不销毁重建播放器。 */
+  it("导航版本变化时原地跳转", async () => {
+    const view = render(<VideoPlayer url="/video.mp4" startTime={10} navigationKey={1} />);
+    await waitFor(() => expect(player.on).toHaveBeenCalledWith("loadedmetadata", expect.any(Function)));
+    player.on.mock.calls[0]?.[1]();
+    player.seek.mockClear();
+
+    view.rerender(<VideoPlayer url="/video.mp4" startTime={20} navigationKey={2} />);
+
+    expect(player.destroy).not.toHaveBeenCalled();
+    expect(player.seek).toHaveBeenCalledWith(20);
+  });
+
+  /** 不传 navigationKey 时保持按 startTime 销毁重建的旧行为。 */
+  it("未传导航版本时按时间重建", async () => {
+    const view = render(<VideoPlayer url="/video.mp4" startTime={10} />);
+    await waitFor(() => expect(player.on).toHaveBeenCalled());
+
+    view.rerender(<VideoPlayer url="/video.mp4" startTime={20} />);
+
+    await waitFor(() => expect(player.destroy).toHaveBeenCalledOnce());
   });
 });

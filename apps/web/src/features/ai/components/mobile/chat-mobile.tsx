@@ -1,10 +1,14 @@
 "use client";
 
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
+import { Button } from "@/components/ui/button";
 import { ChatPanel } from "@/features/ai/components/chat-panel";
 import { NEW_CONVERSATION_KEY, conversationKey } from "@/features/ai/query-keys";
 import { useChatStreamStore } from "@/features/ai/use-chat-stream";
 import { useConversationQuery } from "@/features/ai/use-conversations";
+import { SidePanelProvider, useSidePanelShell } from "@/features/side-panel/launcher";
+import { SidePanelMobileHost } from "@/features/side-panel/mobile-launcher";
+import { renameSidePanelSurface } from "@/features/side-panel/surface-events";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -58,30 +62,95 @@ export function MobileChat({ conversationId, initialBaseId }: MobileChatProps) {
 
   const title = activeConversationId ? (detail.data?.conversation?.title ?? "对话") : "新对话";
 
+  const onConversationCreated = (createdId: number) => {
+    if (activeConversationId) return;
+    const nextPathname = `${MOBILE_CHAT_PATHNAME}/${createdId}`;
+    flushSync(() => {
+      renameKey(newKey, conversationKey({ id: createdId }));
+      renameSidePanelSurface(`chat:${newKey}`, `chat:${conversationKey({ id: createdId })}`);
+      setActiveConversationId(createdId);
+    });
+    window.history.replaceState(window.history.state, "", nextPathname);
+  };
+
   return (
-    <MobileScreen title={title} back="/m/ai/chat" fill tone="paper" contentClassName="min-h-0">
-      <div className="flex min-h-0 flex-1 flex-col" data-testid="mobile-chat">
-        <ChatPanel
-          sessionKey={sessionKey}
-          initialBaseId={initialBaseId}
-          historyStatus={
-            !activeConversationId || detail.data ? "ready" : detail.isError ? "error" : "pending"
-          }
-          onReloadHistory={() => void detail.refetch()}
-          variant="mobile"
-          onConversationCreated={(createdId) => {
-            if (!activeConversationId) {
-              const nextPathname = `${MOBILE_CHAT_PATHNAME}/${createdId}`;
-              flushSync(() => {
-                renameKey(newKey, conversationKey({ id: createdId }));
-                setActiveConversationId(createdId);
-              });
-              window.history.replaceState(window.history.state, "", nextPathname);
+    <SidePanelProvider>
+      <MobileChatScreen
+        title={title}
+        sessionKey={sessionKey}
+        initialBaseId={initialBaseId}
+        activeConversationId={activeConversationId}
+        detailReady={!activeConversationId || Boolean(detail.data)}
+        historyError={Boolean(activeConversationId && detail.isError)}
+        onReloadHistory={() => void detail.refetch()}
+        onConversationCreated={onConversationCreated}
+      />
+    </SidePanelProvider>
+  );
+}
+
+function MobileChatScreen({
+  title,
+  sessionKey,
+  initialBaseId,
+  activeConversationId,
+  detailReady,
+  historyError,
+  onReloadHistory,
+  onConversationCreated,
+}: {
+  title: string;
+  sessionKey: string;
+  initialBaseId: number | undefined;
+  activeConversationId: number | undefined;
+  detailReady: boolean;
+  historyError: boolean;
+  onReloadHistory: () => void;
+  onConversationCreated: (conversationId: number) => void;
+}) {
+  const shell = useSidePanelShell();
+  const [tabCount, setTabCount] = useState(0);
+  const showOpened = shell !== null && tabCount > 0 && !shell.panelOpen;
+
+  return (
+    <>
+      <MobileScreen
+        title={title}
+        back="/m/ai/chat"
+        fill
+        tone="paper"
+        contentClassName="min-h-0"
+        actions={
+          showOpened ? (
+            <Button variant="ghost" size="sm" onClick={() => shell.open(null)}>
+              已打开的内容（{tabCount}）
+            </Button>
+          ) : undefined
+        }
+      >
+        <div className="flex min-h-0 flex-1 flex-col" data-testid="mobile-chat">
+          <ChatPanel
+            sessionKey={sessionKey}
+            initialBaseId={initialBaseId}
+            historyStatus={
+              !activeConversationId || detailReady ? "ready" : historyError ? "error" : "pending"
             }
-          }}
-          emptyHint={activeConversationId ? "继续这段对话" : "开始新的对话"}
+            onReloadHistory={onReloadHistory}
+            variant="mobile"
+            onConversationCreated={onConversationCreated}
+            emptyHint={activeConversationId ? "继续这段对话" : "开始新的对话"}
+          />
+        </div>
+      </MobileScreen>
+      {shell?.mounted ? (
+        <SidePanelMobileHost
+          surface={`chat:${sessionKey}`}
+          pending={shell.pending}
+          panelOpen={shell.panelOpen}
+          onPanelOpenChange={shell.setPanelOpen}
+          onTabCountChange={setTabCount}
         />
-      </div>
-    </MobileScreen>
+      ) : null}
+    </>
   );
 }

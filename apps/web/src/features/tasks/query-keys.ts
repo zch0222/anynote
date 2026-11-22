@@ -11,6 +11,8 @@ export const taskQueryKeys = {
    * 两者语义不同、缓存也不能互相冒用。
    */
   adminDetail: (taskId: number) => ["tasks", "admin", "detail", taskId] as const,
+  /** 成员侧单个任务（`GET /noteTasks/{id}`）。 */
+  memberDetail: (taskId: number) => ["tasks", "member", "detail", taskId] as const,
   /** 提交记录：每个 tab 一棵子树，切 tab 不会与上一个 tab 抢同一个缓存位。 */
   submissions: (taskId: number, status: SubmissionTab, page: number) =>
     ["tasks", "admin", "submissions", taskId, status, page] as const,

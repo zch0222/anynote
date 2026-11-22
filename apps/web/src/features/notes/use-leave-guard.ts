@@ -33,6 +33,8 @@ export function useLeaveGuard(active: boolean, message: string): void {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const anchor = (event.target as Element | null)?.closest?.("a[href]");
       if (!(anchor instanceof HTMLAnchorElement)) return;
+      // 侧栏宿主的资源链接不会离开页面，交给侧栏自己的守卫确认
+      if (anchor.closest("[data-side-panel-links]")) return;
       if (anchor.target === "_blank" || anchor.hasAttribute("download")) return;
       const destination = new URL(anchor.href, window.location.href);
       // 站外链接会触发 beforeunload，由浏览器确认

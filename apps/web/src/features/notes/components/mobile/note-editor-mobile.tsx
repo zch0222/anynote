@@ -1,22 +1,19 @@
 "use client";
 
-import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { MobileActionSheet } from "@/components/layout/mobile/mobile-action-sheet";
 import { MobileScreen } from "@/components/layout/mobile/mobile-screen";
-import { EditorSkeleton } from "@/components/loading/skeletons";
-import { ConflictDialog } from "@/components/note/conflict-dialog";
-import { CollabSyncBadge, SaveFailureNotice, SaveStatusBadge } from "@/components/note/save-status";
-import { CollabNotices } from "@/features/notes/components/collab-notices";
+import { CollabSyncBadge, SaveStatusBadge } from "@/components/note/save-status";
 import { CollabPresence } from "@/features/notes/components/collab-presence";
+import { MobileNoteEditorBody } from "@/features/notes/components/mobile/note-editor-mobile-body";
 import { useDeleteNoteMutation } from "@/features/notes/use-delete-note";
 import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { useMoveNoteMutation } from "@/features/notes/use-move-note";
 import { useNoteEditorSession } from "@/features/notes/use-note-editor-session";
-import { formatRelativeTime } from "@/lib/format-time";
+import { locateFromSearch } from "@/lib/ai/note-location";
 import { mobileNoteHistoryHref } from "@/lib/mobile/hrefs";
 import { FolderInput, History, MoreHorizontal, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 /**
@@ -35,23 +32,13 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
   const remove = useDeleteNoteMutation();
   const move = useMoveNoteMutation();
   const [actionsOpen, setActionsOpen] = useState(false);
-  const session = useNoteEditorSession(noteId);
-  const {
-    note,
-    title,
-    initialContent,
-    charCount,
-    collabEnabled,
-    collab,
-    collaboration,
-    serverPersist,
-    save,
-    handleContentChange,
-    handleEditorReady,
-    uploadFn,
-    confirmLeave,
-  } = session;
-  const { flush, resolveConflict, retry, status, lastSavedAt, conflict, failure } = save;
+  const locate = useMemo(() => {
+    const parsed = locateFromSearch(window.location.search);
+    return parsed ? { ...parsed, revision: 0 } : undefined;
+  }, []);
+  const session = useNoteEditorSession(noteId, { locate });
+  const { note, title, collab, collaboration, serverPersist, save, confirmLeave } = session;
+  const { flush, status, lastSavedAt, failure } = save;
 
   const handleMove = useCallback(
     async (targetBaseId: number) => {
@@ -181,78 +168,7 @@ export function MobileNoteEditor({ baseId, noteId }: { baseId: number; noteId: n
       fill
       contentClassName="min-h-0"
     >
-      {note.isPending || initialContent === null ? (
-        <div className="flex min-h-0 flex-1 flex-col p-4">
-          <EditorSkeleton className="min-h-0 flex-1" />
-        </div>
-      ) : (
-        <>
-          {/*
-            元信息行（设计稿 p09）：更新 · 字数 · 所属知识库。
-            作者与阅读次数后端没有返回（`GET /notes/{id}` 只有 title/content/
-            knowledgeBaseId/updateTime），所以只渲染拿得到的几项。
-            位置在正文之上——正文的首节点就是 H1 标题，这一行插不进去了。
-          */}
-          <p
-            data-testid="mobile-note-meta"
-            className="shrink-0 border-b px-4 pb-3 text-footnote text-label-tertiary"
-          >
-            {note.data?.updateTime ? `${formatRelativeTime(note.data.updateTime)}更新 · ` : ""}
-            <span className="tabular">{charCount.toLocaleString("zh-CN")} 字</span>
-            {note.data?.knowledgeBaseName ? ` · ${note.data.knowledgeBaseName}` : ""}
-          </p>
-          {/* 断线降级（§7.4）：协同连不上时提示并回退单人模式 */}
-          {/* 连接中 / 正文未就位：编辑器只读，不给提示用户只会觉得"打不出字" */}
-          {collabEnabled && !collab.degraded && !collab.contentReady ? (
-            <output
-              data-testid="collab-connecting"
-              className="mx-4 mt-3 block rounded-xl border border-separator bg-fill-tertiary px-4 py-3 text-sm text-label-secondary"
-            >
-              正在接入协同会话，正文载入后即可编辑…
-            </output>
-          ) : null}
-          <CollabNotices collab={collab} className="mx-4 mt-3" />
-          {status === "failed" && failure ? (
-            <SaveFailureNotice
-              failure={failure}
-              onRetry={() => void retry()}
-              className="mx-4 mt-3"
-            />
-          ) : null}
-          {collabEnabled && collab.degraded ? (
-            <div
-              role="alert"
-              data-testid="collab-degraded"
-              className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-footnote text-warning"
-            >
-              <span className="min-w-0 flex-1">协同服务连不上，已切换为单人编辑。</span>
-              <button
-                type="button"
-                className="shrink-0 font-medium underline"
-                onClick={collab.reconnect}
-              >
-                重连
-              </button>
-            </div>
-          ) : null}
-          <TiptapEditor
-            key={noteId}
-            preset={collaboration ? "collaborative" : "full"}
-            toolbar="mobile"
-            value={initialContent ?? ""}
-            {...(collaboration ? { collaboration } : {})}
-            /* 与桌面同一条约束：正文未就位时只读，否则对着空白编辑器打字会覆盖库里的正文 */
-            editable={collab.editable}
-            onChange={handleContentChange}
-            onReady={handleEditorReady}
-            uploadFn={uploadFn}
-            fill
-            className="min-h-0 flex-1"
-          />
-        </>
-      )}
-
-      <ConflictDialog conflict={conflict} onResolve={(choice) => void resolveConflict(choice)} />
+      <MobileNoteEditorBody noteId={noteId} session={session} />
     </MobileScreen>
   );
 }

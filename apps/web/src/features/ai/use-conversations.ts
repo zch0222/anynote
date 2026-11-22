@@ -1,5 +1,6 @@
 "use client";
 
+import { notifyConversationRemoved } from "@/features/side-panel/surface-events";
 import { flattenedDtoQuerySerializer } from "@/lib/api/dto-query";
 import { unwrapEnvelope } from "@/lib/api/errors";
 import { aiApi } from "@/lib/api/openapi";
@@ -135,6 +136,7 @@ export function useDeleteConversationMutation() {
     },
     retry: false,
     onSuccess: (_data, conversationId) => {
+      notifyConversationRemoved(conversationId);
       queryClient.invalidateQueries({ queryKey: aiQueryKeys.conversations });
       queryClient.removeQueries({ queryKey: aiQueryKeys.conversationDetail(conversationId) });
     },

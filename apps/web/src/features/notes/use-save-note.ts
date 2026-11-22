@@ -570,6 +570,39 @@ export function useSaveNote(options: {
     [conflict, detailKey, queryClient, save, setStatus],
   );
 
+  /**
+   * 用服务端版本替换正文、标题与版本基线。
+   *
+   * 只在保存状态空闲时生效；有待保存、在途请求、冲突或失败时不替换。
+   *
+   * @param server 服务端最新内容与版本
+   * @returns 是否完成替换
+   */
+  const applyServerVersion = useCallback(
+    (server: NoteDraft & { version: string | null; updateTime: string | null }): boolean => {
+      if (statusRef.current !== "saved") return false;
+      if (inFlight.current || pendingRef.current || blocked.current || halted.current) return false;
+      versionRef.current = server.version;
+      baseRef.current = { title: server.title, content: server.content };
+      firstPendingAt.current = null;
+      clearTimers();
+      queryClient.setQueryData<NoteDetail>(detailKey, (current) =>
+        current
+          ? {
+              ...current,
+              title: server.title,
+              content: server.content,
+              updateTime: server.updateTime,
+            }
+          : current,
+      );
+      onDiscardLocalRef.current?.({ title: server.title, content: server.content });
+      setStatus("saved");
+      return true;
+    },
+    [clearTimers, detailKey, queryClient, setStatus],
+  );
+
   return {
     status,
     lastSavedAt,
@@ -580,6 +613,7 @@ export function useSaveNote(options: {
     flush,
     retry,
     resolveConflict,
+    applyServerVersion,
     /** 当前是否有尚未确认落库的改动。 */
     hasPendingChanges: () => pendingRef.current !== null || inFlight.current,
     /** 最新保存状态，不等重新渲染。 */

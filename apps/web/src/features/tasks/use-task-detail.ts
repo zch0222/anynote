@@ -18,6 +18,7 @@ import {
   type TaskTimelineItem,
   adminTaskSchema,
   memberTaskPageSchema,
+  memberTaskSchema,
   taskHeatmapSchema,
   taskSubmissionPageSchema,
   taskTimelineItemSchema,
@@ -63,6 +64,26 @@ export function useMemberTaskQuery(baseId: number, taskId: number) {
 }
 
 /**
+ * 成员侧单个任务（`GET /noteTasks/{id}`）。
+ *
+ * @param taskId 任务 id
+ * @param options.enabled 是否发起请求
+ */
+export function useMemberTaskByIdQuery(taskId: number, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: taskQueryKeys.memberDetail(taskId),
+    enabled: (options.enabled ?? true) && Number.isSafeInteger(taskId) && taskId > 0,
+    queryFn: async (): Promise<MemberTask> => {
+      const { response } = await noteApi.GET("/noteTasks/{id}", {
+        params: { path: { id: taskId } },
+        ...request,
+      });
+      return unwrapEnvelope(response, memberTaskSchema.parse);
+    },
+  });
+}
+
+/**
  * 「不存在或无权限」的统一判定。
  *
  * 后端对"任务不存在"与"你没有这个任务的权限"返回的是同一类错误
@@ -83,10 +104,10 @@ export function isTaskMissing(error: unknown): boolean {
 }
 
 /** 管理员任务详情（`GET /admin/noteTasks/{id}`）。 */
-export function useAdminTaskQuery(taskId: number) {
+export function useAdminTaskQuery(taskId: number, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: taskQueryKeys.adminDetail(taskId),
-    enabled: Number.isSafeInteger(taskId) && taskId > 0,
+    enabled: (options.enabled ?? true) && Number.isSafeInteger(taskId) && taskId > 0,
     queryFn: async (): Promise<AdminTask> => {
       const { response } = await noteApi.GET("/admin/noteTasks/{id}", {
         params: { path: { id: taskId } },
