@@ -2,6 +2,7 @@ package com.anynote.ai.service.impl;
 
 import com.anynote.ai.api.model.bo.ChatConversationUpdateParam;
 import com.anynote.ai.api.model.dto.ChatCompletionsDTO;
+import com.anynote.ai.api.model.dto.ChatConversationListDTO;
 import com.anynote.ai.api.model.po.ChatConversation;
 import com.anynote.ai.api.model.po.ChatMessage;
 import com.anynote.ai.api.model.po.MoocVideoSummarizePO;
@@ -12,18 +13,21 @@ import com.anynote.ai.mapper.ChatConversationMapper;
 import com.anynote.ai.mapper.ChatMessageMapper;
 import com.anynote.ai.mapper.MoocVideoSummarizeMapper;
 import com.anynote.ai.model.dto.MoocVideoSummarizeDTO;
+import com.anynote.ai.model.vo.ChatConversationInfoVO;
 import com.anynote.ai.properties.AiHarnessProperties;
 import com.anynote.ai.run.AiCallContext;
 import com.anynote.ai.run.AiRunLimiter;
 import com.anynote.ai.service.ChatConversationService;
 import com.anynote.ai.service.ChatMessageService;
 import com.anynote.ai.service.MoocVideoSummarizeService;
+import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.file.api.RemoteFileService;
 import com.anynote.note.api.RemoteMoocService;
 import com.anynote.note.api.RemoteNoteTaskService;
 import com.anynote.system.api.RemoteSysApiStatisticsService;
 import com.anynote.system.api.model.bo.LoginUser;
+import com.github.pagehelper.PageHelper;
 import com.google.gson.Gson;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -80,6 +84,27 @@ class ChatServiceImplTest {
         conversation.setScope(null);
         result = ReflectionTestUtils.invokeMethod(chatService, "loadConversationVO", 5L);
         assertThat(result.getConversation().getScope()).isNull();
+    }
+
+    /**
+     * 会话列表返回持久化的知识库范围，供桌面端按知识库分组。
+     */
+    @Test
+    void returnsPersistedScopeInConversationList() {
+        ChatConversation conversation = ChatConversation.builder().id(6L).title("分组会话")
+                .scope("{\"knowledgeBaseIds\":[3],\"refs\":[]}").build();
+        when(chatConversationMapper.selectList(any())).thenReturn(List.of(conversation));
+        ChatConversationListDTO query = new ChatConversationListDTO();
+        query.setPage(1);
+        query.setPageSize(20);
+        try {
+            PageBean<ChatConversationInfoVO> result = chatService.getChatConversationList(query, context);
+            assertThat(result.getRows()).hasSize(1);
+            assertThat(result.getRows().get(0).getScope().getKnowledgeBaseIds()).containsExactly(3L);
+            assertThat(result.getRows().get(0).getScope().getRefs()).isEmpty();
+        } finally {
+            PageHelper.clearPage();
+        }
     }
 
     @Mock

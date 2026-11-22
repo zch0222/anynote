@@ -192,6 +192,7 @@ public class ChatServiceImpl implements ChatService {
                         .title(conversation.getTitle())
                         .type(conversation.getType())
                         .docId(conversation.getDocId())
+                        .scope(gson.fromJson(conversation.getScope(), AgentRunScopeDTO.class))
                         .createBy(conversation.getCreateBy())
                         .createTime(conversation.getCreateTime())
                         .updateBy(conversation.getUpdateBy())
