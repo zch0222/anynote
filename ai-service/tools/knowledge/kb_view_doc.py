@@ -335,4 +335,3 @@ async def _materialize(
         visuals=attachments,
         diagnostics={"pages": len(pages), "imageBytes": sum(len(page.data) for page in rendered)},
     )
-
