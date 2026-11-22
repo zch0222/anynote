@@ -42,12 +42,12 @@ def _row_evidence() -> EvidenceItem:
     )
 
 
-def test_knowledge_retrieval_agent_loads_three_files_and_seven_tools():
+def test_knowledge_retrieval_agent_loads_three_files_and_eight_tools():
     """加载契约、指令、上下文策略与只读工具名。"""
     agent = load_agent("knowledge-retrieval")
 
     assert agent.name == "knowledge-retrieval"
-    assert agent.version == "3"
+    assert agent.version == "4"
     assert agent.terminal_tool == "agent_finish"
     assert agent.tools == list(KNOWLEDGE_TOOL_NAMES)
     assert agent.context_policy["evidence_trust_level"] == "UNTRUSTED_CONTENT"
@@ -55,13 +55,14 @@ def test_knowledge_retrieval_agent_loads_three_files_and_seven_tools():
 
 
 def test_instructions_route_catalog_questions_and_explain_citable_rows():
-    """指令按问题类型分派全部七个工具，并说明哪些结果可引用、回答写在哪里。"""
+    """指令按问题类型分派全部八个工具，并说明哪些结果可引用、回答写在哪里。"""
     instructions = load_agent("knowledge-retrieval").instructions
 
     for name in KNOWLEDGE_TOOL_NAMES:
         assert name in instructions
     assert "我有哪些知识库" in instructions
     assert "evidenceId" in instructions
+    assert "引用只写 [1] 这种数字形式，不要写成 [E1]" in instructions
     assert "answer" in instructions
 
 

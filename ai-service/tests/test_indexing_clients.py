@@ -200,3 +200,37 @@ async def test_export_accepts_null_next_after_id_and_attributes():
     assert page.has_more is False
     assert page.next_after_id is None
     assert page.documents[0].attributes == {}
+
+
+async def test_file_client_retries_only_remote_protocol_errors():
+    """响应流协议错误使用新请求恢复，持续失败在第三次后归类并停止。"""
+    attempts = 0
+
+    def recovers(_request):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise httpx.RemoteProtocolError("illegal header line")
+        return httpx.Response(200, content=b"%PDF-recovered")
+
+    client = FileClient(
+        _settings(),
+        lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(recovers), timeout=timeout),
+    )
+    assert await client.download_bytes("docs/a.pdf") == b"%PDF-recovered"
+    assert attempts == 3
+
+    persistent_attempts = 0
+
+    def persists(_request):
+        nonlocal persistent_attempts
+        persistent_attempts += 1
+        raise httpx.RemoteProtocolError("illegal header line")
+
+    failing = FileClient(
+        _settings(),
+        lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(persists), timeout=timeout),
+    )
+    with pytest.raises(InternalServiceError):
+        await failing.download_bytes("docs/a.pdf")
+    assert persistent_attempts == 3

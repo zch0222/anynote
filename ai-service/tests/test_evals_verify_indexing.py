@@ -89,3 +89,17 @@ async def test_probe_embedding_catalog_is_explicitly_disabled():
 
     assert snapshot.logical_models["embedding"].enabled is False
     assert snapshot.resolve_embedding() is None
+
+
+def test_validate_index_documents_checks_pdf_extractor_version():
+    """PDF 条目缺少或写错提取规则版本时不能通过完整性核验。"""
+    from indexing.parsers.pdf import PDF_EXTRACTOR_VERSION
+
+    item = {
+        "item_key": "doc:1", "entity_type": "doc", "format": "pdf",
+        "generation": "g1", "chunk_count": 0, "content_version": "c1",
+        "meta_version": "m1", "readable": True, "chunker_version": CHUNKER_VERSION,
+    }
+    assert validate_index_documents({"doc:1": ("c1", "m1")}, [item], []) == ["item_extractor_version:doc:1"]
+    item["extractor_version"] = PDF_EXTRACTOR_VERSION
+    assert validate_index_documents({"doc:1": ("c1", "m1")}, [item], []) == []

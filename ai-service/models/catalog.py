@@ -57,6 +57,7 @@ class LogicalModelMapping(BaseModel):
     dimensions: int | None = None
     reasoning_format: Literal["none", "reasoning_content", "reasoning", "think_tag"] = "none"
     reasoning_passthrough: Literal["none", "empty", "original"] = "none"
+    supports_vision: bool = False
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 

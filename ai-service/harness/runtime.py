@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from elasticsearch import AsyncElasticsearch
 
 from agents import load_agent
+from clients.file import FileClient
 from clients.knowledge import KnowledgeClient
 from clients.model_provider import ModelProviderClient
 from core.config import RuntimeConfigStore, Settings
@@ -23,7 +24,7 @@ from retrieval.index_reader import KnowledgeIndexReader
 from retrieval.search import HybridSearcher
 from retrieval.session import RetrievalSessionMiddleware, RetrievalSessionStore
 from tools.knowledge import register_knowledge_tools
-from tools.knowledge.common import KnowledgeToolContext
+from tools.knowledge.common import KnowledgeToolContext, VisualRenderLimiter
 
 
 @dataclass
@@ -52,18 +53,28 @@ class RunManager:
         index: KnowledgeIndexReader | None = None,
         searcher: HybridSearcher | None = None,
         index_client: AsyncElasticsearch | None = None,
+        file_client: FileClient | None = None,
     ):
         self._settings = settings
         self._config_store = config_store
         self._providers = providers
         self._retrieval_store = RetrievalSessionStore(knowledge, index) if knowledge is not None else None
         self._index_client = index_client
+        self._file_client = file_client or FileClient(settings)
+        self._render_limiter = VisualRenderLimiter(
+            config_store.get().harness.visual_render_concurrency
+        )
         self._registry = ToolRegistry()
         self._middlewares = []
         if self._retrieval_store is not None and searcher is not None:
             register_knowledge_tools(
                 self._registry,
-                KnowledgeToolContext(store=self._retrieval_store, searcher=searcher),
+                KnowledgeToolContext(
+                    store=self._retrieval_store,
+                    searcher=searcher,
+                    file_client=self._file_client,
+                    render_limiter=self._render_limiter,
+                ),
             )
             self._middlewares.append(
                 RetrievalSessionMiddleware(self._retrieval_store, self._registry.get("kb_search"))
@@ -86,13 +97,16 @@ class RunManager:
         ):
             raise ApiError(503, "A0503", "服务暂时不可用，请稍后重试")
         snapshot = await self._providers.snapshot()
-        runtime = self._config_store.get().harness
+        settings_snapshot = self._config_store.get()
+        runtime = settings_snapshot.harness
+        await self._render_limiter.configure(runtime.visual_render_concurrency)
         context = RunContext(
             request=request,
             agent=load_agent(request.agent),
             runtime=runtime,
             model_snapshot=snapshot,
             access_token=access_token,
+            ocr_enabled=settings_snapshot.indexer.ocr_enabled,
         )
         session = RunSession(
             context=context,
@@ -168,6 +182,10 @@ class RunManager:
                     "evidence": [],
                     "answerNotices": [],
                     "unfinished": [],
+                    "visualDispatches": [
+                        item.model_dump(mode="json", by_alias=True)
+                        for item in session.context.visual_dispatches
+                    ],
                 },
             )
         finally:

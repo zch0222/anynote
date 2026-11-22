@@ -35,7 +35,14 @@ class TraceMiddleware(HarnessMiddleware):
         :return: 始终放行
         """
         run = context.run
-        if context.hook == Hook.AFTER_PREPARE:
+        if context.hook == Hook.BEFORE_MODEL:
+            dispatch = context.payload.visual_dispatch
+            if dispatch is not None:
+                await self._events.emit(
+                    "trace.visual",
+                    dispatch.model_dump(mode="json", by_alias=True),
+                )
+        elif context.hook == Hook.AFTER_PREPARE:
             await self._events.emit(
                 "trace.context",
                 self._span(run.run_id, "context.build", self._context_attributes(context)),

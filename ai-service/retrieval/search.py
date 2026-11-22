@@ -295,6 +295,14 @@ class HybridSearcher:
             hits.append(hit)
         positions = [(hit.item_key, hit.chunk_index) for hit in hits]
         around = await session.call_index(index.chunks_around(positions, settings.neighbor_window)) if positions else {}
+        item_details = await session.call_index(
+            index.item_details([hit.item_key for hit in hits])
+        ) if hits else {}
+        for hit in hits:
+            detail = item_details.get(hit.item_key)
+            if detail is not None:
+                hit.content_mode = detail.content_mode
+                hit.page_count = detail.page_count
         for position, candidate in zip(hits, selected, strict=True):
             if candidate.hit.chunk_index is None and position.chunk_index not in around.get(position.item_key, {}):
                 position.chunk_index = None
@@ -338,6 +346,9 @@ class HybridSearcher:
                 "kbId": auth.kb_id,
                 "locator": locator,
                 "authority": hit.authority,
+                "contentMode": hit.content_mode,
+                "extractionMode": hit.extraction_mode,
+                "sourceRegionId": hit.source_region_id,
                 "stale": stale,
             })
         return evidence, results, any_stale

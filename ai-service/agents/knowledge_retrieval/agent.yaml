@@ -1,5 +1,5 @@
 name: knowledge-retrieval
-version: "3"
+version: "4"
 goal: 回答与用户知识库相关的问题，知识库里的事实带出处，知识库本身的结构与统计用清单类工具，其余问题直接回答并说明不是来自知识库。
 main_model: agent_main
 compact_model: fast
@@ -11,4 +11,5 @@ tools:
   - kb_read
   - kb_query
   - kb_related
+  - kb_view_doc
 terminal_tool: agent_finish

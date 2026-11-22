@@ -9,7 +9,13 @@ from harness.action.plane import ToolExecutionError
 from harness.action.policy import BoundAction
 from harness.action.registry import ToolOutput, ToolSpec
 from harness.models import ActionErrorCategory
-from retrieval.models import CONTINUE_READ_MESSAGE, DOC_UNAVAILABLE_MESSAGE
+from indexing.models import SCANNED_PDF_MESSAGE
+from retrieval.models import (
+    CONTINUE_READ_MESSAGE,
+    DOC_UNAVAILABLE_MESSAGE,
+    OCR_TRANSCRIPT_MESSAGE,
+    PDF_OCR_DISABLED_MESSAGE,
+)
 from retrieval.session import RetrievalSession
 from retrieval.text import take_chars, utf16_length
 from tools.knowledge.args import KbReadArgs
@@ -35,9 +41,13 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
         session = context.store.for_action(action)
         auth = await session.gate(args.ref, args.subtype)
         if args.ref.startswith("doc:"):
-            text, locator, next_offset, title, authority, version, stale = await _read_doc(session, args, auth)
+            text, locator, next_offset, title, authority, version, stale, read_notices = await _read_doc(
+                session, args, auth,
+            )
         else:
-            text, locator, next_offset, title, authority, version, stale = await _read_content(session, args)
+            text, locator, next_offset, title, authority, version, stale, read_notices = await _read_content(
+                session, args,
+            )
         scope = await session.scope()
         item = session.evidence.register(
             item_key=auth.item_key,
@@ -54,7 +64,9 @@ def build(context: KnowledgeToolContext) -> ToolSpec:
             retrieval={"channels": {"read": 1}},
             selected_reason=NAME,
         )
-        notices = [CONTINUE_READ_MESSAGE.format(offset=next_offset)] if next_offset is not None else []
+        notices = list(read_notices)
+        if next_offset is not None:
+            notices.append(CONTINUE_READ_MESSAGE.format(offset=next_offset))
         payload = {
             "evidenceId": item.evidence_id,
             "ref": args.ref,
@@ -85,6 +97,13 @@ async def _read_doc(session: RetrievalSession, args: KbReadArgs, auth):
         index.item_chunks(auth.item_key, args.start_page, args.end_page),
         DOC_UNAVAILABLE_MESSAGE,
     )
+    if not chunks:
+        message = (
+            PDF_OCR_DISABLED_MESSAGE
+            if not session.ocr_enabled and not session.runtime.visual_read_enabled
+            else SCANNED_PDF_MESSAGE
+        )
+        raise ToolExecutionError(ActionErrorCategory.DEPENDENCY_UNAVAILABLE, message)
     full = "\n".join(chunk.content for chunk in chunks if chunk.content)
     piece, cut = take_chars(full[args.offset:], session.settings.read_max_chars)
     next_offset = args.offset + len(piece) if cut else None
@@ -97,8 +116,10 @@ async def _read_doc(session: RetrievalSession, args: KbReadArgs, auth):
     version = first.content_version if first else None
     stale = bool(first and auth.content_version and first.content_version
                  and auth.content_version != first.content_version)
-    return (piece, locator, next_offset, first.title if first else None,
-            first.authority if first else "original", version, stale)
+    has_ocr = any(chunk.extraction_mode == "ocr" for chunk in chunks)
+    authority = "transcript" if has_ocr else (first.authority if first else "original")
+    notices = [OCR_TRANSCRIPT_MESSAGE] if has_ocr else []
+    return piece, locator, next_offset, first.title if first else None, authority, version, stale, notices
 
 
 async def _read_content(session: RetrievalSession, args: KbReadArgs):
@@ -127,4 +148,4 @@ async def _read_content(session: RetrievalSession, args: KbReadArgs):
                        ("startTimeMs", args.start_time_ms), ("endTimeMs", args.end_time_ms)):
         if value is not None:
             locator[key] = value
-    return piece, locator, next_offset, result.title, result.authority, result.content_version, False
+    return piece, locator, next_offset, result.title, result.authority, result.content_version, False, []

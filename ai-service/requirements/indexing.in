@@ -2,3 +2,5 @@
 elasticsearch[async]==8.7.0
 pdfplumber==0.11.10
 pypdf==5.1.0
+pypdfium2==5.15.2
+rapidocr_onnxruntime==1.4.4

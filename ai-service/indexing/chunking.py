@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 MAX_SRT_WINDOW_MS = 60_000
 MAX_SRT_GAP_MS = 5_000
 MAX_GROUP_SOURCE_LINE_GAP = 2
-CHUNKER_VERSION = "markdown-blocks-lines-srt-window-v1"
+CHUNKER_VERSION = "markdown-blocks-lines-srt-window-v2"
 
 
 @dataclass(slots=True)
@@ -31,6 +31,8 @@ class ChunkDraft:
     start_line: int | None = None
     end_line: int | None = None
     block_type: str = "paragraph"
+    extraction_mode: str = "text"
+    source_region_id: str | None = None
 
 
 def _split_long_text_with_offsets(text: str, chunk_size: int) -> list[tuple[str, int, int]]:
@@ -140,8 +142,18 @@ def _can_group_sections(previous: ParsedSection, current: ParsedSection) -> bool
     :param current: 当前普通文本块
     :return: 是否允许合并
     """
-    if (previous.section_path, previous.page_no, previous.section_start_line) != (
-        current.section_path, current.page_no, current.section_start_line,
+    if (
+        previous.section_path,
+        previous.page_no,
+        previous.section_start_line,
+        previous.extraction_mode,
+        previous.source_region_id,
+    ) != (
+        current.section_path,
+        current.page_no,
+        current.section_start_line,
+        current.extraction_mode,
+        current.source_region_id,
     ):
         return False
     if previous.start_ms is not None or current.start_ms is not None:
@@ -193,6 +205,8 @@ def chunk_sections(
                 start_line=first.start_line,
                 end_line=last.end_line,
                 block_type=block_type,
+                extraction_mode=first.extraction_mode,
+                source_region_id=first.source_region_id,
             )
         )
         group.clear()
@@ -226,6 +240,8 @@ def chunk_sections(
                     start_line=source_start_line,
                     end_line=source_start_line + clean.count("\n") if source_start_line is not None else None,
                     block_type=sec.block_type,
+                    extraction_mode=sec.extraction_mode,
+                    source_region_id=sec.source_region_id,
                 )
             )
             continue
@@ -243,6 +259,8 @@ def chunk_sections(
                 start_line=source_start_line,
                 end_line=source_start_line + clean.count("\n") if source_start_line is not None else None,
                 block_type=sec.block_type,
+                extraction_mode=sec.extraction_mode,
+                source_region_id=sec.source_region_id,
             )))
             group_length += len(clean) + (2 if len(group) > 1 else 0)
             continue
@@ -265,6 +283,8 @@ def chunk_sections(
                     start_line=start_line,
                     end_line=end_line,
                     block_type=sec.block_type,
+                    extraction_mode=sec.extraction_mode,
+                    source_region_id=sec.source_region_id,
                 )
             )
     flush_group()

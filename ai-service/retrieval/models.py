@@ -20,6 +20,9 @@ DOC_UNAVAILABLE_MESSAGE = "资料正文暂不可读取"
 NO_MATCH_MESSAGE = "未找到匹配内容"
 CONTINUE_READ_MESSAGE = "内容未读完，续读请传 offset={offset}"
 STALE_MESSAGE = "部分证据对应的内容已更新，索引尚未同步"
+OCR_TRANSCRIPT_MESSAGE = "这是 OCR 识别文本，重要内容请用 kb_view_doc 核对原页"
+PDF_OCR_DISABLED_MESSAGE = "PDF 未检测到可提取文本，且 OCR 未开启"
+VISUAL_RUN_LIMIT_MESSAGE = "本次运行可读取的页面图像数量已达上限"
 KNOWLEDGE_ACCESS_UNAVAILABLE = "KNOWLEDGE_ACCESS_UNAVAILABLE"
 
 
@@ -245,6 +248,10 @@ class ChunkHit:
     end_line: int | None = None
     authority: str = "original"
     content_version: str = ""
+    content_mode: str | None = None
+    page_count: int | None = None
+    extraction_mode: str = "text"
+    source_region_id: str | None = None
     highlight: str | None = None
 
     @property

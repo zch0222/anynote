@@ -629,3 +629,52 @@ async def test_harness_passes_turn_reasoning_back_by_passthrough(fmt, passthroug
     else:
         assert assistant[field] == expected
         assert not other & set(assistant)
+
+
+async def test_image_parts_are_rejected_before_http_without_vision_capability():
+    """目标映射未声明视觉能力时，适配器在创建 HTTP 客户端前拒绝图片。"""
+    clients = 0
+
+    def client_factory(timeout):
+        nonlocal clients
+        clients += 1
+        return httpx.AsyncClient(transport=httpx.MockTransport(lambda _request: httpx.Response(200)))
+
+    adapter = OpenAICompatibleAdapter(client_factory)
+    messages = [{
+        "role": "user",
+        "content": [{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,AA=="}}],
+    }]
+    with pytest.raises(ModelConfigurationError):
+        async for _chunk in adapter.stream(
+            "agent_main", snapshot(), messages, [], HarnessRuntimeSettings(), True,
+        ):
+            pass
+    assert clients == 0
+
+
+async def test_declared_vision_capability_sends_content_parts_unchanged():
+    """声明视觉能力后，OpenAI 多模态 content parts 原样进入请求体。"""
+    captured = {}
+
+    def handler(request):
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, content=sse('{"choices":[{"delta":{"content":"ok"}}]}'))
+
+    configured = snapshot()
+    configured.logical_models["agent_main"].supports_vision = True
+    adapter = OpenAICompatibleAdapter(
+        lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=timeout)
+    )
+    messages = [{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "page"},
+            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,AA=="}},
+        ],
+    }]
+    async for _chunk in adapter.stream(
+        "agent_main", configured, messages, [], HarnessRuntimeSettings(), True,
+    ):
+        pass
+    assert captured["messages"] == messages

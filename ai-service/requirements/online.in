@@ -10,3 +10,5 @@ uvicorn==0.32.0
 elasticsearch[async]==8.7.0
 markdown-it-py==4.3.0
 linkify-it-py==2.2.0
+pypdfium2==5.15.2
+Pillow==13.0.0

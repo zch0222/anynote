@@ -142,6 +142,8 @@ class Harness:
                 if self._short_circuited(decision):
                     await self._finish_short_circuit(context, events, machine, chain, decision)
                     return
+                if prepared.visual_dispatch is not None:
+                    context.visual_dispatches.append(prepared.visual_dispatch)
                 context.model_turns += 1
                 calls, turn_usage, finish_signal, finish_problem = await self._call_model(
                     context, events, prepared
@@ -155,6 +157,11 @@ class Harness:
                         "textLength": len(context.answer),
                         "toolCalls": len(calls),
                         "usage": turn_usage.model_dump(mode="json", by_alias=True),
+                        "dispatchId": (
+                            prepared.visual_dispatch.dispatch_id
+                            if prepared.visual_dispatch is not None
+                            else None
+                        ),
                     },
                 )
                 if calls and not context.force_finish:
@@ -328,7 +335,10 @@ class Harness:
             context.error_message = INTERNAL_ERROR_MESSAGE
             await self._fail(context, events, machine, chain)
         finally:
-            await chain.invoke(Hook.AFTER_RUN, context)
+            try:
+                await chain.invoke(Hook.AFTER_RUN, context)
+            finally:
+                context.workspace.clear_transient()
 
     async def _call_model(self, context: RunContext, events: EventBus, prepared):
         """调用一次模型并拆出工具调用与完成申请。
@@ -557,6 +567,10 @@ class Harness:
                 "usage": context.usage.model_dump(mode="json", by_alias=True),
                 "toolCalls": context.tool_calls,
                 "firstOutputMs": view.first_output_ms(context),
+                "visualDispatches": [
+                    item.model_dump(mode="json", by_alias=True)
+                    for item in context.visual_dispatches
+                ],
             },
         )
 

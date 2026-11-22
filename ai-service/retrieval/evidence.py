@@ -57,6 +57,7 @@ class EvidenceRegistry:
         retrieval: dict[str, Any] | None,
         selected_reason: str,
         structured: bool = False,
+        position_version: str | None = None,
     ) -> EvidenceItem:
         """登记一条证据；位置已存在时返回已有证据，不覆盖其内容。
 
@@ -74,12 +75,15 @@ class EvidenceRegistry:
         :param retrieval: 命中通道、排名与分数
         :param selected_reason: 进入上下文的原因
         :param structured: 是否为清单、目录、关系结果里的一行
+        :param position_version: 需要参与位置去重的内容版本
         :return: 证据条目
         """
         mooc_id = self._mooc_ids.get(item_key)
         if mooc_id is not None:
             locator = {**(locator or {}), "moocId": mooc_id}
         key = self.position_key(item_key, locator)
+        if position_version is not None:
+            key += f"|version:{position_version}"
         existing_id = self._ids.get(key)
         if existing_id is not None:
             return self._items[existing_id]

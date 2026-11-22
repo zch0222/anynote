@@ -87,6 +87,7 @@ async def test_create_loads_knowledge_agent_and_registers_its_tools():
         "kb_read",
         "kb_query",
         "kb_related",
+        "kb_view_doc",
     }
     assert session.context.outcome == RunOutcome.NOT_FOUND
     registered = {item["function"]["name"] for item in model.calls[0]["tools"]}
@@ -98,6 +99,7 @@ async def test_create_loads_knowledge_agent_and_registers_its_tools():
         "kb_read",
         "kb_query",
         "kb_related",
+        "kb_view_doc",
         "agent_finish",
     }
     assert any(event.type == "run.finished" for event in events)

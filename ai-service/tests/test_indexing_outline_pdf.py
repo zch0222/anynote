@@ -22,6 +22,7 @@ from indexing.parsers.pdf import (
     PdfBookmark,
     PdfLine,
     build_pdf_sections,
+    PDF_EXTRACTOR_VERSION,
     extract_pdf_sections_sync,
     group_lines,
     heading_levels,
@@ -154,7 +155,7 @@ def test_real_pdf_bookmarks_become_heading_tree():
 
 
 def test_mappings_include_outline_summary_and_task_members():
-    """schema 3 保留大纲、摘要与任务成员并补可读状态和源行号。
+    """schema 4 保留既有映射并增加 PDF 页数、内容形态和提取来源字段。
 
     @author 称霸幼儿园
     """
@@ -165,7 +166,11 @@ def test_mappings_include_outline_summary_and_task_members():
     assert chunk["task_member_ids"] == {"type": "long"}
     assert item["readable"] == chunk["readable"] == {"type": "boolean"}
     assert chunk["start_line"] == chunk["end_line"] == {"type": "integer"}
-    assert INDEX_SCHEMA_VERSION == 3
+    assert item["page_count"] == {"type": "integer"}
+    assert item["content_mode"] == item["extractor_version"] == {"type": "keyword"}
+    assert chunk["extraction_mode"] == chunk["source_region_id"] == {"type": "keyword"}
+    assert INDEX_SCHEMA_VERSION == 4
+    assert PDF_EXTRACTOR_VERSION == "pdfplumber-pdfium-rapidocr-v1"
 
 
 class _FakeIndices:
@@ -214,6 +219,7 @@ async def test_old_schema_requires_rebuild():
         await store.ensure_active_indices(None, None)
     active = {"version": 2, "schema_version": INDEX_SCHEMA_VERSION,
               "chunker_version": CHUNKER_VERSION, "embedding_profile_version": EMBEDDING_PROFILE_VERSION,
+              "pdf_extractor_version": PDF_EXTRACTOR_VERSION,
               "item_index": "kn_item_v2", "chunk_index": "kn_chunk_v2"}
     for field, value in (("schema_version", 2), ("chunker_version", "old"),
                          ("embedding_profile_version", "old")):

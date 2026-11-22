@@ -20,6 +20,7 @@ from core.config import RuntimeConfigStore, Settings
 import indexing.es_store as es_store_module
 from indexing.chunking import CHUNKER_VERSION
 from indexing.es_store import build_es_client
+from indexing.parsers.pdf import PDF_EXTRACTOR_VERSION
 from models.catalog import LogicalModelMapping, ModelCatalogSnapshot
 from worker import build_pipeline, validate_internal_secret
 
@@ -86,6 +87,10 @@ def validate_index_documents(
             problems.append(f"item_unreadable:{key}")
         if item.get("chunker_version") != CHUNKER_VERSION:
             problems.append(f"item_chunker_version:{key}")
+        if (
+            item.get("entity_type") == "doc" or item.get("format") == "pdf"
+        ) and item.get("extractor_version") != PDF_EXTRACTOR_VERSION:
+            problems.append(f"item_extractor_version:{key}")
         actual_chunks = chunk_map.get(key, [])
         if len(actual_chunks) != item.get("chunk_count"):
             problems.append(f"chunk_count:{key}")
@@ -106,7 +111,7 @@ def validate_index_documents(
 async def _scan_documents(client, index: str) -> list[dict[str, Any]]:
     """分页读取独立完整性核对所需的非正文索引字段。"""
     fields = [
-        "item_key", "entity_type", "generation", "chunk_count", "chunker_version",
+        "item_key", "entity_type", "format", "extractor_version", "generation", "chunk_count", "chunker_version",
         "content_version", "meta_version", "readable", "chunk_index", "index_status",
     ]
     response = await client.search(index=index, query={"match_all": {}}, size=500, sort=["_doc"], scroll="1m", _source=fields)

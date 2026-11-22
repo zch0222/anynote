@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 
+from clients.file import FileClient
 from clients.knowledge import KnowledgeClient
 from clients.model_provider import ModelProviderClient
 from core.config import HarnessRuntimeSettings, IndexerRuntimeSettings, get_settings
@@ -83,7 +84,11 @@ async def run(seed_path: Path, dataset_path: Path, gateway: str) -> dict[str, An
     es = build_es_client(settings, IndexerRuntimeSettings())
     store = RetrievalSessionStore(KnowledgeClient(settings), KnowledgeIndexReader(es))
     registry = ToolRegistry()
-    register_knowledge_tools(registry, KnowledgeToolContext(store=store, searcher=HybridSearcher(OpenAICompatibleAdapter())))
+    register_knowledge_tools(registry, KnowledgeToolContext(
+        store=store,
+        searcher=HybridSearcher(OpenAICompatibleAdapter()),
+        file_client=FileClient(settings),
+    ))
     plane = ActionPlane(registry)
     agent = AgentDefinition(name="retrieval-eval", version="1", goal="检索层评测", instructions="",
                             tools=list(KNOWLEDGE_TOOL_NAMES))

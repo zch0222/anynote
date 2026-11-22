@@ -6,8 +6,9 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from core.config import HarnessRuntimeSettings
 from harness.action.registry import ToolSpec
-from harness.models import RunContext, RunScope
+from harness.models import RunContext, RunScope, RunWorkspace
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,10 @@ class BoundAction:
     arguments: Any
     scope: RunScope | None = None
     model_snapshot: Any = field(default=None, repr=False)
+    runtime: HarnessRuntimeSettings | None = None
+    workspace: RunWorkspace | None = field(default=None, repr=False)
+    ocr_enabled: bool = False
+    call_id: str = ""
 
 
 @dataclass(frozen=True)

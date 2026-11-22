@@ -150,6 +150,8 @@ class OpenAICompatibleAdapter:
         """
         provider, model = snapshot.resolve(logical_name, contains_knowledge)
         mapping = snapshot.logical_models.get(logical_name)
+        if self._contains_image(messages) and (mapping is None or not mapping.supports_vision):
+            raise ModelConfigurationError()
         reasoning_format = mapping.reasoning_format if mapping else "none"
         passthrough = mapping.reasoning_passthrough if mapping else "none"
         deadline = time.monotonic() + runtime.total_timeout_s
@@ -177,6 +179,18 @@ class OpenAICompatibleAdapter:
                     retry_attempt=attempt + 2,
                     reasoning_interrupted=output_state["reasoning_emitted"],
                 )
+
+    @staticmethod
+    def _contains_image(messages: list[dict[str, Any]]) -> bool:
+        """检查 OpenAI 消息是否包含图像 content part。"""
+        return any(
+            isinstance(message.get("content"), list)
+            and any(
+                isinstance(part, dict) and part.get("type") in {"image_url", "input_image"}
+                for part in message["content"]
+            )
+            for message in messages
+        )
 
     @staticmethod
     def _apply_passthrough(

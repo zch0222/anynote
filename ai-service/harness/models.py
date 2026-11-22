@@ -48,6 +48,61 @@ class HistoryCitation(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
+class VisualImageMeta(BaseModel):
+    """一张临时页面图像的安全审计元数据。
+
+    @author 称霸幼儿园
+    """
+
+    attachment_id: str
+    ref: str
+    title: str
+    page_no: int = Field(ge=1)
+    evidence_id: str
+    content_version: str
+    source_tool: str
+    source_call_id: str
+    media_type: str = "image/jpeg"
+    width: int = Field(ge=1)
+    height: int = Field(ge=1)
+    size_bytes: int = Field(ge=1)
+    sha256: str
+    estimated_tokens: int = Field(ge=0)
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class VisualAttachment(BaseModel):
+    """仅在运行内存中保存的图像字节及其元数据。
+
+    @author 称霸幼儿园
+    """
+
+    data: bytes = Field(repr=False, exclude=True)
+    meta: VisualImageMeta
+
+
+class VisualDispatchRecord(BaseModel):
+    """一次逻辑模型请求实际编译的图像清单。
+
+    @author 称霸幼儿园
+    """
+
+    dispatch_id: str
+    run_id: str
+    model_turn: int = Field(ge=1)
+    logical_model: str
+    provider_key: str
+    model: str
+    images: list[VisualImageMeta] = Field(default_factory=list)
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        protected_namespaces=(),
+    )
+
+
 class ChatMessage(BaseModel):
     """会话消息。
 
@@ -61,6 +116,7 @@ class ChatMessage(BaseModel):
     summary: bool = False
     citations: list[HistoryCitation] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
+    visual_dispatches: list[VisualDispatchRecord] = Field(default_factory=list)
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -240,6 +296,7 @@ class ActionResult(BaseModel):
     duration_ms: int = 0
     action_key: str = Field(default="", exclude=True)
     evidence: list[EvidenceItem] = Field(default_factory=list)
+    visuals: list[VisualAttachment] = Field(default_factory=list)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
@@ -261,6 +318,7 @@ class Observation(BaseModel):
     duration_ms: int = 0
     action_key: str = Field(default="", exclude=True)
     evidence_ids: list[str] = Field(default_factory=list, exclude=True)
+    visuals: list[VisualImageMeta] = Field(default_factory=list)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
@@ -306,6 +364,36 @@ class RunWorkspace:
 
     _results: dict[str, str] = field(default_factory=dict)
     _evidence: dict[str, EvidenceItem] = field(default_factory=dict)
+    _visuals: dict[str, VisualAttachment] = field(default_factory=dict, repr=False)
+    _pdf_cache: dict[tuple[str, str], bytes] = field(default_factory=dict, repr=False)
+
+    def put_visual(self, attachment: VisualAttachment) -> None:
+        """按附件标识保存单次运行内的图像字节。
+
+        :param attachment: 临时视觉附件
+        """
+        self._visuals[attachment.meta.attachment_id] = attachment
+
+    def get_visual(self, attachment_id: str) -> VisualAttachment | None:
+        """按附件标识读取内存图像。
+
+        :param attachment_id: 运行内附件标识
+        :return: 附件或空值
+        """
+        return self._visuals.get(attachment_id)
+
+    def cached_pdf(self, ref: str, content_version: str) -> bytes | None:
+        """读取同资料同版本的运行内 PDF 缓存。"""
+        return self._pdf_cache.get((ref, content_version))
+
+    def cache_pdf(self, ref: str, content_version: str, data: bytes) -> None:
+        """保存同资料同版本的一份 PDF 字节。"""
+        self._pdf_cache.setdefault((ref, content_version), data)
+
+    def clear_transient(self) -> None:
+        """在运行结束时释放图像与 PDF 字节，保留安全元数据。"""
+        self._visuals.clear()
+        self._pdf_cache.clear()
 
     def put_result(self, content: str) -> str:
         """保存大结果并返回引用。
@@ -368,6 +456,8 @@ class RunContext:
     observations: list[Observation] = field(default_factory=list)
     tool_exchanges: list[ToolExchange] = field(default_factory=list)
     workspace: RunWorkspace = field(default_factory=RunWorkspace)
+    visual_dispatches: list[VisualDispatchRecord] = field(default_factory=list)
+    ocr_enabled: bool = False
     usage: TokenUsage = field(default_factory=TokenUsage)
     model_turns: int = 0
     tool_calls: int = 0

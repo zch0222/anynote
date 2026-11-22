@@ -37,6 +37,7 @@ TOOL_RESULT_COUNT_KEYS: dict[str, str] = {
     "kb_read": "chars",
     "kb_query": "rows",
     "kb_related": "related",
+    "kb_view_doc": "pages",
 }
 RESULT_ITEM_LIMIT = 3
 

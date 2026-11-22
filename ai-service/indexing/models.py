@@ -210,6 +210,8 @@ class ParsedSection(BaseModel):
     end_line: int | None = None
     section_start_line: int | None = None
     block_type: Literal["paragraph", "list", "image", "code", "table"] = "paragraph"
+    extraction_mode: Literal["text", "ocr", "none"] = "text"
+    source_region_id: str | None = None
 
 
 class ParsedDocument(BaseModel):
@@ -221,6 +223,9 @@ class ParsedDocument(BaseModel):
     sections: list[ParsedSection] = Field(default_factory=list)
     unextractable: bool = False
     reason: str | None = None
+    page_count: int | None = None
+    content_mode: Literal["text", "mixed", "none"] = "text"
+    extractor_version: str = ""
 
 
 class ChunkPayload(BaseModel):
@@ -246,6 +251,8 @@ class ChunkPayload(BaseModel):
     start_line: int | None = None
     end_line: int | None = None
     authority: str = "original"
+    extraction_mode: Literal["text", "ocr", "none"] = "text"
+    source_region_id: str | None = None
     content_version: str = ""
     meta_version: str = ""
     create_by: int | None = None

@@ -3,7 +3,9 @@
 @author 称霸幼儿园
 """
 
+import asyncio
 import json
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -19,6 +21,40 @@ COUNT_LABELS = {"note": "笔记", "doc": "资料", "mooc": "慕课", "task": "�
 RESULT_FULL_CHARS = 10000
 
 
+class VisualRenderLimiter:
+    """限制单个 Harness 实例内同时执行的 PDF 渲染数量。
+
+    @author 称霸幼儿园
+    """
+
+    def __init__(self, limit: int):
+        self._limit = max(1, limit)
+        self._active = 0
+        self._condition = asyncio.Condition()
+
+    async def configure(self, limit: int) -> None:
+        """热更新并发上限并唤醒等待中的渲染。
+
+        :param limit: 新的实例级并发上限
+        """
+        async with self._condition:
+            self._limit = max(1, limit)
+            self._condition.notify_all()
+
+    @asynccontextmanager
+    async def slot(self):
+        """获取一个渲染槽位，并在成功或异常后释放。"""
+        async with self._condition:
+            await self._condition.wait_for(lambda: self._active < self._limit)
+            self._active += 1
+        try:
+            yield
+        finally:
+            async with self._condition:
+                self._active -= 1
+                self._condition.notify_all()
+
+
 @dataclass
 class KnowledgeToolContext:
     """工具处理器共享的会话仓库与检索管线。
@@ -28,6 +64,9 @@ class KnowledgeToolContext:
 
     store: RetrievalSessionStore
     searcher: HybridSearcher
+    file_client: Any | None = None
+    renderer: Any | None = None
+    render_limiter: VisualRenderLimiter | None = None
 
 
 def dumps(value: Any) -> str:

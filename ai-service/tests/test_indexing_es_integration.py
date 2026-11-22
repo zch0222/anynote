@@ -24,6 +24,8 @@ from indexing.models import (
     SourceDocument,
 )
 from indexing.pipeline import IndexingPipeline
+from indexing.parsers.pdf import PDF_EXTRACTOR_VERSION
+from tests.pdf_samples import make_pdf_sample
 from tests.test_indexing_parsers_chunking import _make_text_pdf_bytes
 from tests.test_indexing_pipeline import (
     StubAdapter,
@@ -589,3 +591,38 @@ async def test_uncertain_alias_recovery_never_deletes_referenced_indices(isolate
         assert active["chunk_index"] == chunk_index
     with pytest.raises(IndexVersionConflictError):
         await store.ensure_active_indices(None, None)
+
+
+async def test_real_ocr_reconcile_publishes_schema4_page_and_extraction_metadata(isolated_es):
+    """真实 ES 与 RapidOCR 对账发布带页码、转写权威性和提取版本的 schema 4 片段。"""
+    client, _proxy, store, _prefix = isolated_es
+    knowledge = StubKnowledgeClient()
+    pipeline, files = _pipeline(store, knowledge)
+    current = pipeline._runtime_store.get()
+    pipeline._runtime_store.update(current.model_copy(update={
+        "indexer": current.indexer.model_copy(update={"ocr_enabled": True}),
+    }))
+    document = _document("ocr-v1", "unused").model_copy(update={
+        "ref": "doc:77", "entity_type": "doc", "format": "pdf", "object_name": "ocr.pdf",
+    })
+    knowledge.export_docs["doc"] = [document]
+    files.blobs["ocr.pdf"] = make_pdf_sample([{"imageText": "Hello Anynote"}])
+
+    result = await pipeline.run_reconcile()
+
+    assert result["indexed"] == 1
+    active = await store.get_active_meta()
+    assert active["schema_version"] == 4
+    assert active["pdf_extractor_version"] == PDF_EXTRACTOR_VERSION
+    item = await client.get(index=active["item_index"], id="doc:77")
+    assert item["_source"]["content_mode"] == "mixed"
+    assert item["_source"]["page_count"] == 1
+    assert item["_source"]["extractor_version"] == PDF_EXTRACTOR_VERSION
+    hits = await _readable_hits(client, active["chunk_index"])
+    assert len(hits) == 1
+    source = hits[0]["_source"]
+    assert "Hello" in source["content"] and "Anynote" in source["content"]
+    assert source["page_no"] == 1
+    assert source["extraction_mode"] == "ocr"
+    assert source["authority"] == "transcript"
+    assert source["source_region_id"] is None

@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from harness.models import EvidenceItem
+from harness.models import EvidenceItem, VisualAttachment
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,7 @@ class ToolOutput:
 
     content: str
     evidence: list[EvidenceItem] | None = None
+    visuals: list[VisualAttachment] | None = None
     partial: bool = False
     diagnostics: dict[str, Any] | None = None
 

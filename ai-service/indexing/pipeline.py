@@ -25,7 +25,7 @@ from indexing.models import (
     SourceDocument,
 )
 from indexing.outline import build_outline, build_summary
-from indexing.parsers.pdf import PdfParseError
+from indexing.parsers.pdf import PDF_EXTRACTOR_VERSION, PdfParseError
 from models.catalog import ModelCatalogSnapshot
 from models.openai_compatible import OpenAICompatibleAdapter
 
@@ -68,6 +68,7 @@ class IndexingPipeline:
             "last_error_type": state.get("last_error_type"),
             "chunker_version": CHUNKER_VERSION,
             "embedding_profile_version": EMBEDDING_PROFILE_VERSION,
+            "pdf_extractor_version": PDF_EXTRACTOR_VERSION,
         }
 
     @property
@@ -198,7 +199,9 @@ class IndexingPipeline:
                     end_ms=draft.end_ms,
                     start_line=draft.start_line,
                     end_line=draft.end_line,
-                    authority=doc.authority,
+                    authority="transcript" if draft.extraction_mode == "ocr" else doc.authority,
+                    extraction_mode=draft.extraction_mode,
+                    source_region_id=draft.source_region_id,
                     content_version=doc.content_version or "",
                     meta_version=doc.meta_version or "",
                     create_by=acl.create_by if acl else None,
@@ -236,7 +239,19 @@ class IndexingPipeline:
             same_meta = (existing.get("meta_version") or "") == (doc.meta_version or "")
             same_title = (existing.get("title") or "") == (doc.title or "")
             complete = existing.get("complete") is True
-            if same_content and same_meta and same_title and complete and existing.get("index_status") in (DOC_STATUS_INDEXED, DOC_STATUS_UNEXTRACTABLE):
+            retryable_unextractable = (
+                existing.get("index_status") == DOC_STATUS_UNEXTRACTABLE and not self._runtime.ocr_enabled
+            )
+            if (
+                same_content
+                and same_meta
+                and same_title
+                and complete
+                and (
+                    existing.get("index_status") == DOC_STATUS_INDEXED
+                    or retryable_unextractable
+                )
+            ):
                 status = existing["index_status"]
                 if publish_source_status and doc.entity_type == "doc" and doc.attributes.get("indexStatus") != status:
                     await self._knowledge.update_doc_index_status(doc.entity_id, status)
@@ -265,6 +280,7 @@ class IndexingPipeline:
                 index_status=DOC_STATUS_UNEXTRACTABLE,
                 delete_existing_chunks=delete_existing_chunks,
                 summary=build_summary(doc.title, [], self._runtime.summary_body_chars),
+                parsed=parsed,
             )
             if publish_source_status and doc.entity_type == "doc":
                 await self._knowledge.update_doc_index_status(doc.entity_id, DOC_STATUS_UNEXTRACTABLE)
@@ -288,6 +304,7 @@ class IndexingPipeline:
             delete_existing_chunks=delete_existing_chunks,
             outline=build_outline(parsed.sections),
             summary=build_summary(doc.title, parsed.sections, self._runtime.summary_body_chars),
+            parsed=parsed,
         )
         if publish_source_status and doc.entity_type == "doc":
             await self._knowledge.update_doc_index_status(doc.entity_id, DOC_STATUS_INDEXED)

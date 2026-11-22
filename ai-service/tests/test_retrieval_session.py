@@ -262,3 +262,25 @@ async def test_scope_knowledge_base_names_are_recorded_on_run():
 
     assert run.scope_knowledge_bases == {item.kb_id: item.name for item in scope.knowledge_bases if item.name}
     assert run.scope_knowledge_bases
+
+
+async def test_history_visual_dispatches_without_dependencies_are_dropped():
+    """缺少权限依赖的历史图片清单 fail-closed，不进入后续运行上下文。"""
+    from harness.middleware import Hook, MiddlewareContext
+    from harness.models import ChatMessage
+
+    client, middleware, run = _retrieval_run([
+        ChatMessage(role="user", content="问题"),
+        ChatMessage(
+            role="assistant",
+            content="带图片的回答",
+            visualDispatches=[{
+                "dispatchId": "d1", "runId": "old", "modelTurn": 2,
+                "logicalModel": "agent_main", "providerKey": "p", "model": "vision", "images": [],
+            }],
+        ),
+    ])
+
+    await middleware.handle(MiddlewareContext(run=run, hook=Hook.BEFORE_RUN))
+
+    assert [(message.role, message.content) for message in run.history] == [("user", "问题")]

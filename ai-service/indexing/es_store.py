@@ -16,16 +16,18 @@ from indexing.models import (
     DOC_STATUS_INDEXED,
     ChunkPayload,
     IndexVersionConflictError,
+    ParsedDocument,
     SourceDocument,
 )
 from indexing.outline import replace_summary_title
+from indexing.parsers.pdf import PDF_EXTRACTOR_VERSION
 
 ITEM_ALIAS = "kn_item"
 CHUNK_ALIAS = "kn_chunk"
 META_INDEX = "kn_meta"
 META_ACTIVE_DOC_ID = "active"
 META_CURSOR_DOC_ID = "cursor"
-INDEX_SCHEMA_VERSION = 3
+INDEX_SCHEMA_VERSION = 4
 EMBEDDING_PROFILE_VERSION = "title-path-body-v1"
 logger = logging.getLogger(__name__)
 
@@ -101,6 +103,9 @@ def _build_item_mappings() -> dict[str, Any]:
             "generation": {"type": "keyword"},
             "chunk_count": {"type": "integer"},
             "chunker_version": {"type": "keyword"},
+            "page_count": {"type": "integer"},
+            "content_mode": {"type": "keyword"},
+            "extractor_version": {"type": "keyword"},
             "create_by": {"type": "long"},
             "permissions": {"type": "keyword"},
             "data_scope": {"type": "integer"},
@@ -135,6 +140,8 @@ def _build_chunk_mappings(embedding_dims: int | None) -> dict[str, Any]:
         "start_line": {"type": "integer"},
         "end_line": {"type": "integer"},
         "authority": {"type": "keyword"},
+        "extraction_mode": {"type": "keyword"},
+        "source_region_id": {"type": "keyword"},
         "content_version": {"type": "keyword"},
         "meta_version": {"type": "keyword"},
         "create_by": {"type": "long"},
@@ -199,6 +206,7 @@ class ElasticsearchKnowledgeStore:
                     "chunk_index": {"type": "keyword"},
                     "embedding_model": {"type": "keyword"},
                     "embedding_dims": {"type": "integer"},
+                    "pdf_extractor_version": {"type": "keyword"},
                     "cursor": {"type": "long"},
                     "latest_cursor": {"type": "long"},
                     "lag_records": {"type": "long"},
@@ -358,6 +366,8 @@ class ElasticsearchKnowledgeStore:
         if active.get("chunker_version") != CHUNKER_VERSION:
             raise IndexVersionConflictError()
         if active.get("embedding_profile_version") != EMBEDDING_PROFILE_VERSION:
+            raise IndexVersionConflictError()
+        if active.get("pdf_extractor_version") != PDF_EXTRACTOR_VERSION:
             raise IndexVersionConflictError()
         active_model = active.get("embedding_model")
         active_dims = active.get("embedding_dims")
@@ -528,6 +538,7 @@ class ElasticsearchKnowledgeStore:
                 "schema_version": INDEX_SCHEMA_VERSION,
                 "chunker_version": CHUNKER_VERSION,
                 "embedding_profile_version": EMBEDDING_PROFILE_VERSION,
+                "pdf_extractor_version": PDF_EXTRACTOR_VERSION,
                 "item_index": item_idx or item_index_name(version),
                 "chunk_index": chunk_idx or chunk_index_name(version),
                 "embedding_model": embedding_model,
@@ -551,6 +562,9 @@ class ElasticsearchKnowledgeStore:
             ids=refs,
             _source=[
                 "ref",
+                "entity_type",
+                "format",
+                "extractor_version",
                 "content_version",
                 "meta_version",
                 "index_status",
@@ -661,6 +675,10 @@ class ElasticsearchKnowledgeStore:
     ) -> bool:
         """判断条目片段数量、代际、切分版本与向量覆盖是否完整。"""
         generation = str(item.get("generation") or "")
+        if (
+            item.get("entity_type") == "doc" or item.get("format") == "pdf"
+        ) and item.get("extractor_version") != PDF_EXTRACTOR_VERSION:
+            return False
         expected_count = item.get("chunk_count")
         if (
             generation
@@ -785,6 +803,7 @@ class ElasticsearchKnowledgeStore:
         delete_existing_chunks: bool = True,
         outline: str = "",
         summary: str = "",
+        parsed: ParsedDocument | None = None,
     ) -> None:
         """写入或替换单篇源文档及其全部分块。
 
@@ -796,6 +815,7 @@ class ElasticsearchKnowledgeStore:
         :param delete_existing_chunks: 新代际发布成功后是否清理旧分块
         :param outline: 条目大纲文本
         :param summary: 条目确定性摘要
+        :param parsed: PDF 页数、内容形态与提取规则版本
         """
         item_key = document.canonical_key
         generation = uuid4().hex
@@ -843,6 +863,9 @@ class ElasticsearchKnowledgeStore:
             "generation": generation,
             "chunk_count": len(chunks),
             "chunker_version": CHUNKER_VERSION,
+            "page_count": parsed.page_count if parsed else None,
+            "content_mode": parsed.content_mode if parsed else "text",
+            "extractor_version": parsed.extractor_version if parsed else "",
             "create_by": acl.create_by if acl else None,
             "permissions": acl.permissions if acl else None,
             "data_scope": acl.data_scope if acl else None,
@@ -877,6 +900,8 @@ class ElasticsearchKnowledgeStore:
                 "start_line": chunk.start_line,
                 "end_line": chunk.end_line,
                 "authority": chunk.authority,
+                "extraction_mode": chunk.extraction_mode,
+                "source_region_id": chunk.source_region_id,
                 "content_version": chunk.content_version,
                 "meta_version": chunk.meta_version,
                 "create_by": chunk.create_by,

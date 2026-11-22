@@ -13,10 +13,10 @@ from retrieval.models import ChunkHit
 CHUNK_SOURCE = [
     "item_key", "ref", "entity_type", "subtype", "kb_id", "title", "chunk_index", "content",
     "section_path", "page_no", "start_ms", "end_ms", "authority", "content_version",
-    "start_line", "end_line",
+    "start_line", "end_line", "extraction_mode", "source_region_id",
 ]
 ITEM_SOURCE = ["item_key", "ref", "entity_type", "subtype", "kb_id", "title", "authority",
-               "content_version", "parent_ref", "summary"]
+               "content_version", "parent_ref", "summary", "content_mode", "page_count"]
 SCAN_PAGE_SIZE = 500
 MAX_SCAN_CHUNKS = 10000
 
@@ -40,6 +40,10 @@ def _hit(source: dict[str, Any], highlight: dict[str, Any] | None = None) -> Chu
         end_line=source.get("end_line"),
         authority=str(source.get("authority") or "original"),
         content_version=str(source.get("content_version") or ""),
+        content_mode=source.get("content_mode"),
+        page_count=source.get("page_count"),
+        extraction_mode=str(source.get("extraction_mode") or "text"),
+        source_region_id=source.get("source_region_id"),
         highlight=fragments[0] if fragments else None,
     )
 
@@ -171,6 +175,30 @@ class KnowledgeIndexReader:
             hit.content = str(source.get("summary") or "")
             hits.append(hit)
         return hits
+
+    async def item_details(self, item_keys: list[str]) -> dict[str, ChunkHit]:
+        """按条目键读取内容形态和页数，供片段命中补充文档级元数据。
+
+        :param item_keys: 条目键列表
+        :return: 条目键到条目元数据命中的映射
+        """
+        if not item_keys:
+            return {}
+        response = await self._client.search(
+            index=ITEM_ALIAS,
+            query={
+                "bool": {
+                    "filter": _readable_filters([{"terms": {"item_key": list(dict.fromkeys(item_keys))}}]),
+                }
+            },
+            size=len(set(item_keys)),
+            _source=ITEM_SOURCE,
+        )
+        result: dict[str, ChunkHit] = {}
+        for item in response["hits"]["hits"]:
+            hit = _hit(item.get("_source") or {})
+            result[hit.item_key] = hit
+        return result
 
     async def chunks_around(self, positions: list[tuple[str, int]], window: int) -> dict[str, dict[int, ChunkHit]]:
         """批量读取命中片段及其前后 window 个相邻片段。

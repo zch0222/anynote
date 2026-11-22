@@ -1,4 +1,4 @@
-"""七个知识工具经行动面执行的成功与失败路径。
+"""八个知识工具经行动面执行的成功与失败路径。
 
 @author 称霸幼儿园
 """
@@ -11,12 +11,15 @@ from elastic_transport import ConnectionError as TransportConnectionError
 from clients._internal import InternalServiceError
 from harness.action.plane import ActionPlane, FatalActionError
 from harness.models import ActionErrorCategory, ActionStatus, RunScope, ToolCall
+from indexing.models import SCANNED_PDF_MESSAGE
 from models.openai_compatible import ModelServiceError
 from retrieval.models import (
     CONTINUE_READ_MESSAGE,
     DOC_UNAVAILABLE_MESSAGE,
     NO_MATCH_MESSAGE,
     NOT_FOUND_MESSAGE,
+    OCR_TRANSCRIPT_MESSAGE,
+    PDF_OCR_DISABLED_MESSAGE,
     SEARCH_UNAVAILABLE_MESSAGE,
     SEMANTIC_UNAVAILABLE_MESSAGE,
     STALE_MESSAGE,
@@ -50,6 +53,7 @@ EXPECTED_SUMMARIES = {
     "kb_read": "阅读原文",
     "kb_query": "查询知识库清单",
     "kb_related": "查找关联内容",
+    "kb_view_doc": "读取资料页面图像",
 }
 
 
@@ -61,8 +65,8 @@ def _payload(result) -> dict:
     return json.loads(result.content)
 
 
-def test_registers_seven_read_only_tools_with_confirmed_summaries():
-    """注册七个只读工具，用户可见的一句话说明与确认文案一致。"""
+def test_registers_eight_read_only_tools_with_confirmed_summaries():
+    """注册八个只读工具，用户可见的一句话说明与确认文案一致。"""
     registry, _store = make_toolkit(FakeKnowledgeClient(), FakeIndexReader())
     for name in KNOWLEDGE_TOOL_NAMES:
         spec = registry.get(name)
@@ -613,3 +617,63 @@ async def test_scope_is_fetched_once_per_run_and_released_after_run():
 
     await RetrievalSessionMiddleware(store).handle(MiddlewareContext(run=run, hook=Hook.AFTER_RUN))
     assert run.run_id not in store
+
+
+async def test_search_returns_document_content_mode_and_chunk_extraction_mode():
+    """PDF 片段命中同时返回文档内容形态、OCR 来源和区域标识。"""
+    client = FakeKnowledgeClient()
+    client.allow("doc:4")
+    index = FakeIndexReader()
+    index.lexical_hits = [chunk(
+        "doc:4", 0, "识别正文", "doc", authority="transcript", page=3,
+        extraction_mode="ocr", source_region_id="p3-r1",
+    )]
+    index.item_metadata["doc:4"] = chunk(
+        "doc:4", None, "", "doc", content_mode="mixed", page_count=16,
+    )
+    registry, _store = make_toolkit(client, index)
+
+    result = await _call(registry, make_tool_run(), "kb_search", {"query": "识别正文"})
+
+    row = _payload(result)["results"][0]
+    assert row["contentMode"] == "mixed"
+    assert row["extractionMode"] == "ocr"
+    assert row["sourceRegionId"] == "p3-r1"
+
+
+async def test_read_ocr_pdf_returns_confirmed_notice_and_transcript_authority():
+    """读取 OCR 片段返回已确认提示，并将混合读取证据标为转写来源。"""
+    client = FakeKnowledgeClient()
+    client.allow("doc:4")
+    index = FakeIndexReader()
+    index.chunks["doc:4"] = [chunk(
+        "doc:4", 0, "识别正文", "doc", authority="transcript", page=1,
+        extraction_mode="ocr",
+    )]
+    registry, _store = make_toolkit(client, index)
+
+    result = await _call(registry, make_tool_run(), "kb_read", {"ref": "doc:4", "start_page": 1})
+
+    assert _payload(result)["notices"] == [OCR_TRANSCRIPT_MESSAGE]
+    assert result.evidence[0].authority == "transcript"
+
+
+async def test_read_empty_pdf_explains_disabled_ocr_or_returns_scan_reason():
+    """零片段 PDF 不再空成功，OCR 与视觉均关闭时返回已确认原因。"""
+    client = FakeKnowledgeClient()
+    client.allow("doc:4")
+    registry, _store = make_toolkit(client, FakeIndexReader())
+
+    disabled = await _call(registry, make_tool_run(), "kb_read", {"ref": "doc:4"})
+    assert disabled.status == ActionStatus.FAILED
+    assert disabled.error_category == ActionErrorCategory.DEPENDENCY_UNAVAILABLE
+    assert disabled.content == PDF_OCR_DISABLED_MESSAGE
+
+    enabled = await _call(
+        registry,
+        make_tool_run(run_id="run-ocr", ocr_enabled=True),
+        "kb_read",
+        {"ref": "doc:4"},
+    )
+    assert enabled.error_category == ActionErrorCategory.DEPENDENCY_UNAVAILABLE
+    assert enabled.content == SCANNED_PDF_MESSAGE

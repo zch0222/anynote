@@ -39,6 +39,15 @@ class HarnessRuntimeSettings(BaseModel):
     reasoning_batch_chars: int = Field(default=64, ge=8, le=2000)
     reasoning_batch_interval_ms: int = Field(default=100, ge=20, le=2000)
     trace_result_max_chars: int = Field(default=10000, ge=500, le=100000)
+    visual_read_enabled: bool = False
+    visual_max_pages_per_call: int = Field(default=2, ge=1, le=10)
+    visual_max_pages_per_run: int = Field(default=4, ge=1, le=100)
+    visual_max_pdf_bytes: int = Field(default=50 * 1024 * 1024, ge=1024, le=500 * 1024 * 1024)
+    visual_render_concurrency: int = Field(default=2, ge=1, le=20)
+    visual_render_timeout_s: float = Field(default=20.0, gt=0, le=120)
+    visual_render_max_memory_mb: int = Field(default=512, ge=128, le=4096)
+    visual_image_max_bytes: int = Field(default=1536 * 1024, ge=1024, le=20 * 1024 * 1024)
+    visual_image_token_estimate: int = Field(default=2000, ge=0, le=100000)
 
     model_config = ConfigDict(
         alias_generator=_kebab_case,
@@ -63,6 +72,12 @@ class IndexerRuntimeSettings(BaseModel):
     pdf_parse_timeout_s: float = Field(default=30.0, gt=0, le=300)
     pdf_max_memory_mb: int = Field(default=512, ge=64, le=4096)
     pdf_max_bytes: int = Field(default=50 * 1024 * 1024, ge=1024, le=500 * 1024 * 1024)
+    ocr_enabled: bool = False
+    ocr_timeout_s: float = Field(default=120.0, gt=0, le=600)
+    ocr_max_memory_mb: int = Field(default=2048, ge=256, le=8192)
+    ocr_max_pages: int = Field(default=200, ge=1, le=1000)
+    ocr_max_regions_per_page: int = Field(default=100, ge=1, le=1000)
+    ocr_render_scale: float = Field(default=2.0, gt=0, le=4)
     es_index_replicas: int = Field(default=0, ge=0, le=5)
     es_request_timeout_s: float = Field(default=15.0, gt=0, le=120)
 

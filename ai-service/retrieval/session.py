@@ -12,12 +12,13 @@ from elasticsearch import ApiError, TransportError
 
 from clients._internal import InternalServiceError
 from clients.knowledge import KnowledgeClient
+from core.config import HarnessRuntimeSettings
 from core.logger import get_logger
 from harness.action.plane import FatalActionError, ToolExecutionError
 from harness.action.policy import BoundAction
 from harness.action.registry import ToolSpec
 from harness.middleware import HarnessMiddleware, Hook, MiddlewareContext, MiddlewareDecision
-from harness.models import ActionErrorCategory, ChatMessage, RunContext, RunScope
+from harness.models import ActionErrorCategory, ChatMessage, RunContext, RunScope, RunWorkspace
 from models.catalog import ModelCatalogSnapshot
 from retrieval.evidence import EvidenceRegistry
 from retrieval.index_reader import KnowledgeIndexReader
@@ -25,6 +26,7 @@ from retrieval.models import (
     KNOWLEDGE_ACCESS_UNAVAILABLE,
     NOT_FOUND_MESSAGE,
     SEARCH_UNAVAILABLE_MESSAGE,
+    VISUAL_RUN_LIMIT_MESSAGE,
     AuthorizationItem,
     KnowledgeScope,
 )
@@ -50,6 +52,9 @@ class RetrievalSession:
         snapshot: ModelCatalogSnapshot | None,
         knowledge: KnowledgeClient,
         index: KnowledgeIndexReader | None,
+        runtime: HarnessRuntimeSettings | None = None,
+        workspace: RunWorkspace | None = None,
+        ocr_enabled: bool = False,
     ):
         self.run_id = run_id
         self._access_token = access_token
@@ -58,6 +63,10 @@ class RetrievalSession:
         self.settings = snapshot.retrieval if snapshot is not None else RetrievalSettings()
         self.knowledge = knowledge
         self.index = index
+        self.runtime = runtime or HarnessRuntimeSettings()
+        self.workspace = workspace or RunWorkspace()
+        self.ocr_enabled = ocr_enabled
+        self._visual_pages = 0
         self.evidence = EvidenceRegistry()
         self._scope: KnowledgeScope | None = None
         self.prefetched = False
@@ -67,6 +76,22 @@ class RetrievalSession:
     def access_token(self) -> str:
         """返回当前运行的用户令牌。"""
         return self._access_token
+
+    def reserve_visual_pages(self, pages: int) -> None:
+        """为一次视觉调用预留运行页数预算，超限时不执行后续读取。
+
+        :param pages: 本次请求页数
+        """
+        if self._visual_pages + pages > self.runtime.visual_max_pages_per_run:
+            raise ToolExecutionError(ActionErrorCategory.INVALID_ARGUMENTS, VISUAL_RUN_LIMIT_MESSAGE)
+        self._visual_pages += pages
+
+    def release_visual_pages(self, pages: int) -> None:
+        """释放失败视觉调用预留的页数预算。
+
+        :param pages: 需要释放的页数
+        """
+        self._visual_pages = max(0, self._visual_pages - pages)
 
     async def scope(self) -> KnowledgeScope:
         """取检索范围，每次运行只向 note 请求一次。
@@ -228,6 +253,9 @@ class RetrievalSessionStore:
                 snapshot=action.model_snapshot,
                 knowledge=self._knowledge,
                 index=self._index,
+                runtime=action.runtime,
+                workspace=action.workspace,
+                ocr_enabled=action.ocr_enabled,
             )
             self._sessions[action.run_id] = session
         return session
@@ -247,6 +275,9 @@ class RetrievalSessionStore:
                 snapshot=run.model_snapshot,
                 knowledge=self._knowledge,
                 index=self._index,
+                runtime=run.runtime,
+                workspace=run.workspace,
+                ocr_enabled=run.ocr_enabled,
             )
             self._sessions[run.run_id] = session
         return session
@@ -320,7 +351,7 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
         history = list(run.request.history)
         dependencies: dict[int, list[tuple[str, str | None]]] = {}
         for position, message in enumerate(history):
-            if message.role == "assistant" and message.dependencies:
+            if message.role == "assistant" and (message.dependencies or message.visual_dispatches):
                 dependencies[position] = [self._split_key(key) for key in message.dependencies]
         if not dependencies:
             return
@@ -337,6 +368,8 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
         else:
             kept: list[ChatMessage] = []
             for position, message in enumerate(history):
+                if message.role == "assistant" and message.visual_dispatches and not message.dependencies:
+                    continue
                 if any(item not in readable for item in dependencies.get(position, [])):
                     self._logger.info(
                         "历史回答的依赖已不可读，整条不进上下文 runId=%s position=%d",
@@ -386,6 +419,10 @@ class RetrievalSessionMiddleware(HarnessMiddleware):
                 arguments=arguments,
                 scope=context.run.request.scope,
                 model_snapshot=context.run.model_snapshot,
+                runtime=context.run.runtime,
+                workspace=context.run.workspace,
+                ocr_enabled=context.run.ocr_enabled,
+                call_id=call_id,
             )
             output = await asyncio.wait_for(
                 self._prefetch_tool.handler(arguments, action),

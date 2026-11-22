@@ -4,6 +4,7 @@
 """
 
 import io
+import queue
 import time
 
 import pytest
@@ -293,7 +294,11 @@ def test_pdf_parser_timeout_raises_limit_error(monkeypatch):
 
     class FakeContext:
         def Queue(self, maxsize=1):
-            return object()
+            class EmptyQueue:
+                def get(self, timeout=None):
+                    raise queue.Empty()
+
+            return EmptyQueue()
 
         def Process(self, target=None, args=(), daemon=True):
             return FakeProcess(target=target, args=args, daemon=daemon)

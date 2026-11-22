@@ -141,7 +141,11 @@ class KnowledgeSourceAdapter:
             raw_bytes = await self._file.download_bytes(object_name, max_bytes=runtime.pdf_max_bytes)
             return await parse_pdf_bytes(
                 raw_bytes,
-                timeout_s=runtime.pdf_parse_timeout_s,
-                max_memory_mb=runtime.pdf_max_memory_mb,
+                timeout_s=runtime.ocr_timeout_s if runtime.ocr_enabled else runtime.pdf_parse_timeout_s,
+                max_memory_mb=runtime.ocr_max_memory_mb if runtime.ocr_enabled else runtime.pdf_max_memory_mb,
+                ocr_enabled=runtime.ocr_enabled,
+                ocr_max_pages=runtime.ocr_max_pages,
+                ocr_max_regions_per_page=runtime.ocr_max_regions_per_page,
+                ocr_render_scale=runtime.ocr_render_scale,
             )
         return parse_document_text(document)

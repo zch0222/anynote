@@ -12,6 +12,7 @@ from pypdf import PdfWriter
 from core.config import RuntimeConfigStore, Settings
 from indexing.chunking import CHUNKER_VERSION
 from indexing.es_store import EMBEDDING_PROFILE_VERSION, INDEX_SCHEMA_VERSION, ElasticsearchKnowledgeStore
+from indexing.parsers.pdf import PDF_EXTRACTOR_VERSION
 from indexing.models import (
     ALL_ENTITY_TYPES,
     DOC_STATUS_INDEXED,
@@ -147,6 +148,7 @@ class InMemoryEsStore:
             "schema_version": INDEX_SCHEMA_VERSION,
             "chunker_version": CHUNKER_VERSION,
             "embedding_profile_version": EMBEDDING_PROFILE_VERSION,
+            "pdf_extractor_version": PDF_EXTRACTOR_VERSION,
         }
 
     async def delete_versioned_indices(self, item_idx, chunk_idx):
@@ -194,6 +196,7 @@ class InMemoryEsStore:
         delete_existing_chunks: bool = True,
         outline: str = "",
         summary: str = "",
+        parsed: ParsedDocument | None = None,
     ) -> None:
         if self.failure_on_upsert or document.ref == self.fail_on_ref:
             raise RuntimeError("injected_store_failure")
@@ -219,6 +222,11 @@ class InMemoryEsStore:
             "generation": document.content_version or "g",
             "chunk_count": len(chunks),
             "chunker_version": CHUNKER_VERSION,
+            "entity_type": document.entity_type,
+            "format": document.format,
+            "extractor_version": parsed.extractor_version if parsed else "",
+            "page_count": parsed.page_count if parsed else None,
+            "content_mode": parsed.content_mode if parsed else "text",
             "permissions": document.acl.permissions if document.acl else None,
             "task_member_ids": document.acl.task_member_ids if document.acl else None,
             "outline": outline,
@@ -639,6 +647,7 @@ async def test_embedding_model_conflict_blocks_incremental_until_rebuild():
         "schema_version": INDEX_SCHEMA_VERSION,
         "chunker_version": CHUNKER_VERSION,
         "embedding_profile_version": EMBEDDING_PROFILE_VERSION,
+        "pdf_extractor_version": PDF_EXTRACTOR_VERSION,
     }
     assert store.swap_calls[-1] == (2, "model-b", 8)
     assert len(store.chunks["kn_chunk_v2"]["note:2#0"]["embedding"]) == 8
@@ -799,7 +808,9 @@ async def test_incremental_store_failure_preserves_cursor_success_time_and_doc_s
         changes=[KnowledgeChangeEvent(id=7, entityType="doc", entityId=7, operation="CREATE")],
         nextCursor=7, latestCursor=7,
     )]
-    pipeline._adapter.extract_document = AsyncMock(return_value=ParsedDocument(sections=[ParsedSection(text="正文")]))
+    pipeline._adapter.extract_document = AsyncMock(return_value=ParsedDocument(
+        sections=[ParsedSection(text="正文")], extractor_version=PDF_EXTRACTOR_VERSION,
+    ))
     store.failure_on_upsert = True
 
     with pytest.raises(RuntimeError, match="injected_store_failure"):
@@ -949,7 +960,9 @@ async def test_rebuild_does_not_publish_doc_status_before_complete_commit(failur
     store.cursor = 3
     previous = dict(store.active_meta)
     knowledge.export_docs["doc"] = [_doc("doc:1", "doc", 1), _doc("doc:2", "doc", 2)]
-    pipeline._adapter.extract_document = AsyncMock(return_value=ParsedDocument(sections=[ParsedSection(text="正文")]))
+    pipeline._adapter.extract_document = AsyncMock(return_value=ParsedDocument(
+        sections=[ParsedSection(text="正文")], extractor_version=PDF_EXTRACTOR_VERSION,
+    ))
     if failure_stage == "second_document":
         store.fail_on_ref = "doc:2"
     elif failure_stage == "verification":
@@ -976,7 +989,9 @@ async def test_rebuild_publishes_doc_status_and_watermark_after_commit():
     knowledge.changes_pages = [KnowledgeChangePage(changes=[], nextCursor=3, latestCursor=8)]
     knowledge.export_docs["doc"] = [_doc("doc:1", "doc", 1), _doc("doc:2", "doc", 2)]
     pipeline._adapter.extract_document = AsyncMock(side_effect=[
-        ParsedDocument(sections=[ParsedSection(text="正文")]), ParsedDocument(unextractable=True),
+        ParsedDocument(
+        sections=[ParsedSection(text="正文")], extractor_version=PDF_EXTRACTOR_VERSION,
+    ), ParsedDocument(unextractable=True, extractor_version=PDF_EXTRACTOR_VERSION),
     ])
     observed = []
 
@@ -1004,7 +1019,9 @@ async def test_rebuild_post_activation_failure_preserves_new_index_for_recovery(
     pipeline, knowledge, _files, store = _regression_pipeline()
     document = _doc("doc:1", "doc", 1)
     knowledge.export_docs["doc"] = [document]
-    pipeline._adapter.extract_document = AsyncMock(return_value=ParsedDocument(sections=[ParsedSection(text="正文")]))
+    pipeline._adapter.extract_document = AsyncMock(return_value=ParsedDocument(
+        sections=[ParsedSection(text="正文")], extractor_version=PDF_EXTRACTOR_VERSION,
+    ))
     if failure_stage == "watermark":
         store.save_watermark = AsyncMock(side_effect=RuntimeError("injected_watermark_failure"))
     else:
@@ -1021,3 +1038,53 @@ async def test_rebuild_post_activation_failure_preserves_new_index_for_recovery(
     result = await pipeline.run_reconcile()
     assert result["skipped"] == 1 and result["indexed"] == 0
     knowledge.update_doc_index_status.assert_awaited_once_with(1, DOC_STATUS_INDEXED)
+
+
+async def test_ocr_enabled_retries_unextractable_and_marks_transcript_authority():
+    """OCR 开启后重试同版本历史不可提取资料，并保留片段来源与转写权威性。"""
+    pipeline, knowledge, files, store = _regression_pipeline()
+    document = SourceDocument(
+        ref="doc:77",
+        entityType="doc",
+        entityId=77,
+        kbId=10,
+        title="扫描件",
+        format="pdf",
+        objectName="pdf/scan.pdf",
+        contentVersion="hash-scan",
+        metaVersion="m1",
+    )
+    knowledge.export_docs["doc"] = [document]
+    files.blobs["pdf/scan.pdf"] = _blank_pdf()
+    assert await pipeline.run_reconcile() == {"unextractable": 1, "indexed": 0, "meta_updated": 0,
+                                               "skipped": 0, "deleted": 0, "failed": 0}
+
+    current = pipeline._runtime_store.get()
+    pipeline._runtime_store.update(current.model_copy(update={
+        "indexer": current.indexer.model_copy(update={"ocr_enabled": True}),
+    }))
+    pipeline._adapter.extract_document = AsyncMock(return_value=ParsedDocument(
+        sections=[ParsedSection(
+            text="识别正文",
+            page_no=1,
+            extraction_mode="ocr",
+            source_region_id="p1-r1",
+        )],
+        page_count=1,
+        content_mode="mixed",
+        extractor_version=PDF_EXTRACTOR_VERSION,
+    ))
+
+    result = await pipeline.run_reconcile()
+
+    assert result["indexed"] == 1
+    assert files.downloads == ["pdf/scan.pdf"]
+    assert pipeline._adapter.extract_document.await_count == 1
+    item = store.items["kn_item_v1"]["doc:77"]
+    chunk = store.chunks["kn_chunk_v1"]["doc:77#0"]
+    assert (item["content_mode"], item["page_count"], item["extractor_version"]) == (
+        "mixed", 1, PDF_EXTRACTOR_VERSION,
+    )
+    assert (chunk["authority"], chunk["extraction_mode"], chunk["source_region_id"], chunk["page_no"]) == (
+        "transcript", "ocr", "p1-r1", 1,
+    )

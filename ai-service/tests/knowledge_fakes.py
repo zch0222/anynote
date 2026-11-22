@@ -6,9 +6,11 @@
 from typing import Any
 
 from clients._internal import InternalServiceError
+from clients.file import FileSizeLimitError
 from core.config import HarnessRuntimeSettings
 from harness.action.registry import ToolRegistry
 from harness.models import AgentDefinition, RunContext, RunRequest, RunScope
+from indexing.models import KnowledgeDocumentBatch, SourceDocument
 from models.catalog import LogicalModelMapping, ModelCatalogSnapshot, ProviderSnapshot
 from retrieval.models import (
     AuthorizationItem,
@@ -35,6 +37,7 @@ class FakeKnowledgeClient:
             knowledgeBases=[ScopeKnowledgeBase(kbId=1, name="库一", role="EDIT", permissions=2)],
         )
         self.readable: dict[tuple[str, str | None], AuthorizationItem] = {}
+        self.batch_documents: dict[str, SourceDocument] = {}
         self.contents: dict[str, list[ContentResult]] = {}
         self.outlines: dict[tuple[str, int | None], OutlineResult] = {}
         self.query_result = QueryResult()
@@ -53,6 +56,13 @@ class FakeKnowledgeClient:
     def _check(self) -> None:
         if self.error is not None:
             raise self.error
+
+    async def documents_batch(self, refs, include_body=True):
+        self.calls.append(("documents_batch", (list(refs), include_body)))
+        self._check()
+        documents = [self.batch_documents[ref] for ref in refs if ref in self.batch_documents]
+        missing = [ref for ref in refs if ref not in self.batch_documents]
+        return KnowledgeDocumentBatch(documents=documents, missingRefs=missing)
 
     async def scope(self, access_token, knowledge_base_ids=None, refs=None):
         self.calls.append(("scope", (access_token, knowledge_base_ids, refs)))
@@ -101,6 +111,24 @@ class FakeKnowledgeClient:
         return sum(1 for call, _ in self.calls if call == name)
 
 
+class FakeFileClient:
+    """按对象名返回 PDF 字节并记录下载上限的文件服务替身。"""
+
+    def __init__(self):
+        self.blobs: dict[str, bytes] = {}
+        self.calls: list[tuple[str, int]] = []
+        self.error: Exception | None = None
+
+    async def download_bytes(self, object_name, max_bytes=50 * 1024 * 1024):
+        self.calls.append((object_name, max_bytes))
+        if self.error is not None:
+            raise self.error
+        data = self.blobs.get(object_name, b"")
+        if len(data) > max_bytes:
+            raise FileSizeLimitError("anynote-file", "文件大小超出解析上限")
+        return data
+
+
 class FakeIndexReader:
     """返回预置命中的索引读取器替身。"""
 
@@ -112,6 +140,7 @@ class FakeIndexReader:
         self.embedding: tuple[str | None, int | None] = (None, None)
         self.passing: set[str] | None = None
         self.parents: dict[str, str] = {}
+        self.item_metadata: dict[str, ChunkHit] = {}
         self.phrase_keys: list[str] = []
         self.error: Exception | None = None
         self.calls: list[tuple[str, Any]] = []
@@ -138,6 +167,11 @@ class FakeIndexReader:
         self.calls.append(("items", (query, filters, size)))
         self._check()
         return list(self.item_hits)
+
+    async def item_details(self, item_keys):
+        self.calls.append(("item_details", list(item_keys)))
+        self._check()
+        return {key: self.item_metadata[key] for key in item_keys if key in self.item_metadata}
 
     async def chunks_around(self, positions, window):
         self.calls.append(("around", (list(positions), window)))
@@ -191,12 +225,15 @@ class FakeEmbedder:
 
 def chunk(item_key: str, index: int | None, content: str = "正文", entity_type: str = "note",
           authority: str = "original", page: int | None = None, version: str = "v1",
-          section: str | None = None, kb_id: int = 1) -> ChunkHit:
+          section: str | None = None, kb_id: int = 1, extraction_mode: str = "text",
+          source_region_id: str | None = None, content_mode: str | None = None,
+          page_count: int | None = None) -> ChunkHit:
     """构造一个片段命中。"""
     ref, _, subtype = item_key.partition("#")
     return ChunkHit(item_key=item_key, ref=ref, entity_type=entity_type, subtype=subtype or None, kb_id=kb_id,
                     title=f"标题-{ref}", chunk_index=index, content=content, section_path=section, page_no=page,
-                    authority=authority, content_version=version)
+                    authority=authority, content_version=version, extraction_mode=extraction_mode,
+                    source_region_id=source_region_id, content_mode=content_mode, page_count=page_count)
 
 
 def snapshot(embedding: bool = False, dims: int | None = 3, **retrieval) -> ModelCatalogSnapshot:
@@ -212,23 +249,32 @@ def snapshot(embedding: bool = False, dims: int | None = 3, **retrieval) -> Mode
 
 
 def make_tool_run(scope: RunScope | None = None, snap: ModelCatalogSnapshot | None = None,
-                  run_id: str = "run-kb") -> RunContext:
+                  run_id: str = "run-kb", runtime: HarnessRuntimeSettings | None = None,
+                  ocr_enabled: bool = False) -> RunContext:
     """构造带全部知识工具的运行上下文。"""
     agent = AgentDefinition(name="kb-test", version="1", goal="测试", instructions="测试",
                             tools=list(KNOWLEDGE_TOOL_NAMES))
     return RunContext(
         request=RunRequest(runId=run_id, input="问题", scope=scope),
         agent=agent,
-        runtime=HarnessRuntimeSettings(),
+        runtime=runtime or HarnessRuntimeSettings(),
         model_snapshot=snap or snapshot(),
         access_token="user-token",
+        ocr_enabled=ocr_enabled,
     )
 
 
 def make_toolkit(client: FakeKnowledgeClient, index: FakeIndexReader | None,
-                 embedder: FakeEmbedder | None = None) -> tuple[ToolRegistry, RetrievalSessionStore]:
-    """注册七个工具并返回注册表与会话仓库。"""
+                 embedder: FakeEmbedder | None = None, file_client: FakeFileClient | None = None,
+                 renderer=None, render_limiter=None) -> tuple[ToolRegistry, RetrievalSessionStore]:
+    """注册八个工具并返回注册表与会话仓库。"""
     store = RetrievalSessionStore(client, index)  # type: ignore[arg-type]
     registry = ToolRegistry()
-    register_knowledge_tools(registry, KnowledgeToolContext(store=store, searcher=HybridSearcher(embedder)))
+    register_knowledge_tools(registry, KnowledgeToolContext(
+        store=store,
+        searcher=HybridSearcher(embedder),
+        file_client=file_client,
+        renderer=renderer,
+        render_limiter=render_limiter,
+    ))
     return registry, store

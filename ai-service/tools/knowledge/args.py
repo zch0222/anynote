@@ -1,4 +1,4 @@
-"""七个知识工具的参数模型。
+"""八个知识工具的参数模型。
 
 @author 称霸幼儿园
 """
@@ -144,3 +144,16 @@ class KbRelatedArgs(_Args):
     )
     page_num: int = Field(default=1, ge=1, description="页码，从 1 开始")
     page_size: int = Field(default=20, ge=1, le=100, description="每页条数")
+
+
+class KbViewDocArgs(_Args):
+    """`kb_view_doc` 按页读取 PDF 图像的参数。
+
+    @author 称霸幼儿园
+    """
+
+    ref: str = Field(pattern=r"^doc:[1-9]\d*$", description="要读取页面图像的资料引用，如 doc:5")
+    start_page: int = Field(alias="startPage", description="起始页（含），从 1 开始")
+    end_page: int | None = Field(default=None, alias="endPage", description="结束页（含），缺省等于起始页")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)

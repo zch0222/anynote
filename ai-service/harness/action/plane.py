@@ -82,6 +82,10 @@ class ActionPlane:
             arguments=arguments,
             scope=run.request.scope,
             model_snapshot=run.model_snapshot,
+            runtime=run.runtime,
+            workspace=run.workspace,
+            ocr_enabled=run.ocr_enabled,
+            call_id=call.call_id,
         )
         policy = self._policy.evaluate(run, action)
         if not policy.allowed:
@@ -101,6 +105,7 @@ class ActionPlane:
                 duration_ms=self._duration(started),
                 action_key=self._key(call),
                 evidence=output.evidence or [],
+                visuals=output.visuals or [],
                 diagnostics=output.diagnostics or {},
             )
         except TimeoutError:
@@ -131,6 +136,8 @@ class ActionPlane:
             reference = run.workspace.put_result(content)
             content = structured_preview(content, limit) or content[: run.runtime.large_result_preview_chars]
         run.workspace.add_evidence(result.evidence)
+        for attachment in result.visuals:
+            run.workspace.put_visual(attachment)
         observation = Observation(
             call_id=result.call_id,
             tool_name=result.tool_name,
@@ -142,6 +149,7 @@ class ActionPlane:
             duration_ms=result.duration_ms,
             action_key=result.action_key,
             evidence_ids=[item.evidence_id for item in result.evidence],
+            visuals=[item.meta for item in result.visuals],
             diagnostics=result.diagnostics,
         )
         run.observations.append(observation)
