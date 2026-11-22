@@ -30,6 +30,7 @@ public class LogicalModelConfigPO {
     private Integer dimensions;
     private String reasoningFormat;
     private String reasoningPassthrough;
+    private Integer supportsVision;
     private Integer enabled;
     private Long version;
     private Long createBy;

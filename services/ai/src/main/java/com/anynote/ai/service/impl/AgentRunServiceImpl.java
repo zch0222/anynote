@@ -30,6 +30,7 @@ import com.anynote.ai.model.vo.AgentRunStatusVO;
 import com.anynote.ai.model.vo.AgentStateEventVO;
 import com.anynote.ai.model.vo.AgentTextDeltaEventVO;
 import com.anynote.ai.model.vo.AgentUsageVO;
+import com.anynote.ai.model.vo.AgentVisualDispatchVO;
 import com.anynote.ai.properties.AiHarnessProperties;
 import com.anynote.ai.run.AgentRunEventTypes;
 import com.anynote.ai.run.AgentRunProcessView;
@@ -97,9 +98,13 @@ public class AgentRunServiceImpl implements AgentRunService {
 
     private static final String TRACE_DEPENDENCIES = "trace.dependencies";
 
+    private static final String TRACE_VISUAL = "trace.visual";
+
     private static final String CANCELLED = "CANCELLED";
 
     private static final Type CITATIONS_TYPE = new TypeToken<List<AgentCitationVO>>() { }.getType();
+
+    private static final Type VISUAL_DISPATCHES_TYPE = new TypeToken<List<AgentVisualDispatchVO>>() { }.getType();
 
     private final ChatConversationService conversationService;
 
@@ -429,12 +434,15 @@ public class AgentRunServiceImpl implements AgentRunService {
         state.lastSequence = event.getSeq() == null ? state.lastSequence : event.getSeq();
         JsonObject raw = event.getData() == null ? new JsonObject() : event.getData();
         if (AgentRunEventTypes.isTrace(event.getType())) {
+            String traceContent = TRACE_VISUAL.equals(event.getType())
+                    ? gson.toJson(gson.fromJson(raw, AgentVisualDispatchVO.class))
+                    : gson.toJson(raw);
             withDbPermit(() -> {
                 eventMapper.insert(AgentRunEventPO.builder()
                         .runId(event.getRunId())
                         .seq(event.getSeq())
                         .type(event.getType())
-                        .content(gson.toJson(raw))
+                        .content(traceContent)
                         .createTime(new Date())
                         .build());
                 return null;
@@ -537,6 +545,8 @@ public class AgentRunServiceImpl implements AgentRunService {
             setup.run().setTokenUsage(gson.toJson(finished.getUsage()));
         }
         state.answerNotices = finished.getAnswerNotices() == null ? List.of() : finished.getAnswerNotices();
+        state.visualDispatches = finished.getVisualDispatches() == null
+                ? List.of() : finished.getVisualDispatches();
         setup.run().setState(runState);
         setup.run().setOutcome(outcome);
         setup.run().setFinishedAt(now);
@@ -585,6 +595,7 @@ public class AgentRunServiceImpl implements AgentRunService {
         answerMessage.setCitations(gson.toJson(state.citations));
         answerMessage.setAnswerNotices(gson.toJson(state.answerNotices));
         answerMessage.setOutcome(outcome);
+        answerMessage.setVisualDispatches(gson.toJson(state.visualDispatches));
         AgentRunProcessView view = state.process;
         view.complete(state.reasoningMaxChars);
         if (view.hasItems()) {
@@ -614,6 +625,7 @@ public class AgentRunServiceImpl implements AgentRunService {
                 .evidence(List.of())
                 .answerNotices(List.of())
                 .unfinished(List.of())
+                .visualDispatches(List.of())
                 .usage(usage == null ? new AgentUsageVO() : usage)
                 .build();
     }
@@ -707,6 +719,7 @@ public class AgentRunServiceImpl implements AgentRunService {
                     .content(message.getContent())
                     .citations(toHarnessCitations(message))
                     .dependencies(readDependencies(message))
+                    .visualDispatches(readVisualDispatches(message))
                     .build());
         }
         return history;
@@ -730,6 +743,25 @@ public class AgentRunServiceImpl implements AgentRunService {
                     .build());
         }
         return citations;
+    }
+
+    /**
+     * 读取历史回答实际发送过的页面图像元数据。
+     *
+     * @param message 历史消息
+     * @return 图片发送清单，无有效记录时为空
+     */
+    private List<AgentVisualDispatchVO> readVisualDispatches(ChatMessage message) {
+        if (message.getVisualDispatches() == null || message.getVisualDispatches().isBlank()) {
+            return List.of();
+        }
+        try {
+            List<AgentVisualDispatchVO> dispatches = gson.fromJson(
+                    message.getVisualDispatches(), VISUAL_DISPATCHES_TYPE);
+            return dispatches == null ? List.of() : dispatches;
+        } catch (JsonParseException ignored) {
+            return List.of();
+        }
     }
 
     /**
@@ -811,6 +843,8 @@ public class AgentRunServiceImpl implements AgentRunService {
         private int reasoningMaxChars = DEFAULT_PROCESS_REASONING_MAX_CHARS;
 
         private List<String> answerNotices = List.of();
+
+        private List<AgentVisualDispatchVO> visualDispatches = List.of();
 
         private long lastSequence;
 

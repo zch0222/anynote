@@ -105,7 +105,11 @@ public class ChatController {
         for (int index = 0; index < views.size() && index < detail.getMessages().size(); index++) {
             ChatMessageVO vo = detail.getMessages().get(index);
             if (vo != null) {
-                vo.setProcess(views.get(index));
+                AgentProcessViewVO view = views.get(index);
+                vo.setProcess(view);
+                if (view == null || !Boolean.FALSE.equals(view.getHidden())) {
+                    vo.setVisualDispatches(List.of());
+                }
             }
         }
     }

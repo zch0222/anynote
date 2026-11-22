@@ -50,6 +50,12 @@ public class LogicalModelConfigUpdateDTO {
     private String reasoningPassthrough;
 
     /**
+     * 是否声明主模型支持 OpenAI 兼容图像输入。
+     */
+    @Schema(description = "是否声明支持 OpenAI 兼容图像输入，仅 agent_main 可开启")
+    private Boolean supportsVision;
+
+    /**
      * 是否启用该逻辑模型。
      */
     @NotNull(message = "请求参数错误")

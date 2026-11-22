@@ -97,6 +97,12 @@ public class ModelProviderSnapshotVO {
          */
         @Schema(description = "推理回传方式：none / empty / original")
         private String reasoningPassthrough;
+
+        /**
+         * 是否声明支持 OpenAI 兼容图像输入。
+         */
+        @Schema(description = "是否声明支持 OpenAI 兼容图像输入")
+        private Boolean supportsVision;
     }
 
     /**

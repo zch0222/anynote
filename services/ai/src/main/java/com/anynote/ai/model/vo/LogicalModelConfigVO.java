@@ -40,6 +40,9 @@ public class LogicalModelConfigVO {
             allowableValues = {"none", "empty", "original"})
     private String reasoningPassthrough;
 
+    @Schema(description = "是否声明支持 OpenAI 兼容图像输入，仅 agent_main 可开启")
+    private Boolean supportsVision;
+
     @Schema(description = "是否启用该逻辑模型")
     private Boolean enabled;
 

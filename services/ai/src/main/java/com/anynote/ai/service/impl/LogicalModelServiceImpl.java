@@ -62,6 +62,7 @@ public class LogicalModelServiceImpl implements LogicalModelService {
                     .logicalName(logicalName)
                     .reasoningFormat("none")
                     .reasoningPassthrough("none")
+                    .supportsVision(false)
                     .enabled(false)
                     .version(0L)
                     .build();
@@ -77,6 +78,10 @@ public class LogicalModelServiceImpl implements LogicalModelService {
             throw new BusinessException(INVALID_REQUEST_MESSAGE, ResCode.USER_REQUEST_PARAM_ERROR);
         }
         boolean isEmbedding = LOGICAL_EMBEDDING.equals(logicalName);
+        boolean supportsVision = Boolean.TRUE.equals(request.getSupportsVision());
+        if (supportsVision && !"agent_main".equals(logicalName)) {
+            throw new BusinessException(INVALID_REQUEST_MESSAGE, ResCode.USER_REQUEST_PARAM_ERROR);
+        }
         Integer dimensions = request.getDimensions();
         if (isEmbedding && dimensions != null
                 && (dimensions < MIN_DIMENSIONS || dimensions > MAX_DIMENSIONS)) {
@@ -125,6 +130,7 @@ public class LogicalModelServiceImpl implements LogicalModelService {
                     .dimensions(dimensions)
                     .reasoningFormat(reasoningFormat)
                     .reasoningPassthrough(reasoningPassthrough)
+                    .supportsVision(supportsVision ? 1 : 0)
                     .enabled(enabled ? 1 : 0)
                     .version(1L)
                     .createBy(operatorId == null ? 0L : operatorId)
@@ -140,6 +146,7 @@ public class LogicalModelServiceImpl implements LogicalModelService {
         existing.setDimensions(dimensions);
         existing.setReasoningFormat(reasoningFormat);
         existing.setReasoningPassthrough(reasoningPassthrough);
+        existing.setSupportsVision(supportsVision ? 1 : 0);
         existing.setEnabled(enabled ? 1 : 0);
         existing.setVersion((existing.getVersion() == null ? 0L : existing.getVersion()) + 1L);
         existing.setUpdateBy(operatorId == null ? 0L : operatorId);
@@ -156,6 +163,7 @@ public class LogicalModelServiceImpl implements LogicalModelService {
                 .dimensions(po.getDimensions())
                 .reasoningFormat(po.getReasoningFormat() == null ? "none" : po.getReasoningFormat())
                 .reasoningPassthrough(po.getReasoningPassthrough() == null ? "none" : po.getReasoningPassthrough())
+                .supportsVision(Integer.valueOf(1).equals(po.getSupportsVision()))
                 .enabled(Integer.valueOf(1).equals(po.getEnabled()))
                 .version(po.getVersion())
                 .updateTime(po.getUpdateTime())

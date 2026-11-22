@@ -44,6 +44,9 @@ public class ChatMessageVO {
     @Schema(description = "按当前权限复核后的过程视图；无法复核时为空")
     private AgentProcessViewVO process;
 
+    @Schema(description = "按当前权限复核后的页面图像发送清单，不含图片字节")
+    private List<AgentVisualDispatchVO> visualDispatches;
+
     private String outcome;
 
     private int role;
@@ -67,6 +70,8 @@ public class ChatMessageVO {
     private static final Type CITATIONS_TYPE = new TypeToken<List<AgentCitationVO>>() { }.getType();
 
     private static final Type ANSWER_NOTICES_TYPE = new TypeToken<List<String>>() { }.getType();
+
+    private static final Type VISUAL_DISPATCHES_TYPE = new TypeToken<List<AgentVisualDispatchVO>>() { }.getType();
 
     /**
      * 将持久化消息转换为接口消息；过程视图须经读取复核后另行设置。
@@ -98,6 +103,18 @@ public class ChatMessageVO {
                 // 历史消息的非 JSON 标注按空数组返回。
             }
         }
+        List<AgentVisualDispatchVO> visualDispatches = List.of();
+        if (message.getVisualDispatches() != null && !message.getVisualDispatches().isBlank()) {
+            try {
+                List<AgentVisualDispatchVO> parsed = gson.fromJson(
+                        message.getVisualDispatches(), VISUAL_DISPATCHES_TYPE);
+                if (parsed != null) {
+                    visualDispatches = parsed;
+                }
+            } catch (RuntimeException ignored) {
+                // 历史消息的非 JSON 图片清单按空数组返回。
+            }
+        }
         return ChatMessageVO.builder()
                 .id(message.getId())
                 .conversationId(message.getConversationId())
@@ -106,6 +123,7 @@ public class ChatMessageVO {
                 .runId(message.getRunId())
                 .citations(citations)
                 .answerNotices(answerNotices)
+                .visualDispatches(visualDispatches)
                 .outcome(message.getOutcome())
                 .role(message.getRole())
                 .type(message.getType())

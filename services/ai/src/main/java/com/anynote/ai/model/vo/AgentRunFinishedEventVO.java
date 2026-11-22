@@ -48,4 +48,7 @@ public class AgentRunFinishedEventVO {
 
     @Schema(description = "运行总耗时毫秒数，与运行记录及过程视图落库值一致")
     private Long durationMs;
+
+    @Schema(description = "本次运行实际发送给模型的页面图像清单")
+    private List<AgentVisualDispatchVO> visualDispatches;
 }

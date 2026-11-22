@@ -109,8 +109,11 @@ class ModelProviderServiceImplTest {
         when(modelProviderMapper.selectAll()).thenReturn(List.of(
                 providerPO(1L, "openai", "sk-openai", 3L, 1),
                 providerPO(2L, "backup", "sk-backup", 9L, 0)));
+        LogicalModelConfigPO mainRow = logicalRow(
+                "agent_main", "openai", "gpt-4o", null, "reasoning_content", "empty", 1, 4L);
+        mainRow.setSupportsVision(1);
         when(logicalModelConfigMapper.selectAll()).thenReturn(List.of(
-                logicalRow("agent_main", "openai", "gpt-4o", null, "reasoning_content", "empty", 1, 4L),
+                mainRow,
                 logicalRow("embedding", "openai", "text-embedding-3-small", 1024, "none", "none", 1, 2L)));
         ModelProviderSnapshotVO snapshot = withLogicalMapper().snapshot();
 
@@ -125,10 +128,12 @@ class ModelProviderServiceImplTest {
         assertTrue(main.getEnabled());
         assertEquals("reasoning_content", main.getReasoningFormat());
         assertEquals("empty", main.getReasoningPassthrough());
+        assertTrue(main.getSupportsVision());
 
         ModelProviderSnapshotVO.LogicalModelVO embedding = snapshot.getLogicalModels().get("embedding");
         assertEquals(1024, embedding.getDimensions());
         assertEquals("none", embedding.getReasoningFormat());
+        assertFalse(embedding.getSupportsVision());
     }
 
     /**

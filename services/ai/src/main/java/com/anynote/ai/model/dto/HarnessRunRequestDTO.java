@@ -1,6 +1,7 @@
 package com.anynote.ai.model.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.anynote.ai.model.vo.AgentVisualDispatchVO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -57,6 +58,12 @@ public class HarnessRunRequestDTO {
          */
         @JsonInclude(JsonInclude.Include.NON_EMPTY)
         private List<String> dependencies;
+
+        /**
+         * 历史回答实际发送过的页面图像元数据，不含图片字节。
+         */
+        @JsonInclude(JsonInclude.Include.NON_EMPTY)
+        private List<AgentVisualDispatchVO> visualDispatches;
 
         /**
          * 历史回答在原轮次中的引用编号与标题。

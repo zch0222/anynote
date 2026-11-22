@@ -58,6 +58,7 @@ class LogicalModelServiceImplTest {
         when(logicalModelConfigMapper.selectByLogicalName("agent_main")).thenReturn(null);
         LogicalModelConfigVO absent = service.getConfig("agent_main");
         assertFalse(absent.getEnabled());
+        assertFalse(absent.getSupportsVision());
         assertEquals("none", absent.getReasoningFormat());
         assertEquals("none", absent.getReasoningPassthrough());
         assertEquals(0L, absent.getVersion());
@@ -212,6 +213,31 @@ class LogicalModelServiceImplTest {
         BusinessException error = assertThrows(BusinessException.class,
                 () -> service.updateConfig("agent_main", dto, 1L));
         assertEquals(ResCode.USER_REQUEST_PARAM_ERROR, error.getErrorCode());
+    }
+
+    /**
+     * 仅 agent_main 可声明视觉能力，其他逻辑模型开启时复用参数错误。
+     */
+    @Test
+    void supportsVisionOnlyForAgentMain() {
+        LogicalModelConfigUpdateDTO mainRequest = updateDto(null, null, null, "none", "none", false);
+        mainRequest.setSupportsVision(true);
+        when(logicalModelConfigMapper.selectByLogicalName("agent_main")).thenReturn(null);
+
+        LogicalModelConfigVO updated = service.updateConfig("agent_main", mainRequest, 7L);
+
+        ArgumentCaptor<LogicalModelConfigPO> captor = ArgumentCaptor.forClass(LogicalModelConfigPO.class);
+        verify(logicalModelConfigMapper).insert(captor.capture());
+        assertEquals(1, captor.getValue().getSupportsVision());
+        assertTrue(updated.getSupportsVision());
+        for (String logicalName : new String[]{"fast", "embedding"}) {
+            LogicalModelConfigUpdateDTO rejected = updateDto(null, null, null, "none", "none", false);
+            rejected.setSupportsVision(true);
+            BusinessException error = assertThrows(BusinessException.class,
+                    () -> service.updateConfig(logicalName, rejected, 7L));
+            assertEquals(ResCode.USER_REQUEST_PARAM_ERROR, error.getErrorCode());
+            assertEquals("请求参数错误", error.getErrorMessage());
+        }
     }
 
     private LogicalModelConfigPO row(String logicalName, String providerKey, String model,

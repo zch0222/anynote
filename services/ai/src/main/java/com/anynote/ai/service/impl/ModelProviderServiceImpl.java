@@ -148,6 +148,7 @@ public class ModelProviderServiceImpl implements ModelProviderService {
                 .dimensions(row.getDimensions())
                 .reasoningFormat(row.getReasoningFormat() == null ? "none" : row.getReasoningFormat())
                 .reasoningPassthrough(row.getReasoningPassthrough() == null ? "none" : row.getReasoningPassthrough())
+                .supportsVision(Integer.valueOf(1).equals(row.getSupportsVision()))
                 .build();
     }
 

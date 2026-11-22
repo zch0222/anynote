@@ -13,6 +13,7 @@
         <result property="citations" column="citations" />
         <result property="answerNotices" column="answer_notices" />
         <result property="process" column="process" />
+        <result property="visualDispatches" column="visual_dispatches" />
         <result property="outcome" column="outcome" />
         <result property="role" column="role" />
         <result property="type" column="type" />
@@ -26,7 +27,7 @@
     </resultMap>
 
     <sql id="BaseColumnList">
-        id, conversation_id, order_index, content, run_id, citations, answer_notices, process, outcome,
+        id, conversation_id, order_index, content, run_id, citations, answer_notices, process, visual_dispatches, outcome,
         role, type, doc_id, is_delete, create_by, create_time, update_by, update_time, remark
     </sql>
 

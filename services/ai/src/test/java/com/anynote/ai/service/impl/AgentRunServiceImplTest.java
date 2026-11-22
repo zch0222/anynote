@@ -381,7 +381,9 @@ class AgentRunServiceImplTest {
                 .type(ChatConversationType.KNOWLEDGE_RETRIEVAL.getValue())
                 .build());
         ChatMessage answer = ChatMessage.builder().orderIndex(1).content("旧回答").role(ChatRole.ASSISTANT.getValue())
-                .type(ChatConversationType.KNOWLEDGE_RETRIEVAL.getValue()).build();
+                .type(ChatConversationType.KNOWLEDGE_RETRIEVAL.getValue())
+                .visualDispatches("[{\"dispatchId\":\"visual-dispatch-01\",\"images\":[]}]")
+                .build();
         answer.setProcess("{\"version\":1,\"items\":[{\"type\":\"retry\",\"id\":\"r1\"}],"
                 + "\"dependencies\":[\"note:12\",\"mooc_item:5#transcript\"]}");
         when(messageMapper.selectConversationMessages(42L)).thenReturn(List.of(
@@ -397,6 +399,7 @@ class AgentRunServiceImplTest {
         List<HarnessRunRequestDTO.Message> history = captor.getValue().getHistory();
         assertThat(history.get(0).getDependencies()).isEmpty();
         assertThat(history.get(1).getDependencies()).containsExactly("note:12", "mooc_item:5#transcript");
+        assertThat(history.get(1).getVisualDispatches().get(0).getDispatchId()).isEqualTo("visual-dispatch-01");
     }
 
     /**
@@ -477,6 +480,37 @@ class AgentRunServiceImplTest {
                 "stepfun".equals(run.getProvider())
                         && Integer.valueOf(2).equals(run.getToolCalls())
                         && Long.valueOf(420L).equals(run.getFirstOutputMs())));
+    }
+
+    /**
+     * 视觉 Trace 按强类型裁剪落库，完成事件中的图片清单保存到助手消息。
+     */
+    @Test
+    void persistsTypedVisualDispatchesWithoutBytes() {
+        String dispatch = "{\"dispatchId\":\"visual-dispatch-01\",\"runId\":\"run-1\","
+                + "\"modelTurn\":2,\"logicalModel\":\"agent_main\",\"providerKey\":\"p\","
+                + "\"model\":\"vision\",\"images\":[{\"attachmentId\":\"visual:01\","
+                + "\"ref\":\"doc:77\",\"title\":\"设计稿\",\"pageNo\":3,\"evidenceId\":\"E4\","
+                + "\"contentVersion\":\"v7\",\"sourceTool\":\"kb_view_doc\",\"sourceCallId\":\"c1\","
+                + "\"mediaType\":\"image/jpeg\",\"width\":20,\"height\":10,\"sizeBytes\":7,"
+                + "\"sha256\":\"abc\",\"estimatedTokens\":2000}],\"extra\":\"discard\"}";
+        stubEvents(
+                "trace.visual", dispatch,
+                "run.finished", "{\"state\":\"COMPLETED\",\"outcome\":\"ANSWERED\","
+                        + "\"evidence\":[\"E4\"],\"answerNotices\":[],\"unfinished\":[],"
+                        + "\"visualDispatches\":[" + dispatch + "]}");
+
+        service.createRun(AgentRunRequestDTO.builder().input("问题").build(), context());
+
+        org.mockito.ArgumentCaptor<AgentRunEventPO> events =
+                org.mockito.ArgumentCaptor.forClass(AgentRunEventPO.class);
+        verify(eventMapper, atLeastOnce()).insert(events.capture());
+        assertThat(events.getValue().getContent()).contains("visual-dispatch-01", "doc:77")
+                .doesNotContain("extra", "data:image", "imageBytes");
+        org.mockito.ArgumentCaptor<ChatMessage> messages = org.mockito.ArgumentCaptor.forClass(ChatMessage.class);
+        verify(messageMapper, atLeastOnce()).updateById(messages.capture());
+        assertThat(messages.getValue().getVisualDispatches()).contains("visual-dispatch-01", "doc:77")
+                .doesNotContain("data:image", "imageBytes");
     }
 
     /**
