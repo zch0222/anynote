@@ -1,10 +1,11 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }));
+const navigation = vi.hoisted(() => ({ pathname: "/m/ai/chat/9" }));
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
-  usePathname: () => "/m/ai/chat/9",
+  usePathname: () => navigation.pathname,
 }));
 
 const store = vi.hoisted(() => ({ renameKey: vi.fn(), hydrate: vi.fn() }));
@@ -48,6 +49,15 @@ function mockDetail(value: Record<string, unknown>) {
 }
 
 describe("MobileChat", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    navigation.pathname = "/m/ai/chat/9";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("已有会话用正式 key，并把历史灌进流式 store", () => {
     mockDetail({
       isPending: false,
@@ -75,14 +85,43 @@ describe("MobileChat", () => {
     expect(screen.getByRole("heading", { name: "新对话" })).toBeInTheDocument();
   });
 
-  it("新会话拿到 id 后迁移 key 并回填路由，不重发请求", () => {
+  it("新会话拿到 id 后同步切换会话并只回填地址栏", () => {
+    navigation.pathname = "/m/ai/chat/new";
+    const replaceState = vi
+      .spyOn(window.history, "replaceState")
+      .mockImplementation((_state, _unused, url) => {
+        navigation.pathname = String(url);
+      });
     mockDetail({ isPending: false, isError: false, data: undefined });
     renderWithProviders(<MobileChat />);
 
     fireEvent.click(screen.getByTestId("chat-panel"));
 
-    expect(store.renameKey).toHaveBeenCalledWith("new", "c42");
-    expect(router.replace).toHaveBeenCalledWith("/m/ai/chat/42");
+    expect(store.renameKey).toHaveBeenCalledExactlyOnceWith("new", "c42");
+    expect(screen.getByTestId("chat-panel")).toHaveAttribute("data-session-key", "c42");
+    expect(useConversationQuery).toHaveBeenLastCalledWith(42);
+    expect(replaceState).toHaveBeenCalledExactlyOnceWith(window.history.state, "", "/m/ai/chat/42");
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "对话" })).toBeInTheDocument();
+  });
+
+  it("真实路由变化后清除本地回填的会话 id", () => {
+    navigation.pathname = "/m/ai/chat/new";
+    vi.spyOn(window.history, "replaceState").mockImplementation((_state, _unused, url) => {
+      navigation.pathname = String(url);
+    });
+    mockDetail({ isPending: false, isError: false, data: undefined });
+    const view = renderWithProviders(<MobileChat />);
+    fireEvent.click(screen.getByTestId("chat-panel"));
+    view.rerender(<MobileChat />);
+    expect(screen.getByTestId("chat-panel")).toHaveAttribute("data-session-key", "c42");
+
+    navigation.pathname = "/m/ai/chat/new";
+    view.rerender(<MobileChat />);
+
+    expect(screen.getByTestId("chat-panel")).toHaveAttribute("data-session-key", "new");
+    expect(useConversationQuery).toHaveBeenLastCalledWith(0);
+    expect(screen.getByRole("heading", { name: "新对话" })).toBeInTheDocument();
   });
 
   it("已有会话里不再触发路由回填", () => {
