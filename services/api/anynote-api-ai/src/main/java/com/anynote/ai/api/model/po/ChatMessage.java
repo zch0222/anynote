@@ -67,6 +67,11 @@ public class ChatMessage extends BaseEntity {
     private String process;
 
     /**
+     * JSON 格式的页面图像发送清单，不含图片字节。
+     */
+    private String visualDispatches;
+
+    /**
      * Role: 0 for user, 1 for bot.
      */
     private int role;
@@ -90,8 +95,8 @@ public class ChatMessage extends BaseEntity {
 
     @Builder
     public ChatMessage(Long id, Long conversationId, Integer orderIndex, String content, int role, int type,
-                       String runId, String citations, String answerNotices, String outcome, Long docId, int deleted,
-                       Long createBy, Date createTime, Long updateBy, Date updateTime, String remark,
+                       String runId, String citations, String answerNotices, String outcome, String visualDispatches,
+                       Long docId, int deleted, Long createBy, Date createTime, Long updateBy, Date updateTime, String remark,
                        Map<String, Object> params) {
         super(createBy, createTime, updateBy, updateTime, remark, params);
         this.id = id;
@@ -102,6 +107,7 @@ public class ChatMessage extends BaseEntity {
         this.citations = citations;
         this.answerNotices = answerNotices;
         this.outcome = outcome;
+        this.visualDispatches = visualDispatches;
         this.role = role;
         this.type = type;
         this.docId = docId;
