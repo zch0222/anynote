@@ -4,7 +4,7 @@
 依据：[`docs/ai-refactor/AI_CHAT_SIDE_PANEL_CODE_REVIEW.md`](../ai-refactor/AI_CHAT_SIDE_PANEL_CODE_REVIEW.md)
 方案：[`docs/ai-refactor/AI_CHAT_SIDE_PANEL_PLAN.md`](../ai-refactor/AI_CHAT_SIDE_PANEL_PLAN.md)
 范围：`apps/web`；不改后端、OpenAPI、SQL、Nacos。
-状态：**高 3、中 4、低 4 共 11 项已修复；单测与真实栈 E2E 通过；首屏预算仍失败（310.7 / 310.0 KB），M19.7 未关闭。**
+状态：**高 3、中 4、低 4 共 11 项已修复；单测与真实栈 E2E 通过；首屏预算仍失败（310.7 / 310.0 KB，2026-11-23 用户确认接受 310.7 KB），M19.7 未关闭。**
 
 ## 概览
 
@@ -28,7 +28,7 @@
 | `pnpm --filter web typecheck` | passed |
 | `pnpm exec biome check`（本批文件） | passed |
 | `NEXT_DISABLE_STANDALONE=1 NEXT_PUBLIC_APP_URL=http://localhost:3107 pnpm --filter web build` | 编译、类型检查与 37 个静态页生成成功 |
-| `pnpm --filter web bundle:budget` | **FAIL**：`/ai/chat` 与 `/ai/chat/[id]` **310.7 / 310.0 KB**；移动端 247.3 / 250 通过；编辑器 18.0 / 250 通过 |
+| `pnpm --filter web bundle:budget` | **FAIL**：`/ai/chat` 与 `/ai/chat/[id]` **310.7 / 310.0 KB**（2026-11-23 用户确认接受 310.7 KB）；移动端 247.3 / 250 通过；编辑器 18.0 / 250 通过 |
 | `python tmp/m19-side-panel/run_e2e.py` | **20 passed / 10 skipped，约 1.8 分钟**；`playwrightPassed=true`、`agentMainRestored=true`、`providerDeleted=true`、`containerRemoved=true` |
 
 ## 侧栏容器与持久化
@@ -87,4 +87,4 @@
 3. **程序化导航统一走守卫**：桌面笔记用 `confirmLeave`，移动宿主用 `requestLeave`；以后新增「打开完整页面」类入口不要再直接 `router.push`。
 4. **持久化只认严格会话键**：`chat:new*` 读取时忽略但不回写；恢复校验 `kind`/`ref.type` 与 id 唯一，避免旧数据让宿主渲染抛错。
 5. **删除会话清理不依赖 UI 挂载**：`persisted-surfaces.ts` 按需加载并遍历所有用户键；会话 id 全局唯一，删除后任何用户都不应再恢复该标签。
-6. **首屏预算仍红**：`/ai/chat` 310.7 / 310.0 KB，比此前接受的 310.6 多 0.1 KB；本轮没有上调预算，门禁保持失败。真实栈 E2E 编排报告里的 `harnessConfigRestored` / `harnessPrefetchRestored` 为 false（脚本比较口径），人工读取 Nacos 确认 `prefetch-enabled=false`。
+6. **首屏预算仍红**：`/ai/chat` 310.7 / 310.0 KB（超 0.7 KB）；2026-11-23 用户确认接受该值，本轮没有上调预算，门禁保持失败。真实栈 E2E 编排报告里的 `harnessConfigRestored` / `harnessPrefetchRestored` 为 false（脚本比较口径），人工读取 Nacos 确认 `prefetch-enabled=false`。

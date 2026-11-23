@@ -1082,5 +1082,5 @@ Python 全量多轮在 455 passed、20 skipped 与 1 failed、454 passed 之间�
 - 可访问性与注册表：移动 `tabpanel` 的 `aria-labelledby` 指向真实标题；`multiple` 与 `mobile` 接通，`keepMounted` 保留并注明未消费。
 - 测试：全量 2308 tests 中 **2305 passed / 3 failed**（既有任务日期控件）；本批相关 17 files / 131 tests 全通过；`tabs.test.tsx` 改为 openapi-fetch 客户端打桩并补齐五类正文异常矩阵。
 - 真实栈 E2E：**20 passed / 10 skipped**，新增移动返回取消、桌面/移动完整页面取消、账号切换 4 条用例全部通过。
-- `/ai/chat` 首屏 **310.7 / 310.0 KB**：预算未调整，门禁仍失败；此前接受 310.6 KB，0.1 KB 增量待确认。M19.7 仍未关闭。
+- `/ai/chat` 首屏 **310.7 / 310.0 KB**：2026-11-23 用户确认接受 310.7 KB（超 0.7 KB），预算未调整，门禁仍失败。M19.7 仍未关闭。
 - 未验证：协同构建下双端编辑、编辑器浮层、移动软键盘与真实设备。
