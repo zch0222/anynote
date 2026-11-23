@@ -3,12 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { PanelRightOpen } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type ReactNode, createContext, useContext, useRef, useState } from "react";
+import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   SidePanelLinkContext,
   type SidePanelOpenInput,
   type SidePanelOpenOptions,
 } from "./link-context";
+import { SIDE_PANEL_OPEN_KEY } from "./storage-keys";
 
 /**
  * 首屏常驻的侧栏入口：展开按钮、懒加载宿主与宿主状态桥。
@@ -33,11 +34,28 @@ export function useSidePanelShell(): SidePanelShell | null {
   return useContext(SidePanelShellContext);
 }
 
-export function SidePanelProvider({ children }: { children: ReactNode }) {
+export function SidePanelProvider({
+  children,
+  restoreOpen = true,
+}: {
+  children: ReactNode;
+  /** 移动端加载时忽略展开状态。 */
+  restoreOpen?: boolean;
+}) {
   const [mounted, setMounted] = useState(false);
   const [pending, setPending] = useState<PendingOpen | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const seq = useRef(0);
+  const restored = useRef(false);
+
+  useEffect(() => {
+    if (!restoreOpen || restored.current) return;
+    restored.current = true;
+    if (localStorage.getItem(SIDE_PANEL_OPEN_KEY) !== "1") return;
+    localStorage.removeItem(SIDE_PANEL_OPEN_KEY);
+    setMounted(true);
+    setPanelOpen(true);
+  }, [restoreOpen]);
 
   const open = (input: SidePanelOpenInput | null, options?: SidePanelOpenOptions) => {
     seq.current += 1;

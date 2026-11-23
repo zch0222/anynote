@@ -8,12 +8,20 @@ import {
   targetFromToolItem,
 } from "@/lib/ai/resource-target";
 import { cn } from "@/lib/utils";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { PendingOpen } from "../launcher";
 import { computeLayout } from "../layout";
 import { readSidePanelWidth, writeSidePanelWidth } from "../panel-width";
 import { useSidePanelPersistence } from "../persistence";
 import { RESOURCE_TYPE_LABEL } from "../resource-labels";
+import { setSidePanelOpenFlag } from "../storage-keys";
 import { useSidePanelStore } from "../store";
 import { TabPanel } from "../tab-panel";
 import type { TabRecord } from "../types";
@@ -71,7 +79,12 @@ export function SidePanelHost({
   const lastPendingSeq = useRef(0);
   const initialized = useRef(false);
 
-  useSidePanelPersistence({ onHydrated: onPanelOpenChange });
+  useSidePanelPersistence({
+    onHydrated: (hasOpen) => {
+      setSidePanelOpenFlag(hasOpen);
+      onPanelOpenChange(hasOpen);
+    },
+  });
 
   useLayoutEffect(() => {
     if (!panelOpen) return;
@@ -101,6 +114,12 @@ export function SidePanelHost({
       return;
     }
     onPanelOpenChange(storeOpen);
+    setSidePanelOpenFlag(storeOpen);
+    if (!storeOpen) {
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>('[aria-label="展开右侧栏"]')?.focus();
+      });
+    }
   }, [storeOpen, onPanelOpenChange]);
 
   useEffect(() => {
@@ -149,11 +168,24 @@ export function SidePanelHost({
     if (!useSidePanelStore.getState().surfaces[surface]?.open) onPanelOpenChange(false);
   };
 
+  /** 覆盖呈现时，焦点在标签条或标签头上按 Esc 收起。 */
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (layout.mode !== "overlay" || event.key !== "Escape") return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (!target.closest("[data-side-panel-bar]") && !target.closest("[data-side-panel-header]")) {
+      return;
+    }
+    event.preventDefault();
+    collapse();
+  };
+
   return (
     <aside
       ref={asideRef}
       aria-label="右侧栏"
       data-testid="side-panel"
+      onKeyDown={handleKeyDown}
       className={cn(
         "flex min-h-0 flex-col bg-surface",
         layout.mode === "overlay"

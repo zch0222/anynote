@@ -8,6 +8,7 @@ import { useChatStreamStore } from "@/features/ai/use-chat-stream";
 import { useConversationQuery } from "@/features/ai/use-conversations";
 import { SidePanelProvider, useSidePanelShell } from "@/features/side-panel/launcher";
 import { SidePanelMobileHost } from "@/features/side-panel/mobile-launcher";
+import { readSidePanelTabCount } from "@/features/side-panel/storage-keys";
 import { renameSidePanelSurface } from "@/features/side-panel/surface-events";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -74,7 +75,7 @@ export function MobileChat({ conversationId, initialBaseId }: MobileChatProps) {
   };
 
   return (
-    <SidePanelProvider>
+    <SidePanelProvider restoreOpen={false}>
       <MobileChatScreen
         title={title}
         sessionKey={sessionKey}
@@ -111,6 +112,12 @@ function MobileChatScreen({
   const shell = useSidePanelShell();
   const [tabCount, setTabCount] = useState(0);
   const showOpened = shell !== null && tabCount > 0 && !shell.panelOpen;
+
+  useEffect(() => {
+    if (tabCount > 0) return;
+    const stored = readSidePanelTabCount();
+    if (stored > 0) setTabCount(stored);
+  }, [tabCount]);
 
   return (
     <>

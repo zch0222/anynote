@@ -24,6 +24,7 @@ import type { PendingOpen } from "../launcher";
 import { useSidePanelPersistence } from "../persistence";
 import { getTabDefinition } from "../registry";
 import { RESOURCE_TYPE_LABEL } from "../resource-labels";
+import { setSidePanelTabCount } from "../storage-keys";
 import { useSidePanelStore } from "../store";
 import { TabPanel } from "../tab-panel";
 import { UNREADABLE_TITLE } from "../tabs/shared";
@@ -78,6 +79,7 @@ export function SidePanelMobileHost({
   useSidePanelPersistence({ ignoreOpen: true });
 
   useEffect(() => {
+    setSidePanelTabCount(tabs.length);
     onTabCountChange(tabs.length);
   }, [tabs.length, onTabCountChange]);
 

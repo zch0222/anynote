@@ -56,7 +56,10 @@ export function TabBar({
   };
 
   return (
-    <div className="flex h-14 shrink-0 items-center gap-1 border-b border-separator px-2">
+    <div
+      data-side-panel-bar
+      className="flex h-14 shrink-0 items-center gap-1 border-b border-separator px-2"
+    >
       <div
         ref={listRef}
         role="tablist"
@@ -132,6 +135,16 @@ function TabButton({
     ref.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [active]);
 
+  /** 关闭当前标签；焦点原本在标签内时移到新的活动标签。 */
+  const closeAndFocus = () => {
+    const hadFocus = ref.current?.contains(document.activeElement) ?? false;
+    onClose();
+    if (!hadFocus) return;
+    const nextId = useSidePanelStore.getState().surfaces[surface]?.activeId;
+    if (!nextId) return;
+    requestAnimationFrame(() => document.getElementById(tabDomId(surface, nextId))?.focus());
+  };
+
   return (
     <div
       ref={ref}
@@ -145,7 +158,7 @@ function TabButton({
       onAuxClick={(event) => {
         if (event.button !== 1) return;
         event.preventDefault();
-        onClose();
+        closeAndFocus();
       }}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
@@ -170,7 +183,7 @@ function TabButton({
         title={`关闭「${label}」`}
         onClick={(event) => {
           event.stopPropagation();
-          onClose();
+          closeAndFocus();
         }}
         className="ml-0.5 shrink-0 rounded-sm p-0.5 text-label-tertiary opacity-0 transition-opacity outline-none hover:bg-fill hover:text-label focus-visible:opacity-100 group-hover/tab:opacity-100 group-data-[active]/tab:opacity-100 [@media(pointer:coarse)]:opacity-100"
       >

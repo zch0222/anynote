@@ -1052,21 +1052,21 @@ Python 全量多轮在 455 passed、20 skipped 与 1 failed、454 passed 之间�
 
 ## M19 AI 对话右侧栏（2026-11-22）
 
-方案：[AI_CHAT_SIDE_PANEL_PLAN.md](./AI_CHAT_SIDE_PANEL_PLAN.md)；清单：[docs/changelist/2026-11-22-ai-chat-side-panel.md](../changelist/2026-11-22-ai-chat-side-panel.md)。
+方案：[AI_CHAT_SIDE_PANEL_PLAN.md](./AI_CHAT_SIDE_PANEL_PLAN.md)；实现清单：[docs/changelist/2026-11-22-ai-chat-side-panel.md](../changelist/2026-11-22-ai-chat-side-panel.md)；补做与验收清单：[docs/changelist/2026-11-22-ai-chat-side-panel-acceptance.md](../changelist/2026-11-22-ai-chat-side-panel-acceptance.md)。
 
 ### 已实现
 
 - M19.1 资源模型与点击策略：`resource-target.ts`、引用/工具条目左键进侧栏、修饰键与中键保持原生、`useLeaveGuard` 跳过 `[data-side-panel-links]`。
 - M19.2 容器核心：按宿主分区的标签 store（去重、导航版本、10 标签淘汰、守卫、迁移）、静态注册表、按用户持久化（只存标识、50 分区、损坏删键、登出清理）、宽度规则与偏好。
-- M19.3 桌面宿主：推入/覆盖、临时收起会话列表、拖拽条、标签条键盘与中键、标签头、空态、播报、展开按钮；`ChatPanel` 页头插槽与消息列表标记。
+- M19.3 桌面宿主：推入/覆盖、临时收起会话列表、拖拽条、标签条键盘与中键、标签头、空态、播报、展开按钮；`ChatPanel` 页头插槽与消息列表标记。2026-11-22 补做覆盖态 Esc、收起后焦点回展开按钮、关闭标签后焦点到新活动标签。
 - M19.4 只读标签：资料（页码）、慕课（目录）、慕课条目（视频秒数/文档）、任务（成员单条端点/管理员端点）、知识库（最近笔记与资料）；`VideoPlayer` 增加 `navigationKey` 原地 seek。
 - M19.5 笔记标签：侧栏内可编辑，复用保存/冲突/协同；`useNoteEditorSession` 新增 `locate` 与 `syncOnVisible`；`useSaveNote` 新增 `applyServerVersion`；新窗口先 `flush` 再打开。
 - M19.6 移动覆盖层：全屏、关闭/标题/新窗口/更多、标签胶囊、`pushState`/`popstate` 返回手势；`MobileNoteEditor` 拆出正文层供覆盖层复用；关闭后「已打开的内容（n）」入口。
-- M19.7 E2E 代码：`agent-retrieval.ts` 改为侧栏/覆盖层断言，新增修饰键新标签页、去重/刷新恢复、1280/1024 布局用例；**本次未执行**。
+- M19.7 E2E：`agent-retrieval.ts` 改为侧栏/覆盖层断言，新增修饰键新标签页、去重/刷新恢复、1280/1024 布局、资料第 2 页、移动端返回手势/编辑保存/登出清理/入口用例；2026-11-22 真实栈执行 **16 passed / 6 skipped**，并生成 10 张视觉验收截图。
 
 ### 门禁与未关闭项
 
-- 本批 22 files / 176 tests passed；全量 web 2245 tests 中 2242 passed、3 failed（既有任务日期控件 5s 超时，未改相关代码）。
+- 本批 3 个测试文件 / 18 tests passed；全量 web 2250 tests 中 2247 passed、3 failed（既有任务日期控件 5s 超时，未改相关代码）。
 - `pnpm --filter web typecheck`、本批 Biome、构建编译与静态页生成通过；Windows standalone 符号链接复制报 `EPERM`（环境）。
-- **`/ai/chat` 首屏 310.3 / 310.0 KB，超 0.3 KB**：已把 store、注册表、正文、宽度偏好、布局计算与资源解析移入懒加载块，未上调预算；**2026-11-22 用户确认接受 0.3 KB 超预算，不调整预算，门禁记录为未通过**。
-- V2/V3/V4 与 M19.7 的真实浏览器/E2E 结论未验证；本次按用户确认的 Q3-A 不执行 E2E、Lighthouse 与视觉验收。
+- **`/ai/chat` 首屏 310.5 / 310.0 KB，超 0.5 KB**：刷新恢复修复后比此前接受的 310.3 增加 0.2 KB；预算未调整，**需要重新确认**，门禁记录为未通过。
+- E2E 16 passed / 6 skipped；Lighthouse 桌面全绿，移动端 `/m/ai/chat` 通过、`/m/dashboard` 与 `/m/notes` 未达门槛（用 Docker web `:3000` 复跑同样失败，与本批无关）；视觉截图已生成待人工确认。

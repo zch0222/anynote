@@ -1,7 +1,7 @@
 # AI 对话右侧栏：资源引用在侧栏打开
 
 > 文档版本：v0.2（实施记录） | 创建 2026-11-22
-> 状态：**M19.1–M19.6 已实现并提交（`63eb33a`；M19.3 桌面覆盖态 Esc 未实现）；M19.7 的 E2E 代码已编写、未执行；`/ai/chat` 首屏 310.3 / 310.0 KB，超 0.3 KB 已由用户确认接受（预算未调整，门禁记录为未通过）；E2E、Lighthouse 与真实浏览器视觉验收未执行**
+> 状态：**M19.1–M19.6 已实现（`63eb33a`）；2026-11-22 补做桌面覆盖态 Esc、焦点规则与刷新恢复，真实栈 E2E 16 passed / 6 skipped，Lighthouse 桌面全绿、移动端仅无关路由未达门槛；`/ai/chat` 首屏 310.5 / 310.0 KB，超 0.5 KB（此前接受 0.3 KB，需重新确认）；视觉截图已生成待人工确认；改动未提交**
 > 范围：`apps/web`。桌面 `/ai/chat`、`/ai/chat/[id]`，移动 `/m/ai/chat`、`/m/ai/chat/[id]`。**不改后端、OpenAPI 契约、SQL、Nacos**，因此不需要 OpenSpec 提案
 > 关联：[知识检索方案 §8.2 / §11](./KNOWLEDGE_RETRIEVAL_PLAN.md#82-引用)、[回答文本处理方案](./AGENT_OUTPUT_TEXT_PLAN.md)、
 > [运行过程展示方案 §5.7](./AGENT_TRACE_VIEW_PLAN.md#57-对话界面)、[AI 里程碑](./AI_MILESTONES.md)
@@ -839,3 +839,22 @@ flowchart LR
 - **桌面覆盖态 Esc 未实现**：移动覆盖层已在标签头绑定 Esc；桌面 `SidePanelHost` 的标签条尚未绑定。需要补做或确认不做。
 - M19.7 的 E2E 用例已写入 `apps/web/e2e/support/agent-retrieval.ts`，本次未执行；V2/V3/V4 的真实浏览器结论待 E2E 阶段回写。
 - 逐文件清单见 [`docs/changelist/2026-11-22-ai-chat-side-panel.md`](../changelist/2026-11-22-ai-chat-side-panel.md)。
+
+### 2026-11-22 补做与验收（第二批）
+
+**补做**
+
+- 桌面覆盖态 Esc：焦点在标签条或标签头时收起，焦点在正文内不处理。
+- 焦点规则：收起侧栏后焦点回到「展开右侧栏」；关闭活动标签后焦点移到新的活动标签。
+- 刷新恢复：桌面首屏读取并消费全局展开标记，宿主加载后恢复展开；移动端 `restoreOpen={false}` 始终从关闭开始。
+- 移动端入口：记录标签数量，刷新后「已打开的内容（n）」仍可重新展开并恢复标签。
+
+**验证**
+
+- 本批 3 个单测文件 / 18 条通过；全量 196 files / 2250 tests，**2247 passed / 3 failed**（既有任务日期控件 5s 超时，未改相关代码）。
+- `typecheck`、本批 Biome、生产构建通过。
+- 真实栈 E2E（脚本化供应商）：**16 passed / 6 skipped**，桌面与移动端用例全部通过；视觉截图用例同批执行。
+- Lighthouse 桌面：五条路由全部通过（`/ai/chat` Performance 99 / Accessibility 96）；移动端 `/m/ai/chat` 88 / 96 通过，但 `/m/dashboard` 79、`/m/notes` 83 未达 85；改用 Docker web `:3000` 复跑同样失败，判定与本批无关。
+- 视觉截图：`tmp/m19-side-panel/visual/` 下 10 张（桌面 1920/1440/1280/1024 × 深浅，移动 390×844 × 深浅），待人工确认。
+- `/ai/chat` 首屏 **310.5 / 310.0 KB**，超 0.5 KB；此前接受的是 310.3（超 0.3 KB），需重新确认。
+- 改动未提交。逐文件清单见 [`docs/changelist/2026-11-22-ai-chat-side-panel-acceptance.md`](../changelist/2026-11-22-ai-chat-side-panel-acceptance.md)。

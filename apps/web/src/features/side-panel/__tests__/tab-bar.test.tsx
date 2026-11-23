@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/notes/use-note", () => ({
   useNoteQuery: (id: number) => ({ data: { title: `笔记 ${id}` }, error: null }),
 }));
 
+import { tabDomId } from "@/features/side-panel/desktop/ids";
 import { TabBar } from "@/features/side-panel/desktop/tab-bar";
 import { useSidePanelStore } from "@/features/side-panel/store";
 import type { TabId } from "@/features/side-panel/types";
@@ -90,6 +91,19 @@ describe("侧栏标签条", () => {
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "关闭「笔记 1」" }));
     expect(useSidePanelStore.getState().surfaces[SURFACE]?.tabs).toHaveLength(1);
+  });
+
+  /** 关闭活动标签后，焦点移到新的活动标签。 */
+  it("关闭活动标签后焦点移到新的活动标签", async () => {
+    renderBar();
+    const close = screen.getByRole("button", { name: "关闭「笔记 2」" });
+    close.focus();
+    fireEvent.click(close);
+
+    const surface = useSidePanelStore.getState().surfaces[SURFACE];
+    expect(surface?.tabs).toHaveLength(1);
+    const next = document.getElementById(tabDomId(SURFACE, surface?.activeId as TabId));
+    await waitFor(() => expect(next).toHaveFocus());
   });
 
   /** 最大化 / 还原按钮按状态切换，规则 4 下不渲染。 */

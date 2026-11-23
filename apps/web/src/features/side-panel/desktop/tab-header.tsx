@@ -38,7 +38,10 @@ export function TabHeader({
   onOpenHistory,
 }: TabHeaderProps) {
   return (
-    <header className="flex shrink-0 items-center gap-2 border-b border-separator px-3 py-2">
+    <header
+      data-side-panel-header
+      className="flex shrink-0 items-center gap-2 border-b border-separator px-3 py-2"
+    >
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-medium text-label" title={title}>
           {title}

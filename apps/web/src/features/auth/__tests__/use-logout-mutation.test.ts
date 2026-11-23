@@ -12,7 +12,10 @@ vi.mock("openapi-fetch", () => ({ default: () => ({ POST: post }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, refresh }) }));
 const clearAllLocalNotes = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("@/lib/collab/local-persistence", () => ({ clearAllLocalNotes }));
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  localStorage.clear();
+});
 
 describe("useLogoutMutation", () => {
   it("请求不含凭据，成功后清理所有查询缓存并返回登录", async () => {
@@ -30,6 +33,17 @@ describe("useLogoutMutation", () => {
     expect(refresh).toHaveBeenCalledOnce();
     // 笔记离线副本随退出登录一起删除
     expect(clearAllLocalNotes).toHaveBeenCalledOnce();
+  });
+
+  /** 成功后只删除右侧栏键，保留其它本地数据。 */
+  it("成功后删除右侧栏本地键", async () => {
+    localStorage.setItem("anynote-ai-side-panel:v1:1", "{}");
+    localStorage.setItem("anynote-other", "keep");
+    post.mockResolvedValue({ response: new Response(JSON.stringify({ code: "00000" })) });
+    const { result } = renderHookWithProviders(() => useLogoutMutation());
+    await act(async () => result.current.mutateAsync());
+    expect(localStorage.getItem("anynote-ai-side-panel:v1:1")).toBeNull();
+    expect(localStorage.getItem("anynote-other")).toBe("keep");
   });
 
   it.each([new Response(JSON.stringify({ code: "B0400" })), new Response("oops", { status: 502 })])(
