@@ -111,6 +111,7 @@ function ChatPageLayout({
 }) {
   const shell = useSidePanelShell();
   const [listVisible, setListVisible] = useState(true);
+  const surface = `chat:${sessionKey}`;
 
   return (
     <div className="relative flex min-h-0 flex-1 bg-surface" data-testid="chat-page">
@@ -120,7 +121,7 @@ function ChatPageLayout({
           listVisible ? "hidden md:block" : "hidden",
         )}
       >
-        <ConversationList activeId={activeConversationId ?? 0} />
+        <ConversationList activeId={activeConversationId ?? 0} surface={surface} />
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <ChatPanel
@@ -136,7 +137,7 @@ function ChatPageLayout({
       </main>
       {shell?.mounted ? (
         <SidePanelHost
-          surface={`chat:${sessionKey}`}
+          surface={surface}
           pending={shell.pending}
           panelOpen={shell.panelOpen}
           onPanelOpenChange={shell.setPanelOpen}

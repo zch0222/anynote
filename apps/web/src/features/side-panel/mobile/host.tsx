@@ -27,7 +27,6 @@ import { getTabDefinition, resourceKind } from "../registry";
 import { RESOURCE_TYPE_LABEL } from "../resource-labels";
 import { setSidePanelTabCount } from "../storage-keys";
 import { useSidePanelStore } from "../store";
-import { registerSurfaceHandlers } from "../surface-events";
 import { TabPanel } from "../tab-panel";
 import { UNREADABLE_TITLE } from "../tabs/shared";
 import type { TabRecord } from "../types";
@@ -88,8 +87,6 @@ export function SidePanelMobileHost({
   const requestLeave = useSidePanelStore((state) => state.requestLeave);
   const registerGuard = useSidePanelStore((state) => state.registerGuard);
   const registerNewWindow = useSidePanelStore((state) => state.registerNewWindow);
-  const removeSurface = useSidePanelStore((state) => state.removeSurface);
-  const renameSurface = useSidePanelStore((state) => state.renameSurface);
   const newWindowHandler = useSidePanelStore((state) => state.newWindowHandlers[surface] ?? null);
 
   const [announcement, setAnnouncement] = useState("");
@@ -98,15 +95,6 @@ export function SidePanelMobileHost({
   const initialized = useRef(false);
 
   useSidePanelPersistence({ ignoreOpen: true });
-
-  useEffect(
-    () =>
-      registerSurfaceHandlers({
-        remove: (key) => removeSurface(key),
-        rename: (from, to) => renameSurface(from, to),
-      }),
-    [removeSurface, renameSurface],
-  );
 
   useEffect(() => {
     setSidePanelTabCount(tabs.length);

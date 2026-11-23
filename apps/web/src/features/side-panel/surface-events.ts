@@ -1,26 +1,20 @@
 /**
- * 侧栏与外部动作之间的桥：会话删除、会话 key 迁移在侧栏宿主之外发生。
+ * 侧栏与外部动作之间的桥：会话删除、会话 key 迁移与站内离开检查在侧栏宿主之外发生。
  *
  * @author 称霸幼儿园
  */
 
-type SurfaceHandler = (surfaceKey: string) => void;
-type RenameHandler = (from: string, to: string) => void;
+type SurfaceHandlers = {
+  remove: (surfaceKey: string) => void;
+  rename: (from: string, to: string) => void;
+  requestLeave: (surfaceKey: string) => boolean;
+};
 
-let removeHandler: SurfaceHandler | null = null;
-let renameHandler: RenameHandler | null = null;
+let handlers: SurfaceHandlers | null = null;
 
-/** 由懒加载宿主登记分区移除与迁移处理器。 */
-export function registerSurfaceHandlers(handlers: {
-  remove: SurfaceHandler;
-  rename: RenameHandler;
-}): () => void {
-  removeHandler = handlers.remove;
-  renameHandler = handlers.rename;
-  return () => {
-    removeHandler = null;
-    renameHandler = null;
-  };
+/** 由侧栏状态模块加载时登记分区移除、迁移与离开检查处理器。 */
+export function registerSurfaceHandlers(next: SurfaceHandlers): void {
+  handlers = next;
 }
 
 /**
@@ -29,7 +23,7 @@ export function registerSurfaceHandlers(handlers: {
  * @param conversationId 会话 id
  */
 export function notifyConversationRemoved(conversationId: number): void {
-  removeHandler?.(`chat:c${conversationId}`);
+  handlers?.remove(`chat:c${conversationId}`);
 }
 
 /**
@@ -38,7 +32,7 @@ export function notifyConversationRemoved(conversationId: number): void {
  * @param surfaceKey 分区键
  */
 export function removeSidePanelSurface(surfaceKey: string): void {
-  removeHandler?.(surfaceKey);
+  handlers?.remove(surfaceKey);
 }
 
 /**
@@ -48,5 +42,15 @@ export function removeSidePanelSurface(surfaceKey: string): void {
  * @param to 新分区键
  */
 export function renameSidePanelSurface(from: string, to: string): void {
-  renameHandler?.(from, to);
+  handlers?.rename(from, to);
+}
+
+/**
+ * 在会让侧栏正文卸载的站内导航前，先走该分区活动正文的离开守卫。
+ *
+ * @param surfaceKey 分区键
+ * @returns 是否允许离开；侧栏状态模块未加载（无正文挂载）时为 true
+ */
+export function requestSidePanelLeave(surfaceKey: string): boolean {
+  return handlers?.requestLeave(surfaceKey) ?? true;
 }

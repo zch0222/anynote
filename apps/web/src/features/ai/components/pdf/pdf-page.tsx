@@ -248,7 +248,7 @@ function PdfChatPane() {
               bases.data?.map((base) => (
                 <DropdownMenuItem
                   key={base.id}
-                  onSelect={() => {
+                  onClick={() => {
                     setBaseId(base.id);
                     setDocId(null);
                   }}

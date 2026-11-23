@@ -28,6 +28,7 @@ import {
   useDeleteConversationMutation,
   useRenameConversationMutation,
 } from "@/features/ai/use-conversations";
+import { requestSidePanelLeave } from "@/features/side-panel/surface-events";
 import {
   ChevronDown,
   ChevronRight,
@@ -45,15 +46,17 @@ import { toast } from "sonner";
 export type ConversationListProps = {
   /** 当前打开的会话 id；0 表示新对话。 */
   activeId: number;
+  /** 侧栏分区键，切换、新建或删除当前会话前用它走侧栏正文的离开守卫。 */
+  surface: string;
 };
 
 /**
  * 左侧会话列表，按知识库分组并支持新建、重命名、删除与组内分页。
  *
- * @param props 当前会话 id
+ * @param props 当前会话 id 与侧栏分区键
  * @author 称霸幼儿园
  */
-export function ConversationList({ activeId }: ConversationListProps) {
+export function ConversationList({ activeId, surface }: ConversationListProps) {
   const router = useRouter();
   const conversations = useConversationsQuery();
   const knowledgeBases = useChatKnowledgeBasesQuery();
@@ -66,10 +69,22 @@ export function ConversationList({ activeId }: ConversationListProps) {
   const bases = knowledgeBases.data;
   const groups = useMemo(() => groupConversations(rows ?? [], bases ?? []), [rows, bases]);
 
+  /**
+   * 站内跳到其他会话或新对话；目标与当前地址不同时先走侧栏离开守卫。
+   *
+   * @param href 目标地址
+   */
+  const navigate = (href: string) => {
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (href !== current && !requestSidePanelLeave(surface)) return;
+    router.push(href);
+  };
+
   const handleDelete = async (summary: Conversation) => {
     if (!window.confirm(`删除会话「${summary.title ?? "未命名会话"}」？删除后不可恢复。`)) {
       return;
     }
+    if (summary.id === activeId && !requestSidePanelLeave(surface)) return;
     try {
       await deleteMutation.mutateAsync(summary.id);
       toast.success("会话已删除");
@@ -100,7 +115,7 @@ export function ConversationList({ activeId }: ConversationListProps) {
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={() => router.push("/ai/chat")}
+          onClick={() => navigate("/ai/chat")}
           aria-label="新对话"
           title="新对话"
           data-testid="conversation-new"
@@ -154,7 +169,7 @@ export function ConversationList({ activeId }: ConversationListProps) {
                         summary={summary}
                         active={summary.id === activeId}
                         deleteDisabled={deleteMutation.isPending}
-                        onOpen={() => router.push(`/ai/chat/${summary.id}`)}
+                        onOpen={() => navigate(`/ai/chat/${summary.id}`)}
                         onRename={() => setRenaming(summary)}
                         onDelete={() => void handleDelete(summary)}
                       />
@@ -250,11 +265,11 @@ function ConversationRow({
           <MoreHorizontal className="size-4" aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={onRename}>
+          <DropdownMenuItem onClick={onRename}>
             <Pencil className="size-4" aria-hidden="true" />
             重命名
           </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+          <DropdownMenuItem variant="destructive" onClick={onDelete}>
             <Trash2 className="size-4" aria-hidden="true" />
             删除
           </DropdownMenuItem>

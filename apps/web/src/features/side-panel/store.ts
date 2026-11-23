@@ -5,6 +5,7 @@ import { resourceKey } from "@/lib/ai/resource-target";
 import { create } from "zustand";
 import { resourceKind, tabDefinitions } from "./registry";
 import { SIDE_PANEL_RESET_EVENT } from "./storage-keys";
+import { registerSurfaceHandlers } from "./surface-events";
 import { type SurfaceKey, type SurfaceState, type TabId, type TabRecord, asTabId } from "./types";
 
 /**
@@ -363,6 +364,12 @@ export function resetSidePanelState(): void {
 if (typeof window !== "undefined") {
   window.addEventListener(SIDE_PANEL_RESET_EVENT, resetSidePanelState);
 }
+
+registerSurfaceHandlers({
+  remove: (key) => useSidePanelStore.getState().removeSurface(key),
+  rename: (from, to) => useSidePanelStore.getState().renameSurface(from, to),
+  requestLeave: (key) => useSidePanelStore.getState().requestLeave(key),
+});
 
 function canLeave(state: StoreState, surface: SurfaceKey): boolean {
   const current = state.surfaces[surface];

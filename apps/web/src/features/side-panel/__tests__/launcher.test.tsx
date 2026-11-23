@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/auth/use-me", () => ({ useMe: () => ({ data: undefined }) }));
@@ -24,10 +24,6 @@ import {
 import { useSidePanelLink } from "@/features/side-panel/link-context";
 import { SIDE_PANEL_OPEN_KEY } from "@/features/side-panel/storage-keys";
 import { useSidePanelStore } from "@/features/side-panel/store";
-import {
-  removeSidePanelSurface,
-  renameSidePanelSurface,
-} from "@/features/side-panel/surface-events";
 import { renderWithProviders } from "@/test/render";
 
 /**
@@ -197,23 +193,5 @@ describe("侧栏入口与桌面宿主", () => {
     );
     await waitFor(() => expect(screen.queryByTestId("side-panel")).toBeNull());
     expect(screen.getByRole("button", { name: "展开右侧栏" })).toBeVisible();
-  });
-
-  /** 桌面宿主挂载时登记分区迁移与移除处理器。 */
-  it("登记分区迁移与移除", async () => {
-    renderWithProviders(
-      <SidePanelProvider>
-        <Harness />
-        <OpenNote />
-      </SidePanelProvider>,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "打开笔记" }));
-    await waitFor(() => expect(useSidePanelStore.getState().surfaces["chat:c1"]).toBeDefined());
-
-    act(() => renameSidePanelSurface("chat:c1", "chat:c9"));
-    expect(useSidePanelStore.getState().surfaces["chat:c9"]).toBeDefined();
-
-    act(() => removeSidePanelSurface("chat:c9"));
-    expect(useSidePanelStore.getState().surfaces["chat:c9"]).toBeUndefined();
   });
 });

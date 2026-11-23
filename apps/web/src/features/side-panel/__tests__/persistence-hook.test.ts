@@ -1,4 +1,4 @@
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const meState = vi.hoisted(() => ({
@@ -7,6 +7,7 @@ const meState = vi.hoisted(() => ({
 vi.mock("@/features/auth/use-me", () => ({ useMe: () => meState.current }));
 
 import { saveSidePanelState, useSidePanelPersistence } from "../persistence";
+import { sidePanelStorageKey } from "../storage-keys";
 import { emptySurface, useSidePanelStore } from "../store";
 import { type SurfaceState, asTabId } from "../types";
 
@@ -73,5 +74,49 @@ describe("侧栏持久化 hook", () => {
     rerender();
 
     expect(useSidePanelStore.getState().surfaces).toEqual({});
+  });
+
+  /** 卸载 A 宿主再挂载 B 宿主时，A 的分区（含共用的新会话分区）被清空，之后只写 B 的键。 */
+  it("宿主卸载再挂载遇到账号切换仍清空旧分区", async () => {
+    const first = renderHook(() => useSidePanelPersistence({}));
+    useSidePanelStore.setState({
+      surfaces: { "chat:c7": noteSurface(1), "chat:new": noteSurface(5) },
+      guards: {},
+      newWindowHandlers: {},
+    });
+    first.unmount();
+
+    meState.current = { data: { id: 8 } };
+    const second = renderHook(() => useSidePanelPersistence({}));
+    const surfaces = useSidePanelStore.getState().surfaces;
+    expect(surfaces["chat:c7"]).toBeUndefined();
+    expect(surfaces["chat:new"]).toBeUndefined();
+
+    useSidePanelStore.getState().openResource("chat:c9", {
+      ref: { type: "note", id: 2, kbId: 3 },
+      locator: {},
+    });
+    await waitFor(() => {
+      const raw = localStorage.getItem(sidePanelStorageKey(8));
+      expect(raw).not.toBeNull();
+      expect(raw).toContain("chat:c9");
+      expect(raw).not.toContain('"id":1');
+    });
+    expect(localStorage.getItem(sidePanelStorageKey(7))).toBeNull();
+    second.unmount();
+  });
+
+  /** 同一账号卸载再挂载不清空内存分区。 */
+  it("同账号卸载再挂载保留内存分区", () => {
+    const first = renderHook(() => useSidePanelPersistence({}));
+    useSidePanelStore.setState({
+      surfaces: { "chat:c7": noteSurface(1) },
+      guards: {},
+      newWindowHandlers: {},
+    });
+    first.unmount();
+
+    renderHook(() => useSidePanelPersistence({}));
+    expect(useSidePanelStore.getState().surfaces["chat:c7"]).toBeDefined();
   });
 });

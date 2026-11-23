@@ -137,7 +137,7 @@ export function useDeleteConversationMutation() {
     retry: false,
     onSuccess: (_data, conversationId) => {
       notifyConversationRemoved(conversationId);
-      // 宿主没挂载过时 notify 是空操作；清理模块按需加载，不占首屏
+      // 侧栏状态模块未加载时 notify 是空操作；本地清理按需加载，不占首屏
       void import("@/features/side-panel/persisted-surfaces")
         .then(({ removePersistedConversationSurface }) =>
           removePersistedConversationSurface(conversationId),

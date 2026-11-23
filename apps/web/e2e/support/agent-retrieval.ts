@@ -194,36 +194,18 @@ async function typeDraft(page: Page, editor: Locator) {
 }
 
 /**
- * 打开面板「更多」菜单并点击指定项。
+ * 站内 SPA 跳转（Next 调试全局 router），不触发整页重载。
  *
- * 保存状态刷新会关闭 Base UI 菜单，用 DOM 观察者在菜单项出现时立即点击，
- * 仍然走真实的菜单点击与离开守卫。
+ * @param page 当前页面
+ * @param path 站内目标路径
+ * @author 称霸幼儿园
  */
-async function clickPanelMenuItem(page: Page, label: string) {
-  await page.evaluate(
-    (text) =>
-      new Promise<void>((resolve, reject) => {
-        const trigger = document.querySelector<HTMLElement>(
-          '[data-testid="side-panel"] [aria-label="更多"], [data-testid="side-panel-mobile"] [aria-label="更多"]',
-        );
-        if (!trigger) {
-          reject(new Error("找不到更多按钮"));
-          return;
-        }
-        const observer = new MutationObserver(() => {
-          const item = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(
-            (element) => element.textContent?.trim() === text,
-          );
-          if (!item) return;
-          observer.disconnect();
-          item.click();
-          resolve();
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-        trigger.click();
-      }),
-    label,
-  );
+async function spaPush(page: Page, path: string) {
+  await page.evaluate((href) => {
+    const next = (window as unknown as { next?: { router?: { push: (url: string) => void } } })
+      .next;
+    next?.router?.push(href);
+  }, path);
 }
 
 /** 注册桌面或移动端的知识问答闭环用例。 */
@@ -245,8 +227,12 @@ export function agentRetrievalTests(mobile: boolean) {
       ]) {
         try {
           await api(request, "DELETE", path);
-        } catch {
-          // 清理失败不阻断
+          console.log(`[cleanup] DELETE ${path} ok`);
+        } catch (error) {
+          // 清理失败不阻断，逐项输出结果
+          console.log(
+            `[cleanup] DELETE ${path} failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
     });
@@ -404,7 +390,8 @@ export function agentRetrievalTests(mobile: boolean) {
       const before = page.url();
 
       const dialogPromise = page.waitForEvent("dialog");
-      const menuClick = clickPanelMenuItem(page, "打开完整页面");
+      await panel.getByRole("button", { name: "更多", exact: true }).click();
+      const menuClick = page.getByRole("menuitem", { name: "打开完整页面" }).click();
       const dialog = await dialogPromise;
       await dialog.dismiss();
       await menuClick;
@@ -424,7 +411,8 @@ export function agentRetrievalTests(mobile: boolean) {
       const before = page.url();
 
       const dialogPromise = page.waitForEvent("dialog");
-      const menuClick = clickPanelMenuItem(page, "打开完整页面");
+      await panel.getByRole("button", { name: "更多", exact: true }).click();
+      const menuClick = page.getByRole("menuitem", { name: "打开完整页面" }).click();
       const dialog = await dialogPromise;
       await dialog.dismiss();
       await menuClick;
@@ -651,9 +639,123 @@ export function agentRetrievalTests(mobile: boolean) {
       }
     });
 
-    /** 登出后另一位用户在同一页面会话里看不到上一位的侧栏标签。 */
+    /** 桌面切换会话与新对话被离开守卫取消时不导航、不丢草稿；允许后正常跳转。 */
+    test("桌面切换会话与新建对话受离开守卫约束", async ({ page }) => {
+      test.skip(mobile, "桌面侧栏用例");
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`/ai/chat?baseId=${fixture.baseId}`);
+      await ask(page, "M167NOTECITATION 倒排索引是什么？");
+      await expect(page).toHaveURL(/\/ai\/chat\/\d+/);
+      const otherId = /\/ai\/chat\/(\d+)/.exec(page.url())?.[1] ?? "";
+      expect(otherId).not.toBe("");
+
+      const { panel, editor } = await openNotePanel(page, mobile, fixture);
+      await failNoteSaves(page, fixture.noteId);
+      await typeDraft(page, editor);
+      await expect(panel.locator('[data-status="failed"]')).toBeVisible({ timeout: 20_000 });
+      const before = page.url();
+      const currentId = /\/ai\/chat\/(\d+)/.exec(new URL(before).pathname)?.[1] ?? "";
+      expect(currentId).not.toBe("");
+
+      const seenDialogs: string[] = [];
+      let acceptLeave = false;
+      page.on("dialog", (dialog) => {
+        seenDialogs.push(`${dialog.type()}:${dialog.message()}`);
+        if (acceptLeave) {
+          void dialog.accept();
+        } else {
+          void dialog.dismiss();
+        }
+      });
+      const rowOpenButton = page
+        .getByTestId(`conversation-item-${otherId}`)
+        .getByRole("button")
+        .first();
+
+      await rowOpenButton.click();
+      await expect.poll(() => seenDialogs.length).toBe(1);
+      await expect(page).toHaveURL(before);
+      await expect(page.getByTestId(`conversation-item-${currentId}`)).toHaveAttribute(
+        "data-active",
+        "true",
+      );
+      await expect(panel).toBeVisible();
+      await expect(editor).toContainText("M19守卫草稿");
+
+      await page.getByTestId("conversation-new").click();
+      await expect.poll(() => seenDialogs.length).toBe(2);
+      await expect(page).toHaveURL(before);
+      await expect(page.getByTestId(`conversation-item-${currentId}`)).toHaveAttribute(
+        "data-active",
+        "true",
+      );
+      await expect(panel).toBeVisible();
+      await expect(editor).toContainText("M19守卫草稿");
+
+      acceptLeave = true;
+      await rowOpenButton.click();
+      await expect(page).toHaveURL(new RegExp(`/ai/chat/${otherId}$`));
+      expect(seenDialogs).toEqual(
+        Array.from({ length: 3 }, () => "confirm:改动尚未保存，离开后会丢失。确定离开吗？"),
+      );
+    });
+
+    /** 桌面删除当前会话被离开守卫取消时不发请求；允许后正常删除并跳回新对话。 */
+    test("桌面删除当前会话受离开守卫约束", async ({ page }) => {
+      test.skip(mobile, "桌面侧栏用例");
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const { panel, editor } = await openNotePanel(page, mobile, fixture);
+      await failNoteSaves(page, fixture.noteId);
+      await typeDraft(page, editor);
+      await expect(panel.locator('[data-status="failed"]')).toBeVisible({ timeout: 20_000 });
+      const before = page.url();
+      const currentId = /\/ai\/chat\/(\d+)/.exec(new URL(before).pathname)?.[1] ?? "";
+      expect(currentId).not.toBe("");
+
+      const deleteRequests: string[] = [];
+      page.on("request", (request) => {
+        if (
+          request.method() === "DELETE" &&
+          request.url().includes(`/chat/conversations/${currentId}`)
+        ) {
+          deleteRequests.push(request.url());
+        }
+      });
+      const seenDialogs: string[] = [];
+      let acceptLeave = false;
+      page.on("dialog", (dialog) => {
+        seenDialogs.push(`${dialog.type()}:${dialog.message()}`);
+        if (dialog.message().endsWith("」？删除后不可恢复。") || acceptLeave) {
+          void dialog.accept();
+        } else {
+          void dialog.dismiss();
+        }
+      });
+      const row = page.getByTestId(`conversation-item-${currentId}`);
+
+      await row.getByRole("button", { name: /操作$/ }).click();
+      await page.getByRole("menuitem", { name: "删除" }).click();
+      await expect.poll(() => seenDialogs.length).toBe(2);
+      expect(seenDialogs[0]).toMatch(/^confirm:删除会话「.+」？删除后不可恢复。$/);
+      expect(seenDialogs[1]).toBe("confirm:改动尚未保存，离开后会丢失。确定离开吗？");
+      expect(deleteRequests).toHaveLength(0);
+      await expect(page).toHaveURL(before);
+      await expect(row).toHaveAttribute("data-active", "true");
+      await expect(panel).toBeVisible();
+      await expect(editor).toContainText("M19守卫草稿");
+
+      acceptLeave = true;
+      await row.getByRole("button", { name: /操作$/ }).click();
+      await page.getByRole("menuitem", { name: "删除" }).click();
+      await expect(page).toHaveURL(/\/ai\/chat$/);
+      await expect(page.getByTestId(`conversation-item-${currentId}`)).toHaveCount(0);
+      expect(deleteRequests).toHaveLength(1);
+      await expect.poll(() => seenDialogs.length).toBe(4);
+    });
+
+    /** 同一页面会话里登出再登录，另一位用户看不到上一位的侧栏标签。 */
     test("账号切换不残留上一位用户的侧栏标签", async ({ page }) => {
-      test.skip(!mobile, "账号切换用移动端「我的」登出，再回桌面路由检查侧栏");
+      test.skip(!mobile, "账号切换会撤销默认会话，放在移动端项目最后执行");
       await page.setViewportSize({ width: 1280, height: 720 });
       await page.goto(`/ai/chat?baseId=${fixture.baseId}`);
       await ask(page, "M167NOTECITATION 倒排索引是什么？");
@@ -662,9 +764,16 @@ export function agentRetrievalTests(mobile: boolean) {
       const panel = page.getByTestId("side-panel");
       await expect(panel.getByRole("tab")).toHaveCount(1);
       await expect(page).toHaveURL(/\/ai\/chat\/\d+/);
-      const conversationUrl = page.url();
+      const conversationPath = new URL(page.url()).pathname;
+      const meA = await page.request.get("/api/auth/me");
+      const userIdA = ((await meA.json()) as { data: { id: number } }).data.id;
 
-      await page.goto("/m/me");
+      // 文档哨兵：断言全程未整页重载
+      await page.evaluate(() => {
+        (window as unknown as { __e2eSentinel?: string }).__e2eSentinel = "same-document";
+      });
+
+      await spaPush(page, "/m/me");
       await page.getByTestId("mobile-logout").click();
       await page
         .getByTestId("mobile-action-sheet")
@@ -692,12 +801,38 @@ export function agentRetrievalTests(mobile: boolean) {
       await page.getByRole("button", { name: "登录", exact: true }).click();
       await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 
-      await page.goto(conversationUrl);
-      const expand = page.getByRole("button", { name: "展开右侧栏" });
-      await expect(expand).toBeVisible();
-      await expand.click();
+      await spaPush(page, "/ai/chat");
+      await expect(page).toHaveURL(/\/ai\/chat$/);
+      await page.getByRole("button", { name: "展开右侧栏" }).click();
       await expect(page.getByTestId("side-panel")).toBeVisible();
       await expect(page.getByTestId("side-panel").getByRole("tab")).toHaveCount(0);
+
+      // 站内跳到 A 的会话（Next 调试全局 router）
+      await spaPush(page, conversationPath);
+      await page.waitForURL((url) => url.pathname === conversationPath);
+      await expect(page.getByTestId("side-panel")).toBeVisible();
+      await expect(page.getByTestId("side-panel").getByRole("tab")).toHaveCount(0);
+
+      const sentinel = await page.evaluate(
+        () => (window as unknown as { __e2eSentinel?: string }).__e2eSentinel,
+      );
+      expect(sentinel).toBe("same-document");
+
+      const meB = await page.request.get("/api/auth/me");
+      const userIdB = ((await meB.json()) as { data: { id: number } }).data.id;
+      expect(userIdB).not.toBe(userIdA);
+      await page.waitForTimeout(400);
+      const stored = await page.evaluate(
+        ({ a, b }) => ({
+          a: localStorage.getItem(`anynote-ai-side-panel:v1:${a}`),
+          b: localStorage.getItem(`anynote-ai-side-panel:v1:${b}`),
+        }),
+        { a: userIdA, b: userIdB },
+      );
+      expect(stored.a).toBeNull();
+      if (stored.b !== null) {
+        expect(stored.b).not.toContain('"type":"note"');
+      }
     });
   });
 }

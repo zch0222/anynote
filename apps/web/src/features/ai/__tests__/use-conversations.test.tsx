@@ -7,6 +7,11 @@ vi.mock("@/lib/api/openapi", () => ({
   aiApi: { GET: vi.fn(), PATCH: vi.fn(), DELETE: vi.fn() },
 }));
 
+const meState = vi.hoisted(() => ({
+  current: { data: { id: 7 } as { id?: number } | undefined },
+}));
+vi.mock("@/features/auth/use-me", () => ({ useMe: () => meState.current }));
+
 import { aiQueryKeys, conversationKey } from "@/features/ai/query-keys";
 import {
   useConversationQuery,
@@ -15,7 +20,10 @@ import {
   useDeleteConversationMutation,
   useRenameConversationMutation,
 } from "@/features/ai/use-conversations";
+import { saveSidePanelState, useSidePanelPersistence } from "@/features/side-panel/persistence";
 import { sidePanelStorageKey } from "@/features/side-panel/storage-keys";
+import { emptySurface, useSidePanelStore } from "@/features/side-panel/store";
+import { type SurfaceState, asTabId } from "@/features/side-panel/types";
 import { aiApi } from "@/lib/api/openapi";
 
 const aiApiMock = vi.mocked(aiApi, true);
@@ -52,12 +60,33 @@ const PAGE = {
   ],
 };
 
+/** 构造一个带活动笔记标签、可被持久化 schema 接受的分区。 */
+function noteSurface(id: number): SurfaceState {
+  const surface = emptySurface();
+  surface.open = true;
+  surface.tabs = [
+    {
+      id: asTabId("t1"),
+      kind: "note",
+      family: "resource",
+      ref: { type: "note", id, kbId: 3 },
+    },
+  ];
+  surface.activeId = asTabId("t1");
+  surface.recent = [asTabId("t1")];
+  surface.seq = 1;
+  surface.touchedAt = 1;
+  return surface;
+}
+
 describe("use-conversations", () => {
   beforeEach(() => {
     aiApiMock.GET.mockReset();
     aiApiMock.PATCH.mockReset();
     aiApiMock.DELETE.mockReset();
     localStorage.clear();
+    meState.current = { data: { id: 7 } };
+    useSidePanelStore.setState({ surfaces: {}, guards: {}, newWindowHandlers: {} });
   });
 
   it("会话列表分页解析并支持翻页", async () => {
@@ -183,6 +212,37 @@ describe("use-conversations", () => {
     expect(first).not.toBeNull();
     expect(first).not.toContain("chat:c7");
     expect(first).toContain("chat:c8");
+  });
+
+  /** 宿主卸载后删除会话也清内存分区，重新挂载后的保存不会把已删分区写回。 */
+  it("宿主卸载后删除会话同步清理内存分区", async () => {
+    aiApiMock.DELETE.mockResolvedValue(envelope("SUCCESS"));
+    saveSidePanelState(7, { "chat:c7": noteSurface(1), "chat:c8": noteSurface(2) });
+    const persistence = renderHook(() => useSidePanelPersistence({}));
+    expect(useSidePanelStore.getState().surfaces["chat:c7"]).toBeDefined();
+    expect(useSidePanelStore.getState().surfaces["chat:c8"]).toBeDefined();
+    persistence.unmount();
+
+    const { result } = renderHook(() => useDeleteConversationMutation(), {
+      wrapper: createWrapper(),
+    });
+    await result.current.mutateAsync(7);
+    expect(useSidePanelStore.getState().surfaces["chat:c7"]).toBeUndefined();
+    await waitFor(() => {
+      const raw = localStorage.getItem(sidePanelStorageKey(7));
+      expect(raw).not.toBeNull();
+      expect(raw).not.toContain("chat:c7");
+    });
+
+    renderHook(() => useSidePanelPersistence({}));
+    useSidePanelStore.getState().setOpen("chat:c8", false);
+    await waitFor(() => {
+      const raw = localStorage.getItem(sidePanelStorageKey(7));
+      expect(raw).not.toBeNull();
+      const stored = JSON.parse(raw as string) as { surfaces: Record<string, unknown> };
+      expect(stored.surfaces["chat:c8"]).toBeDefined();
+      expect(stored.surfaces["chat:c7"]).toBeUndefined();
+    });
   });
 
   it("conversationKey 生成稳定的 store key", () => {

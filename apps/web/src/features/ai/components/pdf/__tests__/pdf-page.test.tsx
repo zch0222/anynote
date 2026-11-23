@@ -38,6 +38,7 @@ vi.mock("@/features/ai/components/pdf/pdf-viewer", () => ({
 
 import { PdfChatPage } from "@/features/ai/components/pdf/pdf-page";
 import { useDocsQuery } from "@/features/ai/use-docs";
+import { useKnowledgeBasesQuery } from "@/features/notes/use-knowledge-bases";
 import { renderWithProviders } from "@/test/render";
 
 function mockDocs(rows: Array<Record<string, unknown>>) {
@@ -157,5 +158,31 @@ describe("PdfChatPage 地址参数", () => {
     renderWithProviders(<PdfChatPage />);
 
     expect(screen.getByTestId("pdf-base-select")).toBeInTheDocument();
+  });
+});
+
+/**
+ * 资料库下拉切库：选中另一个库后触发器改显新库名、文档查询换到新 baseId。
+ *
+ * @author 称霸幼儿园
+ */
+describe("PdfChatPage 知识库切换", () => {
+  /** 菜单项点击选中第二个库：触发器与 useDocsQuery 都切到 2。 */
+  it("点击另一个库的菜单项后切换到该库", async () => {
+    vi.mocked(useKnowledgeBasesQuery).mockReturnValue({
+      data: [
+        { id: 1, knowledgeBaseName: "我的库" },
+        { id: 2, knowledgeBaseName: "第二个库" },
+      ],
+      isPending: false,
+    } as never);
+    mockDocs([]);
+    renderWithProviders(<PdfChatPage />);
+
+    fireEvent.click(screen.getByTestId("pdf-base-select"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "第二个库" }));
+
+    expect(screen.getByTestId("pdf-base-select")).toHaveTextContent("第二个库");
+    expect(vi.mocked(useDocsQuery).mock.lastCall?.[0]).toBe(2);
   });
 });

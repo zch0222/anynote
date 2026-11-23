@@ -1,7 +1,7 @@
 # AI 对话右侧栏：资源引用在侧栏打开
 
 > 文档版本：v0.2（实施记录） | 创建 2026-11-22
-> 状态：**M19.1–M19.6 已实现（`63eb33a`）；2026-11-22 补做桌面覆盖态 Esc、焦点规则与刷新恢复（`6d341c3`）。2026-11-23 按评估报告修复高 1/2/3、中 1/2 与低 1–4：登出/账号切换清理内存、移动返回守卫、完整页面守卫、持久化键与恢复校验、会话删除清理、移动可访问名称、注册表字段接线；新增回归单测与 4 条真实栈 E2E。当前单测 2305 passed / 3 failed（既有任务日期控件），E2E 20 passed / 10 skipped；`/ai/chat` 首屏 310.7 / 310.0 KB，超 0.7 KB；2026-11-23 用户确认接受 310.7 KB，预算未调整，门禁仍记录为未通过，M19.7 未关闭**
+> 状态：**M19.1–M19.6 已实现（`63eb33a`）；2026-11-22 补做桌面覆盖态 Esc、焦点规则与刷新恢复（`6d341c3`）。2026-11-23 按评估报告修复高 1/2/3、中 1/2 与低 1–4：登出/账号切换清理内存、移动返回守卫、完整页面守卫、持久化键与恢复校验、会话删除清理、移动可访问名称、注册表字段接线；新增回归单测与 4 条真实栈 E2E。2026-11-24 按第二轮评估修复 R2-01（桌面切换、新建、删除当前会话接入离开守卫，并修复会话菜单「重命名」「删除」点击无效）、R2-02（删除会话的内存清理不再依赖宿主挂载）、R2-03（账号切换 E2E 改为同一文档）与报告 §4.1/§4.2，同批修复 PDF 页知识库下拉点击无效。当前单测 2317 passed / 3 failed（既有任务日期控件），E2E 22 passed / 12 skipped；`/ai/chat` 首屏 310.8 / 310.0 KB，超 0.8 KB（2026-11-23 接受的是 310.7 KB，2026-11-24 确认超出时如实记录），预算未调整，门禁仍记录为未通过，M19.7 未关闭**
 > 范围：`apps/web`。桌面 `/ai/chat`、`/ai/chat/[id]`，移动 `/m/ai/chat`、`/m/ai/chat/[id]`。**不改后端、OpenAPI 契约、SQL、Nacos**，因此不需要 OpenSpec 提案
 > 关联：[知识检索方案 §8.2 / §11](./KNOWLEDGE_RETRIEVAL_PLAN.md#82-引用)、[回答文本处理方案](./AGENT_OUTPUT_TEXT_PLAN.md)、
 > [运行过程展示方案 §5.7](./AGENT_TRACE_VIEW_PLAN.md#57-对话界面)、[AI 里程碑](./AI_MILESTONES.md)
@@ -356,7 +356,10 @@ type TabBodyProps = {
 1. **页面上同一篇笔记至多一个编辑器。** 同一分区按资源去重；只挂载活动标签；其他会话的分区不渲染；`/ai/chat` 上没有别的笔记编辑器。
 2. **切标签、关标签、收起侧栏。** 笔记正文登记的守卫就是 `useNoteEditorSession` 已有的 `confirmLeave()`：有丢失风险时用现有文案确认，取消则不动。
    确认或无风险时卸载，由 `useSaveNote` 卸载时的补发把待保存草稿送出——与完整页面在站内跳走时完全相同。
-3. **离开对话页、刷新、关页。** `useNoteEditorSession` 内部的 `useLeaveGuard` 与 `beforeunload` 照常生效（切换会话、点应用导航都是站内链接，会被它拦截确认）。
+3. **离开对话页、刷新、关页、切换会话。** `useNoteEditorSession` 内部的 `useLeaveGuard` 与 `beforeunload` 照常生效，应用导航等站内链接由它拦截确认。
+   桌面会话列表的切换会话、「新对话」与删除当前会话是按钮触发的程序化导航，不经过链接拦截，改为先调用 `surface-events.ts` 的 `requestSidePanelLeave(surface)`
+   （处理器由侧栏状态模块加载时登记）走当前分区活动正文的守卫：目标与当前地址相同时不询问；删除当前会话在删除确认之后、删除请求之前询问。
+   移动端会话列表是独立页面，进入会话用站内链接。（2026-11-24 按第二轮评估 R2-01 订正：原文「切换会话是站内链接」不成立）
 4. **消息列表里的资源链接。** `useLeaveGuard` 在 `document` 捕获阶段比 React 的处理器先执行；资源链接其实不会离开页面，若不排除，有风险时会先弹「离开」确认、再弹第 2 条的确认。
    因此 `useLeaveGuard` 增加一条：**跳过位于 `[data-side-panel-links]` 内的链接**，这类点击交给侧栏的守卫。没有宿主时不会出现该标记，完整页面行为不变。
 5. **定位改为参数传入。** `useNoteEditorSession(noteId, { locate? })` 新增可选参数 `{ section?, line?, revision }`：传入时不再读 `window.location.search`，
@@ -744,7 +747,7 @@ flowchart LR
 
 | 风险 | 影响 | 处理 |
 |---|---|---|
-| 首屏余量只有约 1.3KB | 超预算构建失败 | §5.8：宿主、注册表、正文全部懒加载；M19.0 先测；不上调预算，放不下停下来问。**2026-11-23 实测 `/ai/chat` 310.7 / 310.0 KB，超 0.7 KB；用户确认接受，预算未调整，门禁记录为未通过** |
+| 首屏余量只有约 1.3KB | 超预算构建失败 | §5.8：宿主、注册表、正文全部懒加载；M19.0 先测；不上调预算，放不下停下来问。**2026-11-23 实测 `/ai/chat` 310.7 / 310.0 KB，超 0.7 KB；用户确认接受，预算未调整，门禁记录为未通过。2026-11-24 第二轮修复后实测 310.8 KB（超 0.8 KB），按确认如实记录，门禁仍未通过** |
 | 侧栏与新标签页同时编辑同一篇（非协同） | 旧正文覆盖新改动 | 新窗口前先保存（§5.7 第 6 条）；回到窗口时空闲同步（第 7 条）；仍有并发修改时由现有的版本冲突对话框把关 |
 | 离开保护重复确认 | 一次点击弹两次确认 | `useLeaveGuard` 排除 `[data-side-panel-links]`（第 4 条），侧栏只用一个守卫 |
 | 切标签即卸载编辑器 | 切回时重新初始化、丢失滚动位置与撤销历史 | 这是 `keepMounted: false` 的代价，换来页面上至多一个编辑器实例；保存不受影响（卸载补发）。若用户反馈强烈，再给笔记打开 `keepMounted` 并配套多实例约束 |
@@ -794,7 +797,7 @@ flowchart LR
 | A6 | 不持久化 | 定位、标题、最大化、滚动位置、未拿到 id 的新会话 | 与 S7「只存标识」一致 |
 | A7 | 宽度偏好 | 全局一份，存 `ui-store` | 非敏感，与左侧栏偏好同处。**实现改为 `features/side-panel/panel-width.ts` 的 `anynote-side-panel-width` 本地键（§16 偏差 2）** |
 | A8 | 快捷键 | 一期不加 | 避免与左侧栏、编辑器冲突 |
-| A9 | 首屏预算 | 不上调 | 仓库约定。**2026-11-23 实测 310.7 / 310.0 KB（超 0.7 KB），用户确认接受，预算未调整，门禁记录为未通过** |
+| A9 | 首屏预算 | 不上调 | 仓库约定。**2026-11-23 实测 310.7 / 310.0 KB（超 0.7 KB），用户确认接受，预算未调整，门禁记录为未通过。2026-11-24 实测 310.8 KB（超 0.8 KB），按确认如实记录，门禁仍未通过** |
 | A10 | 笔记标签的保存语义 | 与完整页面相同，另加「新窗口前先保存」「回到窗口空闲同步」 | 可编辑（S1）与新窗口（S3）同时存在时的必要补充 |
 
 **M19.0 核对结论（已定）**
@@ -886,3 +889,34 @@ flowchart LR
 - 未验证：协同构建（`NEXT_PUBLIC_COLLAB_NOTES=1`）下双端编辑、编辑器浮层层级、移动软键盘贴底与真实设备。
 
 逐文件清单见 [`docs/changelist/2026-11-23-ai-chat-side-panel-review-fixes.md`](../changelist/2026-11-23-ai-chat-side-panel-review-fixes.md)。
+
+### 2026-11-24 第二轮评估修复
+
+依据 [`AI_CHAT_SIDE_PANEL_CODE_REVIEW_ROUND_2.md`](./AI_CHAT_SIDE_PANEL_CODE_REVIEW_ROUND_2.md)，本轮只改 `apps/web`，不改后端、OpenAPI、SQL 与 Nacos。
+
+**已修复**
+
+- **R2-01（会话导航旁路守卫）**：`ConversationList` 新增 `surface`；切换会话与「新对话」先调用 `requestSidePanelLeave(surface)`，目标与当前地址相同时不询问；删除当前会话在删除确认之后、删除请求之前询问，删除非当前会话不询问。确认文案沿用现有的离开确认，不新增文案。§5.7 第 3 条已订正。
+- **R2-01 前置缺陷**：会话菜单「重命名」「删除」使用的 `onSelect` 不被 Base UI `Menu.Item` 处理，会落到 DOM 的 `onSelect`（React 只在文本输入或可编辑区域获得焦点时触发），点击无效；改为 `onClick`。
+- **同类缺陷（确认后同批修复）**：PDF 问答页的知识库下拉（`pdf-page.tsx`）同样使用 `onSelect`，选择其他知识库无效；改为 `onClick`。真实浏览器在修复前后各核对一次：修复前点选后仍显示原知识库，修复后切到所选知识库。
+- **R2-02（删除后分区被写回）**：`surface-events.ts` 的移除、迁移与离开检查处理器改由 `store.ts` 加载时登记，桌面/移动宿主不再登记；状态模块加载过即对宿主卸载期间的删除同步清理内存，之后的持久化不会写回已删分区。附带效果：宿主未挂载期间新会话拿到 id 时的分区迁移也会生效（此前为空操作），已确认接受。
+- **R2-03（账号切换 E2E）**：用例全程同一文档（文档哨兵断言），登出、表单登录、进入新对话与 A 的会话均为站内跳转，断言侧栏无标签，A 的存储键不再出现、B 的存储键不含笔记标识；`persistence-hook.test.ts` 补「卸载后跨账号重新挂载」（含 `chat:new` 分区）与「同账号重新挂载保留内存」用例。
+- **§4.1**：「打开完整页面」E2E 改用 Playwright 普通点击，删除 DOM 观察者辅助函数；桌面与移动两条均通过，本轮未复现菜单被保存状态刷新关闭。
+- **§4.2**：E2E 收尾逐项输出 `[cleanup]` 删除结果。
+
+**与确认方案的偏差**
+
+- R2-03 原定用桌面顶栏用户菜单登出、用侧边栏「AI 对话」链接进入新对话。核对后桌面没有渲染用户菜单（`components/layout/user-menu.tsx` 的 `UserMenu` 未被任何页面引用），移动端项目的 UA 登录后落在 `/m/dashboard`，也没有桌面「AI 对话」链接；因此 `/m/me`、`/ai/chat` 与 A 的会话三步都经 Next 调试全局 `window.next.router.push` 站内跳转，登出用 `/m/me` 的退出登录。
+
+**验证**
+
+- 复现用例改前失败、改后通过：`conversation-list.test.tsx` 守卫拒绝/允许、删除当前会话守卫允许、删除非当前会话、删除确认后守卫拒绝、重命名打开对话框；`use-conversations.test.tsx` 宿主卸载后删除会话；`surface-events.test.ts` 两条；`pdf-page.test.tsx` 切换知识库。
+- 本批相关范围 21 files / 151 tests 通过；全量 `pnpm --filter web test`：201 files / 2320 tests，**2317 passed / 3 failed**，失败仍为既有任务日期控件（`date-time-field.test.tsx` 2 条、`task-form-page.test.tsx` 1 条），未改相关代码。
+- `pnpm --filter web typecheck` 通过；本批文件 Biome check 通过。
+- `NEXT_DISABLE_STANDALONE=1 NEXT_PUBLIC_APP_URL=http://localhost:3107 pnpm --filter web build` 成功。
+- `pnpm --filter web bundle:budget`：**FAIL**，`/ai/chat` 与 `/ai/chat/[id]` **310.8 / 310.0 KB**（构建前对已有产物复算为 310.7 KB），`/ai/pdf` 309.2 / 310.0 KB；移动最重路由 `/m/ai/pdf/[docId]` 247.3 / 250 通过，编辑器 18.0 / 250 通过。预算未调整。
+- 真实栈 E2E（`tmp/m19-side-panel/run_e2e.py`，宿主机 `next start -p 3107`）：第 1 次 20 passed / 12 skipped / 2 failed，两条均为移动端测试代码问题（「更多」按钮名与编辑器工具条「更多格式」冲突、桌面用户菜单不存在）；修正测试后第 2 次 **22 passed / 12 skipped**；PDF 修复后的最终构建上第 3 次 **22 passed / 12 skipped**。新增桌面「切换会话与新建对话」「删除当前会话」两条与重写的账号切换用例均通过。编排脚本（不在仓库）的配置恢复校验改为轮询读回后，第 3 次报告 `agentMainRestored`、`harnessConfigRestored`、`harnessPrefetchRestored`、`providerDeleted`、`containerRemoved` 均为 true；只读查询 Nacos 为 `prefetch-enabled: false`。
+- E2E 清理：chromium 项目 4 项夹具删除成功；mobile 项目 4 项返回 `A0311`（账号切换用例登出默认会话后请求失效）。第 2、3 次运行残留的 mobile 夹具已按确认用对应临时账号删除，复查返回 `A0404`；更早运行若有残留，因临时账号凭据已被覆盖，本轮未核对、未处理。
+- 未验证：协同构建（`NEXT_PUBLIC_COLLAB_NOTES=1`）下双端编辑、编辑器浮层层级、移动软键盘贴底、真实设备与 Lighthouse；视觉截图用例随批执行，截图未人工复核。
+
+逐文件清单见 [`docs/changelist/2026-11-24-ai-chat-side-panel-review-round-2-fixes.md`](../changelist/2026-11-24-ai-chat-side-panel-review-round-2-fixes.md)。

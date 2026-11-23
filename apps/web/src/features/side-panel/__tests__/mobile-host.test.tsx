@@ -11,10 +11,6 @@ vi.mock("@/features/side-panel/tab-panel", () => ({ TabPanel: () => null }));
 
 import { SidePanelMobileHost } from "@/features/side-panel/mobile/host";
 import { emptySurface, useSidePanelStore } from "@/features/side-panel/store";
-import {
-  removeSidePanelSurface,
-  renameSidePanelSurface,
-} from "@/features/side-panel/surface-events";
 import { asTabId } from "@/features/side-panel/types";
 
 /**
@@ -119,16 +115,6 @@ describe("移动端侧栏覆盖层", () => {
     fireEvent.click(screen.getByRole("button", { name: "更多" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "打开完整页面" }));
     expect(push).toHaveBeenCalledWith("/m/notes/3/5");
-  });
-
-  /** 宿主挂载时登记分区迁移与移除处理器。 */
-  it("登记分区迁移与移除", () => {
-    renderOpenOverlay();
-    act(() => renameSidePanelSurface("chat:c1", "chat:c9"));
-    expect(useSidePanelStore.getState().surfaces["chat:c9"]).toBeDefined();
-
-    act(() => removeSidePanelSurface("chat:c9"));
-    expect(useSidePanelStore.getState().surfaces["chat:c9"]).toBeUndefined();
   });
 });
 
