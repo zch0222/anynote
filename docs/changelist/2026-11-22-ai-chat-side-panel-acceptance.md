@@ -3,7 +3,7 @@
 日期：2026-11-22
 方案：[`docs/ai-refactor/AI_CHAT_SIDE_PANEL_PLAN.md`](../ai-refactor/AI_CHAT_SIDE_PANEL_PLAN.md)
 范围：`apps/web`（含 E2E 支撑文件）；不改后端、OpenAPI、SQL、Nacos 配置的最终状态。
-状态：**代码与单元测试完成，真实栈 E2E 通过；Lighthouse 桌面通过、移动端仅无关路由未达门槛；视觉截图已生成待人工确认；改动随本批提交到 `dev`。**
+状态：**代码与单元测试完成，真实栈 E2E 通过；Lighthouse 桌面通过、移动端仅无关路由未达门槛；视觉截图已生成待人工确认；改动随本批提交到 `dev`（`6d341c3`）。**
 
 ## 概览
 
@@ -91,4 +91,4 @@ E2E 使用 `tmp/m19-side-panel/run_e2e.py` 编排：临时启动 M16.6 本地脚
 - **协同构建**：`NEXT_PUBLIC_COLLAB_NOTES=1` 下侧栏与新标签页同时编辑未验证。
 - **全量单测**：3 条既有任务日期控件失败，未修改相关代码。
 - **Nacos 恢复核对**：编排报告里的 `harnessConfigRestored` / `harnessPrefetchRestored` 为 `false`，原因是发布后立即读取存在时序；运行结束后直接查询 Nacos，`harness.prefetch-enabled` 已为 `false`，配置已恢复。
-- **提交状态**：本批改动随提交进入 `dev`，提交哈希见 `git log`。
+- **提交状态**：本批改动随提交进入 `dev`（`6d341c3`）。

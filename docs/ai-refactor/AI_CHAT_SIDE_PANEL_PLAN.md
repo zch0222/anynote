@@ -1,7 +1,7 @@
 # AI 对话右侧栏：资源引用在侧栏打开
 
 > 文档版本：v0.2（实施记录） | 创建 2026-11-22
-> 状态：**M19.1–M19.6 已实现（`63eb33a`）；2026-11-22 补做桌面覆盖态 Esc、焦点规则与刷新恢复，真实栈 E2E 16 passed / 6 skipped，Lighthouse 桌面全绿、移动端仅无关路由未达门槛；`/ai/chat` 首屏 310.5 / 310.0 KB，超 0.5 KB（此前接受 0.3 KB，需重新确认）；视觉截图已生成待人工确认；改动未提交**
+> 状态：**M19.1–M19.6 已实现（`63eb33a`）；2026-11-22 补做桌面覆盖态 Esc、焦点规则与刷新恢复，真实栈 E2E 16 passed / 6 skipped，Lighthouse 桌面全绿、移动端仅无关路由未达门槛；`/ai/chat` 首屏 310.5 / 310.0 KB，超 0.5 KB（此前接受 0.3 KB，需重新确认）；视觉截图已生成待人工确认；改动已提交（`6d341c3`）**
 > 范围：`apps/web`。桌面 `/ai/chat`、`/ai/chat/[id]`，移动 `/m/ai/chat`、`/m/ai/chat/[id]`。**不改后端、OpenAPI 契约、SQL、Nacos**，因此不需要 OpenSpec 提案
 > 关联：[知识检索方案 §8.2 / §11](./KNOWLEDGE_RETRIEVAL_PLAN.md#82-引用)、[回答文本处理方案](./AGENT_OUTPUT_TEXT_PLAN.md)、
 > [运行过程展示方案 §5.7](./AGENT_TRACE_VIEW_PLAN.md#57-对话界面)、[AI 里程碑](./AI_MILESTONES.md)
@@ -857,4 +857,4 @@ flowchart LR
 - Lighthouse 桌面：五条路由全部通过（`/ai/chat` Performance 99 / Accessibility 96）；移动端 `/m/ai/chat` 88 / 96 通过，但 `/m/dashboard` 79、`/m/notes` 83 未达 85；改用 Docker web `:3000` 复跑同样失败，判定与本批无关。
 - 视觉截图：`tmp/m19-side-panel/visual/` 下 10 张（桌面 1920/1440/1280/1024 × 深浅，移动 390×844 × 深浅），待人工确认。
 - `/ai/chat` 首屏 **310.5 / 310.0 KB**，超 0.5 KB；此前接受的是 310.3（超 0.3 KB），需重新确认。
-- 改动未提交。逐文件清单见 [`docs/changelist/2026-11-22-ai-chat-side-panel-acceptance.md`](../changelist/2026-11-22-ai-chat-side-panel-acceptance.md)。
+- 改动已提交（`6d341c3`）。逐文件清单见 [`docs/changelist/2026-11-22-ai-chat-side-panel-acceptance.md`](../changelist/2026-11-22-ai-chat-side-panel-acceptance.md)。
