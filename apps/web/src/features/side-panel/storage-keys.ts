@@ -6,6 +6,9 @@
 
 export const SIDE_PANEL_STORAGE_PREFIX = "anynote-ai-side-panel:";
 
+/** 登出时清空侧栏内存状态的事件；store 懒加载时自行监听。 */
+export const SIDE_PANEL_RESET_EVENT = `${SIDE_PANEL_STORAGE_PREFIX}reset`;
+
 /** 刷新前侧栏是否展开的标记；与资源标识同前缀，登出时一并删除。 */
 export const SIDE_PANEL_OPEN_KEY = `${SIDE_PANEL_STORAGE_PREFIX}open`;
 

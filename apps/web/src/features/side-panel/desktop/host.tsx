@@ -23,6 +23,7 @@ import { useSidePanelPersistence } from "../persistence";
 import { RESOURCE_TYPE_LABEL } from "../resource-labels";
 import { setSidePanelOpenFlag } from "../storage-keys";
 import { useSidePanelStore } from "../store";
+import { registerSurfaceHandlers } from "../surface-events";
 import { TabPanel } from "../tab-panel";
 import type { TabRecord } from "../types";
 import { tabDomId, tabPanelId } from "./ids";
@@ -69,6 +70,8 @@ export function SidePanelHost({
   const closeTab = useSidePanelStore((state) => state.close);
   const registerGuard = useSidePanelStore((state) => state.registerGuard);
   const registerNewWindow = useSidePanelStore((state) => state.registerNewWindow);
+  const removeSurface = useSidePanelStore((state) => state.removeSurface);
+  const renameSurface = useSidePanelStore((state) => state.renameSurface);
 
   const [announcement, setAnnouncement] = useState("");
   const [dragWidth, setDragWidth] = useState<number | null>(null);
@@ -85,6 +88,15 @@ export function SidePanelHost({
       onPanelOpenChange(hasOpen);
     },
   });
+
+  useEffect(
+    () =>
+      registerSurfaceHandlers({
+        remove: (key) => removeSurface(key),
+        rename: (from, to) => renameSurface(from, to),
+      }),
+    [removeSurface, renameSurface],
+  );
 
   useLayoutEffect(() => {
     if (!panelOpen) return;

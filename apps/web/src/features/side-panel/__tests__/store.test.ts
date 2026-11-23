@@ -1,6 +1,6 @@
 import type { ResourceTarget } from "@/lib/ai/resource-target";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MAX_TABS, emptySurface, useSidePanelStore } from "../store";
+import { MAX_TABS, emptySurface, resetSidePanelState, useSidePanelStore } from "../store";
 import type { TabId } from "../types";
 
 /**
@@ -122,6 +122,19 @@ describe("侧栏 store", () => {
     unregister();
   });
 
+  /** 程序化导航前通过 store 请求离开，与切换标签使用同一个守卫。 */
+  it("请求离开调用守卫", () => {
+    const store = useSidePanelStore.getState();
+    store.openResource(SURFACE, note(1));
+    expect(store.requestLeave(SURFACE)).toBe(true);
+    const guard = vi.fn(() => false);
+    const unregister = store.registerGuard(SURFACE, guard);
+    expect(store.requestLeave(SURFACE)).toBe(false);
+    guard.mockReturnValue(true);
+    expect(store.requestLeave(SURFACE)).toBe(true);
+    unregister();
+  });
+
   /** 同一标签内换定位不调用守卫。 */
   it("同一标签换定位不调守卫", () => {
     const store = useSidePanelStore.getState();
@@ -164,6 +177,19 @@ describe("侧栏 store", () => {
     store.openResource(SURFACE, note(1));
     store.removeSurface(SURFACE);
     expect(useSidePanelStore.getState().surfaces[SURFACE]).toBeUndefined();
+  });
+
+  /** 登出重置清空分区、守卫与新窗口处理器。 */
+  it("重置内存状态", () => {
+    const store = useSidePanelStore.getState();
+    store.openResource(SURFACE, note(1));
+    store.registerGuard(SURFACE, () => true);
+    store.registerNewWindow(SURFACE, () => {});
+    resetSidePanelState();
+    const state = useSidePanelStore.getState();
+    expect(state.surfaces).toEqual({});
+    expect(state.guards).toEqual({});
+    expect(state.newWindowHandlers).toEqual({});
   });
 
   /** 恢复状态时按需忽略展开标志，且不覆盖内存里已有分区。 */

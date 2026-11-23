@@ -1,30 +1,14 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const docState = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
-vi.mock("@/features/ai/use-docs", () => ({ useDocQuery: () => docState.current }));
-const baseState = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
-vi.mock("@/features/notes/use-knowledge-bases", () => ({
-  useKnowledgeBaseQuery: () => baseState.current,
-}));
-const notesState = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
-vi.mock("@/features/notes/use-notes", () => ({ useNotesQuery: () => notesState.current }));
-const docsState = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
-vi.mock("@/features/notes/use-docs", () => ({
-  useKnowledgeBaseDocsQuery: () => docsState.current,
-}));
-const adminState = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
-const memberState = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
-vi.mock("@/features/tasks/use-task-detail", () => ({
-  useAdminTaskQuery: vi.fn(() => adminState.current),
-  useMemberTaskByIdQuery: vi.fn(() => memberState.current),
-  isTaskMissing: () => false,
-}));
-const moocItemState = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
-const objectUrlState = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
-vi.mock("@/features/mooc/use-moocs", () => ({
-  useMoocItemQuery: () => moocItemState.current,
-  useObjectUrlQuery: () => objectUrlState.current,
+const noteGet = vi.hoisted(() => vi.fn());
+const notePost = vi.hoisted(() => vi.fn());
+const fileGet = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/api/openapi", () => ({
+  aiApi: { GET: vi.fn() },
+  noteApi: { GET: noteGet, POST: notePost },
+  fileApi: { GET: fileGet },
 }));
 vi.mock("@/features/ai/components/pdf/pdf-viewer", () => ({
   PdfViewer: ({ page, navigationKey }: { page?: number; navigationKey?: number }) => (
@@ -48,18 +32,156 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 import { DocTabBody } from "@/features/side-panel/tabs/doc/body";
 import { KbTabBody } from "@/features/side-panel/tabs/kb/body";
 import { MoocItemTabBody } from "@/features/side-panel/tabs/mooc-item/body";
-import { UNREADABLE_TITLE } from "@/features/side-panel/tabs/shared";
+import { MoocTabBody } from "@/features/side-panel/tabs/mooc/body";
+import { LOAD_FAILED, UNREADABLE_TITLE } from "@/features/side-panel/tabs/shared";
 import { TaskTabBody } from "@/features/side-panel/tabs/task/body";
 import type { TabBodyActions, TabBodyProps, TabId } from "@/features/side-panel/types";
-import { useAdminTaskQuery, useMemberTaskByIdQuery } from "@/features/tasks/use-task-detail";
-import { ApiError } from "@/lib/api/errors";
 import { renderWithProviders } from "@/test/render";
 
 /**
- * 只读资源正文测试。
+ * 只读资源正文测试：在 openapi-fetch 客户端层打桩。
  *
  * @author 称霸幼儿园
  */
+type Responder = (options: unknown) => { response: Response } | Promise<{ response: Response }>;
+type Routes = Record<string, Responder>;
+
+const DOC = {
+  id: 7,
+  docName: "资料.pdf",
+  url: "https://x/doc.pdf",
+  indexStatus: 0,
+  knowledgeBaseId: 3,
+};
+const BASE = { id: 3, knowledgeBaseName: "复习库", detail: "简介", permissions: 2 };
+const NOTES = {
+  current: 1,
+  pages: 1,
+  total: 1,
+  rows: [
+    {
+      id: 5,
+      title: "复习笔记",
+      updateTime: "2026-11-22T09:00:00.000Z",
+      latestOperationTime: null,
+    },
+  ],
+};
+const DOCS = {
+  current: 1,
+  pages: 1,
+  total: 1,
+  rows: [{ id: 7, docName: "资料.pdf", indexStatus: 0 }],
+};
+const MOOC = {
+  id: 8,
+  title: "课程一",
+  moocDescription: "课程简介",
+  moocKnowledgeBaseName: "复习库",
+};
+const TOP_ITEMS = {
+  current: 1,
+  pages: 1,
+  total: 2,
+  rows: [
+    { id: 10, title: "第一章", moocItemType: 0, parentId: 0 },
+    { id: 9, title: "第一讲", moocItemType: 1, parentId: 0, objectName: "video.mp4" },
+  ],
+};
+const CHILD_ITEMS = {
+  current: 1,
+  pages: 1,
+  total: 1,
+  rows: [{ id: 11, title: "第一节", moocItemType: 1, parentId: 10, objectName: "video2.mp4" }],
+};
+const ITEM_VIDEO = {
+  id: 9,
+  title: "第一讲",
+  moocItemType: 1,
+  objectName: "video.mp4",
+  moocItemText: null,
+};
+const ITEM_DOC = {
+  id: 9,
+  title: "讲义",
+  moocItemType: 2,
+  objectName: null,
+  moocItemText: { content: "# 讲义" },
+};
+const OBJECT_URL = { url: "https://x/video.mp4" };
+const ADMIN_TASK = {
+  id: 4,
+  taskName: "期末任务",
+  taskDescribe: "任务说明",
+  startTime: "2020-01-01T00:00:00.000Z",
+  endTime: "2030-01-01T00:00:00.000Z",
+};
+const MEMBER_TASK = { ...ADMIN_TASK, taskName: "成员任务", submissionStatus: 1 };
+
+function ok(data: unknown) {
+  return {
+    response: new Response(JSON.stringify({ code: "00000", msg: "操作成功", data })),
+  };
+}
+
+function fail(code: string, msg: string, status = 200) {
+  return { response: new Response(JSON.stringify({ code, msg }), { status }) };
+}
+
+function networkError(): never {
+  throw new TypeError("Failed to fetch");
+}
+
+function pending(): Promise<never> {
+  return new Promise(() => {});
+}
+
+function parentId(options: unknown): number | undefined {
+  const params = (
+    options as {
+      params?: { query?: { moocItemListDTO?: { parentId?: number } } };
+    }
+  ).params;
+  return params?.query?.moocItemListDTO?.parentId;
+}
+
+let routes: { noteGet: Routes; notePost: Routes; fileGet: Routes };
+
+beforeEach(() => {
+  noteGet.mockReset();
+  notePost.mockReset();
+  fileGet.mockReset();
+  routes = {
+    noteGet: {
+      "/docs/{id}": () => ok(DOC),
+      "/docs": () => ok(DOCS),
+      "/bases/{id}": () => ok(BASE),
+      "/moocs/{id}": () => ok(MOOC),
+      "/moocs/items": (options) => ok(parentId(options) === 0 ? TOP_ITEMS : CHILD_ITEMS),
+      "/moocs/items/{moocItemId}": () => ok(ITEM_VIDEO),
+      "/admin/noteTasks/{id}": () => ok(ADMIN_TASK),
+      "/noteTasks/{id}": () => ok(MEMBER_TASK),
+    },
+    notePost: { "/notes/bases/{baseId}": () => ok(NOTES) },
+    fileGet: { "/public/byObjectName": () => ok(OBJECT_URL) },
+  };
+  noteGet.mockImplementation((path: string, options: unknown) => {
+    const responder = routes.noteGet[path];
+    if (!responder) throw new Error(`未打桩的 GET：${path}`);
+    return responder(options);
+  });
+  notePost.mockImplementation((path: string, options: unknown) => {
+    const responder = routes.notePost[path];
+    if (!responder) throw new Error(`未打桩的 POST：${path}`);
+    return responder(options);
+  });
+  fileGet.mockImplementation((path: string, options: unknown) => {
+    const responder = routes.fileGet[path];
+    if (!responder) throw new Error(`未打桩的 file GET：${path}`);
+    return responder(options);
+  });
+});
+
 function actions(): TabBodyActions {
   return {
     openResource: vi.fn(),
@@ -82,114 +204,45 @@ function props(
   };
 }
 
-const adminQuery = vi.mocked(useAdminTaskQuery);
-const memberQuery = vi.mocked(useMemberTaskByIdQuery);
+const docRecord = {
+  id: "t1" as TabId,
+  kind: "doc",
+  family: "resource" as const,
+  ref: { type: "doc" as const, id: 7, kbId: 3 },
+};
+const kbRecord = {
+  id: "t1" as TabId,
+  kind: "kb",
+  family: "resource" as const,
+  ref: { type: "kb" as const, id: 3 },
+};
+const moocRecord = {
+  id: "t1" as TabId,
+  kind: "mooc",
+  family: "resource" as const,
+  ref: { type: "mooc" as const, id: 8, kbId: 3 },
+};
+const moocItemRecord = {
+  id: "t1" as TabId,
+  kind: "mooc_item",
+  family: "resource" as const,
+  ref: { type: "mooc_item" as const, id: 9, kbId: 3, moocId: 8 },
+};
+const taskRecord = {
+  id: "t1" as TabId,
+  kind: "task",
+  family: "resource" as const,
+  ref: { type: "task" as const, id: 4, kbId: 3 },
+};
 
-beforeEach(() => {
-  adminQuery.mockClear();
-  memberQuery.mockClear();
-  docState.current = {
-    data: { id: 7, docName: "资料.pdf", url: "https://x/doc.pdf", indexStatus: 0 },
-    isPending: false,
-    isError: false,
-    isFetching: false,
-    error: null,
-    refetch: vi.fn(),
-  };
-  baseState.current = {
-    data: { id: 3, knowledgeBaseName: "复习库", detail: "简介", permissions: 2 },
-    isPending: false,
-    isError: false,
-    isFetching: false,
-    error: null,
-    refetch: vi.fn(),
-  };
-  notesState.current = {
-    data: { rows: [{ id: 5, title: "复习笔记", updateTime: "2026-11-22T09:00:00.000Z" }] },
-    isPending: false,
-    isError: false,
-    isFetching: false,
-    error: null,
-    refetch: vi.fn(),
-  };
-  docsState.current = {
-    data: { rows: [{ id: 7, docName: "资料.pdf", indexStatus: 0 }] },
-    isPending: false,
-    isError: false,
-    isFetching: false,
-    error: null,
-    refetch: vi.fn(),
-  };
-  adminState.current = {
-    data: {
-      id: 4,
-      taskName: "期末任务",
-      taskDescribe: "任务说明",
-      startTime: "2020-01-01T00:00:00.000Z",
-      endTime: "2030-01-01T00:00:00.000Z",
-    },
-    isPending: false,
-    isError: false,
-    isFetching: false,
-    error: null,
-    refetch: vi.fn(),
-  };
-  memberState.current = {
-    data: {
-      id: 4,
-      taskName: "期末任务",
-      taskDescribe: "任务说明",
-      startTime: "2020-01-01T00:00:00.000Z",
-      endTime: "2030-01-01T00:00:00.000Z",
-      submissionStatus: 1,
-    },
-    isPending: false,
-    isError: false,
-    isFetching: false,
-    error: null,
-    refetch: vi.fn(),
-  };
-  moocItemState.current = {
-    data: {
-      id: 9,
-      title: "第一讲",
-      moocItemType: 1,
-      objectName: "video.mp4",
-      moocItemText: null,
-    },
-    isPending: false,
-    isError: false,
-    isFetching: false,
-    error: null,
-    refetch: vi.fn(),
-  };
-  objectUrlState.current = {
-    data: { url: "https://x/video.mp4" },
-    isPending: false,
-    isError: false,
-    isFetching: false,
-    error: null,
-    refetch: vi.fn(),
-  };
-});
+function calls(mock: typeof noteGet, path: string): number {
+  return mock.mock.calls.filter(([value]) => value === path).length;
+}
 
-describe("只读资源正文", () => {
-  /** 资料页码与导航版本传给 PDF 预览，新窗口地址带页码。 */
-  it("资料按页码定位", async () => {
-    renderWithProviders(
-      <DocTabBody
-        {...props(
-          {
-            id: "t1" as TabId,
-            kind: "doc",
-            family: "resource",
-            ref: { type: "doc", id: 7, kbId: 3 },
-          },
-          { page: 4 },
-          2,
-        )}
-      />,
-    );
+describe("资料标签", () => {
+  /** 资料按页码与导航版本定位，新窗口地址带页码。 */
+  it("按页码定位", async () => {
+    renderWithProviders(<DocTabBody {...props(docRecord, { page: 4 }, 2)} />);
     const viewer = await screen.findByTestId("pdf-viewer");
     expect(viewer).toHaveAttribute("data-page", "4");
     expect(viewer).toHaveAttribute("data-navigation", "2");
@@ -199,137 +252,177 @@ describe("只读资源正文", () => {
     );
   });
 
-  /** 不存在与无权限共用不可读文案；网络错误给重试。 */
-  it("资料不可读与加载失败", async () => {
-    docState.current = {
-      ...docState.current,
-      data: undefined,
-      isError: true,
-      error: new ApiError(200, "A0301", "没有权限"),
-    };
-    const view = renderWithProviders(
-      <DocTabBody
-        {...props({
-          id: "t1" as TabId,
-          kind: "doc",
-          family: "resource",
-          ref: { type: "doc", id: 7, kbId: 3 },
-        })}
-      />,
-    );
-    expect(screen.getByText(UNREADABLE_TITLE)).toBeVisible();
-
-    const refetch = vi.fn();
-    docState.current = {
-      ...docState.current,
-      error: new ApiError(500, "B0001", "服务错误"),
-      refetch,
-    };
-    view.rerender(
-      <DocTabBody
-        {...props({
-          id: "t1" as TabId,
-          kind: "doc",
-          family: "resource",
-          ref: { type: "doc", id: 7, kbId: 3 },
-        })}
-      />,
-    );
-    expect(screen.getByText("加载失败，请稍后重试")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "重试" }));
-    expect(refetch).toHaveBeenCalledOnce();
+  /** 详情未返回时显示文档骨架。 */
+  it("加载时显示文档骨架", () => {
+    routes.noteGet["/docs/{id}"] = () => pending();
+    renderWithProviders(<DocTabBody {...props(docRecord)} />);
+    expect(document.querySelector('[data-slot="skeleton-document"]')).not.toBeNull();
   });
 
-  /** 知识库正文列出最近笔记与资料，点条目在侧栏打开。 */
-  it("知识库正文打开条目", async () => {
-    const bodyProps = props({
-      id: "t1" as TabId,
-      kind: "kb",
-      family: "resource",
-      ref: { type: "kb", id: 3 },
-    });
+  /** 不存在与无权限共用不可读文案。 */
+  it("不可读", async () => {
+    routes.noteGet["/docs/{id}"] = () => fail("A0301", "没有权限");
+    renderWithProviders(<DocTabBody {...props(docRecord)} />);
+    expect(await screen.findByText(UNREADABLE_TITLE)).toBeVisible();
+  });
+
+  /** 网络错误给重试，重试重新请求。 */
+  it("网络错误重试", async () => {
+    routes.noteGet["/docs/{id}"] = networkError;
+    renderWithProviders(<DocTabBody {...props(docRecord)} />);
+    expect(await screen.findByText(LOAD_FAILED)).toBeVisible();
+    const before = calls(noteGet, "/docs/{id}");
+    routes.noteGet["/docs/{id}"] = () => ok(DOC);
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(calls(noteGet, "/docs/{id}")).toBe(before + 1));
+    expect(await screen.findByTestId("pdf-viewer")).toBeVisible();
+  });
+});
+
+describe("知识库标签", () => {
+  /** 最近笔记与资料各列 5 条，点条目在侧栏打开。 */
+  it("列出条目并在侧栏打开", async () => {
+    const bodyProps = props(kbRecord);
     renderWithProviders(<KbTabBody {...bodyProps} />);
-    expect(screen.getByText("复习笔记")).toBeVisible();
+    expect(await screen.findByText("复习笔记")).toBeVisible();
     expect(screen.getByText("资料.pdf")).toBeVisible();
+
     fireEvent.click(screen.getByTestId("side-panel-kb-note-5"));
     expect(bodyProps.actions.openResource).toHaveBeenCalledWith({
       ref: { type: "note", id: 5, kbId: 3 },
       locator: {},
       hint: { title: "复习笔记", kbName: "复习库" },
     });
+
+    fireEvent.click(screen.getByTestId("side-panel-kb-doc-7"));
+    expect(bodyProps.actions.openResource).toHaveBeenCalledWith({
+      ref: { type: "doc", id: 7, kbId: 3 },
+      locator: {},
+      hint: { title: "资料.pdf", kbName: "复习库" },
+    });
   });
 
-  /** 知识库空态使用已确认文案。 */
-  it("知识库空态", () => {
-    notesState.current = { ...notesState.current, data: { rows: [] } };
-    docsState.current = { ...docsState.current, data: { rows: [] } };
-    renderWithProviders(
-      <KbTabBody
-        {...props({
-          id: "t1" as TabId,
-          kind: "kb",
-          family: "resource",
-          ref: { type: "kb", id: 3 },
-        })}
-      />,
-    );
-    expect(screen.getByText("这个知识库还没有笔记")).toBeVisible();
+  /** 知识库详情未返回时显示面板骨架。 */
+  it("加载时显示面板骨架", () => {
+    routes.noteGet["/bases/{id}"] = () => pending();
+    renderWithProviders(<KbTabBody {...props(kbRecord)} />);
+    expect(document.querySelector('[data-slot="skeleton-panel"]')).not.toBeNull();
+  });
+
+  /** 不存在与无权限共用不可读文案。 */
+  it("不可读", async () => {
+    routes.noteGet["/bases/{id}"] = () => fail("A0301", "没有权限");
+    renderWithProviders(<KbTabBody {...props(kbRecord)} />);
+    expect(await screen.findByText(UNREADABLE_TITLE)).toBeVisible();
+  });
+
+  /** 网络错误给重试。 */
+  it("网络错误重试", async () => {
+    routes.noteGet["/bases/{id}"] = networkError;
+    renderWithProviders(<KbTabBody {...props(kbRecord)} />);
+    expect(await screen.findByText(LOAD_FAILED)).toBeVisible();
+    const before = calls(noteGet, "/bases/{id}");
+    routes.noteGet["/bases/{id}"] = () => ok(BASE);
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(calls(noteGet, "/bases/{id}")).toBe(before + 1));
+  });
+
+  /** 两个预览区为空时使用已确认文案。 */
+  it("空态", async () => {
+    routes.notePost["/notes/bases/{baseId}"] = () => ok({ ...NOTES, rows: [] });
+    routes.noteGet["/docs"] = () => ok({ ...DOCS, rows: [] });
+    renderWithProviders(<KbTabBody {...props(kbRecord)} />);
+    expect(await screen.findByText("这个知识库还没有笔记")).toBeVisible();
     expect(screen.getByText("这个知识库还没有资料")).toBeVisible();
   });
 
-  /** 成员视角使用单条端点，管理员视角使用管理端点。 */
-  it("任务按权限选择数据源", () => {
-    const member = renderWithProviders(
-      <TaskTabBody
-        {...props({
-          id: "t1" as TabId,
-          kind: "task",
-          family: "resource",
-          ref: { type: "task", id: 4, kbId: 3 },
-        })}
-      />,
-    );
-    expect(screen.getAllByText("期末任务").length).toBeGreaterThan(0);
-    expect(screen.getByText("任务说明")).toBeVisible();
-    expect(adminQuery).toHaveBeenLastCalledWith(4, { enabled: false });
-    expect(memberQuery).toHaveBeenLastCalledWith(4, { enabled: true });
-    member.unmount();
+  /** 子列表失败只影响该区块，重试重新请求。 */
+  it("笔记列表异常重试", async () => {
+    routes.notePost["/notes/bases/{baseId}"] = networkError;
+    renderWithProviders(<KbTabBody {...props(kbRecord)} />);
+    expect(await screen.findByText(LOAD_FAILED)).toBeVisible();
+    expect(screen.getByText("资料.pdf")).toBeVisible();
+    const before = calls(notePost, "/notes/bases/{baseId}");
+    routes.notePost["/notes/bases/{baseId}"] = () => ok(NOTES);
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(calls(notePost, "/notes/bases/{baseId}")).toBe(before + 1));
+  });
+});
 
-    baseState.current = {
-      ...baseState.current,
-      data: { ...(baseState.current.data as Record<string, unknown>), permissions: 1 },
-    };
-    renderWithProviders(
-      <TaskTabBody
-        {...props({
-          id: "t1" as TabId,
-          kind: "task",
-          family: "resource",
-          ref: { type: "task", id: 4, kbId: 3 },
-        })}
-      />,
-    );
-    expect(screen.getAllByText("期末任务").length).toBeGreaterThan(0);
-    expect(adminQuery).toHaveBeenLastCalledWith(4, { enabled: true });
-    expect(memberQuery).toHaveBeenLastCalledWith(4, { enabled: false });
+describe("慕课标签", () => {
+  /** 目录展开后加载子条目，点可播放条目在侧栏打开。 */
+  it("目录展开与条目打开", async () => {
+    const bodyProps = props(moocRecord);
+    renderWithProviders(<MoocTabBody {...bodyProps} />);
+    expect(await screen.findByText("课程一")).toBeVisible();
+    expect(screen.getByText("课程简介")).toBeVisible();
+    expect(screen.getByText("课程目录")).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("side-panel-mooc-item-9"));
+    expect(bodyProps.actions.openResource).toHaveBeenCalledWith({
+      ref: { type: "mooc_item", id: 9, kbId: 3, moocId: 8 },
+      locator: {},
+      hint: { title: "第一讲", kbName: "复习库" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "展开章节" }));
+    expect(await screen.findByText("第一节")).toBeVisible();
+    fireEvent.click(screen.getByTestId("side-panel-mooc-item-11"));
+    expect(bodyProps.actions.openResource).toHaveBeenCalledWith({
+      ref: { type: "mooc_item", id: 11, kbId: 3, moocId: 8 },
+      locator: {},
+      hint: { title: "第一节", kbName: "复习库" },
+    });
   });
 
-  /** 视频条目把秒数与导航版本传给播放器。 */
-  it("慕课条目视频定位", async () => {
-    renderWithProviders(
-      <MoocItemTabBody
-        {...props(
-          {
-            id: "t1" as TabId,
-            kind: "mooc_item",
-            family: "resource",
-            ref: { type: "mooc_item", id: 9, kbId: 3, moocId: 8 },
-          },
-          { seconds: 12.345 },
-          3,
-        )}
-      />,
-    );
+  /** 目录加载时显示骨架。 */
+  it("目录加载骨架", () => {
+    routes.noteGet["/moocs/items"] = () => pending();
+    renderWithProviders(<MoocTabBody {...props(moocRecord)} />);
+    expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
+  });
+
+  /** 课程不存在与无权限共用不可读文案。 */
+  it("课程不可读", async () => {
+    routes.noteGet["/moocs/{id}"] = () => fail("A0301", "没有权限");
+    renderWithProviders(<MoocTabBody {...props(moocRecord)} />);
+    expect(await screen.findByText(UNREADABLE_TITLE)).toBeVisible();
+  });
+
+  /** 课程网络错误给重试。 */
+  it("课程网络错误重试", async () => {
+    routes.noteGet["/moocs/{id}"] = networkError;
+    renderWithProviders(<MoocTabBody {...props(moocRecord)} />);
+    expect(await screen.findByText(LOAD_FAILED)).toBeVisible();
+    const before = calls(noteGet, "/moocs/{id}");
+    routes.noteGet["/moocs/{id}"] = () => ok(MOOC);
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(calls(noteGet, "/moocs/{id}")).toBe(before + 1));
+  });
+
+  /** 目录失败给重试，重试重新请求。 */
+  it("目录异常重试", async () => {
+    routes.noteGet["/moocs/items"] = networkError;
+    renderWithProviders(<MoocTabBody {...props(moocRecord)} />);
+    expect(await screen.findByText(LOAD_FAILED)).toBeVisible();
+    const before = calls(noteGet, "/moocs/items");
+    routes.noteGet["/moocs/items"] = () => ok(TOP_ITEMS);
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(calls(noteGet, "/moocs/items")).toBe(before + 1));
+  });
+
+  /** 空目录使用已确认文案。 */
+  it("空目录", async () => {
+    routes.noteGet["/moocs/items"] = () => ok({ ...TOP_ITEMS, rows: [] });
+    renderWithProviders(<MoocTabBody {...props(moocRecord)} />);
+    expect(await screen.findByText("这门课还没有章节内容")).toBeVisible();
+  });
+});
+
+describe("慕课条目标签", () => {
+  /** 视频把秒数与导航版本传给播放器，新窗口地址带时间点。 */
+  it("视频按秒数定位", async () => {
+    renderWithProviders(<MoocItemTabBody {...props(moocItemRecord, { seconds: 12.345 }, 3)} />);
     const player = await screen.findByTestId("video-player");
     expect(player).toHaveAttribute("data-start", "12.345");
     expect(player).toHaveAttribute("data-navigation", "3");
@@ -340,30 +433,94 @@ describe("只读资源正文", () => {
   });
 
   /** 文档类条目只读渲染正文。 */
-  it("慕课条目文档正文", async () => {
-    moocItemState.current = {
-      ...moocItemState.current,
-      data: {
-        id: 9,
-        title: "讲义",
-        moocItemType: 2,
-        objectName: null,
-        moocItemText: { content: "# 讲义" },
-      },
-    };
-    renderWithProviders(
-      <MoocItemTabBody
-        {...props({
-          id: "t1" as TabId,
-          kind: "mooc_item",
-          family: "resource",
-          ref: { type: "mooc_item", id: 9, kbId: 3, moocId: 8 },
-        })}
-      />,
-    );
+  it("文档条目只读正文", async () => {
+    routes.noteGet["/moocs/items/{moocItemId}"] = () => ok(ITEM_DOC);
+    renderWithProviders(<MoocItemTabBody {...props(moocItemRecord)} />);
     await waitFor(() =>
       expect(screen.getByTestId("tiptap")).toHaveAttribute("data-preset", "readonly"),
     );
     expect(screen.getByText("# 讲义")).toBeVisible();
+  });
+
+  /** 条目详情未返回时显示骨架。 */
+  it("加载骨架", () => {
+    routes.noteGet["/moocs/items/{moocItemId}"] = () => pending();
+    renderWithProviders(<MoocItemTabBody {...props(moocItemRecord)} />);
+    expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
+  });
+
+  /** 不存在与无权限共用不可读文案。 */
+  it("不可读", async () => {
+    routes.noteGet["/moocs/items/{moocItemId}"] = () => fail("A0301", "没有权限");
+    renderWithProviders(<MoocItemTabBody {...props(moocItemRecord)} />);
+    expect(await screen.findByText(UNREADABLE_TITLE)).toBeVisible();
+  });
+
+  /** 网络错误给重试。 */
+  it("网络错误重试", async () => {
+    routes.noteGet["/moocs/items/{moocItemId}"] = networkError;
+    renderWithProviders(<MoocItemTabBody {...props(moocItemRecord)} />);
+    expect(await screen.findByText(LOAD_FAILED)).toBeVisible();
+    const before = calls(noteGet, "/moocs/items/{moocItemId}");
+    routes.noteGet["/moocs/items/{moocItemId}"] = () => ok(ITEM_VIDEO);
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(calls(noteGet, "/moocs/items/{moocItemId}")).toBe(before + 1));
+  });
+
+  /** 播放地址失败给重试，重试重新请求 file 域。 */
+  it("播放地址失败重试", async () => {
+    routes.fileGet["/public/byObjectName"] = networkError;
+    renderWithProviders(<MoocItemTabBody {...props(moocItemRecord)} />);
+    expect(await screen.findByText(LOAD_FAILED)).toBeVisible();
+    const before = calls(fileGet, "/public/byObjectName");
+    routes.fileGet["/public/byObjectName"] = () => ok(OBJECT_URL);
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(calls(fileGet, "/public/byObjectName")).toBe(before + 1));
+    expect(await screen.findByTestId("video-player")).toBeVisible();
+  });
+});
+
+describe("任务标签", () => {
+  /** 成员视角使用单条端点，不请求管理端点。 */
+  it("成员视角", async () => {
+    renderWithProviders(<TaskTabBody {...props(taskRecord)} />);
+    expect(await screen.findByRole("heading", { name: "成员任务", level: 3 })).toBeVisible();
+    expect(screen.getByText("任务说明")).toBeVisible();
+    expect(calls(noteGet, "/noteTasks/{id}")).toBe(1);
+    expect(calls(noteGet, "/admin/noteTasks/{id}")).toBe(0);
+  });
+
+  /** 管理员视角渲染管理端点的数据。 */
+  it("管理员视角", async () => {
+    routes.noteGet["/bases/{id}"] = () => ok({ ...BASE, permissions: 1 });
+    renderWithProviders(<TaskTabBody {...props(taskRecord)} />);
+    expect(await screen.findByRole("heading", { name: "期末任务", level: 3 })).toBeVisible();
+    expect(screen.queryByText("成员任务")).toBeNull();
+    expect(calls(noteGet, "/admin/noteTasks/{id}")).toBe(1);
+  });
+
+  /** 知识库权限未返回时显示骨架。 */
+  it("加载骨架", () => {
+    routes.noteGet["/bases/{id}"] = () => pending();
+    renderWithProviders(<TaskTabBody {...props(taskRecord)} />);
+    expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
+  });
+
+  /** 任务不存在与无权限共用不可读文案。 */
+  it("不可读", async () => {
+    routes.noteGet["/noteTasks/{id}"] = () => fail("A0301", "没有权限");
+    renderWithProviders(<TaskTabBody {...props(taskRecord)} />);
+    expect(await screen.findByText(UNREADABLE_TITLE)).toBeVisible();
+  });
+
+  /** 网络错误给重试。 */
+  it("网络错误重试", async () => {
+    routes.noteGet["/noteTasks/{id}"] = networkError;
+    renderWithProviders(<TaskTabBody {...props(taskRecord)} />);
+    expect(await screen.findByText(LOAD_FAILED)).toBeVisible();
+    const before = calls(noteGet, "/noteTasks/{id}");
+    routes.noteGet["/noteTasks/{id}"] = () => ok(MEMBER_TASK);
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(calls(noteGet, "/noteTasks/{id}")).toBe(before + 1));
   });
 });

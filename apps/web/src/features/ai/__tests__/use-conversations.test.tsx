@@ -15,6 +15,7 @@ import {
   useDeleteConversationMutation,
   useRenameConversationMutation,
 } from "@/features/ai/use-conversations";
+import { sidePanelStorageKey } from "@/features/side-panel/storage-keys";
 import { aiApi } from "@/lib/api/openapi";
 
 const aiApiMock = vi.mocked(aiApi, true);
@@ -56,6 +57,7 @@ describe("use-conversations", () => {
     aiApiMock.GET.mockReset();
     aiApiMock.PATCH.mockReset();
     aiApiMock.DELETE.mockReset();
+    localStorage.clear();
   });
 
   it("会话列表分页解析并支持翻页", async () => {
@@ -158,6 +160,29 @@ describe("use-conversations", () => {
       expect.objectContaining({ params: { path: { id: 7 } } }),
     );
     expect(queryClient.getQueryData(aiQueryKeys.conversationDetail(7))).toBeUndefined();
+  });
+
+  /** 宿主未挂载时删除会话仍清理本地分区；会话 id 全局唯一，各用户键一并处理。 */
+  it("删除会话清理本地分区", async () => {
+    aiApiMock.DELETE.mockResolvedValue(envelope("SUCCESS"));
+    const surface = { open: true, activeId: null, tabs: [], recent: [], seq: 0, touchedAt: 1 };
+    localStorage.setItem(
+      sidePanelStorageKey(7),
+      JSON.stringify({ version: 1, surfaces: { "chat:c7": surface, "chat:c8": surface } }),
+    );
+    localStorage.setItem(
+      sidePanelStorageKey(8),
+      JSON.stringify({ version: 1, surfaces: { "chat:c7": surface } }),
+    );
+    const { result } = renderHook(() => useDeleteConversationMutation(), {
+      wrapper: createWrapper(),
+    });
+    await result.current.mutateAsync(7);
+    await waitFor(() => expect(localStorage.getItem(sidePanelStorageKey(8))).toBeNull());
+    const first = localStorage.getItem(sidePanelStorageKey(7));
+    expect(first).not.toBeNull();
+    expect(first).not.toContain("chat:c7");
+    expect(first).toContain("chat:c8");
   });
 
   it("conversationKey 生成稳定的 store key", () => {

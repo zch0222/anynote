@@ -37,6 +37,17 @@ function noteSurface(id = 5, touchedAt = 100): SurfaceState {
   return surface;
 }
 
+function storedSurface(tabs: Array<{ id: string; kind: string; ref: unknown }>) {
+  return {
+    open: true,
+    activeId: tabs[0]?.id ?? null,
+    tabs,
+    recent: tabs[0] ? [tabs[0].id] : [],
+    seq: tabs.length,
+    touchedAt: 1,
+  };
+}
+
 beforeEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
@@ -112,6 +123,77 @@ describe("侧栏持久化", () => {
       throw new Error("quota");
     });
     expect(() => saveSidePanelState(USER, { "chat:c1": noteSurface() })).not.toThrow();
+  });
+
+  /** 只写拿到会话 id 的 chat:c<正整数> 分区，新会话与非法键都不写。 */
+  it("只写拿到会话 id 的分区", () => {
+    saveSidePanelState(USER, {
+      "chat:new": noteSurface(1),
+      "chat:new:kb3": noteSurface(2),
+      "chat:c0": noteSurface(3),
+      "chat:c12": noteSurface(4),
+    });
+    const raw = localStorage.getItem(sidePanelStorageKey(USER)) ?? "";
+    expect(raw).toContain("chat:c12");
+    expect(raw).not.toContain("chat:new");
+    expect(raw).not.toContain("chat:c0");
+    expect(Object.keys(loadSidePanelState(USER) ?? {})).toEqual(["chat:c12"]);
+  });
+
+  /** 读取时忽略旧版本写入的 chat:new* 分区。 */
+  it("读取时忽略新会话分区", () => {
+    const key = sidePanelStorageKey(USER);
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 1,
+        surfaces: {
+          "chat:new": storedSurface([
+            { id: "t1", kind: "note", ref: { type: "note", id: 5, kbId: 3 } },
+          ]),
+          "chat:c1": storedSurface([
+            { id: "t1", kind: "note", ref: { type: "note", id: 6, kbId: 3 } },
+          ]),
+        },
+      }),
+    );
+    const loaded = loadSidePanelState(USER);
+    expect(loaded?.["chat:new"]).toBeUndefined();
+    expect(loaded?.["chat:c1"]).toBeDefined();
+
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 1,
+        surfaces: {
+          "chat:new": storedSurface([
+            { id: "t1", kind: "note", ref: { type: "note", id: 5, kbId: 3 } },
+          ]),
+        },
+      }),
+    );
+    expect(loadSidePanelState(USER)).toBeNull();
+  });
+
+  /** 未注册的 kind、kind 与 ref.type 不一致、标签 id 重复都删除该用户的键。 */
+  it("恢复时校验标签类型与唯一性", () => {
+    const key = sidePanelStorageKey(USER);
+    const invalidTabs = [
+      [{ id: "t1", kind: "summary", ref: { type: "note", id: 5, kbId: 3 } }],
+      [{ id: "t1", kind: "doc", ref: { type: "note", id: 5, kbId: 3 } }],
+      [
+        { id: "t1", kind: "note", ref: { type: "note", id: 5, kbId: 3 } },
+        { id: "t1", kind: "note", ref: { type: "note", id: 6, kbId: 3 } },
+      ],
+    ];
+    for (const tabs of invalidTabs) {
+      localStorage.setItem(
+        key,
+        JSON.stringify({ version: 1, surfaces: { "chat:c1": storedSurface(tabs) } }),
+      );
+      expect(loadSidePanelState(USER)).toBeNull();
+      expect(localStorage.getItem(key)).toBeNull();
+    }
   });
 
   /** 只写 chat 分区，页面类标签不写。 */

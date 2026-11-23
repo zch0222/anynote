@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { type Citation, citationHref } from "../citations";
 import {
   resourceHref,
   resourceKey,
@@ -64,7 +65,9 @@ describe("资源目标", () => {
     expect(targetFromCitation({ sourceId: "mooc:8" })).toBeNull();
     expect(targetFromCitation({ sourceId: "task:4" })).toBeNull();
     expect(targetFromCitation({ sourceId: "mooc_item:9", kbId: 3 })).toBeNull();
-    expect(targetFromCitation({ sourceId: "mooc_item:9", kbId: 3, locator: { moocId: 0 } })).toBeNull();
+    expect(
+      targetFromCitation({ sourceId: "mooc_item:9", kbId: 3, locator: { moocId: 0 } }),
+    ).toBeNull();
   });
 
   /** 非法来源标识与越界 id 一律拒绝。 */
@@ -127,4 +130,55 @@ describe("资源目标", () => {
     });
     expect(item && resourceHref(item, "desktop")).toBe("/notes/3/mooc/8?itemId=9&t=0");
   });
+
+  /** 同一输入下，首屏的 citationHref 与侧栏的 resourceHref 生成相同地址。 */
+  it.each(equivalenceCases)("$name 与资源地址一致", ({ citation }) => {
+    for (const variant of ["desktop", "mobile"] as const) {
+      const target = targetFromCitation(citation);
+      expect(citationHref(citation, variant)).toBe(target ? resourceHref(target, variant) : null);
+    }
+  });
 });
+
+function citation(
+  sourceId: string,
+  kbId?: number | null,
+  locator?: Record<string, unknown> | null,
+): Citation {
+  return { index: 1, sourceType: "test", sourceId, kbId, locator };
+}
+
+const equivalenceCases: Array<{ name: string; citation: Citation }> = [
+  {
+    name: "笔记小节与行号",
+    citation: citation("note:5", 3, { sectionPath: "第一章 > 索引", startLine: 12 }),
+  },
+  { name: "笔记 heading 与 line", citation: citation("note:5", 3, { heading: "索引", line: 12 }) },
+  { name: "笔记无定位", citation: citation("note:5", 3) },
+  { name: "笔记缺少知识库", citation: citation("note:5") },
+  {
+    name: "笔记空白小节与负行号",
+    citation: citation("note:5", 3, { sectionPath: "  ", line: -1 }),
+  },
+  { name: "资料带知识库与页码", citation: citation("doc:7", 3, { pageStart: 4 }) },
+  { name: "资料无知识库", citation: citation("doc:7") },
+  { name: "资料 pageNo", citation: citation("doc:7", 3, { pageNo: 2 }) },
+  { name: "资料非法页码", citation: citation("doc:7", 3, { pageStart: 2.5 }) },
+  { name: "慕课", citation: citation("mooc:8", 3) },
+  {
+    name: "慕课条目字幕",
+    citation: citation("mooc_item:9#transcript", 3, { moocId: 8, startTimeMs: 12345 }),
+  },
+  {
+    name: "慕课条目总结无时间",
+    citation: citation("mooc_item:9#summary", 3, { moocId: 8 }),
+  },
+  {
+    name: "慕课条目零秒",
+    citation: citation("mooc_item:9", 3, { moocId: 8, startTimeMs: 0 }),
+  },
+  { name: "慕课条目缺少慕课 id", citation: citation("mooc_item:9", 3) },
+  { name: "任务", citation: citation("task:4", 3) },
+  { name: "知识库", citation: citation("kb:2", 3) },
+  { name: "非法来源", citation: citation("note:0", 3) },
+];

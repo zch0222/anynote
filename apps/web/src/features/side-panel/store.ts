@@ -3,7 +3,8 @@
 import type { ResourceTarget } from "@/lib/ai/resource-target";
 import { resourceKey } from "@/lib/ai/resource-target";
 import { create } from "zustand";
-import { resourceKind } from "./registry";
+import { resourceKind, tabDefinitions } from "./registry";
+import { SIDE_PANEL_RESET_EVENT } from "./storage-keys";
 import { type SurfaceKey, type SurfaceState, type TabId, type TabRecord, asTabId } from "./types";
 
 /**
@@ -23,6 +24,7 @@ type StoreState = {
   activate: (surface: SurfaceKey, tabId: TabId) => void;
   close: (surface: SurfaceKey, tabId: TabId) => void;
   setOpen: (surface: SurfaceKey, open: boolean) => void;
+  requestLeave: (surface: SurfaceKey) => boolean;
   toggleMaximized: (surface: SurfaceKey) => void;
   renameSurface: (from: SurfaceKey, to: SurfaceKey) => void;
   removeSurface: (surface: SurfaceKey) => void;
@@ -143,13 +145,16 @@ export const useSidePanelStore = create<StoreState>()((set, get) => ({
       };
     }),
 
-  openPage: (surface, kind, contentId = "", multiple = false) =>
+  openPage: (surface, kind, contentId, multiple) =>
     set((state) => {
       const current = state.surfaces[surface] ?? emptySurface();
-      const existing = multiple
+      const pageId = contentId ?? "";
+      const definition = tabDefinitions.find((item) => item.kind === kind);
+      const effectiveMultiple = multiple ?? definition?.multiple ?? false;
+      const existing = effectiveMultiple
         ? undefined
         : current.tabs.find(
-            (tab) => tab.family === "page" && tab.kind === kind && tab.contentId === contentId,
+            (tab) => tab.family === "page" && tab.kind === kind && tab.contentId === pageId,
           );
       if (existing) {
         if (existing.id !== current.activeId && !canLeave(state, surface)) return state;
@@ -176,7 +181,7 @@ export const useSidePanelStore = create<StoreState>()((set, get) => ({
       if (!canLeave(state, surface)) return state;
 
       const { id, seq } = nextTabId(current);
-      const record: TabRecord = { id, kind, family: "page", contentId };
+      const record: TabRecord = { id, kind, family: "page", contentId: pageId };
       const tabs = insertAfterActive(current.tabs, current.activeId, record);
       const recent = [id, ...current.recent.filter((item) => item !== id)];
       const overflow = evictOverflow(tabs, recent, id, current.navigation, current.hints);
@@ -265,6 +270,8 @@ export const useSidePanelStore = create<StoreState>()((set, get) => ({
       };
     }),
 
+  requestLeave: (surface) => canLeave(get(), surface),
+
   toggleMaximized: (surface) =>
     set((state) => {
       const current = state.surfaces[surface] ?? emptySurface();
@@ -345,6 +352,17 @@ export const useSidePanelStore = create<StoreState>()((set, get) => ({
       return { surfaces: next };
     }),
 }));
+
+/**
+ * 清空全部侧栏内存分区；登出时通过同名事件触发。
+ */
+export function resetSidePanelState(): void {
+  useSidePanelStore.setState({ surfaces: {}, guards: {}, newWindowHandlers: {} });
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener(SIDE_PANEL_RESET_EVENT, resetSidePanelState);
+}
 
 function canLeave(state: StoreState, surface: SurfaceKey): boolean {
   const current = state.surfaces[surface];

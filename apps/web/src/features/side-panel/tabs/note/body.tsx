@@ -141,7 +141,13 @@ export function NoteTabBody({ record, navigation, variant, actions }: TabBodyPro
         }
         href={href}
         {...(pending && href ? { onNewWindow: () => openInNewWindow(href) } : {})}
-        {...(href ? { onOpenFullPage: () => router.push(href) } : {})}
+        {...(href
+          ? {
+              onOpenFullPage: () => {
+                if (confirmLeave()) router.push(href);
+              },
+            }
+          : {})}
         {...(historyHref ? { onOpenHistory: () => openInNewWindow(historyHref) } : {})}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">

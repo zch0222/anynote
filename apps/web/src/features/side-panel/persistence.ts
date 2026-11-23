@@ -1,6 +1,7 @@
 "use client";
 
 import { useMe } from "@/features/auth/use-me";
+import type { ResourceType } from "@/lib/ai/resource-target";
 import { useEffect, useRef } from "react";
 import { z } from "zod";
 import { tabDefinitions } from "./registry";
@@ -19,6 +20,12 @@ export const MAX_SURFACES = 50;
 /** 写入防抖。 */
 export const PERSIST_DEBOUNCE_MS = 300;
 
+/** 最近一次恢复所属的用户 id；宿主重新挂载后仍保留，用于识别账号切换。 */
+let activeUserId: number | null = null;
+
+/** 只持久化拿到会话 id 的分区；新会话的 `chat:new*` 不写入也不恢复。 */
+const PERSISTABLE_SURFACE_KEY = /^chat:c[1-9]\d*$/;
+
 const positiveInt = z.number().int().positive();
 
 const refSchema = z.discriminatedUnion("type", [
@@ -35,11 +42,23 @@ const refSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("task"), id: positiveInt, kbId: positiveInt }),
 ]);
 
-const resourceTabSchema = z.object({
-  id: z.string().min(1),
-  kind: z.string().min(1),
-  ref: refSchema,
-});
+/** 资源类型到标签 kind 的映射；注册表加载时已保证每种资源恰好一个定义。 */
+const resourceKinds = new Map<ResourceType, string>();
+for (const definition of tabDefinitions) {
+  if (definition.family === "resource" && definition.resourceType) {
+    resourceKinds.set(definition.resourceType, definition.kind);
+  }
+}
+
+const resourceTabSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.string().min(1),
+    ref: refSchema,
+  })
+  .refine((tab) => resourceKinds.get(tab.ref.type) === tab.kind, {
+    message: "标签类型与资源类型不一致",
+  });
 
 const surfaceSchema = z
   .object({
@@ -59,6 +78,9 @@ const surfaceSchema = z
   )
   .refine((surface) => surface.recent.every((id) => surface.tabs.some((tab) => tab.id === id)), {
     message: "最近使用记录不在标签列表里",
+  })
+  .refine((surface) => new Set(surface.tabs.map((tab) => tab.id)).size === surface.tabs.length, {
+    message: "标签 id 重复",
   });
 
 const storedSchema = z.object({
@@ -98,8 +120,10 @@ export function loadSidePanelState(userId: number): Record<SurfaceKey, SurfaceSt
   }
 
   const entries = Object.entries(result.data.surfaces)
+    .filter(([surfaceKey]) => PERSISTABLE_SURFACE_KEY.test(surfaceKey))
     .sort((left, right) => right[1].touchedAt - left[1].touchedAt)
     .slice(0, MAX_SURFACES);
+  if (entries.length === 0) return null;
   return Object.fromEntries(
     entries.map(([surfaceKey, surface]) => [surfaceKey, toSurfaceState(surface)]),
   );
@@ -119,7 +143,7 @@ export function saveSidePanelState(
   if (typeof localStorage === "undefined") return;
   const key = sidePanelStorageKey(userId);
   const entries = Object.entries(surfaces)
-    .filter(([surfaceKey]) => surfaceKey.startsWith("chat:"))
+    .filter(([surfaceKey]) => PERSISTABLE_SURFACE_KEY.test(surfaceKey))
     .sort((left, right) => right[1].touchedAt - left[1].touchedAt)
     .slice(0, MAX_SURFACES);
   if (entries.length === 0) {
@@ -181,13 +205,14 @@ export function useSidePanelPersistence(options: {
   const ignoreOpen = options.ignoreOpen === true;
 
   useEffect(() => {
-    if (loadedFor.current === userId) return;
-    const previous = loadedFor.current;
-    loadedFor.current = userId;
-    if (userId === null) return;
-    if (previous !== null && previous !== userId) {
+    // 宿主重新挂载后 loadedFor 从 null 开始，跨挂载的账号变化只能靠模块级记录识别
+    if (activeUserId !== userId) {
+      activeUserId = userId;
       useSidePanelStore.setState({ surfaces: {}, guards: {}, newWindowHandlers: {} });
     }
+    if (loadedFor.current === userId) return;
+    loadedFor.current = userId;
+    if (userId === null) return;
     const stored = loadSidePanelState(userId);
     if (!stored) return;
     useSidePanelStore.getState().hydrate(stored, { ignoreOpen });

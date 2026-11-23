@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   type APIRequestContext,
+  type Locator,
   type Page,
   request as apiRequest,
   devices,
@@ -156,6 +157,75 @@ async function ask(page: Page, prompt: string, pdf = false) {
   return { message, request: stream.request().postDataJSON() };
 }
 
+/** 拦截笔记保存，制造不可重试的未保存风险。 */
+async function failNoteSaves(page: Page, noteId: number) {
+  await page.route(`**/api/proxy/note/notes/${noteId}`, (route) =>
+    route.request().method() === "PATCH"
+      ? route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ code: "A0300", msg: "没有编辑权限" }),
+        })
+      : route.continue(),
+  );
+}
+
+/** 打开笔记引用并等待侧栏编辑器就绪。 */
+async function openNotePanel(page: Page, mobile: boolean, fixture: Fixture) {
+  await page.goto(
+    mobile ? `/m/ai/chat/new?baseId=${fixture.baseId}` : `/ai/chat?baseId=${fixture.baseId}`,
+  );
+  await ask(page, "M167NOTECITATION 倒排索引是什么？");
+  const inline = page.locator(".anynote-editor__content a").filter({ hasText: "[1]" });
+  await inline.click();
+  const panel = page.getByTestId(mobile ? "side-panel-mobile" : "side-panel");
+  await expect(panel).toBeVisible();
+  const editor = panel.locator(".anynote-editor__content");
+  await expect(editor).toBeVisible({ timeout: 30_000 });
+  return { panel, editor };
+}
+
+/** 在侧栏笔记里输入一段草稿。 */
+async function typeDraft(page: Page, editor: Locator) {
+  await editor.click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("M19守卫草稿");
+  await expect(editor).toContainText("M19守卫草稿");
+}
+
+/**
+ * 打开面板「更多」菜单并点击指定项。
+ *
+ * 保存状态刷新会关闭 Base UI 菜单，用 DOM 观察者在菜单项出现时立即点击，
+ * 仍然走真实的菜单点击与离开守卫。
+ */
+async function clickPanelMenuItem(page: Page, label: string) {
+  await page.evaluate(
+    (text) =>
+      new Promise<void>((resolve, reject) => {
+        const trigger = document.querySelector<HTMLElement>(
+          '[data-testid="side-panel"] [aria-label="更多"], [data-testid="side-panel-mobile"] [aria-label="更多"]',
+        );
+        if (!trigger) {
+          reject(new Error("找不到更多按钮"));
+          return;
+        }
+        const observer = new MutationObserver(() => {
+          const item = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(
+            (element) => element.textContent?.trim() === text,
+          );
+          if (!item) return;
+          observer.disconnect();
+          item.click();
+          resolve();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        trigger.click();
+      }),
+    label,
+  );
+}
+
 /** 注册桌面或移动端的知识问答闭环用例。 */
 export function agentRetrievalTests(mobile: boolean) {
   test.describe("M16.7 知识检索前端", () => {
@@ -166,10 +236,19 @@ export function agentRetrievalTests(mobile: boolean) {
     });
     test.afterAll(async ({ request }) => {
       if (!fixture) return;
-      await api(request, "DELETE", `/api/proxy/note/docs/${fixture.docId}`);
-      await api(request, "DELETE", `/api/proxy/note/notes/${fixture.noteId}`);
-      await api(request, "DELETE", `/api/proxy/note/bases/${fixture.baseId}`);
-      await api(request, "DELETE", `/api/proxy/note/bases/${fixture.emptyBaseId}`);
+      // 账号切换用例会撤销默认会话，清理失败不阻断本批结果
+      for (const path of [
+        `/api/proxy/note/docs/${fixture.docId}`,
+        `/api/proxy/note/notes/${fixture.noteId}`,
+        `/api/proxy/note/bases/${fixture.baseId}`,
+        `/api/proxy/note/bases/${fixture.emptyBaseId}`,
+      ]) {
+        try {
+          await api(request, "DELETE", path);
+        } catch {
+          // 清理失败不阻断
+        }
+      }
     });
 
     /** 带引用回答、范围持久化与侧栏笔记小节定位。 */
@@ -295,6 +374,64 @@ export function agentRetrievalTests(mobile: boolean) {
       await page.goBack();
       await expect(panel).toHaveCount(0);
       await expect(page.getByText(prompt, { exact: true })).toBeVisible();
+    });
+
+    /** 移动端返回手势被离开守卫取消时保持覆盖层与草稿。 */
+    test("移动端返回取消保留覆盖层与草稿", async ({ page }) => {
+      test.skip(!mobile, "移动端覆盖层用例");
+      const { panel, editor } = await openNotePanel(page, mobile, fixture);
+      await failNoteSaves(page, fixture.noteId);
+      await typeDraft(page, editor);
+      await expect(panel.locator('[data-status="failed"]')).toBeVisible({ timeout: 20_000 });
+
+      const dialogPromise = page.waitForEvent("dialog");
+      await page.evaluate(() => window.history.back());
+      const dialog = await dialogPromise;
+      expect(dialog.type()).toBe("confirm");
+      await dialog.dismiss();
+
+      await expect(panel).toBeVisible();
+      await expect(editor).toContainText("M19守卫草稿");
+    });
+
+    /** 桌面「打开完整页面」被离开守卫取消时不导航、不卸载笔记。 */
+    test("桌面打开完整页面取消不离开", async ({ page }) => {
+      test.skip(mobile, "桌面侧栏用例");
+      const { panel, editor } = await openNotePanel(page, mobile, fixture);
+      await failNoteSaves(page, fixture.noteId);
+      await typeDraft(page, editor);
+      await expect(panel.locator('[data-status="failed"]')).toBeVisible({ timeout: 20_000 });
+      const before = page.url();
+
+      const dialogPromise = page.waitForEvent("dialog");
+      const menuClick = clickPanelMenuItem(page, "打开完整页面");
+      const dialog = await dialogPromise;
+      await dialog.dismiss();
+      await menuClick;
+
+      await expect(page).toHaveURL(before);
+      await expect(panel).toBeVisible();
+      await expect(editor).toContainText("M19守卫草稿");
+    });
+
+    /** 移动端「打开完整页面」被离开守卫取消时不导航。 */
+    test("移动端打开完整页面取消不离开", async ({ page }) => {
+      test.skip(!mobile, "移动端覆盖层用例");
+      const { panel, editor } = await openNotePanel(page, mobile, fixture);
+      await failNoteSaves(page, fixture.noteId);
+      await typeDraft(page, editor);
+      await expect(panel.locator('[data-status="failed"]')).toBeVisible({ timeout: 20_000 });
+      const before = page.url();
+
+      const dialogPromise = page.waitForEvent("dialog");
+      const menuClick = clickPanelMenuItem(page, "打开完整页面");
+      const dialog = await dialogPromise;
+      await dialog.dismiss();
+      await menuClick;
+
+      await expect(page).toHaveURL(before);
+      await expect(panel).toBeVisible();
+      await expect(editor).toContainText("M19守卫草稿");
     });
 
     /** 移动端覆盖层内编辑笔记并保存，完整页面读到最新正文。 */
@@ -512,6 +649,55 @@ export function agentRetrievalTests(mobile: boolean) {
           });
         }
       }
+    });
+
+    /** 登出后另一位用户在同一页面会话里看不到上一位的侧栏标签。 */
+    test("账号切换不残留上一位用户的侧栏标签", async ({ page }) => {
+      test.skip(!mobile, "账号切换用移动端「我的」登出，再回桌面路由检查侧栏");
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.goto(`/ai/chat?baseId=${fixture.baseId}`);
+      await ask(page, "M167NOTECITATION 倒排索引是什么？");
+      const inline = page.locator(".anynote-editor__content a").filter({ hasText: "[1]" });
+      await inline.click();
+      const panel = page.getByTestId("side-panel");
+      await expect(panel.getByRole("tab")).toHaveCount(1);
+      await expect(page).toHaveURL(/\/ai\/chat\/\d+/);
+      const conversationUrl = page.url();
+
+      await page.goto("/m/me");
+      await page.getByTestId("mobile-logout").click();
+      await page
+        .getByTestId("mobile-action-sheet")
+        .getByRole("button", { name: "退出登录" })
+        .click();
+      await page.waitForURL(/\/login/);
+
+      const account = {
+        username: `e2e${randomBytes(5).toString("hex")}`,
+        password: `Aa1${randomBytes(6).toString("hex")}`,
+        nickname: "E2E 账号切换",
+        sex: 0,
+      };
+      const request = await apiRequest.newContext({ baseURL });
+      try {
+        const headers = { origin: baseURL, "content-type": "application/json" };
+        const registered = await request.post("/api/auth/register", { headers, data: account });
+        expect((await registered.json()).code).toBe("00000");
+      } finally {
+        await request.dispose();
+      }
+
+      await page.locator("#username").fill(account.username);
+      await page.locator("#password").fill(account.password);
+      await page.getByRole("button", { name: "登录", exact: true }).click();
+      await page.waitForURL((url) => !url.pathname.startsWith("/login"));
+
+      await page.goto(conversationUrl);
+      const expand = page.getByRole("button", { name: "展开右侧栏" });
+      await expect(expand).toBeVisible();
+      await expand.click();
+      await expect(page.getByTestId("side-panel")).toBeVisible();
+      await expect(page.getByTestId("side-panel").getByRole("tab")).toHaveCount(0);
     });
   });
 }

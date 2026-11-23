@@ -12,6 +12,7 @@ import {
   type ResourceHint,
   type ResourceLocator,
   type ResourceTarget,
+  resourceHref,
   targetFromCitation,
   targetFromToolItem,
 } from "@/lib/ai/resource-target";
@@ -22,10 +23,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { tabDomId, tabPanelId } from "../desktop/ids";
 import type { PendingOpen } from "../launcher";
 import { useSidePanelPersistence } from "../persistence";
-import { getTabDefinition } from "../registry";
+import { getTabDefinition, resourceKind } from "../registry";
 import { RESOURCE_TYPE_LABEL } from "../resource-labels";
 import { setSidePanelTabCount } from "../storage-keys";
 import { useSidePanelStore } from "../store";
+import { registerSurfaceHandlers } from "../surface-events";
 import { TabPanel } from "../tab-panel";
 import { UNREADABLE_TITLE } from "../tabs/shared";
 import type { TabRecord } from "../types";
@@ -48,6 +50,22 @@ const EMPTY_TABS: TabRecord[] = [];
 const EMPTY_NAVIGATION: Record<string, { locator: ResourceLocator; revision: number }> = {};
 const EMPTY_HINTS: Record<string, ResourceHint> = {};
 const EMPTY_NAVIGATION_ENTRY = { locator: {}, revision: 1 };
+const OVERLAY_HISTORY_FLAG = "__anynoteSidePanel";
+
+/** 当前历史记录是否已经带有覆盖层标记。 */
+function hasOverlayHistoryEntry(): boolean {
+  const state = window.history.state as { __anynoteSidePanel?: boolean } | null;
+  return Boolean(state?.__anynoteSidePanel);
+}
+
+/** 压入一条同地址、带覆盖层标记的历史记录。 */
+function pushOverlayHistoryEntry(): void {
+  const state = window.history.state;
+  window.history.pushState(
+    { ...(typeof state === "object" && state !== null ? state : {}), [OVERLAY_HISTORY_FLAG]: true },
+    "",
+  );
+}
 
 export function SidePanelMobileHost({
   surface,
@@ -67,8 +85,11 @@ export function SidePanelMobileHost({
   const setOpen = useSidePanelStore((state) => state.setOpen);
   const activate = useSidePanelStore((state) => state.activate);
   const closeTab = useSidePanelStore((state) => state.close);
+  const requestLeave = useSidePanelStore((state) => state.requestLeave);
   const registerGuard = useSidePanelStore((state) => state.registerGuard);
   const registerNewWindow = useSidePanelStore((state) => state.registerNewWindow);
+  const removeSurface = useSidePanelStore((state) => state.removeSurface);
+  const renameSurface = useSidePanelStore((state) => state.renameSurface);
   const newWindowHandler = useSidePanelStore((state) => state.newWindowHandlers[surface] ?? null);
 
   const [announcement, setAnnouncement] = useState("");
@@ -77,6 +98,15 @@ export function SidePanelMobileHost({
   const initialized = useRef(false);
 
   useSidePanelPersistence({ ignoreOpen: true });
+
+  useEffect(
+    () =>
+      registerSurfaceHandlers({
+        remove: (key) => removeSurface(key),
+        rename: (from, to) => renameSurface(from, to),
+      }),
+    [removeSurface, renameSurface],
+  );
 
   useEffect(() => {
     setSidePanelTabCount(tabs.length);
@@ -100,6 +130,12 @@ export function SidePanelMobileHost({
         : targetFromToolItem(pending.input.entry)
       : null;
     if (target) {
+      const definition = getTabDefinition(resourceKind(target.ref.type));
+      if (!definition.mobile) {
+        const href = resourceHref(target, "mobile");
+        if (href) router.push(href);
+        return;
+      }
       openResource(surface, target);
       const title = target.hint?.title ?? RESOURCE_TYPE_LABEL[target.ref.type];
       setAnnouncement(`已在右侧栏打开「${title}」`);
@@ -109,23 +145,23 @@ export function SidePanelMobileHost({
     if (pending.focus) {
       requestAnimationFrame(() => bodyRef.current?.focus());
     }
-  }, [pending, surface, openResource, setOpen]);
+  }, [pending, surface, openResource, setOpen, router]);
 
   /** 打开覆盖层时压一条同地址记录，返回手势与「关闭」都靠它退出。 */
   useEffect(() => {
-    if (!panelOpen) return;
-    const state = window.history.state;
-    if ((state as { __anynoteSidePanel?: boolean } | null)?.__anynoteSidePanel) return;
-    window.history.pushState(
-      { ...(typeof state === "object" && state !== null ? state : {}), __anynoteSidePanel: true },
-      "",
-    );
+    if (!panelOpen || hasOverlayHistoryEntry()) return;
+    pushOverlayHistoryEntry();
   }, [panelOpen]);
 
   useEffect(() => {
     const handlePopState = () => {
       if (!useSidePanelStore.getState().surfaces[surface]?.open) return;
       setOpen(surface, false);
+      if (useSidePanelStore.getState().surfaces[surface]?.open) {
+        // 守卫拒绝关闭：补回刚被 pop 掉的历史标记，保持覆盖层与草稿
+        pushOverlayHistoryEntry();
+        return;
+      }
       onPanelOpenChange(false);
     };
     window.addEventListener("popstate", handlePopState);
@@ -162,8 +198,7 @@ export function SidePanelMobileHost({
   const closeOverlay = () => {
     setOpen(surface, false);
     if (useSidePanelStore.getState().surfaces[surface]?.open) return;
-    const state = window.history.state as { __anynoteSidePanel?: boolean } | null;
-    if (state?.__anynoteSidePanel) {
+    if (hasOverlayHistoryEntry()) {
       window.history.back();
       return;
     }
@@ -177,6 +212,12 @@ export function SidePanelMobileHost({
       return;
     }
     window.open(target, "_blank", "noopener");
+  };
+
+  /** 当前窗口跳到完整页面：先走活动正文的离开守卫，取消时不导航。 */
+  const openFullPage = (target: string) => {
+    if (!requestLeave(surface)) return;
+    router.push(target);
   };
 
   if (!panelOpen) return null;
@@ -203,7 +244,11 @@ export function SidePanelMobileHost({
         </Button>
         <div className="min-w-0 flex-1">
           {activeRecord ? (
-            <MobileTitle record={activeRecord} hint={hints[activeRecord.id]} />
+            <MobileTitle
+              id={tabDomId(surface, activeRecord.id)}
+              record={activeRecord}
+              hint={hints[activeRecord.id]}
+            />
           ) : (
             <h2 className="truncate text-sm font-medium text-label">右侧栏</h2>
           )}
@@ -229,7 +274,7 @@ export function SidePanelMobileHost({
             <DropdownMenuContent align="end">
               <DropdownMenuGroup>
                 {href ? (
-                  <DropdownMenuItem onClick={() => router.push(href)}>
+                  <DropdownMenuItem onClick={() => openFullPage(href)}>
                     打开完整页面
                   </DropdownMenuItem>
                 ) : null}
@@ -241,7 +286,7 @@ export function SidePanelMobileHost({
                         openNewWindow(item.href);
                         return;
                       }
-                      router.push(item.href);
+                      openFullPage(item.href);
                     }}
                   >
                     {item.label}
@@ -292,12 +337,20 @@ export function SidePanelMobileHost({
   );
 }
 
-function MobileTitle({ record, hint }: { record: TabRecord; hint: ResourceHint | undefined }) {
+function MobileTitle({
+  id,
+  record,
+  hint,
+}: {
+  id: string;
+  record: TabRecord;
+  hint: ResourceHint | undefined;
+}) {
   const definition = getTabDefinition(record.kind);
   const { title, unavailable } = definition.useTitle(record, hint);
   const label = unavailable ? UNREADABLE_TITLE : (title ?? definition.typeLabel);
   return (
-    <h2 className="truncate text-sm font-medium text-label" title={label}>
+    <h2 id={id} className="truncate text-sm font-medium text-label" title={label}>
       {label}
     </h2>
   );

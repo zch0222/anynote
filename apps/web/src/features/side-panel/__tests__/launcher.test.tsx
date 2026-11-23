@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/auth/use-me", () => ({ useMe: () => ({ data: undefined }) }));
@@ -24,6 +24,10 @@ import {
 import { useSidePanelLink } from "@/features/side-panel/link-context";
 import { SIDE_PANEL_OPEN_KEY } from "@/features/side-panel/storage-keys";
 import { useSidePanelStore } from "@/features/side-panel/store";
+import {
+  removeSidePanelSurface,
+  renameSidePanelSurface,
+} from "@/features/side-panel/surface-events";
 import { renderWithProviders } from "@/test/render";
 
 /**
@@ -85,6 +89,11 @@ function storeOpenFlag() {
   localStorage.setItem(SIDE_PANEL_OPEN_KEY, "1");
 }
 
+/** 等待懒加载的桌面宿主挂载；全量并行跑测试时给足加载时间。 */
+function findPanel() {
+  return screen.findByTestId("side-panel", {}, { timeout: 5_000 });
+}
+
 describe("侧栏入口与桌面宿主", () => {
   /** 展开按钮只在收起时出现；展开后显示空态，收起后按钮回来。 */
   it("展开与收起", async () => {
@@ -95,7 +104,7 @@ describe("侧栏入口与桌面宿主", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "展开右侧栏" }));
-    expect(await screen.findByTestId("side-panel")).toBeVisible();
+    expect(await findPanel()).toBeVisible();
     expect(screen.getByText("点击回答里的引用，在这里查看和编辑")).toBeVisible();
     expect(screen.queryByRole("button", { name: "展开右侧栏" })).toBeNull();
 
@@ -114,7 +123,7 @@ describe("侧栏入口与桌面宿主", () => {
       </SidePanelProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "打开笔记" }));
-    await screen.findByTestId("side-panel");
+    await findPanel();
 
     fireEvent.keyDown(screen.getByRole("tabpanel"), { key: "Escape" });
     expect(screen.getByTestId("side-panel")).toBeVisible();
@@ -124,7 +133,7 @@ describe("侧栏入口与桌面宿主", () => {
     await waitFor(() => expect(screen.queryByTestId("side-panel")).toBeNull());
 
     fireEvent.click(screen.getByRole("button", { name: "展开右侧栏" }));
-    await screen.findByTestId("side-panel");
+    await findPanel();
     fireEvent.keyDown(screen.getByRole("tablist"), { key: "Escape" });
     await waitFor(() => expect(screen.queryByTestId("side-panel")).toBeNull());
   });
@@ -139,7 +148,7 @@ describe("侧栏入口与桌面宿主", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "打开笔记" }));
-    expect(await screen.findByTestId("side-panel")).toBeVisible();
+    expect(await findPanel()).toBeVisible();
     await waitFor(() =>
       expect(screen.getByTestId("side-panel-announcer")).toHaveTextContent(
         "已在右侧栏打开「复习笔记」",
@@ -158,7 +167,7 @@ describe("侧栏入口与桌面宿主", () => {
       </SidePanelProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "打开笔记" }));
-    await screen.findByTestId("side-panel");
+    await findPanel();
     fireEvent.click(screen.getByRole("button", { name: "打开笔记" }));
     await waitFor(() =>
       expect(useSidePanelStore.getState().surfaces["chat:c1"]?.tabs).toHaveLength(1),
@@ -175,7 +184,7 @@ describe("侧栏入口与桌面宿主", () => {
         <Harness />
       </SidePanelProvider>,
     );
-    expect(await screen.findByTestId("side-panel")).toBeVisible();
+    expect(await findPanel()).toBeVisible();
   });
 
   /** 移动端忽略持久化的展开状态。 */
@@ -188,5 +197,23 @@ describe("侧栏入口与桌面宿主", () => {
     );
     await waitFor(() => expect(screen.queryByTestId("side-panel")).toBeNull());
     expect(screen.getByRole("button", { name: "展开右侧栏" })).toBeVisible();
+  });
+
+  /** 桌面宿主挂载时登记分区迁移与移除处理器。 */
+  it("登记分区迁移与移除", async () => {
+    renderWithProviders(
+      <SidePanelProvider>
+        <Harness />
+        <OpenNote />
+      </SidePanelProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "打开笔记" }));
+    await waitFor(() => expect(useSidePanelStore.getState().surfaces["chat:c1"]).toBeDefined());
+
+    act(() => renameSidePanelSurface("chat:c1", "chat:c9"));
+    expect(useSidePanelStore.getState().surfaces["chat:c9"]).toBeDefined();
+
+    act(() => removeSidePanelSurface("chat:c9"));
+    expect(useSidePanelStore.getState().surfaces["chat:c9"]).toBeUndefined();
   });
 });

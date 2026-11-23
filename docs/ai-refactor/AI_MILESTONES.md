@@ -1070,3 +1070,17 @@ Python 全量多轮在 455 passed、20 skipped 与 1 failed、454 passed 之间�
 - `pnpm --filter web typecheck`、本批 Biome、构建编译与静态页生成通过；Windows standalone 符号链接复制报 `EPERM`（环境）。
 - **`/ai/chat` 首屏 310.5 / 310.0 KB，超 0.5 KB**：刷新恢复修复后比此前接受的 310.3 增加 0.2 KB；预算未调整，**需要重新确认**，门禁记录为未通过。
 - E2E 16 passed / 6 skipped；Lighthouse 桌面全绿，移动端 `/m/ai/chat` 通过、`/m/dashboard` 与 `/m/notes` 未达门槛（用 Docker web `:3000` 复跑同样失败，与本批无关）；视觉截图已生成待人工确认。
+
+### 2026-11-23 评估报告修复
+
+依据 [`AI_CHAT_SIDE_PANEL_CODE_REVIEW.md`](./AI_CHAT_SIDE_PANEL_CODE_REVIEW.md)，修复高 1/2/3、中 1/2 与低 1–4，逐文件清单见 [`docs/changelist/2026-11-23-ai-chat-side-panel-review-fixes.md`](../changelist/2026-11-23-ai-chat-side-panel-review-fixes.md)。
+
+- 账号隔离：登出清空内存 store；持久化 hook 识别跨挂载的账号变化（含变为 `null`），切换用户时隔离旧分区。
+- 离开保护：移动返回在守卫拒绝时保持覆盖层并补回历史标记；桌面/移动「打开完整页面」先走守卫，取消不导航。
+- 持久化：只写/只读 `chat:c<正整数>`，忽略历史 `chat:new*`；恢复校验 `kind`、`kind`/`ref.type` 一致性与标签 id 唯一。
+- 删除会话：宿主登记迁移/移除处理器；本地分区清理由按需加载模块完成，不依赖宿主挂载。
+- 可访问性与注册表：移动 `tabpanel` 的 `aria-labelledby` 指向真实标题；`multiple` 与 `mobile` 接通，`keepMounted` 保留并注明未消费。
+- 测试：全量 2308 tests 中 **2305 passed / 3 failed**（既有任务日期控件）；本批相关 17 files / 131 tests 全通过；`tabs.test.tsx` 改为 openapi-fetch 客户端打桩并补齐五类正文异常矩阵。
+- 真实栈 E2E：**20 passed / 10 skipped**，新增移动返回取消、桌面/移动完整页面取消、账号切换 4 条用例全部通过。
+- `/ai/chat` 首屏 **310.7 / 310.0 KB**：预算未调整，门禁仍失败；此前接受 310.6 KB，0.1 KB 增量待确认。M19.7 仍未关闭。
+- 未验证：协同构建下双端编辑、编辑器浮层、移动软键盘与真实设备。

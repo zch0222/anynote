@@ -1,7 +1,7 @@
 # AI 对话右侧栏：资源引用在侧栏打开
 
 > 文档版本：v0.2（实施记录） | 创建 2026-11-22
-> 状态：**M19.1–M19.6 已实现（`63eb33a`）；2026-11-22 补做桌面覆盖态 Esc、焦点规则与刷新恢复，真实栈 E2E 16 passed / 6 skipped，Lighthouse 桌面全绿、移动端仅无关路由未达门槛；`/ai/chat` 首屏 310.5 / 310.0 KB，超 0.5 KB（此前接受 0.3 KB，需重新确认）；视觉截图已生成待人工确认；改动已提交（`6d341c3`）**
+> 状态：**M19.1–M19.6 已实现（`63eb33a`）；2026-11-22 补做桌面覆盖态 Esc、焦点规则与刷新恢复（`6d341c3`）。2026-11-23 按评估报告修复高 1/2/3、中 1/2 与低 1–4：登出/账号切换清理内存、移动返回守卫、完整页面守卫、持久化键与恢复校验、会话删除清理、移动可访问名称、注册表字段接线；新增回归单测与 4 条真实栈 E2E。当前单测 2305 passed / 3 failed（既有任务日期控件），E2E 20 passed / 10 skipped；`/ai/chat` 首屏 310.7 / 310.0 KB，仍超预算（此前接受 310.6，0.1 KB 增量待确认），M19.7 未关闭**
 > 范围：`apps/web`。桌面 `/ai/chat`、`/ai/chat/[id]`，移动 `/m/ai/chat`、`/m/ai/chat/[id]`。**不改后端、OpenAPI 契约、SQL、Nacos**，因此不需要 OpenSpec 提案
 > 关联：[知识检索方案 §8.2 / §11](./KNOWLEDGE_RETRIEVAL_PLAN.md#82-引用)、[回答文本处理方案](./AGENT_OUTPUT_TEXT_PLAN.md)、
 > [运行过程展示方案 §5.7](./AGENT_TRACE_VIEW_PLAN.md#57-对话界面)、[AI 里程碑](./AI_MILESTONES.md)
@@ -858,3 +858,31 @@ flowchart LR
 - 视觉截图：`tmp/m19-side-panel/visual/` 下 10 张（桌面 1920/1440/1280/1024 × 深浅，移动 390×844 × 深浅），待人工确认。
 - `/ai/chat` 首屏 **310.5 / 310.0 KB**，超 0.5 KB；此前接受的是 310.3（超 0.3 KB），需重新确认。
 - 改动已提交（`6d341c3`）。逐文件清单见 [`docs/changelist/2026-11-22-ai-chat-side-panel-acceptance.md`](../changelist/2026-11-22-ai-chat-side-panel-acceptance.md)。
+
+### 2026-11-23 评估报告修复
+
+依据 [`AI_CHAT_SIDE_PANEL_CODE_REVIEW.md`](./AI_CHAT_SIDE_PANEL_CODE_REVIEW.md)，本轮只改 `apps/web`，不改后端、OpenAPI、SQL 与 Nacos。
+
+**已修复**
+
+- **高 1（账号隔离）**：登出通过 `SIDE_PANEL_RESET_EVENT` 清空模块级 store；持久化 hook 用模块级 `activeUserId` 识别宿主重新挂载后的账号变化（含变为 `null`），切换用户时清空旧分区再恢复新用户数据。
+- **高 2（移动返回守卫）**：`popstate` 关闭覆盖层后重新读取 store；守卫拒绝时补回被 pop 掉的历史标记并保持覆盖层，取消不再卸载编辑器。
+- **高 3（完整页面守卫）**：桌面笔记的「打开完整页面」先调用 `confirmLeave()`；移动端新增 `openFullPage`，通过 store 的 `requestLeave` 复用活动正文守卫，取消时不导航。
+- **中 1（新会话持久化）**：只写入、只恢复 `chat:c<正整数>` 分区；历史 `chat:new*` 读取时忽略（按确认不主动回写）。
+- **中 2（恢复校验）**：恢复时校验 `kind` 必须是已注册资源类型、`kind` 与 `ref.type` 一致、标签 id 唯一；任一处不合法仍删除该用户键并从空状态开始。
+- **低 1（双实现等价）**：新增 `citationHref` 与 `resourceHref` 同一输入的参数化等价测试，覆盖六类、两端、可选字段与非法定位。
+- **低 2（删除会话清理）**：桌面/移动宿主挂载时登记 `renameSurface` / `removeSurface`；删除会话的 localStorage 清理改由 `persisted-surfaces.ts` 按需加载执行，不依赖宿主是否挂载，并覆盖同浏览器多个用户键。
+- **低 3（移动可访问名称）**：移动标题 `<h2>` 使用 `tabDomId`，`tabpanel` 的 `aria-labelledby` 指向真实元素。
+- **低 4（注册表字段）**：`openPage` 在调用方未显式传参时读取定义里的 `multiple`；移动宿主消费 `mobile`，为 `false` 时整页跳转；`keepMounted` 保留并注明容器暂未消费。
+
+**验证**
+
+- 全量 `pnpm --filter web test`：200 files / **2308 tests，2305 passed / 3 failed**；失败仍为既有任务日期控件 5s 超时（`date-time-field.test.tsx` 2 条、`task-form-page.test.tsx` 1 条），未改相关代码。
+- 本批相关测试：17 files / 131 tests 全通过；其中 `tabs.test.tsx` 改为在 `noteApi` / `fileApi` 的 openapi-fetch 客户端层打桩，补齐五类正文的加载、不可读、网络错误与重试、定位与侧栏内跳转矩阵，并新增 `MoocTabBody` 目录展开/子条目打开用例。
+- `pnpm --filter web typecheck` 通过；本批文件 Biome check 通过。
+- `NEXT_DISABLE_STANDALONE=1 NEXT_PUBLIC_APP_URL=http://localhost:3107 pnpm --filter web build`：编译、类型检查与 37 个静态页生成成功。
+- `pnpm --filter web bundle:budget`：**FAIL**，`/ai/chat` 与 `/ai/chat/[id]` **310.7 / 310.0 KB**；移动端 247.3 / 250 通过，编辑器 18.0 / 250 通过。此前接受的是 310.6 KB，本轮 0.1 KB 增量待确认；预算未调整，门禁仍记录为未通过。
+- 真实栈 E2E（脚本化供应商）：**20 passed / 10 skipped**；新增 4 条用例全部通过：移动端返回取消保留覆盖层与草稿、桌面/移动「打开完整页面」取消不离开、账号切换不残留上一位用户的侧栏标签。原始日志在 `tmp/m19-side-panel/e2e.log`。
+- 未验证：协同构建（`NEXT_PUBLIC_COLLAB_NOTES=1`）下双端编辑、编辑器浮层层级、移动软键盘贴底与真实设备。
+
+逐文件清单见 [`docs/changelist/2026-11-23-ai-chat-side-panel-review-fixes.md`](../changelist/2026-11-23-ai-chat-side-panel-review-fixes.md)。

@@ -1,3 +1,4 @@
+import { emptySurface, useSidePanelStore } from "@/features/side-panel/store";
 import { renderHookWithProviders } from "@/test/render";
 import { act, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -44,6 +45,22 @@ describe("useLogoutMutation", () => {
     await act(async () => result.current.mutateAsync());
     expect(localStorage.getItem("anynote-ai-side-panel:v1:1")).toBeNull();
     expect(localStorage.getItem("anynote-other")).toBe("keep");
+  });
+
+  /** 登出同时清空进程内的侧栏分区，避免下一位用户看到上一位的标签。 */
+  it("成功后清空侧栏内存状态", async () => {
+    useSidePanelStore.setState({
+      surfaces: { "chat:c1": { ...emptySurface(), open: true } },
+      guards: { "chat:c1": () => true },
+      newWindowHandlers: { "chat:c1": () => {} },
+    });
+    post.mockResolvedValue({ response: new Response(JSON.stringify({ code: "00000" })) });
+    const { result } = renderHookWithProviders(() => useLogoutMutation());
+    await act(async () => result.current.mutateAsync());
+    const state = useSidePanelStore.getState();
+    expect(state.surfaces).toEqual({});
+    expect(state.guards).toEqual({});
+    expect(state.newWindowHandlers).toEqual({});
   });
 
   it.each([new Response(JSON.stringify({ code: "B0400" })), new Response("oops", { status: 502 })])(

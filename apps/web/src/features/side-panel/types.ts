@@ -71,9 +71,9 @@ export type TabDefinition = {
   family: "resource" | "page";
   /** resource 类必填；每种资源类型恰好一个定义，且与 kind 相同。 */
   resourceType?: ResourceType;
-  /** page 类：每次打开是否新建。 */
+  /** page 类：每次打开是否新建；调用方未显式传参时由定义决定。 */
   multiple?: boolean;
-  /** 默认只挂载活动标签的正文。 */
+  /** 默认只挂载活动标签的正文；容器暂未消费该字段。 */
   keepMounted?: boolean;
   /** 默认：resource 为 true，page 为 false。 */
   persist?: boolean;

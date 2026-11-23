@@ -27,7 +27,8 @@ vi.mock("@/components/note/save-status", () => ({
   SaveFailureNotice: () => null,
 }));
 vi.mock("@/components/note/conflict-dialog", () => ({ ConflictDialog: () => null }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 import { NoteTabBody } from "@/features/side-panel/tabs/note/body";
 import type { TabBodyActions, TabId } from "@/features/side-panel/types";
@@ -84,7 +85,7 @@ function makeSession(hasPending: boolean) {
     save: {
       status: "saved",
       lastSavedAt: null,
-      failure: null,
+      failure: null as { kind: "forbidden"; message: string } | null,
       conflict: null,
       hasPendingChanges: vi.fn(() => hasPending),
       flush: vi.fn(async () => undefined),
@@ -109,6 +110,7 @@ function actions(): TabBodyActions {
 }
 
 beforeEach(() => {
+  push.mockClear();
   sessionHook.mockReset();
   sessionHook.mockImplementation(() => makeSession(false));
 });
@@ -183,6 +185,49 @@ describe("笔记标签", () => {
     expect(link).toHaveAttribute("href", "/notes/3/5?section=%E7%AC%AC%E4%B8%80%E7%AB%A0");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  /** 打开完整页面先走守卫，取消时不导航。 */
+  it("打开完整页面受离开守卫约束", async () => {
+    const session = makeSession(false);
+    session.confirmLeave.mockReturnValue(false);
+    sessionHook.mockReturnValue(session);
+    renderWithProviders(
+      <NoteTabBody
+        record={record}
+        navigation={{ locator: { section: "第一章" }, revision: 1 }}
+        variant="desktop"
+        actions={actions()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "更多" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "打开完整页面" }));
+    expect(session.confirmLeave).toHaveBeenCalledOnce();
+    expect(push).not.toHaveBeenCalled();
+
+    session.confirmLeave.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "更多" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "打开完整页面" }));
+    expect(push).toHaveBeenCalledWith("/notes/3/5?section=%E7%AC%AC%E4%B8%80%E7%AB%A0");
+  });
+
+  /** 保存失败时「更多」菜单仍可打开。 */
+  it("保存失败时更多菜单可用", async () => {
+    const session = makeSession(false);
+    session.save.status = "failed";
+    session.save.failure = { kind: "forbidden", message: "没有编辑权限" };
+    sessionHook.mockReturnValue(session);
+    renderWithProviders(
+      <NoteTabBody
+        record={record}
+        navigation={{ locator: { section: "第一章" }, revision: 1 }}
+        variant="desktop"
+        actions={actions()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "更多" }));
+    expect(await screen.findByRole("menuitem", { name: "打开完整页面" })).toBeInTheDocument();
   });
 
   /** 移动端复用正文层，不渲染桌面标签头。 */
