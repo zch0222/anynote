@@ -94,6 +94,31 @@ describe("CitationAnswer", () => {
     );
   });
 
+  /** 对话引用使用无边框浅色块，片段不再带左侧竖线。 */
+  it("按 Harness 风格展示对话引用", () => {
+    render(
+      <CitationAnswer
+        content="答案[1]"
+        variant="desktop"
+        presentation="conversation"
+        citations={[
+          {
+            index: 1,
+            sourceType: "note",
+            sourceId: "note:5",
+            kbId: 3,
+            title: "复习笔记",
+            snippet: "原文",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("citation-list")).not.toHaveClass("border");
+    expect(screen.getByTestId("citation-list")).toHaveClass("bg-fill-hover");
+    expect(screen.getByText("原文")).toHaveClass("border-l-0", "pl-0");
+  });
+
   /** 空片段仍显示标题与定位，不渲染空引用块。 */
   it("支持空引用片段", () => {
     const { container } = render(

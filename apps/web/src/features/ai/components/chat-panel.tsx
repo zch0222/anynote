@@ -304,7 +304,7 @@ export function ChatPanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-surface">
       {variant === "desktop" && conversationTitle ? (
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-separator bg-surface px-6">
           <h1

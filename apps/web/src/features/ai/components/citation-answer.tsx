@@ -75,15 +75,27 @@ export function CitationAnswer({
       {citations.length > 0 ? (
         <div
           className={cn(
-            "rounded-xl border p-3",
+            "p-3",
             presentation === "conversation"
-              ? "border-separator bg-background"
-              : "border-separator/60 bg-block",
+              ? "rounded-lg bg-fill-hover px-3.5"
+              : "rounded-xl border border-separator/60 bg-block",
           )}
           data-testid="citation-list"
         >
-          <p className="mb-2 text-sm font-medium">引用来源</p>
-          <ol className="space-y-3 text-sm">
+          <p
+            className={cn(
+              "mb-2 text-sm font-medium",
+              presentation === "conversation" && "text-[13px] leading-5 text-label-secondary",
+            )}
+          >
+            引用来源
+          </p>
+          <ol
+            className={cn(
+              "space-y-2.5 text-sm",
+              presentation === "conversation" && "max-h-80 overflow-y-auto",
+            )}
+          >
             {citations.map((citation) => {
               const href = citationHref(citation, variant);
               const title = `[${citation.index}] ${citation.title || "未命名来源"}`;
@@ -100,7 +112,12 @@ export function CitationAnswer({
                         href={href}
                         prefetch={false}
                         aria-label={`查看引用 ${citation.index}`}
-                        className="min-w-0 break-words text-accent hover:underline"
+                        className={cn(
+                          "min-w-0 break-words text-accent",
+                          presentation === "conversation"
+                            ? "font-medium no-underline hover:underline hover:decoration-dotted hover:underline-offset-[3px] focus-visible:underline focus-visible:decoration-dotted focus-visible:underline-offset-[3px]"
+                            : "hover:underline",
+                        )}
                       >
                         {title}
                       </Link>
@@ -122,7 +139,12 @@ export function CitationAnswer({
                     ) : null}
                   </div>
                   {citation.kbName || location ? (
-                    <p className="text-xs text-label-secondary">
+                    <p
+                      className={cn(
+                        "text-label-secondary",
+                        presentation === "conversation" ? "text-[13px] leading-5" : "text-xs",
+                      )}
+                    >
                       {[citation.kbName, location].filter(Boolean).join(" · ")}
                     </p>
                   ) : null}
@@ -136,7 +158,14 @@ export function CitationAnswer({
                     {citation.stale ? <Badge variant="warning">索引滞后</Badge> : null}
                   </div>
                   {citation.snippet ? (
-                    <blockquote className="border-l-2 pl-2 text-xs whitespace-pre-wrap text-label-secondary">
+                    <blockquote
+                      className={cn(
+                        "whitespace-pre-wrap text-label-secondary",
+                        presentation === "conversation"
+                          ? "mt-0.5 border-l-0 pl-0 text-[13px] leading-5"
+                          : "border-l-2 pl-2 text-xs",
+                      )}
+                    >
                       {citation.snippet}
                     </blockquote>
                   ) : null}

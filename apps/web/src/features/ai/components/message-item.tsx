@@ -42,7 +42,7 @@ export const MessageItem = memo(function MessageItem({
         <div
           className={cn(
             conversation
-              ? "max-w-[82%] rounded-2xl border border-accent/15 bg-accent-soft px-4 py-2.5 text-sm leading-6 whitespace-pre-wrap text-label"
+              ? "max-w-[82%] rounded-2xl bg-fill-hover px-4 py-2.5 text-sm leading-6 whitespace-pre-wrap text-label"
               : "max-w-[85%] rounded-xl rounded-br-sm bg-accent px-4 py-2.5 text-sm whitespace-pre-wrap text-accent-foreground",
           )}
         >
@@ -60,16 +60,12 @@ export const MessageItem = memo(function MessageItem({
 
   return (
     <div
-      className={
-        conversation
-          ? "anynote-ai-message group/message min-w-0 rounded-2xl border border-separator/80 bg-surface p-4 shadow-sm sm:p-5"
-          : "flex gap-3"
-      }
+      className={conversation ? "anynote-ai-message group/message min-w-0" : "flex gap-3"}
       data-message-surface={conversation ? "conversation" : undefined}
       data-state={thinking ? "thinking" : message.streaming ? "streaming" : "done"}
     >
       {conversation ? null : <AiAvatar thinking={thinking} />}
-      <div className={conversation ? "min-w-0 space-y-3" : "min-w-0 flex-1 space-y-1"}>
+      <div className={conversation ? "min-w-0 space-y-4" : "min-w-0 flex-1 space-y-1"}>
         {message.process && message.process.items.length > 0 ? (
           <ProcessArea
             process={message.process}

@@ -14,8 +14,33 @@ const ANSWER = [
   "| 笔记 | UI 设计 | note:2579 | 2026-11-24 |",
   "| 资料（PDF） | DeepSeek Harness 风格参考 | doc:77 | 2026-11-24 |",
   "",
-  "该知识库共 2 项内容。",
+  "该知识库共 2 项内容。[1]",
 ].join("\n");
+const CITATIONS = [
+  {
+    index: 1,
+    sourceType: "note",
+    sourceId: "note:2579",
+    kbId: 1,
+    kbName: "Test",
+    title: "UI 设计",
+    snippet: "用于核对引用样式的原文片段",
+  },
+];
+const PROCESS = {
+  durationMs: 2800,
+  toolCalls: 1,
+  firstOutputMs: 600,
+  items: [
+    {
+      type: "reasoning",
+      id: "reasoning-1",
+      text: "先整理内容，再用表格列出结果",
+      status: "done",
+      durationMs: 500,
+    },
+  ],
+};
 
 /**
  * 调用真实 BFF 并校验业务信封。
@@ -86,7 +111,7 @@ async function applyTheme(page: Page, theme: "light" | "dark") {
 }
 
 /**
- * 检查消息表面与表格的视觉层级并保存实拍。
+ * 检查 Harness 全宽消息、表格、引用与过程样式并保存实拍。
  *
  * @param page 当前页面
  * @param testInfo Playwright 用例信息
@@ -94,7 +119,7 @@ async function applyTheme(page: Page, theme: "light" | "dark") {
  * @param mobile 是否移动端
  * @author 称霸幼儿园
  */
-async function expectMessageSurfaces(
+async function expectHarnessMessageStyles(
   page: Page,
   testInfo: TestInfo,
   theme: "light" | "dark",
@@ -102,29 +127,51 @@ async function expectMessageSurfaces(
 ) {
   const message = page.locator(".anynote-ai-message");
   const table = message.locator(".tableWrapper");
+  const citations = message.getByTestId("citation-list");
+  const process = message.getByTestId("process-area");
   await expect(message).toBeVisible();
   await expect(table).toBeVisible();
-  const backgrounds = await message.evaluate((element) => {
-    const surface = getComputedStyle(element).backgroundColor;
-    let parent = element.parentElement;
-    while (parent) {
-      const page = getComputedStyle(parent).backgroundColor;
-      if (page !== "rgba(0, 0, 0, 0)" && page !== "transparent") {
-        return { surface, page };
-      }
-      parent = parent.parentElement;
-    }
-    return { surface, page: null };
-  });
-  expect(backgrounds.page).not.toBeNull();
-  expect(backgrounds.surface).not.toBe(backgrounds.page);
-  const headerBackground = await table
-    .locator("th")
-    .first()
-    .evaluate((element) => getComputedStyle(element).backgroundColor);
-  expect(headerBackground).not.toBe(backgrounds.surface);
-  expect(await table.evaluate((element) => getComputedStyle(element).borderTopStyle)).toBe("solid");
+  await expect(citations).toBeVisible();
+  await expect(process).toBeVisible();
+
+  const messageStyle = await message.evaluate((element) => ({
+    background: getComputedStyle(element).backgroundColor,
+    border: getComputedStyle(element).borderTopWidth,
+  }));
+  expect(messageStyle).toEqual({ background: "rgba(0, 0, 0, 0)", border: "0px" });
+  const userBubble = page.getByText(PROMPT, { exact: true });
+  expect(await userBubble.evaluate((element) => getComputedStyle(element).borderTopWidth)).toBe(
+    "0px",
+  );
+  expect(
+    await userBubble.evaluate((element) => getComputedStyle(element).backgroundColor),
+  ).not.toBe("rgba(0, 0, 0, 0)");
+
+  expect(
+    await table
+      .locator("th")
+      .first()
+      .evaluate((element) => getComputedStyle(element).backgroundColor),
+  ).toBe("rgba(0, 0, 0, 0)");
+  expect(await table.evaluate((element) => getComputedStyle(element).borderTopWidth)).toBe("0px");
+  expect(
+    await table
+      .locator("tbody td")
+      .first()
+      .evaluate((element) => getComputedStyle(element).borderBottomStyle),
+  ).toBe("solid");
   expect(await table.evaluate((element) => getComputedStyle(element).overflowX)).toBe("auto");
+  expect(await citations.evaluate((element) => getComputedStyle(element).borderTopWidth)).toBe(
+    "0px",
+  );
+  expect(await citations.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
+    "rgba(0, 0, 0, 0)",
+  );
+  expect(await process.evaluate((element) => getComputedStyle(element).borderTopWidth)).toBe("0px");
+  expect(await process.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(
+    "rgba(0, 0, 0, 0)",
+  );
+
   if (mobile) {
     const widths = await table.evaluate((element) => ({
       client: element.clientWidth,
@@ -133,6 +180,7 @@ async function expectMessageSurfaces(
     expect(widths.scroll).toBeGreaterThan(widths.client);
   }
   await page.screenshot({ path: testInfo.outputPath(`chat-${theme}.png`), fullPage: true });
+  await message.screenshot({ path: testInfo.outputPath(`message-${theme}.png`) });
 }
 
 /**
@@ -161,8 +209,15 @@ export function aiChatUiTests(mobile: boolean) {
       );
       expect(conversationId).toBeGreaterThan(0);
       mysql(
-        `INSERT INTO a_chat_message (conversation_id, order_index, content, outcome, role, type, create_by, create_time, update_by, update_time) VALUES (${conversationId}, 0, ${hex(PROMPT)}, NULL, 0, 2, ${userId}, NOW(), ${userId}, NOW()), (${conversationId}, 1, ${hex(ANSWER)}, 'ANSWERED', 1, 2, ${userId}, NOW(), ${userId}, NOW())`,
+        `INSERT INTO a_chat_message (conversation_id, order_index, content, citations, process, outcome, role, type, create_by, create_time, update_by, update_time) VALUES (${conversationId}, 0, ${hex(PROMPT)}, NULL, NULL, NULL, 0, 2, ${userId}, NOW(), ${userId}, NOW()), (${conversationId}, 1, ${hex(ANSWER)}, CONVERT(${hex(JSON.stringify(CITATIONS))} USING utf8mb4), CONVERT(${hex(JSON.stringify(PROCESS))} USING utf8mb4), 'ANSWERED', 1, 2, ${userId}, NOW(), ${userId}, NOW())`,
       );
+      const detail = await api(
+        request,
+        "GET",
+        `/api/proxy/ai/chat/conversations/${conversationId}`,
+      );
+      expect(detail.messages[1].citations).toHaveLength(1);
+      expect(detail.messages[1].process.items).toHaveLength(1);
     });
 
     test.afterAll(async ({ request }) => {
@@ -171,14 +226,14 @@ export function aiChatUiTests(mobile: boolean) {
       }
     });
 
-    /** 消息与表格在两种主题下分层，复制原文并再次发送最后一问。 */
-    test("消息卡片、表格、复制和重新提问", async ({ page }, testInfo) => {
+    /** Harness 消息、表格和引用在两种主题下保持全宽轻量样式，复制原文并再次发送最后一问。 */
+    test("Harness 全宽消息、表格、引用与操作", async ({ page }, testInfo) => {
       await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
       await page.goto(mobile ? `/m/ai/chat/${conversationId}` : `/ai/chat/${conversationId}`);
       await applyTheme(page, "light");
-      await expectMessageSurfaces(page, testInfo, "light", mobile);
+      await expectHarnessMessageStyles(page, testInfo, "light", mobile);
       await applyTheme(page, "dark");
-      await expectMessageSurfaces(page, testInfo, "dark", mobile);
+      await expectHarnessMessageStyles(page, testInfo, "dark", mobile);
 
       const assistant = page.locator(".anynote-ai-message");
       await assistant.getByRole("button", { name: "复制", exact: true }).click();

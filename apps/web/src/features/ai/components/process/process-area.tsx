@@ -96,10 +96,9 @@ export function ProcessArea({
     <div
       ref={rootRef}
       className={cn(
-        "rounded-lg border",
         presentation === "conversation"
-          ? "border-separator bg-background"
-          : "border-separator/60 bg-block/60",
+          ? "border-0 bg-transparent"
+          : "rounded-lg border border-separator/60 bg-block/60",
       )}
       data-testid="process-area"
     >
@@ -110,7 +109,10 @@ export function ProcessArea({
         type="button"
         aria-expanded={expanded}
         onClick={toggle}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-label-secondary"
+        className={cn(
+          "flex w-full items-center gap-2 text-left text-xs text-label-secondary",
+          presentation === "conversation" ? "px-0 py-1" : "px-3 py-2",
+        )}
         data-testid="process-toggle"
       >
         {expanded ? (
@@ -128,7 +130,9 @@ export function ProcessArea({
         ) : null}
       </button>
       {collapsed && !latestOnly ? null : (
-        <ul className="space-y-1 px-3 pb-3">
+        <ul
+          className={cn("space-y-1", presentation === "conversation" ? "px-0 pb-2" : "px-3 pb-3")}
+        >
           {visibleItems.map((item, index) => (
             <ProcessRow key={processRowKey(item, index)} item={item} variant={variant} />
           ))}

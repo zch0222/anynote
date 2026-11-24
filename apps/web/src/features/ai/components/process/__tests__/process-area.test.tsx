@@ -75,6 +75,19 @@ describe("运行过程区", () => {
     expect(screen.getByText("先看看目录")).toBeInTheDocument();
   });
 
+  /** 对话过程使用轻量文字行，文档问答保留原有容器。 */
+  it("按展示场景隔离过程容器样式", () => {
+    const { rerender } = renderWithProviders(
+      <ProcessArea process={sampleProcess()} streaming presentation="conversation" />,
+    );
+    expect(screen.getByTestId("process-area")).not.toHaveClass("rounded-lg", "bg-block/60");
+    expect(screen.getByTestId("process-toggle")).toHaveClass("px-0");
+
+    rerender(<ProcessArea process={sampleProcess()} streaming />);
+    expect(screen.getByTestId("process-area")).toHaveClass("rounded-lg", "bg-block/60");
+    expect(screen.getByTestId("process-toggle")).toHaveClass("px-3");
+  });
+
   it("运行中整轮计时按秒推进", () => {
     vi.useFakeTimers();
     renderWithProviders(<ProcessArea process={sampleProcess()} streaming />);

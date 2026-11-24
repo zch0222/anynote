@@ -441,12 +441,9 @@
 /* ---------- AI 对话表格 ---------- */
 .anynote-ai-message .anynote-editor__content .tableWrapper {
   max-width: 100%;
-  margin: 12px 0;
+  margin: 16px 0;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-md);
-  background-color: var(--surface-primary);
 }
 
 .anynote-ai-message .anynote-editor__content .tableWrapper:focus-visible {
@@ -455,38 +452,45 @@
 }
 
 .anynote-ai-message .anynote-editor__content .tableWrapper table {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  max-width: none;
   margin: 0;
   table-layout: auto;
 }
 
+.anynote-ai-message
+  .anynote-editor__content
+  .tableWrapper:has(th:nth-child(4), td:nth-child(4))
+  table {
+  width: max-content;
+  max-width: max-content;
+}
+
 .anynote-ai-message .anynote-editor__content .tableWrapper th,
 .anynote-ai-message .anynote-editor__content .tableWrapper td {
-  min-width: 7rem;
-  max-width: 20rem;
-  padding: 10px 12px;
+  min-width: 100px;
+  max-width: min(30vw, 320px);
+  padding: 10px 16px;
   border: 0;
   border-bottom: 1px solid var(--separator);
+  background-color: transparent;
   font-size: var(--text-footnote);
   line-height: var(--text-footnote--line-height);
   text-align: left;
 }
 
 .anynote-ai-message .anynote-editor__content .tableWrapper th {
-  background-color: var(--fill-hover);
   color: var(--label-primary);
   font-weight: 500;
 }
 
-.anynote-ai-message .anynote-editor__content .tableWrapper tr:last-child td {
-  border-bottom: 0;
+.anynote-ai-message .anynote-editor__content .tableWrapper th:first-child,
+.anynote-ai-message .anynote-editor__content .tableWrapper td:first-child {
+  padding-left: 0;
 }
 
-@media (hover: hover) {
-  .anynote-ai-message .anynote-editor__content .tableWrapper tbody tr:hover {
-    background-color: var(--fill-hover);
-  }
+.anynote-ai-message .anynote-editor__content .tableWrapper td:last-child {
+  padding-right: 0;
 }
 
 /* ---------- 图片上传指示器 ----------

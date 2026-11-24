@@ -91,12 +91,25 @@ describe("MessageItem", () => {
     expect(screen.queryByRole("button", { name: "复制" })).toBeNull();
   });
 
-  /** 对话页使用品牌浅色用户气泡，文档问答默认样式保持不变。 */
+  /** AI 对话正文不使用卡片容器，保持 Harness 全宽排版。 */
+  it("对话助手正文不带气泡卡片样式", () => {
+    const { container } = render(
+      <MessageItem
+        message={{ id: "9", role: 1, content: "全宽回答" }}
+        presentation="conversation"
+      />,
+    );
+
+    const message = container.querySelector(".anynote-ai-message");
+    expect(message).not.toHaveClass("rounded-2xl", "border", "bg-surface", "p-4", "shadow-sm");
+  });
+
+  /** 对话页使用 Harness 中性用户气泡，文档问答默认样式保持不变。 */
   it("按展示场景隔离用户气泡样式", () => {
     const { rerender } = render(
       <MessageItem message={{ id: "7", role: 0, content: "问题" }} presentation="conversation" />,
     );
-    expect(screen.getByText("问题")).toHaveClass("bg-accent-soft");
+    expect(screen.getByText("问题")).toHaveClass("bg-fill-hover");
 
     rerender(<MessageItem message={{ id: "7", role: 0, content: "问题" }} />);
     expect(screen.getByText("问题")).toHaveClass("bg-accent");
