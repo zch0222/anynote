@@ -10,12 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   CONVERSATION_GROUP_PREVIEW_SIZE,
@@ -29,16 +23,7 @@ import {
   useRenameConversationMutation,
 } from "@/features/ai/use-conversations";
 import { requestSidePanelLeave } from "@/features/side-panel/surface-events";
-import {
-  ChevronDown,
-  ChevronRight,
-  Folder,
-  FolderOpen,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderOpen, Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -236,8 +221,10 @@ function ConversationRow({
 }) {
   return (
     <div
-      className={`group flex min-h-10 items-center gap-1 rounded-lg px-1.5 transition-colors ${
-        active ? "bg-fill-hover text-label" : "text-label-secondary hover:bg-fill-hover/70"
+      className={`group flex min-h-11 items-center gap-1 rounded-lg border px-1.5 transition-colors ${
+        active
+          ? "border-accent/20 bg-accent-soft/70 text-label"
+          : "border-transparent text-label-secondary hover:bg-fill-hover/70"
       }`}
       data-testid={`conversation-item-${summary.id}`}
       data-active={active ? "true" : "false"}
@@ -250,31 +237,35 @@ function ConversationRow({
       >
         {summary.title ?? "未命名会话"}
       </button>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-9 shrink-0 md:size-7 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
-              disabled={deleteDisabled}
-            />
-          }
-          aria-label={`会话「${summary.title ?? "未命名会话"}」操作`}
+      <div
+        className={`flex shrink-0 items-center gap-0.5 transition-opacity ${
+          active ? "" : "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+        }`}
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="rounded-md"
+          aria-label={`重命名会话「${summary.title ?? "未命名会话"}」`}
+          title="重命名"
+          onClick={onRename}
         >
-          <MoreHorizontal className="size-4" aria-hidden="true" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onRename}>
-            <Pencil className="size-4" aria-hidden="true" />
-            重命名
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onClick={onDelete}>
-            <Trash2 className="size-4" aria-hidden="true" />
-            删除
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <Pencil className="size-3.5" aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="rounded-md hover:text-danger"
+          aria-label={`删除会话「${summary.title ?? "未命名会话"}」`}
+          title="删除"
+          disabled={deleteDisabled}
+          onClick={onDelete}
+        >
+          <Trash2 className="size-3.5" aria-hidden="true" />
+        </Button>
+      </div>
     </div>
   );
 }

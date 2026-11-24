@@ -162,6 +162,15 @@ export function ChatPanel({
   };
 
   const streaming = session.status === "streaming";
+  const lastMessage = session.messages[session.messages.length - 1];
+  const canRetryLastAnswer = Boolean(
+    conversation &&
+      !streaming &&
+      lastMessage?.role === 1 &&
+      lastMessage.content &&
+      lastMessage.outcome !== "FAILED" &&
+      lastMessage.outcome !== "CANCELLED",
+  );
   const historyUnavailable = session.messages.length === 0 && historyStatus !== "ready";
   const hero = conversation && session.messages.length === 0 && !historyUnavailable;
   const presentation = conversation ? "conversation" : "document";
@@ -200,12 +209,15 @@ export function ChatPanel({
           </div>
         )
       ) : null}
-      {session.messages.map((message) => (
+      {session.messages.map((message, index) => (
         <MessageItem
           key={message.id}
           message={message}
           variant={variant}
           onCitation={onCitation}
+          onRetry={
+            canRetryLastAnswer && index === session.messages.length - 1 ? handleRetry : undefined
+          }
           presentation={presentation}
         />
       ))}
@@ -292,9 +304,9 @@ export function ChatPanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-surface">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
       {variant === "desktop" && conversationTitle ? (
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-separator px-6">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-separator bg-surface px-6">
           <h1
             className="min-w-0 flex-1 truncate text-sm font-medium text-label"
             title={conversationTitle}

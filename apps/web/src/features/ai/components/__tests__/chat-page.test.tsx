@@ -65,13 +65,14 @@ describe("ChatPage", () => {
     expect(page.className).not.toContain("100svh");
   });
 
-  it("首条消息后同步切换会话并只回填地址栏，不发起路由导航", () => {
+  it("首条消息后同步切换会话并只回填地址栏，不发起路由导航", async () => {
     const replaceState = vi
       .spyOn(window.history, "replaceState")
       .mockImplementation((_state, _unused, url) => {
         navigation.pathname = String(url);
       });
     renderWithProviders(<ChatPage />);
+    await screen.findByTestId("conversation-list");
 
     fireEvent.click(screen.getByTestId("chat-panel"));
 
@@ -83,11 +84,12 @@ describe("ChatPage", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("真实路由变化后重新采用路由中的会话状态", () => {
+  it("真实路由变化后重新采用路由中的会话状态", async () => {
     vi.spyOn(window.history, "replaceState").mockImplementation((_state, _unused, url) => {
       navigation.pathname = String(url);
     });
     const view = renderWithProviders(<ChatPage />);
+    await screen.findByTestId("conversation-list");
     fireEvent.click(screen.getByTestId("chat-panel"));
     view.rerender(<ChatPage />);
     expect(screen.getByTestId("chat-panel")).toHaveAttribute("data-session-key", "c42");

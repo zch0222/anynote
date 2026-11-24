@@ -1,5 +1,6 @@
 "use client";
 
+import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { NEW_CONVERSATION_KEY, conversationKey } from "@/features/ai/query-keys";
 import { useChatStreamStore } from "@/features/ai/use-chat-stream";
 import { useConversationQuery } from "@/features/ai/use-conversations";
@@ -11,13 +12,26 @@ import {
 } from "@/features/side-panel/launcher";
 import { renameSidePanelSurface } from "@/features/side-panel/surface-events";
 import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ChatPanel } from "./chat-panel";
-import { ConversationList } from "./conversation-list";
 
 const CHAT_PATHNAME = "/ai/chat";
+
+// 桌面会话列表按需加载，避免重命名对话框与列表数据层进入对话首屏共享包。
+const ConversationList = dynamic(
+  () => import("./conversation-list").then((mod) => mod.ConversationList),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full overflow-hidden p-3">
+        <ListRowsSkeleton count={4} />
+      </div>
+    ),
+  },
+);
 
 export type ChatPageProps = {
   /** 路由中的会话 id；不传表示新对话。 */

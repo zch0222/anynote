@@ -61,6 +61,7 @@ export function CitationAnswer({
       <TiptapEditor
         preset="aiAnswer"
         value={content}
+        flush={presentation === "conversation"}
         className={cn("border-0", presentation === "conversation" && "[&_.ProseMirror]:min-h-0!")}
         onReady={(editor) =>
           applyCitationReferences(
@@ -72,7 +73,15 @@ export function CitationAnswer({
         }
       />
       {citations.length > 0 ? (
-        <div className="rounded-lg border bg-block p-3" data-testid="citation-list">
+        <div
+          className={cn(
+            "rounded-xl border p-3",
+            presentation === "conversation"
+              ? "border-separator bg-background"
+              : "border-separator/60 bg-block",
+          )}
+          data-testid="citation-list"
+        >
           <p className="mb-2 text-sm font-medium">引用来源</p>
           <ol className="space-y-3 text-sm">
             {citations.map((citation) => {

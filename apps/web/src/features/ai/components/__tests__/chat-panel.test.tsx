@@ -1,4 +1,5 @@
 vi.mock("../chat-scope-select", () => ({ ChatScopeSelect: () => null }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -104,6 +105,49 @@ describe("ChatPanel", () => {
     const args = sendMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(args).toMatchObject({ key: "new", prompt: "问题" });
     expect(args).not.toHaveProperty("model");
+  });
+
+  /** 只给最后一条已完成的助手回答提供重新提问，并复用最后一轮用户原文。 */
+  it("重新提问追加最后一轮用户消息", () => {
+    Object.assign(session.current, {
+      messages: [
+        { id: "u1", role: 0, content: "第一问" },
+        { id: "a1", role: 1, content: "第一答" },
+        { id: "u2", role: 0, content: "第二问" },
+        { id: "a2", role: 1, content: "第二答" },
+      ],
+    });
+    renderWithProviders(<ChatPanel sessionKey="c1" />);
+
+    expect(screen.getAllByRole("button", { name: "复制" })).toHaveLength(4);
+    const retry = screen.getByRole("button", { name: "重新提问" });
+    fireEvent.click(retry);
+
+    expect(sendMock).toHaveBeenCalledOnce();
+    expect(sendMock.mock.calls[0]?.[0]).toMatchObject({ key: "c1", prompt: "第二问" });
+  });
+
+  /** 流式期间和已取消的回答不显示重新提问。 */
+  it("非完成状态不提供重新提问", () => {
+    Object.assign(session.current, {
+      messages: [
+        { id: "u1", role: 0, content: "问题" },
+        { id: "a1", role: 1, content: "部分回答", streaming: true },
+      ],
+      status: "streaming",
+    });
+    const { rerender } = renderWithProviders(<ChatPanel sessionKey="c1" />);
+    expect(screen.queryByRole("button", { name: "重新提问" })).toBeNull();
+
+    Object.assign(session.current, {
+      messages: [
+        { id: "u1", role: 0, content: "问题" },
+        { id: "a1", role: 1, content: "已停止的回答", outcome: "CANCELLED" },
+      ],
+      status: "idle",
+    });
+    rerender(<ChatPanel sessionKey="c1" />);
+    expect(screen.queryByRole("button", { name: "重新提问" })).toBeNull();
   });
 
   /** 文档问答继续使用原有范围提示和输入布局。 */

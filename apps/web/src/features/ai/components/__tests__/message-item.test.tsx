@@ -80,12 +80,23 @@ describe("MessageItem", () => {
     expect(screen.queryByTestId("answer-notices")).toBeNull();
   });
 
-  /** 对话页使用中性用户气泡，文档问答默认样式保持不变。 */
+  /** AI 对话提供消息操作，文档问答不新增操作栏。 */
+  it("按展示场景隔离消息操作", () => {
+    const { rerender } = render(
+      <MessageItem message={{ id: "8", role: 1, content: "回答" }} presentation="conversation" />,
+    );
+    expect(screen.getByRole("button", { name: "复制" })).toBeVisible();
+
+    rerender(<MessageItem message={{ id: "8", role: 1, content: "回答" }} />);
+    expect(screen.queryByRole("button", { name: "复制" })).toBeNull();
+  });
+
+  /** 对话页使用品牌浅色用户气泡，文档问答默认样式保持不变。 */
   it("按展示场景隔离用户气泡样式", () => {
     const { rerender } = render(
       <MessageItem message={{ id: "7", role: 0, content: "问题" }} presentation="conversation" />,
     );
-    expect(screen.getByText("问题")).toHaveClass("bg-fill-hover");
+    expect(screen.getByText("问题")).toHaveClass("bg-accent-soft");
 
     rerender(<MessageItem message={{ id: "7", role: 0, content: "问题" }} />);
     expect(screen.getByText("问题")).toHaveClass("bg-accent");

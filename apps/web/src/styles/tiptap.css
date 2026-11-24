@@ -438,6 +438,57 @@
   font-weight: 600;
 }
 
+/* ---------- AI 对话表格 ---------- */
+.anynote-ai-message .anynote-editor__content .tableWrapper {
+  max-width: 100%;
+  margin: 12px 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-primary);
+}
+
+.anynote-ai-message .anynote-editor__content .tableWrapper:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.anynote-ai-message .anynote-editor__content .tableWrapper table {
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  table-layout: auto;
+}
+
+.anynote-ai-message .anynote-editor__content .tableWrapper th,
+.anynote-ai-message .anynote-editor__content .tableWrapper td {
+  min-width: 7rem;
+  max-width: 20rem;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--separator);
+  font-size: var(--text-footnote);
+  line-height: var(--text-footnote--line-height);
+  text-align: left;
+}
+
+.anynote-ai-message .anynote-editor__content .tableWrapper th {
+  background-color: var(--fill-hover);
+  color: var(--label-primary);
+  font-weight: 500;
+}
+
+.anynote-ai-message .anynote-editor__content .tableWrapper tr:last-child td {
+  border-bottom: 0;
+}
+
+@media (hover: hover) {
+  .anynote-ai-message .anynote-editor__content .tableWrapper tbody tr:hover {
+    background-color: var(--fill-hover);
+  }
+}
+
 /* ---------- 图片上传指示器 ----------
    上传期间以 widget decoration 插在图片将要落下的位置。它是 ProseMirror 的本地装饰、
    不是文档节点，所以不会进 Markdown，也不会同步给协同的其他人。

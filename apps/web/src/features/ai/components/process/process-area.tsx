@@ -5,6 +5,7 @@ import { shouldHandleSidePanelClick, useSidePanelLink } from "@/features/side-pa
 import { type CitationVariant, citationHref } from "@/lib/ai/citations";
 import { completedHead, toolAction, toolTrailing } from "@/lib/ai/process";
 import type { ProcessItem, ProcessResultItem, ProcessState } from "@/lib/ai/process";
+import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -25,6 +26,7 @@ export function ProcessArea({
   failed,
   cancelled,
   variant = "desktop",
+  presentation = "document",
 }: {
   process: ProcessState;
   streaming: boolean;
@@ -34,6 +36,7 @@ export function ProcessArea({
   failed?: boolean | undefined;
   cancelled?: boolean | undefined;
   variant?: CitationVariant | undefined;
+  presentation?: "document" | "conversation" | undefined;
 }) {
   const items = process.items;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -92,7 +95,12 @@ export function ProcessArea({
   return (
     <div
       ref={rootRef}
-      className="rounded-lg border border-separator/60 bg-block/60"
+      className={cn(
+        "rounded-lg border",
+        presentation === "conversation"
+          ? "border-separator bg-background"
+          : "border-separator/60 bg-block/60",
+      )}
       data-testid="process-area"
     >
       <span className="sr-only" aria-live="polite" data-testid="process-announcer">

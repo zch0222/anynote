@@ -194,14 +194,17 @@ describe("ConversationList", () => {
     expect(screen.getByText(/会话加载失败/)).toBeTruthy();
   });
 
-  /** 触摸端常显操作入口，桌面端继续使用悬停揭示。 */
-  it("操作按钮在触摸端常显，md 以上才靠 hover 揭示", () => {
-    mockConversations(ready([conversation(1)]));
+  /** 会话行直接提供重命名和删除，未选中行在桌面悬停或聚焦时揭示。 */
+  it("直接渲染重命名和删除按钮", () => {
+    mockConversations(ready([conversation(1), conversation(2)]));
     renderWithProviders(<ConversationList activeId={1} surface="chat:c1" />);
 
-    const trigger = screen.getByLabelText("会话「会话1」操作");
-    expect(trigger.className).toContain("md:opacity-0");
-    expect(trigger.className).not.toMatch(/(^|\s)opacity-0/);
+    const selectedRow = screen.getByTestId("conversation-item-1");
+    const idleRow = screen.getByTestId("conversation-item-2");
+    expect(selectedRow.querySelector("div.flex.shrink-0")?.className).not.toContain("md:opacity-0");
+    expect(idleRow.querySelector("div.flex.shrink-0")?.className).toContain("md:opacity-0");
+    expect(screen.getByRole("button", { name: "重命名会话「会话1」" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "删除会话「未命名会话」" })).toBeVisible();
   });
 
   /** 离开守卫拒绝时，点击其他会话与新对话都不导航。 */
@@ -262,8 +265,7 @@ describe("ConversationList", () => {
     mockConversations(ready([conversation(1)]));
     renderWithProviders(<ConversationList activeId={1} surface="chat:c1" />);
 
-    fireEvent.click(screen.getByLabelText("会话「会话1」操作"));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "删除" }));
+    fireEvent.click(screen.getByRole("button", { name: "删除会话「会话1」" }));
 
     expect(confirmSpy).toHaveBeenCalled();
     await waitFor(() => expect(deleteMutation.mutateAsync).toHaveBeenCalledWith(1));
@@ -277,8 +279,7 @@ describe("ConversationList", () => {
     mockConversations(ready([conversation(1), conversation(2)]));
     renderWithProviders(<ConversationList activeId={1} surface="chat:c1" />);
 
-    fireEvent.click(screen.getByLabelText("会话「未命名会话」操作"));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "删除" }));
+    fireEvent.click(screen.getByRole("button", { name: "删除会话「未命名会话」" }));
 
     await waitFor(() => expect(deleteMutation.mutateAsync).toHaveBeenCalledWith(2));
     expect(guard).not.toHaveBeenCalled();
@@ -292,8 +293,7 @@ describe("ConversationList", () => {
     mockConversations(ready([conversation(1)]));
     renderWithProviders(<ConversationList activeId={1} surface="chat:c1" />);
 
-    fireEvent.click(screen.getByLabelText("会话「会话1」操作"));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "删除" }));
+    fireEvent.click(screen.getByRole("button", { name: "删除会话「会话1」" }));
 
     expect(confirmSpy).toHaveBeenCalled();
     expect(guard).toHaveBeenCalled();
@@ -312,20 +312,18 @@ describe("ConversationList", () => {
     mockConversations(ready([conversation(1)]));
     renderWithProviders(<ConversationList activeId={1} surface="chat:c1" />);
 
-    fireEvent.click(screen.getByLabelText("会话「会话1」操作"));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "删除" }));
+    fireEvent.click(screen.getByRole("button", { name: "删除会话「会话1」" }));
 
     expect(guard).not.toHaveBeenCalled();
     expect(deleteMutation.mutateAsync).not.toHaveBeenCalled();
   });
 
-  /** 「重命名」菜单项打开重命名对话框。 */
-  it("重命名菜单项打开重命名对话框", async () => {
+  /** 「重命名」按钮打开重命名对话框。 */
+  it("重命名按钮打开重命名对话框", async () => {
     mockConversations(ready([conversation(1)]));
     renderWithProviders(<ConversationList activeId={1} surface="chat:c1" />);
 
-    fireEvent.click(screen.getByLabelText("会话「会话1」操作"));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "重命名" }));
+    fireEvent.click(screen.getByRole("button", { name: "重命名会话「会话1」" }));
 
     expect(await screen.findByText("重命名会话")).toBeTruthy();
   });
