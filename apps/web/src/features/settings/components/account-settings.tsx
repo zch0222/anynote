@@ -30,6 +30,7 @@ import {
   useUpdateMyProfileMutation,
   validateResetPassword,
 } from "../use-profile";
+import { LogoutSettingsCard } from "./logout-settings-card";
 
 /*
  * 分节表已抽到 `@/features/settings/sections`（见那里的注释：留在本文件会把
@@ -384,6 +385,8 @@ export function AccountSettings() {
           </Button>
         </div>
       </section>
+
+      <LogoutSettingsCard />
     </div>
   );
 }

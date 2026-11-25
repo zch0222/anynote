@@ -3,12 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const updateMutate = vi.hoisted(() => vi.fn());
 const resetMutate = vi.hoisted(() => vi.fn());
+const logoutMutate = vi.hoisted(() => vi.fn());
 /** toast 是副作用出口，不是 DOM：仓库里没有挂 Toaster，所以断言打到调用上。 */
 const toastError = vi.hoisted(() => vi.fn());
 const toastSuccess = vi.hoisted(() => vi.fn());
 vi.mock("sonner", () => ({
   toast: { error: toastError, success: toastSuccess },
   Toaster: () => null,
+}));
+vi.mock("@/features/auth/use-logout-mutation", () => ({
+  useLogoutMutation: () => ({ mutate: logoutMutate, isPending: false }),
 }));
 vi.mock("@/features/settings/use-profile", async () => {
   const actual = await vi.importActual<typeof import("@/features/settings/use-profile")>(
@@ -68,6 +72,7 @@ async function selectSex(label: string) {
 beforeEach(() => {
   updateMutate.mockReset();
   resetMutate.mockReset();
+  logoutMutate.mockReset();
   toastError.mockReset();
   toastSuccess.mockReset();
 });
@@ -401,6 +406,20 @@ describe("改密码（D-12 图例 23 · 24）", () => {
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("网络连接超时，请检查网络后重试"));
     expect(screen.queryByTestId("settings-old-password-error")).toBeNull();
+  });
+});
+
+/**
+ * 账号分区渲染桌面退出登录入口。
+ *
+ * @author 称霸幼儿园
+ */
+describe("退出登录入口", () => {
+  it("账号设置页包含退出登录按钮", () => {
+    show();
+    renderWithProviders(<AccountSettings />);
+
+    expect(screen.getByTestId("settings-logout-button")).toHaveTextContent("退出登录");
   });
 });
 
