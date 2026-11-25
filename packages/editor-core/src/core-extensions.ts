@@ -1,5 +1,5 @@
 import type { AnyExtension, Extensions } from "@tiptap/core";
-import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
+import { TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import TextAlign from "@tiptap/extension-text-align";
@@ -11,6 +11,7 @@ import { CoreCodeBlock } from "./extensions/code-block";
 import { CoreImage } from "./extensions/image";
 import { AnynoteHighlight, AnynoteUnderline } from "./extensions/marks";
 import { CoreBlockMath, CoreInlineMath } from "./extensions/math";
+import { CoreTable } from "./extensions/table";
 import { AnynoteTightTaskList } from "./extensions/tight-lists";
 import { AnynoteWikilink } from "./extensions/wikilink";
 import { MarkdownBridge } from "./markdown";
@@ -55,7 +56,7 @@ export function coreExtensions(options: CoreExtensionOptions = {}): Extensions {
     TaskList,
     TaskItem.configure({ nested: true }),
     AnynoteTightTaskList,
-    Table.configure({ resizable: false }),
+    CoreTable.configure({ resizable: false }),
     TableRow,
     TableHeader,
     TableCell,
