@@ -42,11 +42,11 @@ flowchart LR
 
 - [x] 编写 OpenSpec 提案 `.claude/openspec/changes/2026-11-27-agent-run-admin-stats.md`
 - [x] 新增数据库迁移 `infra/sql/migrations/2026-11-27-agent-run-started-index.sql`（为 `a_agent_run` 添加联合索引 `idx_agent_run_started_outcome(started_at, outcome)`），同步更新 `infra/sql/anynote.sql`
-- [ ] 在 `services/ai` 新增命名强类型 VO：`AgentRunAdminStatsVO`、`AgentRunOutcomeCountVO`、`AgentRunModelBucketVO`、`AgentRunTimeBucketVO`（完整标注 `@Schema`，禁用 `Map<String, Object>`）
-- [ ] 在 `AgentRunAdminController` / `AgentRunAdminService` 实现 `GET /v1/admin/agent-runs/stats`（含 `SystemAdminGuard` 校验、时间跨度 `≤ 90 天` 校验、`HOUR`/`DAY` 分桶及 P95 计算）
-- [ ] 将 `SystemAdminGuard.ADMIN_ONLY_MESSAGE` 统一为 `"只有系统管理员可以访问管理接口"` 并同步既有单测断言
-- [ ] 编写 JUnit 5 + Mockito 纯单测（覆盖非超管拦截、空数据集零值返回、跨度超限报错、按小时/按天聚合与 P95 计算）
-- [ ] 启动网关与 `anynote-ai`，执行 `pnpm openapi:generate` 更新并核对 `openapi/specs/ai.json`
+- [x] 在 `services/ai` 新增命名强类型 VO：`AgentRunAdminStatsVO`、`AgentRunOutcomeCountVO`、`AgentRunModelBucketVO`、`AgentRunTimeBucketVO`（完整标注 `@Schema`，禁用 `Map<String, Object>`）
+- [x] 在 `AgentRunAdminController` / `AgentRunAdminService` 实现 `GET /v1/admin/agent-runs/stats`（含 `SystemAdminGuard` 校验、时间跨度 `≤ 90 天` 校验、`HOUR`/`DAY` 分桶及 P95 计算）
+- [x] 将 `SystemAdminGuard.ADMIN_ONLY_MESSAGE` 统一为 `"只有系统管理员可以访问管理接口"` 并同步既有单测断言
+- [x] 编写 JUnit 5 + Mockito 纯单测（覆盖非超管拦截、空数据集零值返回、跨度超限报错、按小时/按天聚合与 P95 计算）
+- [x] 启动网关与 `anynote-ai`，执行 `pnpm openapi:generate` 更新并核对 `openapi/specs/ai.json`
 
 **验收标准**
 
