@@ -2,6 +2,7 @@ package com.anynote.ai.controller;
 
 import com.anynote.ai.model.vo.AgentRunAdminDetailVO;
 import com.anynote.ai.model.vo.AgentRunAdminEventVO;
+import com.anynote.ai.model.vo.AgentRunAdminStatsVO;
 import com.anynote.ai.model.vo.AgentRunAdminVO;
 import com.anynote.ai.security.SystemAdminGuard;
 import com.anynote.ai.service.AgentRunAdminService;
@@ -71,6 +72,24 @@ public class AgentRunAdminController {
         systemAdminGuard.requireAdmin();
         return ResUtil.success(agentRunAdminService.listRuns(
                 pageNum, pageSize, userId, runId, outcome, startedFrom, startedTo));
+    }
+
+    /**
+     * 查询时间范围内的 Agent 运行聚合统计。
+     *
+     * @param startedFrom 开始时间下界（ISO-8601），可空
+     * @param startedTo 开始时间上界（ISO-8601），可空
+     * @param granularity 时间桶粒度（HOUR 或 DAY），可空
+     * @return 聚合统计
+     */
+    @Operation(summary = "查询 Agent 运行聚合统计", description = "按时间范围汇总运行状态、Token、耗时、模型分布与时间序列")
+    @GetMapping("/stats")
+    public ResData<AgentRunAdminStatsVO> getStats(
+            @Parameter(description = "开始时间下界") @RequestParam(required = false) String startedFrom,
+            @Parameter(description = "开始时间上界") @RequestParam(required = false) String startedTo,
+            @Parameter(description = "时间桶粒度") @RequestParam(required = false) String granularity) {
+        systemAdminGuard.requireAdmin();
+        return ResUtil.success(agentRunAdminService.getStats(startedFrom, startedTo, granularity));
     }
 
     /**

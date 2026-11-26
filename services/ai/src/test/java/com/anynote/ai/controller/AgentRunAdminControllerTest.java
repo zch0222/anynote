@@ -8,6 +8,7 @@ import com.anynote.ai.model.po.AgentRunEventPO;
 import com.anynote.ai.model.po.AgentRunPO;
 import com.anynote.ai.model.vo.AgentRunAdminDetailVO;
 import com.anynote.ai.model.vo.AgentRunAdminEventVO;
+import com.anynote.ai.model.vo.AgentRunAdminStatsVO;
 import com.anynote.ai.model.vo.AgentRunAdminVO;
 import com.anynote.ai.security.SystemAdminGuard;
 import com.anynote.ai.service.AgentRunAdminService;
@@ -88,6 +89,44 @@ class AgentRunAdminControllerTest {
                 .andExpect(jsonPath("$.data.rows[0].runId").value("run-abc"));
 
         verify(systemAdminGuard).requireAdmin();
+    }
+
+    /**
+     * 验证统计端点先做管理员校验并传递时间范围与粒度。
+     */
+    @Test
+    @DisplayName("统计端点校验管理员并传递筛选")
+    void statsRequiresAdminAndPassesFilters() throws Exception {
+        when(systemAdminGuard.requireAdmin()).thenReturn(loginUser);
+        when(agentRunAdminService.getStats("from", "to", "DAY"))
+                .thenReturn(AgentRunAdminStatsVO.builder().totalRuns(6L).build());
+
+        mockMvc.perform(get("/v1/admin/agent-runs/stats")
+                        .param("startedFrom", "from")
+                        .param("startedTo", "to")
+                        .param("granularity", "DAY"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalRuns").value(6));
+
+        verify(systemAdminGuard).requireAdmin();
+        verify(agentRunAdminService).getStats("from", "to", "DAY");
+    }
+
+    /**
+     * 验证统计端点鉴权失败时不访问服务。
+     */
+    @Test
+    @DisplayName("统计端点鉴权失败时不访问服务")
+    void statsRejectsWhenNotAdmin() {
+        org.mockito.Mockito.doThrow(new com.anynote.core.exception.auth.AuthException(
+                com.anynote.core.web.enums.ResCode.UNAUTHORIZED_ERROR))
+                .when(systemAdminGuard).requireAdmin();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> agentRunAdminControllerInstance().getStats(null, null, null))
+                .isInstanceOf(com.anynote.core.exception.auth.AuthException.class);
+
+        verify(agentRunAdminService, never()).getStats(any(), any(), any());
     }
 
     /**

@@ -2,6 +2,7 @@ package com.anynote.ai.service;
 
 import com.anynote.ai.model.vo.AgentRunAdminDetailVO;
 import com.anynote.ai.model.vo.AgentRunAdminEventVO;
+import com.anynote.ai.model.vo.AgentRunAdminStatsVO;
 import com.anynote.ai.model.vo.AgentRunAdminVO;
 import com.anynote.core.web.model.bo.PageBean;
 
@@ -28,6 +29,16 @@ public interface AgentRunAdminService {
      */
     PageBean<AgentRunAdminVO> listRuns(int pageNum, int pageSize, Long userId, String runId,
                                        String outcome, String startedFrom, String startedTo);
+
+    /**
+     * 查询时间范围内的运行聚合统计。
+     *
+     * @param startedFrom 开始时间下界，可空
+     * @param startedTo 开始时间上界，可空
+     * @param granularity 时间桶粒度，可空
+     * @return 聚合统计
+     */
+    AgentRunAdminStatsVO getStats(String startedFrom, String startedTo, String granularity);
 
     /**
      * 查询运行详情（摘要与落库的过程视图），并写一条访问留痕。

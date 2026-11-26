@@ -30,7 +30,7 @@ class SystemAdminGuardTest {
     private TokenUtil tokenUtil;
 
     @Test
-    @DisplayName("ADMIN_X 可以管理供应商并返回操作者")
+    @DisplayName("ADMIN_X 可以访问管理接口并返回操作者")
     void adminShouldPass() {
         SystemAdminGuard guard = new SystemAdminGuard(tokenUtil);
         when(tokenUtil.getLoginUser()).thenReturn(loginUser("ADMIN_X"));
@@ -44,7 +44,7 @@ class SystemAdminGuardTest {
         when(tokenUtil.getLoginUser()).thenReturn(loginUser("MEMBER"));
         AuthException member = assertThrows(AuthException.class, guard::requireAdmin);
         assertEquals(ResCode.UNAUTHORIZED_ERROR, member.getErrorCode());
-        assertEquals("只有系统管理员可以管理模型供应商", member.getErrorMessage());
+        assertEquals("只有系统管理员可以访问管理接口", member.getErrorMessage());
 
         LoginUser withoutRole = loginUser("MEMBER");
         withoutRole.getSysUser().setRole(null);

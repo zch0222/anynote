@@ -5,13 +5,16 @@ import com.anynote.ai.mapper.AgentRunEventMapper;
 import com.anynote.ai.mapper.AgentRunMapper;
 import com.anynote.ai.mapper.AgentTraceAccessMapper;
 import com.anynote.ai.mapper.ChatMessageMapper;
+import com.anynote.ai.model.bo.AgentRunStatsRowBO;
 import com.anynote.ai.model.po.AgentRunEventPO;
 import com.anynote.ai.model.po.AgentRunPO;
 import com.anynote.ai.model.po.AgentTraceAccessPO;
 import com.anynote.ai.model.vo.AgentRunAdminDetailVO;
 import com.anynote.ai.model.vo.AgentRunAdminEventVO;
+import com.anynote.ai.model.vo.AgentRunAdminStatsVO;
 import com.anynote.ai.model.vo.AgentRunAdminVO;
 import com.anynote.core.exception.BusinessException;
+import com.anynote.core.web.enums.ResCode;
 import com.anynote.core.web.model.bo.PageBean;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
@@ -31,7 +34,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -179,6 +186,226 @@ class AgentRunAdminServiceImplTest {
         assertThatThrownBy(() -> service.getRun("missing", 42L)).isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.listEvents("missing", 0, 10, 42L)).isInstanceOf(BusinessException.class);
         verify(accessMapper, never()).insert(any(AgentTraceAccessPO.class));
+    }
+
+    /**
+     * 空数据集返回零值，并保留完整零值时间桶。
+     */
+    @Test
+    @DisplayName("统计空数据集返回零值")
+    void statsReturnsZerosForEmptyDataset() {
+        AgentRunAdminServiceImpl fixedService = serviceAt("2026-11-27T02:00:00Z");
+        when(runMapper.selectAdminStatsRows(any(), any())).thenReturn(List.of());
+
+        AgentRunAdminStatsVO stats = fixedService.getStats(
+                "2026-11-20T00:00:00+08:00", "2026-11-20T23:59:59+08:00", "DAY");
+
+        assertThat(stats.getTotalRuns()).isZero();
+        assertThat(stats.getRunningRuns()).isZero();
+        assertThat(stats.getSucceededRuns()).isZero();
+        assertThat(stats.getFailedRuns()).isZero();
+        assertThat(stats.getCancelledRuns()).isZero();
+        assertThat(stats.getPromptTokens()).isZero();
+        assertThat(stats.getCompletionTokens()).isZero();
+        assertThat(stats.getReasoningTokens()).isZero();
+        assertThat(stats.getTotalTokens()).isZero();
+        assertThat(stats.getAvgDurationMs()).isZero();
+        assertThat(stats.getP95DurationMs()).isZero();
+        assertThat(stats.getAvgFirstOutputMs()).isZero();
+        assertThat(stats.getP95FirstOutputMs()).isZero();
+        assertThat(stats.getAvgToolCalls()).isEqualTo(0D);
+        assertThat(stats.getOutcomes()).isEmpty();
+        assertThat(stats.getModels()).isEmpty();
+        assertThat(stats.getSeries()).hasSize(1);
+        assertThat(stats.getSeries().get(0).getBucketStart())
+                .isEqualTo(Date.from(OffsetDateTime.parse("2026-11-20T00:00:00+08:00").toInstant()));
+        assertThat(stats.getSeries().get(0).getTotalRuns()).isZero();
+    }
+
+    /**
+     * 未传时间时默认查询当前时间往前 7 天，并按天聚合。
+     */
+    @Test
+    @DisplayName("统计默认查询近 7 天并按天聚合")
+    void statsUsesDefaultWeekAndDayGranularity() {
+        AgentRunAdminServiceImpl fixedService = serviceAt("2026-11-27T02:00:00Z");
+        when(runMapper.selectAdminStatsRows(any(), any())).thenReturn(List.of());
+
+        AgentRunAdminStatsVO stats = fixedService.getStats(null, null, null);
+
+        ArgumentCaptor<Date> startedFrom = ArgumentCaptor.forClass(Date.class);
+        ArgumentCaptor<Date> startedTo = ArgumentCaptor.forClass(Date.class);
+        verify(runMapper).selectAdminStatsRows(startedFrom.capture(), startedTo.capture());
+        assertThat(startedFrom.getValue()).isEqualTo(Date.from(Instant.parse("2026-11-20T02:00:00Z")));
+        assertThat(startedTo.getValue()).isEqualTo(Date.from(Instant.parse("2026-11-27T02:00:00Z")));
+        long spacing = stats.getSeries().get(1).getBucketStart().getTime()
+                - stats.getSeries().get(0).getBucketStart().getTime();
+        assertThat(spacing).isEqualTo(24L * 60L * 60L * 1000L);
+    }
+
+    /**
+     * 起止倒置、跨度超限、非法粒度与无时区时间均返回统一参数错误。
+     */
+    @Test
+    @DisplayName("统计拒绝非法时间范围与粒度")
+    void statsRejectsInvalidRangeAndGranularity() {
+        assertInvalidStats(() -> service.getStats(
+                "2026-11-22T00:00:00Z", "2026-11-21T00:00:00Z", null));
+        assertInvalidStats(() -> service.getStats(
+                "2026-01-01T00:00:00Z", "2026-04-02T00:00:00Z", null));
+        assertInvalidStats(() -> service.getStats(
+                "2026-11-20T00:00:00Z", "2026-11-21T00:00:00Z", "WEEK"));
+        assertInvalidStats(() -> service.getStats(
+                "2026-11-20T00:00:00", "2026-11-21T00:00:00Z", null));
+    }
+
+    /**
+     * 按小时聚合状态、Token、模型分布与时间序列，粒度大小写不敏感。
+     */
+    @Test
+    @DisplayName("统计按小时聚合并汇总 Token 与模型")
+    void statsAggregatesHourlyBucketsAndTokenUsage() {
+        AgentRunAdminServiceImpl fixedService = serviceAt("2026-11-27T02:00:00Z");
+        when(runMapper.selectAdminStatsRows(any(), any())).thenReturn(List.of(
+                statsRow("COMPLETED", "ANSWERED", "stepfun", "step-3",
+                        "{\"promptTokens\":100,\"completionTokens\":20,\"reasoningTokens\":5,\"totalTokens\":125}",
+                        1000L, 100L, 2, "2026-11-20T00:10:00Z"),
+                statsRow("FAILED", "ERROR", "openai", "gpt-x",
+                        "{\"promptTokens\":200,\"completionTokens\":40,\"reasoningTokens\":10,\"totalTokens\":250}",
+                        2000L, 200L, 4, "2026-11-20T01:10:00Z"),
+                statsRow("COMPLETED", "NOT_FOUND", null, null,
+                        "not-json", null, null, null, "2026-11-20T02:10:00Z"),
+                statsRow("COMPLETED", "ANSWERED", "stepfun", "step-3",
+                        "{\"promptTokens\":50,\"completionTokens\":15,\"reasoningTokens\":5,\"totalTokens\":70}",
+                        3000L, 300L, 3, "2026-11-20T00:40:00Z")));
+
+        AgentRunAdminStatsVO stats = fixedService.getStats(
+                "2026-11-20T00:00:00Z", "2026-11-20T02:59:59Z", "hour");
+
+        assertThat(stats.getTotalRuns()).isEqualTo(4L);
+        assertThat(stats.getSucceededRuns()).isEqualTo(3L);
+        assertThat(stats.getFailedRuns()).isEqualTo(1L);
+        assertThat(stats.getPromptTokens()).isEqualTo(350L);
+        assertThat(stats.getCompletionTokens()).isEqualTo(75L);
+        assertThat(stats.getReasoningTokens()).isEqualTo(20L);
+        assertThat(stats.getTotalTokens()).isEqualTo(445L);
+        assertThat(stats.getAvgDurationMs()).isEqualTo(2000L);
+        assertThat(stats.getP95DurationMs()).isEqualTo(3000L);
+        assertThat(stats.getAvgFirstOutputMs()).isEqualTo(200L);
+        assertThat(stats.getP95FirstOutputMs()).isEqualTo(300L);
+        assertThat(stats.getAvgToolCalls()).isEqualTo(3D);
+        assertThat(stats.getOutcomes()).extracting("outcome")
+                .containsExactly("ANSWERED", "ERROR", "NOT_FOUND");
+        assertThat(stats.getOutcomes().get(0).getCount()).isEqualTo(2L);
+        assertThat(stats.getModels().get(0).getProvider()).isEqualTo("stepfun");
+        assertThat(stats.getModels().get(0).getRuns()).isEqualTo(2L);
+        assertThat(stats.getModels().get(0).getTotalTokens()).isEqualTo(195L);
+        assertThat(stats.getModels()).anySatisfy(model -> {
+            assertThat(model.getProvider()).isNull();
+            assertThat(model.getModel()).isNull();
+            assertThat(model.getRuns()).isEqualTo(1L);
+        });
+        assertThat(stats.getSeries()).hasSize(3);
+        assertThat(stats.getSeries().get(0).getTotalRuns()).isEqualTo(2L);
+        assertThat(stats.getSeries().get(0).getSucceededRuns()).isEqualTo(2L);
+        assertThat(stats.getSeries().get(0).getTotalTokens()).isEqualTo(195L);
+        assertThat(stats.getSeries().get(0).getAvgDurationMs()).isEqualTo(2000L);
+        assertThat(stats.getSeries().get(1).getFailedRuns()).isEqualTo(1L);
+        assertThat(stats.getSeries().get(2).getTotalRuns()).isEqualTo(1L);
+    }
+
+    /**
+     * 按天聚合时缺失日期补零，NULL 耗时不参与均值，P95 使用 nearest-rank。
+     */
+    @Test
+    @DisplayName("统计按天补零并计算 nearest-rank P95")
+    void statsAggregatesDailyBucketsMissingZerosAndP95() {
+        AgentRunAdminServiceImpl fixedService = serviceAt("2026-11-27T02:00:00Z");
+        List<AgentRunStatsRowBO> rows = new ArrayList<>();
+        for (int index = 1; index <= 20; index++) {
+            rows.add(statsRow("COMPLETED", "ANSWERED", "stepfun", "step-3",
+                    "{\"totalTokens\":10}", index * 100L, index * 10L, 1,
+                    index % 2 == 0 ? "2026-11-19T17:00:00Z" : "2026-11-20T17:00:00Z"));
+        }
+        rows.add(statsRow("FAILED", "ERROR", "stepfun", "step-3", null,
+                null, null, null, "2026-11-20T18:00:00Z"));
+        when(runMapper.selectAdminStatsRows(any(), any())).thenReturn(rows);
+
+        AgentRunAdminStatsVO stats = fixedService.getStats(
+                "2026-11-20T00:00:00+08:00", "2026-11-22T23:59:59+08:00", "DAY");
+
+        assertThat(stats.getTotalRuns()).isEqualTo(21L);
+        assertThat(stats.getSucceededRuns()).isEqualTo(20L);
+        assertThat(stats.getFailedRuns()).isEqualTo(1L);
+        assertThat(stats.getAvgDurationMs()).isEqualTo(1050L);
+        assertThat(stats.getP95DurationMs()).isEqualTo(1900L);
+        assertThat(stats.getAvgFirstOutputMs()).isEqualTo(105L);
+        assertThat(stats.getP95FirstOutputMs()).isEqualTo(190L);
+        assertThat(stats.getAvgToolCalls()).isEqualTo(1D);
+        assertThat(stats.getTotalTokens()).isEqualTo(200L);
+        assertThat(stats.getSeries()).hasSize(3);
+        assertThat(stats.getSeries().get(0).getBucketStart())
+                .isEqualTo(Date.from(OffsetDateTime.parse("2026-11-20T00:00:00+08:00").toInstant()));
+        assertThat(stats.getSeries().get(0).getTotalRuns()).isEqualTo(10L);
+        assertThat(stats.getSeries().get(1).getTotalRuns()).isEqualTo(11L);
+        assertThat(stats.getSeries().get(1).getFailedRuns()).isEqualTo(1L);
+        assertThat(stats.getSeries().get(2).getTotalRuns()).isZero();
+        assertThat(stats.getSeries().get(2).getTotalTokens()).isZero();
+    }
+
+    /**
+     * 断言统计调用抛出统一参数错误。
+     *
+     * @param callable 统计调用
+     */
+    private void assertInvalidStats(org.assertj.core.api.ThrowableAssert.ThrowingCallable callable) {
+        assertThatThrownBy(callable)
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("请求参数错误")
+                .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
+                        .isEqualTo(ResCode.USER_REQUEST_PARAM_ERROR));
+    }
+
+    /**
+     * 构造固定时间与时区的统计服务。
+     *
+     * @param instant 当前时间
+     * @return 统计服务
+     */
+    private AgentRunAdminServiceImpl serviceAt(String instant) {
+        ZoneId zoneId = ZoneId.of("Asia/Shanghai");
+        return new AgentRunAdminServiceImpl(runMapper, eventMapper, accessMapper, messageMapper,
+                new Gson(), new ObjectMapper(), Clock.fixed(Instant.parse(instant), zoneId), zoneId);
+    }
+
+    /**
+     * 构造一条统计查询行。
+     *
+     * @param state 运行状态
+     * @param outcome 运行结果
+     * @param provider 供应商标识
+     * @param model 模型标识
+     * @param tokenUsage Token JSON
+     * @param durationMs 运行耗时
+     * @param firstOutputMs 首字耗时
+     * @param toolCalls 工具调用次数
+     * @param startedAt 开始时间
+     * @return 统计查询行
+     */
+    private static AgentRunStatsRowBO statsRow(String state, String outcome, String provider, String model,
+                                               String tokenUsage, Long durationMs, Long firstOutputMs,
+                                               Integer toolCalls, String startedAt) {
+        AgentRunStatsRowBO row = new AgentRunStatsRowBO();
+        row.setState(state);
+        row.setOutcome(outcome);
+        row.setProvider(provider);
+        row.setModel(model);
+        row.setTokenUsage(tokenUsage);
+        row.setDurationMs(durationMs);
+        row.setFirstOutputMs(firstOutputMs);
+        row.setToolCalls(toolCalls);
+        row.setStartedAt(Date.from(OffsetDateTime.parse(startedAt).toInstant()));
+        return row;
     }
 
     /**
