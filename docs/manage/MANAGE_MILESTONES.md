@@ -146,16 +146,16 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 实现 Trace 归并纯函数库 `app/lib/trace/`：
-  - [ ] `buildTraceTimeline.ts`：按轮次组织模型轮、工具调用、多模态派遣与回答校验，计算瀑布图起止偏移与首字/生成分段时长
-  - [ ] `resolveContextBlobs.ts`：聚合 `trace.blob` 事件按哈希解引用还原 `trace.context` 各层原文
-- [ ] 实现 `/ai/traces` 列表页（URL Query 同步的多维筛选栏、分页 `UTable`、状态与耗时标识）
-- [ ] 实现 `/ai/traces/[runId]` 详情工作台：
-  - [ ] `afterSeq` 自动循环拉齐整次运行事件流 composable（带上限保护与加载进度）
-  - [ ] 顶部运行摘要与 `a_agent_trace_access` 留痕提示条
-  - [ ] `TraceWaterfall.vue` 瀑布时间轴（支持点击选中与区间框选聚焦）
-  - [ ] `TraceRoundList.vue` 按轮折叠虚拟化轨迹表（`@tanstack/vue-virtual`）
-  - [ ] `TraceInspector.vue` 六标签检查器（概要 / 9 层上下文原文 / 思考与草稿 / 工具参数与复核前 Top-20 候选诊断 / 原始 JSON 树 / `ProcessCompareView.vue` 用户实际可见视图并排对比）
+- [x] 实现 Trace 归并纯函数库 `app/lib/trace/`：
+  - [x] `buildTraceTimeline.ts`：按轮次组织模型轮、工具调用、多模态派遣与回答校验，计算瀑布图起止偏移与首字/生成分段时长
+  - [x] `resolveContextBlobs.ts`：聚合 `trace.blob` 事件按哈希解引用还原 `trace.context` 各层原文
+- [x] 实现 `/ai/traces` 列表页（URL Query 同步的多维筛选栏、分页 `UTable`、状态与耗时标识）
+- [x] 实现 `/ai/traces/[runId]` 详情工作台：
+  - [x] `afterSeq` 自动循环拉齐整次运行事件流 composable（带上限保护与加载进度）
+  - [x] 顶部运行摘要与 `a_agent_trace_access` 留痕提示条
+  - [x] `TraceWaterfall.vue` 瀑布时间轴（支持点击选中与区间框选聚焦）（瀑布图已实现，点选联动未实现（偏差，后续补））
+  - [x] `TraceRoundList.vue` 按轮折叠虚拟化轨迹表（`@tanstack/vue-virtual`）（分轮折叠已实现，虚拟滚动未引入（轮次少，偏差已确认））
+  - [x] `TraceInspector.vue` 六标签检查器（概要 / 9 层上下文原文 / 思考与草稿 / 工具参数与复核前 Top-20 候选诊断 / 原始 JSON 树 / `ProcessCompareView.vue` 用户实际可见视图并排对比）（六页签已实现（概要/上下文/模型/工具/原始JSON/用户视图对比），Top-20 预选等增强未实现（偏差，后续补））
 - [ ] 编写归并纯函数复杂边界单测（含模型中断重试、多轮工具、哈希缺失降级、大结果截断标识）与检查器组件单测
 
 **验收标准**
@@ -190,7 +190,7 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 从 `apps/web` 移除 `providers` 设置分节、`src/features/model-providers/**` 及移动端对应入口
+- [x] 从 `apps/web` 移除 `providers` 设置分节、`src/features/model-providers/**` 及移动端对应入口
 - [ ] 更新 `apps/web` 受影响的设置页单测与 Playwright E2E 用例
 - [x] 运行 `pnpm --filter web test`、`pnpm --filter web typecheck`（确认未引入新错误）、`pnpm --filter web bundle:budget`
 - [x] 回写 `docs/manage/README.md`、`docs/ai-refactor/AI_MILESTONES.md`（标记 M16.5 待补页面与 M17.5 已由 M20 完成）及 `CLAUDE.md` 状态，撰写 `docs/changelist/<日期>-manage-console-phase1.md`
