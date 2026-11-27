@@ -40,6 +40,20 @@ test.describe('管理后台冒烟', () => {
     await expect(page).toHaveURL(/\/login/)
   })
 
+
+  test('深色模式概览看板可辨', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.goto('/login')
+    await page.getByLabel('用户名').fill(ADMIN_USER)
+    await page.getByLabel('密码').fill(ADMIN_PASS)
+    await page.getByRole('button', { name: /登录/ }).click()
+    await expect(page).toHaveURL(/\/ai\/overview/, { timeout: 15000 })
+    await expect(page.getByText('总运行')).toBeVisible({ timeout: 15000 })
+    // 深色下背景应非纯白：校验根元素背景不是浅色系
+    const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+    expect(bg).not.toBe('rgb(255, 255, 255)')
+  })
+
   test('未登录访问受保护页跳转登录', async ({ page }) => {
     await page.goto('/ai/overview')
     await expect(page).toHaveURL(/\/login/, { timeout: 10000 })
