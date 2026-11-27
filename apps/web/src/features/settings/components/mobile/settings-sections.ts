@@ -14,8 +14,7 @@ export type MobileSettingsSection =
 	| "profile"
 	| "appearance"
 	| "ai"
-	| "integrations"
-	| "providers";
+	| "integrations";
 
 export const MOBILE_SETTINGS_SECTIONS: {
 	key: MobileSettingsSection;
@@ -25,5 +24,4 @@ export const MOBILE_SETTINGS_SECTIONS: {
 	{ key: "appearance", label: "外观" },
 	{ key: "ai", label: "AI" },
 	{ key: "integrations", label: "集成" },
-	{ key: "providers", label: "模型供应商" },
 ];

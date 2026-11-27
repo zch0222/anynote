@@ -6,8 +6,6 @@ import { ListRowsSkeleton } from "@/components/loading/skeletons";
 import { QueryError } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { useMe } from "@/features/auth/use-me";
-import { ModelProviderAdminOnly } from "@/features/model-providers/components/model-provider-admin-only";
-import { isSystemAdmin } from "@/features/model-providers/permissions";
 import {
 	MOBILE_SETTINGS_SECTIONS,
 	type MobileSettingsSection,
@@ -36,14 +34,6 @@ import { useTheme } from "next-themes";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-
-const ModelProviderSettings = dynamic(
-	() =>
-		import(
-			"@/features/model-providers/components/model-provider-settings"
-		).then((mod) => mod.ModelProviderSettings),
-	{ ssr: false },
-);
 
 /** `sys_user.sex` 的取值：0 男 / 1 女 / 2 未设置（B-3 契约）。 */
 const SEX_UNSET = 2;
@@ -106,8 +96,6 @@ function toForm(profile: Profile | undefined): ProfileForm {
 export function MobileSettingsPage({
 	section,
 }: { section: MobileSettingsSection }) {
-	const me = useMe();
-	const admin = isSystemAdmin(me.data);
 	const label =
 		MOBILE_SETTINGS_SECTIONS.find((item) => item.key === section)?.label ??
 		"设置";
@@ -119,15 +107,6 @@ export function MobileSettingsPage({
 				{section === "appearance" ? <MobileAppearanceSettings /> : null}
 				{section === "ai" ? <MobileAiSettings /> : null}
 				{section === "integrations" ? <MobileIntegrationsSettings /> : null}
-				{section === "providers" ? (
-					me.isPending ? (
-						<ListRowsSkeleton count={4} />
-					) : admin ? (
-						<ModelProviderSettings />
-					) : (
-						<ModelProviderAdminOnly />
-					)
-				) : null}
 			</div>
 		</MobileScreen>
 	);

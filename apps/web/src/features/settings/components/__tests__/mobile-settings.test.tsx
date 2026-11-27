@@ -13,12 +13,6 @@ vi.mock("@/features/auth/use-me", () => ({
 		isPending: me.isPending,
 	}),
 }));
-vi.mock(
-	"@/features/model-providers/components/model-provider-settings",
-	() => ({
-		ModelProviderSettings: () => <div data-testid="model-provider-settings" />,
-	}),
-);
 
 const profile = vi.hoisted(() => ({
 	query: vi.fn(),
@@ -95,24 +89,6 @@ describe("MobileSettingsPage", () => {
 	});
 });
 
-describe("移动端供应商管理准入", () => {
-	it("普通用户直接访问显示拒绝文案", () => {
-		mockProfile();
-		renderWithProviders(<MobileSettingsPage section="providers" />);
-		expect(
-			screen.getByText("只有系统管理员可以管理模型供应商"),
-		).toBeInTheDocument();
-	});
-
-	it("管理员可渲染供应商管理组件", async () => {
-		me.roleKey = "ADMIN_X";
-		mockProfile();
-		renderWithProviders(<MobileSettingsPage section="providers" />);
-		expect(
-			await screen.findByTestId("model-provider-settings"),
-		).toBeInTheDocument();
-	});
-});
 
 describe("账号分节（M-11 行表单）", () => {
 	it("用 iOS 设置式行表单：标签左、值右，不复用桌面两列表单", () => {
