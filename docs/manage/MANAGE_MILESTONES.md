@@ -92,11 +92,11 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 搭建 `layouts/auth.vue` 与 `layouts/default.vue`（`UDashboardGroup` + 可折叠 `UDashboardSidebar` + 顶栏面包屑 + `UCommandPalette` 快捷导航 + 深浅色切换 + 超管退出菜单）
-- [ ] 实现全局路由中间件 `middleware/auth.global.ts` 与会话状态 `useAdminSession`
-- [ ] 实现 `/login` 页面（表单校验、`A0301` 非超管专有阻断提示、同源安全 `redirect` 回跳）
-- [ ] 实现 `/ai/overview` 页面（`24h / 7d / 30d` 切换、6 张核心指标卡、`@unovis/vue` 运行趋势与模型占比图表、最近异常运行直达列表、空状态与错误重试态）
-- [ ] 补齐登录流、路由守卫与概览页 Composable / 组件单测
+- [x] 搭建 `layouts/auth.vue` 与 `layouts/default.vue`（`UDashboardGroup` + 可折叠 `UDashboardSidebar` + 顶栏面包屑 + `UCommandPalette` 快捷导航 + 深浅色切换 + 超管退出菜单）
+- [x] 实现全局路由中间件 `middleware/auth.global.ts` 与会话状态 `useAdminSession`
+- [x] 实现 `/login` 页面（表单校验、`A0301` 非超管专有阻断提示、同源安全 `redirect` 回跳）
+- [x] 实现 `/ai/overview` 页面（`24h / 7d / 30d` 切换、6 张核心指标卡、`@unovis/vue` 运行趋势与模型占比图表、最近异常运行直达列表、空状态与错误重试态）
+- [ ] 补齐登录流、路由守卫与概览页 Composable / 组件单测（Schema 与纯函数 53 例已绿，Composable/组件级待补）
 
 **验收标准**
 
