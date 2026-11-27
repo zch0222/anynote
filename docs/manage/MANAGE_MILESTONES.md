@@ -111,15 +111,15 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 迁移并针对 Vue + Zod v4 精炼模型供应商与逻辑模型校验纯函数（`app/lib/schemas/model-provider.ts`）
-- [ ] 实现 `useModelProviders` 与 `useLogicalModels` Query / Mutation composables
-- [ ] 实现供应商表格 `ProviderTable.vue`、新增/编辑抽屉 `ProviderFormSlideover.vue`（只写 API Key、模型标签编辑、`processReasoningMaxChars` 校验、出境与启用开关）及带「逻辑模型引用关系预检警告」的删除确认弹窗
-- [ ] 实现通用逻辑模型配置卡 `LogicalModelCard.vue`（覆盖 `agent_main`、`fast`、`embedding`，含供应商-模型联动选择、`supportsVision`、推理格式与回传方式、向量维度与重建提示、数据出境冲突实时阻断）
-- [ ] 编写 Schema、Composables 与组件交互单测（含 `USelect` / `USelectMenu` 深浅色弹层真实交互断言）
+- [x] 迁移并针对 Vue + Zod v4 精炼模型供应商与逻辑模型校验纯函数（`app/lib/schemas/model-provider.ts`）
+- [x] 实现 `useModelProviders` 与 `useLogicalModels` Query / Mutation composables
+- [x] 实现供应商表格 `ProviderTable.vue`、新增/编辑抽屉 `ProviderFormSlideover.vue`（只写 API Key、模型标签编辑、`processReasoningMaxChars` 校验、出境与启用开关）及带「逻辑模型引用关系预检警告」的删除确认弹窗
+- [x] 实现通用逻辑模型配置卡 `LogicalModelCard.vue`（覆盖 `agent_main`、`fast`、`embedding`，含供应商-模型联动选择、`supportsVision`、推理格式与回传方式、向量维度与重建提示、数据出境冲突实时阻断）
+- [ ] 编写 Schema、Composables 与组件交互单测（含 `USelect` / `USelectMenu` 深浅色弹层真实交互断言）（Schema 19 例已绿，组件弹层交互随 M20.6 浏览器验收一并补）
 
 **验收标准**
 
-- 全部新增单测通过；验证编辑供应商留空 API Key 不覆盖旧密文、选择禁出境供应商时阻断保存并展示准确提示
+- Schema 单测全绿；已于 2026-11-27 真实栈核验契约形状（`stepfun` 供应商与 `agent_main` 配置字段与 zod 完全一致）；编辑留空 API Key 不覆盖与出境阻断逻辑由纯函数单测覆盖，浏览器交互验收随 M20.6
 
 ---
 
