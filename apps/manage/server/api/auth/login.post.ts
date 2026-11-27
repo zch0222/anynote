@@ -30,7 +30,7 @@ export const adminProfileSchema = z.object({
   nickname: z.string().nullish(),
   avatar: z.string().nullish(),
   role: z
-    .looseObject({
+    .object({
       id: z.number().optional(),
       roleKey: z.string().optional(),
       roleName: z.string().optional(),
