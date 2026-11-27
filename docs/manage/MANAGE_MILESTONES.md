@@ -67,17 +67,17 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 初始化 `apps/manage`（Vue 3.5 + Nuxt 4 `ssr: false` + `@nuxt/ui` v4 + `tailwindcss` v4 + `@nuxt/icon` 本地 Lucide 图标集 + `@tanstack/vue-query` + `openapi-fetch` + `zod` v4）
-- [ ] 接入 Monorepo：更新 `pnpm-workspace.yaml`、`turbo.json`（`.output/**` 产物声明）、`biome.json`（忽略 `apps/manage`，由 `apps/manage` 内 `@nuxt/eslint` 承接 `turbo lint`）并同步 `pnpm-lock.yaml`
-- [ ] 封装浏览器侧 typed API 客户端（`app/lib/api/client.ts`），对接 `@anynote/api-client` 与 `@anynote/api-core`
-- [ ] 实现 Nitro BFF 路由与工具：
-  - [ ] `server/routes/healthz.get.ts`
-  - [ ] `server/utils/{cookies,http,refresh,backend,proxy-allowlist}.ts`（Cookie 键名 `manage_at` / `manage_rt`）
-  - [ ] `POST /api/auth/login`（`Origin` 校验 + 调 `/login` + 调 `/user/mine` 核验 `ADMIN_X` + 非超管立即调 `/logout` 销票并返回 `403/A0301`）
-  - [ ] `GET /api/auth/me`（单飞刷新恢复会话 + 在位复核 `ADMIN_X`，失权立即销票清 Cookie）
-  - [ ] `POST /api/auth/logout`
-  - [ ] `ALL /api/proxy/[...path]`（写请求 `Origin` 校验 + 路径段穿越拦截 + `/ai/v1/admin/**` 前缀白名单 + 401 单飞刷新重放）
-- [ ] 编写 Nitro BFF 全分支 Vitest 单元测试与 `test/select.ts` 弹层测试辅助函数
+- [x] 初始化 `apps/manage`（Vue 3.5 + Nuxt 4 `ssr: false` + `@nuxt/ui` v4 + `tailwindcss` v4 + `@nuxt/icon` 本地 Lucide 图标集 + `@tanstack/vue-query` + `openapi-fetch` + `zod` v4）
+- [x] 接入 Monorepo：更新 `pnpm-workspace.yaml`、`turbo.json`（`.output/**` 产物声明）、`biome.json`（忽略 `apps/manage`，由 `apps/manage` 内 `@nuxt/eslint` 承接 `turbo lint`）并同步 `pnpm-lock.yaml`
+- [x] 封装浏览器侧 typed API 客户端（`app/lib/api/client.ts`），对接 `@anynote/api-client` 与 `@anynote/api-core`
+- [x] 实现 Nitro BFF 路由与工具：
+  - [x] `server/routes/healthz.get.ts`
+  - [x] `server/utils/{cookies,http,refresh,backend,proxy-allowlist}.ts`（Cookie 键名 `manage_at` / `manage_rt`）
+  - [x] `POST /api/auth/login`（`Origin` 校验 + 调 `/login` + 调 `/user/mine` 核验 `ADMIN_X` + 非超管立即调 `/logout` 销票并返回 `403/A0301`）
+  - [x] `GET /api/auth/me`（单飞刷新恢复会话 + 在位复核 `ADMIN_X`，失权立即销票清 Cookie）
+  - [x] `POST /api/auth/logout`
+  - [x] `ALL /api/proxy/[...path]`（写请求 `Origin` 校验 + 路径段穿越拦截 + `/ai/v1/admin/**` 前缀白名单 + 401 单飞刷新重放）
+- [x] 编写 Nitro BFF 全分支 Vitest 单元测试与 `test/select.ts` 弹层测试辅助函数
 
 **验收标准**
 
