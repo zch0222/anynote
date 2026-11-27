@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 落地页：M20.2 由全局路由守卫接管重定向，占位保证 M20.1 可构建
+// 落地页重定向：登录后默认进入 AI 运行概览
+await navigateTo('/ai/overview', { replace: true })
 </script>
 
 <template>
