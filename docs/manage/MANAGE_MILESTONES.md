@@ -129,10 +129,10 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 定义 24 项检索参数元数据表（分组、标签、说明、默认值、上下界、步进）与交叉校验 Schema（`app/lib/schemas/retrieval-setting.ts`）
-- [ ] 实现 `useRetrievalSettings` Query / Mutation
-- [ ] 实现 `/ai/retrieval` 五分组参数卡片、与系统默认值差异徽章、单字段还原默认、「重置全部为推荐默认值」与未保存修改离开路由守卫（`onBeforeRouteLeave`）
-- [ ] 编写参数边界校验、交叉校验（`searchDefaultLimit <= searchMaxLimit`、`grepContextDefault <= grepContextMax`）与表单提交单测
+- [x] 定义 24 项检索参数元数据表（分组、标签、说明、默认值、上下界、步进）与交叉校验 Schema（`app/lib/schemas/retrieval-setting.ts`）
+- [x] 实现 `useRetrievalSettings` Query / Mutation
+- [x] 实现 `/ai/retrieval` 五分组参数卡片、与系统默认值差异徽章、单字段还原默认、「重置全部为推荐默认值」与未保存修改离开路由守卫（`onBeforeRouteLeave`）
+- [x] 编写参数边界校验、交叉校验（`searchDefaultLimit <= searchMaxLimit`、`grepContextDefault <= grepContextMax`）与表单提交单测
 
 **验收标准**
 
