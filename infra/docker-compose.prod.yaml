@@ -45,6 +45,22 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?请配置 HTTPS 站点来源}
       NEXT_PUBLIC_COLLAB_WS_URL: ${NEXT_PUBLIC_COLLAB_WS_URL:?请配置同源 WSS 协同地址}
       COLLAB_TOKEN_SECRET: ${COLLAB_TOKEN_SECRET:?请配置至少32字符的协同密钥}
+  anynote-manage-web:
+    <<: *prod
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    build:
+      args:
+        NUXT_PUBLIC_APP_URL: ${MANAGE_PUBLIC_APP_URL:?请配置管理后台 HTTPS 站点来源}
+    environment:
+      DEPLOYMENT_ENV: production
+      NUXT_PUBLIC_APP_URL: ${MANAGE_PUBLIC_APP_URL:?请配置管理后台 HTTPS 站点来源}
+    # 与网关同口径：只绑回环，由容器外 Nginx 的 manage.YOUR_DOMAIN 反代
+    ports:
+      - "${MANAGE_BIND_IP:-127.0.0.1}:${MANAGE_PORT:-3080}:3080"
   anynote-collab:
     <<: *prod
     init: true

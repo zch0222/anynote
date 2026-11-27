@@ -943,7 +943,7 @@ Python 全量多轮在 455 passed、20 skipped 与 1 failed、454 passed 之间�
 **与方案的偏差**：确认清单之外的思考行「已中断」徽标未实现（确认清单只有重试行「模型连接中断，已重试」），中断状态仅保留在过程状态中不额外展示；
 移动端「运行中只显示整轮控件和最新一行」未单独实现（移动端复用桌面 `ChatPanel`，整轮收起后行为一致），与 Playwright 桌面/移动端用例一并留待 M17.6。
 
-**遗留项（M17.5/M17.6）**：管理控制台前端（`/settings/ai-runs`）未开始；Playwright 用例、真实推理模型重放（主密钥恢复后）、
+**遗留项（M17.5/M17.6）**：管理控制台前端（`/settings/ai-runs`）未开始；**2026-11-27 更新：该管理界面已由 `docs/manage` M20 的 `apps/manage` 独立管理后台吸收并替代（M17.5 不再单独实施），Trace 检查器见 `apps/manage` `/ai/traces`**；Playwright 用例、真实推理模型重放（主密钥恢复后）、
 开关逐项打开与体量实测未执行。逐文件清单见 [`docs/changelist/2026-11-19-agent-process-area.md`](../changelist/2026-11-19-agent-process-area.md)。
 
 **实现评估（2026-11-21）**：发现 8 处阻断级缺陷，包括跨用户思考串流、全文开关关闭时 Trace 仍写原文、刷新回放不可用。

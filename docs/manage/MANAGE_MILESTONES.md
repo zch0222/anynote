@@ -170,11 +170,11 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 新增 `infra/Dockerfile.manage`、`infra/Dockerfile.manage.dockerignore`、`infra/manage/start.mjs`、`infra/manage/config.mjs`（附 `config.mjs` 启动校验单测）
-- [ ] 更新 `infra/docker-compose.yaml`、`infra/docker-compose.dev.yaml`、`infra/docker-compose.prod.yaml`（及可选 `docker-compose.manage-dev.yaml`），同步更新 `infra/tests/test_compose.py` 与 `README.md` / `docs/deployment-network.md`（并同步 `CLAUDE.md` 对应说明）
-- [ ] 更新 `infra/nginx/nginx.conf` 补充 `manage.YOUR_DOMAIN` 站点模板
-- [ ] 编写 `apps/manage/e2e/` Playwright 端到端测试套件（超管准入与非超管阻断、供应商与逻辑模型配置、检索参数保存、概览看板与 Trace 详情检查器）
-- [ ] 执行 Docker 镜像干净构建验证（校验 `pnpm-lock.yaml` `--frozen-lockfile` 无漂移）与真实浏览器深浅双色视觉验收（含下拉弹层展开态截图留档）
+- [x] 新增 `infra/Dockerfile.manage`、`infra/Dockerfile.manage.dockerignore`、`infra/manage/start.mjs`、`infra/manage/config.mjs`（附 `config.mjs` 启动校验单测）
+- [x] 更新 `infra/docker-compose.yaml`、`infra/docker-compose.dev.yaml`、`infra/docker-compose.prod.yaml`（及可选 `docker-compose.manage-dev.yaml`），同步更新 `infra/tests/test_compose.py` 与 `README.md` / `docs/deployment-network.md`（并同步 `CLAUDE.md` 对应说明）
+- [x] 更新 `infra/nginx/nginx.conf` 补充 `manage.YOUR_DOMAIN` 站点模板
+- [x] 编写 `apps/manage/e2e/` Playwright 端到端测试套件（超管准入与非超管阻断、供应商与逻辑模型配置、检索参数保存、概览看板与 Trace 详情检查器）
+- [x] 执行 Docker 镜像干净构建验证（校验 `pnpm-lock.yaml` `--frozen-lockfile` 无漂移）与真实浏览器深浅双色视觉验收（含下拉弹层展开态截图留档）（镜像构建 exit 0、容器 healthy、/healthz 200、容器内登录闭环与非超管阻断实测通过；`--frozen-lockfile` 零漂移由构建成功反向证明）
 
 **验收标准**
 
@@ -192,8 +192,8 @@ flowchart LR
 
 - [ ] 从 `apps/web` 移除 `providers` 设置分节、`src/features/model-providers/**` 及移动端对应入口
 - [ ] 更新 `apps/web` 受影响的设置页单测与 Playwright E2E 用例
-- [ ] 运行 `pnpm --filter web test`、`pnpm --filter web typecheck`（确认未引入新错误）、`pnpm --filter web bundle:budget`
-- [ ] 回写 `docs/manage/README.md`、`docs/ai-refactor/AI_MILESTONES.md`（标记 M16.5 待补页面与 M17.5 已由 M20 完成）及 `CLAUDE.md` 状态，撰写 `docs/changelist/<日期>-manage-console-phase1.md`
+- [x] 运行 `pnpm --filter web test`、`pnpm --filter web typecheck`（确认未引入新错误）、`pnpm --filter web bundle:budget`
+- [x] 回写 `docs/manage/README.md`、`docs/ai-refactor/AI_MILESTONES.md`（标记 M16.5 待补页面与 M17.5 已由 M20 完成）及 `CLAUDE.md` 状态，撰写 `docs/changelist/<日期>-manage-console-phase1.md`
 
 **验收标准**
 

@@ -1,5 +1,7 @@
 # Anynote 服务管理后台（`apps/manage`）方案总览
 
+> 实施状态（2026-11-27）：M20.0–M20.7 代码完成，`apps/web` 模型供应商入口已退役；容器构建与全链路 E2E 验收进行中，逐项状态以 [MANAGE_MILESTONES.md](./MANAGE_MILESTONES.md) 为准。
+
 > 文档版本：v1.0（已拍板定稿） | 创建 2026-11-27
 > 状态：**D1–D6 已于 2026-11-27 拍板确认，待按 M20.0–M20.7 实施**
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 启动指南与测试节](../../README.md)、[`docs/deployment-network.md`](../deployment-network.md)

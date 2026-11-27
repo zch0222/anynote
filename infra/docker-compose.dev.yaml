@@ -23,6 +23,14 @@ services:
       DEPLOYMENT_ENV: development
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       NEXT_PUBLIC_COLLAB_WS_URL: ws://localhost:1234
+  anynote-manage-web:
+    <<: *app-dev
+    build:
+      args:
+        NUXT_PUBLIC_APP_URL: http://localhost:3080
+    environment:
+      DEPLOYMENT_ENV: development
+      NUXT_PUBLIC_APP_URL: http://localhost:3080
   anynote-gateway:
     <<: *app-dev
   anynote-auth:

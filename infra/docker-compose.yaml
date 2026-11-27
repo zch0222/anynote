@@ -105,8 +105,8 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  anynote-manage:
-    image: ${APP_IMAGE_PREFIX:-anynote}/anynote-manage:${APP_IMAGE_TAG:-local}
+  anynote-manage-web:
+    image: ${APP_IMAGE_PREFIX:-anynote}/anynote-manage-web:${APP_IMAGE_TAG:-local}
     build:
       context: ..
       dockerfile: infra/Dockerfile.manage

@@ -21,16 +21,19 @@ PROD = {
     "NACOS_PROD_CONFIG_DIR": "/tmp/anynote-test-nacos",
     "NEXT_PUBLIC_APP_URL": "https://notes.example.com",
     "NEXT_PUBLIC_COLLAB_WS_URL": "wss://notes.example.com/collab",
+    "MANAGE_PUBLIC_APP_URL": "https://manage.example.com",
 }
 
 def compose(*files, extra=None, success=True):
     # 避免宿主机 .env / IDEA 变量污染测试；只继承执行工具所需变量。
-    env = {key: value for key, value in os.environ.items() if key in {"PATH", "HOME", "DOCKER_HOST", "DOCKER_CONFIG"}}
+    # USERPROFILE/HOMEDRIVE/HOMEPATH：Windows 下 docker CLI 按 USERPROFILE 发现用户级 compose 插件，
+    # 缺失时 `docker compose` 无法调度插件、报 unknown flag（ compose 文件不引用这些变量，不影响插值）。
+    env = {key: value for key, value in os.environ.items() if key in {"PATH", "HOME", "DOCKER_HOST", "DOCKER_CONFIG", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"}}
     env.update(extra or {})
-    command = ["docker", "compose", "--env-file=/dev/null", "--profile", "*"]
+    command = ["docker", "compose", f"--env-file={os.devnull}", "--profile", "*"]
     for file in files:
         command.extend(["-f", f"infra/{file}.yaml"])
-    result = subprocess.run(command + ["config", "--format", "json"], cwd=ROOT, env=env, capture_output=True, text=True)
+    result = subprocess.run(command + ["config", "--format", "json"], cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8")
     if not success:
         return result
     if result.returncode:
@@ -41,12 +44,14 @@ class ComposeTest(unittest.TestCase):
     def test_production_only_publishes_frontend_and_collab(self):
         services = compose("docker-compose", "docker-compose.prod", extra=PROD)
         published = {name for name, service in services.items() if service.get("ports")}
-        self.assertEqual(published, {"anynote-web", "anynote-collab"})
+        # gateway 自 a42ca340 起按设计保留回环端口（CLI api.YOUR_DOMAIN 反代上游）
+        self.assertEqual(published, {"anynote-web", "anynote-collab", "anynote-gateway", "anynote-manage-web"})
         for name in published:
             self.assertEqual(services[name]["ports"][0]["host_ip"], "127.0.0.1")
         for name, service in services.items():
             self.assertNotIn("nginx", service.get("image", ""))
-            if name != "nacos-init":
+            # *-init 是一次性 ops 容器（如 nacos-init/minio-init），restart 为 "no" 属设计
+            if not name.endswith("-init"):
                 self.assertEqual(service["restart"], "unless-stopped")
         web = services["anynote-web"]
         self.assertNotIn("volumes", web)
@@ -56,6 +61,14 @@ class ComposeTest(unittest.TestCase):
         collab = services["anynote-collab"]["environment"]
         self.assertEqual(collab["COLLAB_ALLOWED_ORIGINS"], PROD["NEXT_PUBLIC_APP_URL"])
         self.assertEqual(collab["COLLAB_TOKEN_SECRET"], web["environment"]["COLLAB_TOKEN_SECRET"])
+        manage = services["anynote-manage-web"]
+        self.assertEqual(manage["environment"]["DEPLOYMENT_ENV"], "production")
+        self.assertEqual(manage["environment"]["NUXT_INTERNAL_API_URL"], "http://anynote-gateway:8080")
+        self.assertEqual(
+            manage["environment"]["NUXT_PUBLIC_APP_URL"],
+            manage["build"]["args"]["NUXT_PUBLIC_APP_URL"],
+        )
+        self.assertEqual(manage["ports"][0]["host_ip"], "127.0.0.1")
         gateway = services["anynote-gateway"]["environment"]
         self.assertIn("application-prod.yml", gateway["SPRING_CONFIG_IMPORT"])
         self.assertNotIn("application-dev.yml", gateway["SPRING_CONFIG_IMPORT"])
@@ -78,6 +91,10 @@ class ComposeTest(unittest.TestCase):
         self.assertEqual(web["restart"], "no")
         self.assertEqual(web["build"]["target"], "runtime")
         self.assertTrue(services["anynote-gateway"]["ports"])
+        manage = services["anynote-manage-web"]
+        self.assertEqual(manage["environment"]["DEPLOYMENT_ENV"], "development")
+        self.assertEqual(manage["restart"], "no")
+        self.assertEqual(manage["environment"]["NUXT_PUBLIC_APP_URL"], "http://localhost:3080")
         hot = compose("docker-compose", "docker-compose.dev", "docker-compose.web-dev")["anynote-web"]
         self.assertEqual(hot["build"]["target"], "development")
         for mount in hot["volumes"]:

@@ -26,7 +26,7 @@ test.describe('管理后台冒烟', () => {
     await page.getByRole('button', { name: /登录/ }).click()
     await expect(page).toHaveURL(/\/ai\/overview/, { timeout: 15000 })
     await page.goto('/ai/models')
-    await expect(page.getByText('模型供应商')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('heading', { name: '模型供应商目录' })).toBeVisible({ timeout: 10000 })
   })
 
   test('非超管登录被阻断并提示', async ({ page }) => {
