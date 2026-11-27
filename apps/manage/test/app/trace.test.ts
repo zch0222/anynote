@@ -77,3 +77,41 @@ describe('resolveContextBlobs', () => {
     expect(parseContextManifest(undefined)).toEqual([])
   })
 })
+
+describe('buildTraceTimeline 复杂边界', () => {
+  it('模型中断重试：同 turn 两次 model 事件归入同轮', () => {
+    const events = [
+      ev(1, 'trace.model', { attributes: { turn: 1 }, endTimeUnixNano: 1e9 }),
+      ev(2, 'trace.model', { attributes: { turn: 1, usage: { totalTokens: 80 } }, endTimeUnixNano: 2e9 }),
+    ]
+    const t = buildTraceTimeline(events)
+    expect(t.rounds).toHaveLength(1)
+    expect(t.rounds[0]!.events).toHaveLength(2)
+  })
+
+  it('缺失 turn 的事件归入当前轮（补偿逻辑不丢事件）', () => {
+    const events = [
+      ev(1, 'trace.model', { attributes: { turn: 1 }, endTimeUnixNano: 1e9 }),
+      ev(2, 'trace.state', { attributes: {}, endTimeUnixNano: 1.1e9 }),
+      ev(3, 'trace.action', { attributes: {}, endTimeUnixNano: 1.2e9 }),
+    ]
+    const t = buildTraceTimeline(events)
+    const all = t.rounds.flatMap((r) => r.events)
+    expect(all).toHaveLength(3)
+    expect(t.rounds[0]!.toolCalls).toBe(1)
+  })
+
+  it('空事件列表产出空时间线', () => {
+    const t = buildTraceTimeline([])
+    expect(t.rounds).toHaveLength(0)
+    expect(t.totalDurationMs).toBe(0)
+    expect(t.eventCount).toBe(0)
+  })
+
+  it('verify 未通过时正确暴露 failed 状态', () => {
+    const t = buildTraceTimeline([
+      ev(1, 'trace.verify', { attributes: { turn: 1, passed: false }, endTimeUnixNano: 1e9 }),
+    ])
+    expect(t.rounds[0]!.verifyPassed).toBe(false)
+  })
+})

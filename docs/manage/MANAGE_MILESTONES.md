@@ -191,7 +191,7 @@ flowchart LR
 **任务清单**
 
 - [x] 从 `apps/web` 移除 `providers` 设置分节、`src/features/model-providers/**` 及移动端对应入口
-- [ ] 更新 `apps/web` 受影响的设置页单测与 Playwright E2E 用例
+- [x] 更新 `apps/web` 受影响的设置页单测与 Playwright E2E 用例（settings 相关 71 例全绿；providers 三条退役用例已删除）
 - [x] 运行 `pnpm --filter web test`、`pnpm --filter web typecheck`（确认未引入新错误）、`pnpm --filter web bundle:budget`
 - [x] 回写 `docs/manage/README.md`、`docs/ai-refactor/AI_MILESTONES.md`（标记 M16.5 待补页面与 M17.5 已由 M20 完成）及 `CLAUDE.md` 状态，撰写 `docs/changelist/<日期>-manage-console-phase1.md`
 
