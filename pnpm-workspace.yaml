@@ -1,5 +1,6 @@
 packages:
   - "apps/web"
+  - "apps/manage"
   - "apps/collab"
   - "apps/desktop"
   - "apps/cli"

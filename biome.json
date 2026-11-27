@@ -20,6 +20,7 @@
       ".next",
       ".turbo",
       "apps/cli/src/bundled.ts",
+      "apps/manage",
       "apps/web-legacy",
       "apps/web/.next",
       "apps/web/e2e/.auth",
