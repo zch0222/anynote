@@ -105,6 +105,42 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  anynote-manage:
+    image: ${APP_IMAGE_PREFIX:-anynote}/anynote-manage:${APP_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.manage
+      target: runtime
+      args:
+        NUXT_PUBLIC_APP_URL: ${MANAGE_PUBLIC_APP_URL:-http://localhost:3080}
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      DEPLOYMENT_ENV: production
+      NUXT_INTERNAL_API_URL: http://anynote-gateway:8080
+      NUXT_PUBLIC_APP_URL: ${MANAGE_PUBLIC_APP_URL:-http://localhost:3080}
+      TZ: Asia/Shanghai
+    ports:
+      - "${MANAGE_BIND_IP:-127.0.0.1}:${MANAGE_PORT:-3080}:3080"
+    networks:
+      - anynote-net
+    depends_on:
+      anynote-gateway:
+        condition: service_healthy
+    healthcheck:
+      <<: *health-defaults
+      start_period: 30s
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3080/healthz',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   mysql:
     extends:
       file: docker-compose-middleware.yaml
