@@ -10,6 +10,9 @@ const kind = computed(() => {
   if (Array.isArray(v)) return 'array'
   return typeof v
 })
+const bracketLabel = computed(() =>
+  kind.value === 'array' ? `[${(props.value as unknown[]).length}]` : `{${Object.keys(props.value as object).length}}`,
+)
 const entries = computed(() => {
   if (kind.value === 'array') return (props.value as unknown[]).map((v, i) => [String(i), v] as const)
   if (kind.value === 'object') return Object.entries(props.value as Record<string, unknown>)
@@ -21,7 +24,7 @@ const entries = computed(() => {
   <div :style="{ paddingLeft: depth ? '14px' : '0' }" class="font-mono text-xs">
     <template v-if="kind === 'object' || kind === 'array'">
       <button type="button" class="cursor-pointer text-muted hover:text-default" @click="collapsed = !collapsed">
-        {{ collapsed ? '▸' : '▾' }} {{ kind === 'array' ? `[${entries.length}]` : `{${entries.length}}` }}
+        {{ collapsed ? '▸' : '▾' }} {{ bracketLabel }}
       </button>
       <div v-if="!collapsed">
         <div v-for="[k, v] in entries" :key="k">
