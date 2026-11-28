@@ -29,6 +29,16 @@ test('非完整 URL 报错', () => {
   assert.match(errors[0], /http\(s\):\/\//)
 })
 
+test('非法地址的报错不回显环境变量原值', () => {
+  for (const value of ['user:pass@host:8080', 'ftp://user:pass@host', 'localhost:3080/']) {
+    const errors = validateManageConfig({ ...validEnv, NUXT_INTERNAL_API_URL: value })
+    assert.equal(errors.length, 1, value)
+    assert.match(errors[0], /NUXT_INTERNAL_API_URL 必须是以 http\(s\):\/\/ 开头的完整地址/)
+    assert.equal(errors[0].includes(value), false, value)
+    assert.equal(errors[0].includes('pass'), false, value)
+  }
+})
+
 test('生产环境拒绝明文 http 来源', () => {
   const errors = validateManageConfig({ ...validEnv, NUXT_PUBLIC_APP_URL: 'http://manage.example.com' })
   assert.equal(errors.length, 1)

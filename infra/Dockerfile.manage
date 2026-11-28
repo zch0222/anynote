@@ -37,4 +37,6 @@ WORKDIR /app
 COPY --from=build /workspace/apps/manage/.output ./.output
 COPY infra/manage/config.mjs infra/manage/start.mjs ./
 EXPOSE 3080
+# 以非特权用户运行；产物与启动脚本为全局可读，无需改属主
+USER node
 CMD ["node", "start.mjs"]

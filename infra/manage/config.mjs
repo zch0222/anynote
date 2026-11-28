@@ -28,8 +28,9 @@ export function validateManageConfig(env) {
       errors.push(`缺少必配环境变量 ${key}：${hint}`)
       continue
     }
+    // 报错不回显原值：地址里可能带 userinfo，容器日志会落进日志采集
     if (!/^https?:\/\//.test(value)) {
-      errors.push(`${key} 必须是以 http(s):// 开头的完整地址，当前值：${value}`)
+      errors.push(`${key} 必须是以 http(s):// 开头的完整地址`)
     }
   }
   if (env.DEPLOYMENT_ENV === 'production' && env.NUXT_PUBLIC_APP_URL?.startsWith('http://')) {
