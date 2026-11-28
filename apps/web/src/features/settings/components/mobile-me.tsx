@@ -10,7 +10,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useLogoutMutation } from "@/features/auth/use-logout-mutation";
 import { useMe } from "@/features/auth/use-me";
-import { isSystemAdmin } from "@/features/model-providers/permissions";
 import {
 	MOBILE_SETTINGS_SECTIONS,
 	type MobileSettingsSection,
@@ -23,7 +22,6 @@ import {
 	type LucideIcon,
 	Palette,
 	Plug,
-	Server,
 	Sparkles,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -43,7 +41,6 @@ const SECTION_ICON_BLOCKS: Record<
 	appearance: { icon: Palette, tone: "bg-[#5e5ce6]" },
 	ai: { icon: Sparkles, tone: "bg-[#ff9f0a]" },
 	integrations: { icon: Plug, tone: "bg-[#30d158]" },
-	providers: { icon: Server, tone: "bg-[#64d2ff]" },
 };
 
 const THEME_VALUE_LABEL: Record<string, string> = {
@@ -97,9 +94,7 @@ export function MobileMePage() {
 				</Link>
 
 				<MeGroup label="设置">
-					{MOBILE_SETTINGS_SECTIONS.filter(
-						(section) => section.key !== "providers" || isSystemAdmin(me.data),
-					).map((section) => {
+					{MOBILE_SETTINGS_SECTIONS.map((section) => {
 						const block = SECTION_ICON_BLOCKS[section.key];
 						return (
 							<MeLink

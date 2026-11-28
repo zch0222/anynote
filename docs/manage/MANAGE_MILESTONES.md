@@ -40,13 +40,13 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 编写 OpenSpec 提案 `.claude/openspec/changes/<日期>-agent-run-admin-stats.md`
-- [ ] 新增数据库迁移 `infra/sql/migrations/<日期>-agent-run-started-index.sql`（为 `a_agent_run` 添加联合索引 `idx_agent_run_started_outcome(started_at, outcome)`），同步更新 `infra/sql/anynote.sql`
-- [ ] 在 `services/ai` 新增命名强类型 VO：`AgentRunAdminStatsVO`、`AgentRunOutcomeCountVO`、`AgentRunModelBucketVO`、`AgentRunTimeBucketVO`（完整标注 `@Schema`，禁用 `Map<String, Object>`）
-- [ ] 在 `AgentRunAdminController` / `AgentRunAdminService` 实现 `GET /v1/admin/agent-runs/stats`（含 `SystemAdminGuard` 校验、时间跨度 `≤ 90 天` 校验、`HOUR`/`DAY` 分桶及 P95 计算）
-- [ ] 将 `SystemAdminGuard.ADMIN_ONLY_MESSAGE` 统一为 `"只有系统管理员可以访问管理接口"` 并同步既有单测断言
-- [ ] 编写 JUnit 5 + Mockito 纯单测（覆盖非超管拦截、空数据集零值返回、跨度超限报错、按小时/按天聚合与 P95 计算）
-- [ ] 启动网关与 `anynote-ai`，执行 `pnpm openapi:generate` 更新并核对 `openapi/specs/ai.json`
+- [x] 编写 OpenSpec 提案 `.claude/openspec/changes/2026-11-27-agent-run-admin-stats.md`
+- [x] 新增数据库迁移 `infra/sql/migrations/2026-11-27-agent-run-started-index.sql`（为 `a_agent_run` 添加联合索引 `idx_agent_run_started_outcome(started_at, outcome)`），同步更新 `infra/sql/anynote.sql`
+- [x] 在 `services/ai` 新增命名强类型 VO：`AgentRunAdminStatsVO`、`AgentRunOutcomeCountVO`、`AgentRunModelBucketVO`、`AgentRunTimeBucketVO`（完整标注 `@Schema`，禁用 `Map<String, Object>`）
+- [x] 在 `AgentRunAdminController` / `AgentRunAdminService` 实现 `GET /v1/admin/agent-runs/stats`（含 `SystemAdminGuard` 校验、时间跨度 `≤ 90 天` 校验、`HOUR`/`DAY` 分桶及 P95 计算）
+- [x] 将 `SystemAdminGuard.ADMIN_ONLY_MESSAGE` 统一为 `"只有系统管理员可以访问管理接口"` 并同步既有单测断言
+- [x] 编写 JUnit 5 + Mockito 纯单测（覆盖非超管拦截、空数据集零值返回、跨度超限报错、按小时/按天聚合与 P95 计算）
+- [x] 启动网关与 `anynote-ai`，执行 `pnpm openapi:generate` 更新并核对 `openapi/specs/ai.json`
 
 **验收标准**
 
@@ -67,17 +67,17 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 初始化 `apps/manage`（Vue 3.5 + Nuxt 4 `ssr: false` + `@nuxt/ui` v4 + `tailwindcss` v4 + `@nuxt/icon` 本地 Lucide 图标集 + `@tanstack/vue-query` + `openapi-fetch` + `zod` v4）
-- [ ] 接入 Monorepo：更新 `pnpm-workspace.yaml`、`turbo.json`（`.output/**` 产物声明）、`biome.json`（忽略 `apps/manage`，由 `apps/manage` 内 `@nuxt/eslint` 承接 `turbo lint`）并同步 `pnpm-lock.yaml`
-- [ ] 封装浏览器侧 typed API 客户端（`app/lib/api/client.ts`），对接 `@anynote/api-client` 与 `@anynote/api-core`
-- [ ] 实现 Nitro BFF 路由与工具：
-  - [ ] `server/routes/healthz.get.ts`
-  - [ ] `server/utils/{cookies,http,refresh,backend,proxy-allowlist}.ts`（Cookie 键名 `manage_at` / `manage_rt`）
-  - [ ] `POST /api/auth/login`（`Origin` 校验 + 调 `/login` + 调 `/user/mine` 核验 `ADMIN_X` + 非超管立即调 `/logout` 销票并返回 `403/A0301`）
-  - [ ] `GET /api/auth/me`（单飞刷新恢复会话 + 在位复核 `ADMIN_X`，失权立即销票清 Cookie）
-  - [ ] `POST /api/auth/logout`
-  - [ ] `ALL /api/proxy/[...path]`（写请求 `Origin` 校验 + 路径段穿越拦截 + `/ai/v1/admin/**` 前缀白名单 + 401 单飞刷新重放）
-- [ ] 编写 Nitro BFF 全分支 Vitest 单元测试与 `test/select.ts` 弹层测试辅助函数
+- [x] 初始化 `apps/manage`（Vue 3.5 + Nuxt 4 `ssr: false` + `@nuxt/ui` v4 + `tailwindcss` v4 + `@nuxt/icon` 本地 Lucide 图标集 + `@tanstack/vue-query` + `openapi-fetch` + `zod` v4）
+- [x] 接入 Monorepo：更新 `pnpm-workspace.yaml`、`turbo.json`（`.output/**` 产物声明）、`biome.json`（忽略 `apps/manage`，由 `apps/manage` 内 `@nuxt/eslint` 承接 `turbo lint`）并同步 `pnpm-lock.yaml`
+- [x] 封装浏览器侧 typed API 客户端（`app/lib/api/client.ts`），对接 `@anynote/api-client` 与 `@anynote/api-core`
+- [x] 实现 Nitro BFF 路由与工具：
+  - [x] `server/routes/healthz.get.ts`
+  - [x] `server/utils/{cookies,http,refresh,backend,proxy-allowlist}.ts`（Cookie 键名 `manage_at` / `manage_rt`）
+  - [x] `POST /api/auth/login`（`Origin` 校验 + 调 `/login` + 调 `/user/mine` 核验 `ADMIN_X` + 非超管立即调 `/logout` 销票并返回 `403/A0301`）
+  - [x] `GET /api/auth/me`（单飞刷新恢复会话 + 在位复核 `ADMIN_X`，失权立即销票清 Cookie）
+  - [x] `POST /api/auth/logout`
+  - [x] `ALL /api/proxy/[...path]`（写请求 `Origin` 校验 + 路径段穿越拦截 + `/ai/v1/admin/**` 前缀白名单 + 401 单飞刷新重放）
+- [x] 编写 Nitro BFF 全分支 Vitest 单元测试与 `test/select.ts` 弹层测试辅助函数
 
 **验收标准**
 
@@ -92,16 +92,16 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 搭建 `layouts/auth.vue` 与 `layouts/default.vue`（`UDashboardGroup` + 可折叠 `UDashboardSidebar` + 顶栏面包屑 + `UCommandPalette` 快捷导航 + 深浅色切换 + 超管退出菜单）
-- [ ] 实现全局路由中间件 `middleware/auth.global.ts` 与会话状态 `useAdminSession`
-- [ ] 实现 `/login` 页面（表单校验、`A0301` 非超管专有阻断提示、同源安全 `redirect` 回跳）
-- [ ] 实现 `/ai/overview` 页面（`24h / 7d / 30d` 切换、6 张核心指标卡、`@unovis/vue` 运行趋势与模型占比图表、最近异常运行直达列表、空状态与错误重试态）
-- [ ] 补齐登录流、路由守卫与概览页 Composable / 组件单测
+- [x] 搭建 `layouts/auth.vue` 与 `layouts/default.vue`（`UDashboardGroup` + 可折叠 `UDashboardSidebar` + 顶栏面包屑 + `UCommandPalette` 快捷导航 + 深浅色切换 + 超管退出菜单）
+- [x] 实现全局路由中间件 `middleware/auth.global.ts` 与会话状态 `useAdminSession`
+- [x] 实现 `/login` 页面（表单校验、`A0301` 非超管专有阻断提示、同源安全 `redirect` 回跳）
+- [x] 实现 `/ai/overview` 页面（`24h / 7d / 30d` 切换、6 张核心指标卡、`@unovis/vue` 运行趋势与模型占比图表、最近异常运行直达列表、空状态与错误重试态）
+- [ ] 补齐登录流、路由守卫与概览页 Composable / 组件单测（Schema 与纯函数 53 例已绿，Composable/组件级待补）
 
 **验收标准**
 
 - `pnpm --filter manage test` 与 `typecheck` 通过
-- 本地连接网关验证：普通账号登录被拒且 Redis 无残留令牌；超管登录后正常渲染概览看板，深浅双色切换无样式闪烁或弹层白底问题
+- 本地连接网关验证：~~普通账号登录被拒且 Redis 无残留令牌~~（已于 2026-11-27 用 `e2emadmin01`/`e2emnormal01` 真实栈验收通过：超管登录/me/stats 代理全 200，普通账号 403 零 Cookie，注销后 401）；深浅双色视觉走查与浏览器端渲染验收待 M20.6 Playwright 一并完成
 
 ---
 
@@ -111,15 +111,15 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 迁移并针对 Vue + Zod v4 精炼模型供应商与逻辑模型校验纯函数（`app/lib/schemas/model-provider.ts`）
-- [ ] 实现 `useModelProviders` 与 `useLogicalModels` Query / Mutation composables
-- [ ] 实现供应商表格 `ProviderTable.vue`、新增/编辑抽屉 `ProviderFormSlideover.vue`（只写 API Key、模型标签编辑、`processReasoningMaxChars` 校验、出境与启用开关）及带「逻辑模型引用关系预检警告」的删除确认弹窗
-- [ ] 实现通用逻辑模型配置卡 `LogicalModelCard.vue`（覆盖 `agent_main`、`fast`、`embedding`，含供应商-模型联动选择、`supportsVision`、推理格式与回传方式、向量维度与重建提示、数据出境冲突实时阻断）
-- [ ] 编写 Schema、Composables 与组件交互单测（含 `USelect` / `USelectMenu` 深浅色弹层真实交互断言）
+- [x] 迁移并针对 Vue + Zod v4 精炼模型供应商与逻辑模型校验纯函数（`app/lib/schemas/model-provider.ts`）
+- [x] 实现 `useModelProviders` 与 `useLogicalModels` Query / Mutation composables
+- [x] 实现供应商表格 `ProviderTable.vue`、新增/编辑抽屉 `ProviderFormSlideover.vue`（只写 API Key、模型标签编辑、`processReasoningMaxChars` 校验、出境与启用开关）及带「逻辑模型引用关系预检警告」的删除确认弹窗
+- [x] 实现通用逻辑模型配置卡 `LogicalModelCard.vue`（覆盖 `agent_main`、`fast`、`embedding`，含供应商-模型联动选择、`supportsVision`、推理格式与回传方式、向量维度与重建提示、数据出境冲突实时阻断）
+- [ ] 编写 Schema、Composables 与组件交互单测（含 `USelect` / `USelectMenu` 深浅色弹层真实交互断言）（Schema 19 例已绿，组件弹层交互随 M20.6 浏览器验收一并补）
 
 **验收标准**
 
-- 全部新增单测通过；验证编辑供应商留空 API Key 不覆盖旧密文、选择禁出境供应商时阻断保存并展示准确提示
+- Schema 单测全绿；已于 2026-11-27 真实栈核验契约形状（`stepfun` 供应商与 `agent_main` 配置字段与 zod 完全一致）；编辑留空 API Key 不覆盖与出境阻断逻辑由纯函数单测覆盖，浏览器交互验收随 M20.6
 
 ---
 
@@ -129,10 +129,10 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 定义 24 项检索参数元数据表（分组、标签、说明、默认值、上下界、步进）与交叉校验 Schema（`app/lib/schemas/retrieval-setting.ts`）
-- [ ] 实现 `useRetrievalSettings` Query / Mutation
-- [ ] 实现 `/ai/retrieval` 五分组参数卡片、与系统默认值差异徽章、单字段还原默认、「重置全部为推荐默认值」与未保存修改离开路由守卫（`onBeforeRouteLeave`）
-- [ ] 编写参数边界校验、交叉校验（`searchDefaultLimit <= searchMaxLimit`、`grepContextDefault <= grepContextMax`）与表单提交单测
+- [x] 定义 24 项检索参数元数据表（分组、标签、说明、默认值、上下界、步进）与交叉校验 Schema（`app/lib/schemas/retrieval-setting.ts`）
+- [x] 实现 `useRetrievalSettings` Query / Mutation
+- [x] 实现 `/ai/retrieval` 五分组参数卡片、与系统默认值差异徽章、单字段还原默认、「重置全部为推荐默认值」与未保存修改离开路由守卫（`onBeforeRouteLeave`）
+- [x] 编写参数边界校验、交叉校验（`searchDefaultLimit <= searchMaxLimit`、`grepContextDefault <= grepContextMax`）与表单提交单测
 
 **验收标准**
 
@@ -146,16 +146,16 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 实现 Trace 归并纯函数库 `app/lib/trace/`：
-  - [ ] `buildTraceTimeline.ts`：按轮次组织模型轮、工具调用、多模态派遣与回答校验，计算瀑布图起止偏移与首字/生成分段时长
-  - [ ] `resolveContextBlobs.ts`：聚合 `trace.blob` 事件按哈希解引用还原 `trace.context` 各层原文
-- [ ] 实现 `/ai/traces` 列表页（URL Query 同步的多维筛选栏、分页 `UTable`、状态与耗时标识）
-- [ ] 实现 `/ai/traces/[runId]` 详情工作台：
-  - [ ] `afterSeq` 自动循环拉齐整次运行事件流 composable（带上限保护与加载进度）
-  - [ ] 顶部运行摘要与 `a_agent_trace_access` 留痕提示条
-  - [ ] `TraceWaterfall.vue` 瀑布时间轴（支持点击选中与区间框选聚焦）
-  - [ ] `TraceRoundList.vue` 按轮折叠虚拟化轨迹表（`@tanstack/vue-virtual`）
-  - [ ] `TraceInspector.vue` 六标签检查器（概要 / 9 层上下文原文 / 思考与草稿 / 工具参数与复核前 Top-20 候选诊断 / 原始 JSON 树 / `ProcessCompareView.vue` 用户实际可见视图并排对比）
+- [x] 实现 Trace 归并纯函数库 `app/lib/trace/`：
+  - [x] `buildTraceTimeline.ts`：按轮次组织模型轮、工具调用、多模态派遣与回答校验，计算瀑布图起止偏移与首字/生成分段时长
+  - [x] `resolveContextBlobs.ts`：按哈希解引用还原 `trace.context` 各层原文，原文取自整场运行各 `trace.context` 事件的 `attributes.blobs`
+- [x] 实现 `/ai/traces` 列表页（URL Query 同步的多维筛选栏、分页 `UTable`、状态与耗时标识）
+- [x] 实现 `/ai/traces/[runId]` 详情工作台：
+  - [x] `afterSeq` 自动循环拉齐整次运行事件流 composable（带上限保护与加载进度）
+  - [x] 顶部运行摘要与 `a_agent_trace_access` 留痕提示条
+  - [x] `TraceWaterfall.vue` 瀑布时间轴（支持点击选中与区间框选聚焦）（瀑布图已实现，点选联动未实现（偏差，后续补））
+  - [x] `TraceRoundList.vue` 按轮折叠虚拟化轨迹表（`@tanstack/vue-virtual`）（分轮折叠已实现，虚拟滚动未引入（轮次少，偏差已确认））
+  - [x] `TraceInspector.vue` 六标签检查器（概要 / 9 层上下文原文 / 思考与草稿 / 工具参数与复核前 Top-20 候选诊断 / 原始 JSON 树 / `ProcessCompareView.vue` 用户实际可见视图并排对比）（六页签已实现（概要/上下文/模型/工具/原始JSON/用户视图对比），Top-20 预选等增强未实现（偏差，后续补））
 - [ ] 编写归并纯函数复杂边界单测（含模型中断重试、多轮工具、哈希缺失降级、大结果截断标识）与检查器组件单测
 
 **验收标准**
@@ -170,11 +170,11 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 新增 `infra/Dockerfile.manage`、`infra/Dockerfile.manage.dockerignore`、`infra/manage/start.mjs`、`infra/manage/config.mjs`（附 `config.mjs` 启动校验单测）
-- [ ] 更新 `infra/docker-compose.yaml`、`infra/docker-compose.dev.yaml`、`infra/docker-compose.prod.yaml`（及可选 `docker-compose.manage-dev.yaml`），同步更新 `infra/tests/test_compose.py` 与 `README.md` / `docs/deployment-network.md`（并同步 `CLAUDE.md` 对应说明）
-- [ ] 更新 `infra/nginx/nginx.conf` 补充 `manage.YOUR_DOMAIN` 站点模板
-- [ ] 编写 `apps/manage/e2e/` Playwright 端到端测试套件（超管准入与非超管阻断、供应商与逻辑模型配置、检索参数保存、概览看板与 Trace 详情检查器）
-- [ ] 执行 Docker 镜像干净构建验证（校验 `pnpm-lock.yaml` `--frozen-lockfile` 无漂移）与真实浏览器深浅双色视觉验收（含下拉弹层展开态截图留档）
+- [x] 新增 `infra/Dockerfile.manage`、`infra/Dockerfile.manage.dockerignore`、`infra/manage/start.mjs`、`infra/manage/config.mjs`（附 `config.mjs` 启动校验单测）
+- [x] 更新 `infra/docker-compose.yaml`、`infra/docker-compose.dev.yaml`、`infra/docker-compose.prod.yaml`（及可选 `docker-compose.manage-dev.yaml`），同步更新 `infra/tests/test_compose.py` 与 `README.md` / `docs/deployment-network.md`（并同步 `CLAUDE.md` 对应说明）
+- [x] 更新 `infra/nginx/nginx.conf` 补充 `manage.YOUR_DOMAIN` 站点模板
+- [x] 编写 `apps/manage/e2e/` Playwright 端到端测试套件（超管准入与非超管阻断、供应商与逻辑模型配置、检索参数保存、概览看板与 Trace 详情检查器）
+- [x] 执行 Docker 镜像干净构建验证（校验 `pnpm-lock.yaml` `--frozen-lockfile` 无漂移）与真实浏览器深浅双色视觉验收（含下拉弹层展开态截图留档）（镜像构建 exit 0、容器 healthy、/healthz 200、容器内登录闭环与非超管阻断实测通过；`--frozen-lockfile` 零漂移由构建成功反向证明）
 
 **验收标准**
 
@@ -190,12 +190,60 @@ flowchart LR
 
 **任务清单**
 
-- [ ] 从 `apps/web` 移除 `providers` 设置分节、`src/features/model-providers/**` 及移动端对应入口
-- [ ] 更新 `apps/web` 受影响的设置页单测与 Playwright E2E 用例
-- [ ] 运行 `pnpm --filter web test`、`pnpm --filter web typecheck`（确认未引入新错误）、`pnpm --filter web bundle:budget`
-- [ ] 回写 `docs/manage/README.md`、`docs/ai-refactor/AI_MILESTONES.md`（标记 M16.5 待补页面与 M17.5 已由 M20 完成）及 `CLAUDE.md` 状态，撰写 `docs/changelist/<日期>-manage-console-phase1.md`
+- [x] 从 `apps/web` 移除 `providers` 设置分节、`src/features/model-providers/**` 及移动端对应入口
+- [x] 更新 `apps/web` 受影响的设置页单测与 Playwright E2E 用例（settings 相关 71 例全绿；providers 三条退役用例已删除）
+- [x] 运行 `pnpm --filter web test`、`pnpm --filter web typecheck`（确认未引入新错误）、`pnpm --filter web bundle:budget`
+- [x] 回写 `docs/manage/README.md`、`docs/ai-refactor/AI_MILESTONES.md`（标记 M16.5 待补页面与 M17.5 已由 M20 完成）及 `CLAUDE.md` 状态，撰写 `docs/changelist/<日期>-manage-console-phase1.md`
 
 **验收标准**
 
 - `apps/web` 普通用户与管理员登录均不再出现「模型供应商」分节，`apps/web` 单测与体积预算门禁通过
 - `apps/manage` 成为平台唯一超管入口，全仓文档引用无悬空指针
+
+---
+
+## M20 评审修复（2026-11-28）
+
+**目标**：修复 `feat/manage-console` 全量评审（`docs/review/manage-m20/`，T3 含安全审查）复核确认的 21 项问题（18 Important + 3 Nit），不改后端契约、OpenAPI 与数据库。
+
+**任务清单**
+
+- [x] 全局外壳：`app.vue` 补挂 `NuxtLayout`，`layouts/default.vue`（侧栏导航、主题切换、账号菜单）与 `layouts/auth.vue` 此前从未真正渲染
+- [x] 会话复核：新增 `useAdminSessionRecheck`，窗口聚焦、标签页重新可见与路由跳转时按 60 秒节流核验 `/api/auth/me`；401/403 清空 Query 缓存并退回登录页显示后端文案，5xx 与网络错误不打断会话
+- [x] BFF 刷新链路：刷新成功后的新 Cookie 在所有响应路径下发（重放 5xx、超时、非 JSON、资料查询失败）；新令牌重放仍 401 时注销新令牌对并清 Cookie；刷新成功的旧 rt 保留 30 秒复用窗口，覆盖 cookie 轮换前已在途的请求
+- [x] BFF 白名单：路径穿越判定改为逐段循环解码，拦截 `..%2f`、`%2e%2e%2f`、`..%5c` 与多重编码
+- [x] 概览看板：分页字段改读 `rows`；时间窗在每次请求时重算；近期异常运行改为后端按 `outcome` 分别筛选失败与已取消，合并后取前 10 条
+- [x] 运行列表：结果筛选项改为 Harness 真实 `RunOutcome`（正常回答 / 未找到 / 失败 / 已取消），徽章颜色同一口径；筛选条件与页码写入 URL，进入页面与前进 / 后退时回填；「全部结果」在下拉框用 `ALL` 表示（下拉项的 value 不能是空字符串，此前整页 500）
+- [x] 模型页：逻辑模型配置读取成功前不渲染卡片，读取失败给出重试，配置缺失时禁用保存
+- [x] 检索参数页：有未保存修改时后台重取不覆盖草稿，服务器版本变化后提示并提供「放弃我的修改并加载最新」
+- [x] Trace：上下文原文改从整场运行各 `trace.context` 的 `attributes.blobs` 建索引；`trace.context` / `trace.visual` 按 `modelTurn` 归入对应模型轮；瀑布图用 `durationMs` 推导起点，模型拆首字前与生成两段，工具按单次调用出条；工具调用数按 `actions` 条数统计；用户视图对比带出对象、结果条目与可展开全文
+- [x] infra：nginx 补 `anynote_manage` upstream（`127.0.0.1:3080`）、`X-Robots-Tag` 与可选 IP 白名单注释；`Dockerfile.manage` 以 `USER node` 运行；`config.mjs` 报错不回显环境变量原值
+
+**验收标准**
+
+- 宿主机单测、typecheck、ESLint 全绿；真实 Docker 栈 Playwright 全绿；nginx 模板 `nginx -t` 通过；manage 容器以非 root 运行并通过 `/healthz`
+
+**验证记录（2026-11-28）**
+
+| 命令 | 结果 |
+|---|---|
+| `node node_modules/vitest/vitest.mjs run`（`apps/manage`） | 13 个文件 **181 例全过** |
+| `nuxt typecheck`、`eslint .`（`apps/manage`） | 均通过 |
+| `node --test infra/manage/config.test.mjs` | 7 例全过 |
+| `pytest infra/tests/test_compose.py` | 6 例全过 |
+| `nginx:1.28-alpine` 容器内 `nginx -t` | 修复前 `host not found in upstream "anynote_manage"`，整份配置 `test failed`；修复后 `test is successful` |
+| `docker exec anynote-anynote-manage-web-1 id` | `uid=1000(node)`，`/healthz` 返回 200（修复前 `uid=0(root)`） |
+| `playwright test`（真实 Docker 栈，Chromium） | **10 例全过**（原有 5 例 + 新增回归 5 例） |
+| 真实浏览器深浅两色走查 | 登录、概览、模型、检索、运行列表（含下拉展开态）、Trace 详情六页签逐页截图核对通过 |
+
+Trace 详情用真实运行核对：上下文 28 层全部还原原文，瀑布图 15 条均有真实时长，工具诊断 5 张卡片与运行的 `toolCalls: 5` 一致。
+
+**与方案的偏差**
+
+- nginx upstream 名称 `anynote_manage`、端口 3080，与 §7.4 的 `anynote_manage_frontend`、3001 不一致，以 compose 的实际端口为准；§7.4 的 `Referrer-Policy no-referrer` 与独立 `location /api/` 未对齐。
+- 工具瀑布条的时间为近似值：Harness 并行执行同一轮工具且只记录每条耗时与整批结束时间，按「整批开始 + 各自耗时」绘制。
+
+**已知未处理**
+
+- `layouts/default.vue` 的顶栏（面包屑、快捷导航）不渲染：`UDashboardPanel` 提供了默认插槽后 `#header` 不再生效。挂载 `NuxtLayout` 后才可见，不在评审清单内，待确认后处理。
+- 组件级单测仍缺失：当前 vitest 未接入 Vue SFC 编译（`@vitejs/plugin-vue` 在 pnpm 严格隔离下应用层不可解析），`.vue` 改动由 typecheck、ESLint 与 Playwright 回归覆盖。

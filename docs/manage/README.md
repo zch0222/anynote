@@ -1,5 +1,7 @@
 # Anynote 服务管理后台（`apps/manage`）方案总览
 
+> 实施状态（2026-11-27）：M20.0–M20.7 代码完成，`apps/web` 模型供应商入口已退役；容器构建与全链路 E2E 验收进行中，逐项状态以 [MANAGE_MILESTONES.md](./MANAGE_MILESTONES.md) 为准。
+
 > 文档版本：v1.0（已拍板定稿） | 创建 2026-11-27
 > 状态：**D1–D6 已于 2026-11-27 拍板确认，待按 M20.0–M20.7 实施**
 > 上游约束：[`CLAUDE.md`](../../CLAUDE.md)、[`README.md` 启动指南与测试节](../../README.md)、[`docs/deployment-network.md`](../deployment-network.md)
@@ -34,7 +36,7 @@
 - **AI 运行概览看板（`/ai/overview`）**：时间窗（24h / 7d / 30d）运行总量、成功率、输入/输出/推理 Token 消耗、平均与 P95 首字耗时（TTFT）与总耗时、按时间分桶趋势图、模型调用占比与近期异常运行直达
 - **模型供应商与逻辑模型配置（`/ai/models`）**：模型供应商 CRUD（AES-GCM 只写密钥、`dataEgressAllowed` 出境开关、`processReasoningMaxChars` 思考截断字数）+ 三张逻辑模型运行时绑定卡（`agent_main` 含多模态视觉开关与推理解析/回传、`fast`、`embedding` 含向量维度与重建提示）
 - **知识检索参数配置（`/ai/retrieval`）**：对接 `a_retrieval_setting` 全部 24 项 RRF 融合常数、三类查询词法/语义权重、权威性系数、片段窗口、`kb_grep` 限额与重排开关，支持分组校验、默认值差异对比与一键恢复推荐值（关闭 M16.5 待补项）
-- **Agent 运行监控与完整 Trace 检查器（`/ai/traces`、`/ai/traces/[runId]`）**：多维筛选运行列表、交互式瀑布时间轴（区分首字前等待与流式生成）、按轮次折叠的虚拟化轨迹树、`trace.blob` 上下文分层原文还原、复核前检索候选分数诊断、以及与「用户实际可见过程视图（`AgentProcessViewVO`）」的并排脱敏核验（关闭 M17.5，每次查看自动写 `a_agent_trace_access` 留痕）
+- **Agent 运行监控与完整 Trace 检查器（`/ai/traces`、`/ai/traces/[runId]`）**：多维筛选运行列表、交互式瀑布时间轴（区分首字前等待与流式生成）、按轮次折叠的虚拟化轨迹树、`trace.context.attributes.blobs` 上下文分层原文还原、复核前检索候选分数诊断、以及与「用户实际可见过程视图（`AgentProcessViewVO`）」的并排脱敏核验（关闭 M17.5，每次查看自动写 `a_agent_trace_access` 留痕）
 - **容器化部署与旧入口收敛**：`infra/Dockerfile.manage`、Compose 三环境编排、Nginx `manage.YOUR_DOMAIN` 模板；验收通过后下线 `apps/web` 的 `/settings/providers` 与 `/m/settings/providers`
 
 ### 第二阶段（架构预留，不在一期开发）

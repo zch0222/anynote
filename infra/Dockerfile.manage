@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+# 管理后台 apps/manage 生产镜像：Nuxt 4 node-server 产物。
+# 仓库根为上下文；契约类型由入库 OpenAPI baseline 派生，构建不依赖运行中的后端。
+FROM node:22.23.2-bookworm-slim AS dependencies
+ENV PNPM_HOME=/pnpm NEXT_TELEMETRY_DISABLED=1
+ENV PATH=$PNPM_HOME:$PATH
+WORKDIR /workspace
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/manage/package.json ./apps/manage/package.json
+COPY packages/api-client/package.json ./packages/api-client/package.json
+COPY packages/api-core/package.json ./packages/api-core/package.json
+COPY packages/tsconfig ./packages/tsconfig
+RUN --mount=type=cache,id=anynote-manage-pnpm,target=/pnpm/store \
+    pnpm config set store-dir /pnpm/store && pnpm install --frozen-lockfile
+
+FROM dependencies AS source
+COPY apps/manage ./apps/manage
+COPY packages/api-client/tsconfig.json ./packages/api-client/tsconfig.json
+COPY packages/api-core ./packages/api-core
+COPY openapi/specs ./openapi/specs
+# 与 Dockerfile.web 同口径：用入库契约 + 锁定版本生成器派生类型
+RUN mkdir -p packages/api-client/src && \
+    for service in auth system note file ai notify; do \
+      pnpm --filter manage exec openapi-typescript /workspace/openapi/specs/$service.json \
+        --output /workspace/packages/api-client/src/$service.ts; \
+    done
+
+FROM source AS build
+ARG NUXT_PUBLIC_APP_URL=http://localhost:3080
+ENV NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL
+RUN pnpm --filter manage build
+
+FROM node:22.23.2-bookworm-slim AS runtime
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3080
+WORKDIR /app
+COPY --from=build /workspace/apps/manage/.output ./.output
+COPY infra/manage/config.mjs infra/manage/start.mjs ./
+EXPOSE 3080
+# 以非特权用户运行；产物与启动脚本为全局可读，无需改属主
+USER node
+CMD ["node", "start.mjs"]

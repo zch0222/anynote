@@ -1243,7 +1243,8 @@ CREATE TABLE IF NOT EXISTS `a_agent_run` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_agent_run_id` (`run_id`),
   KEY `idx_agent_run_user` (`user_id`, `run_id`),
-  KEY `idx_agent_run_conversation` (`conversation_id`)
+  KEY `idx_agent_run_conversation` (`conversation_id`),
+  KEY `idx_agent_run_started_outcome` (`started_at`, `outcome`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='AI Agent 运行记录';
 

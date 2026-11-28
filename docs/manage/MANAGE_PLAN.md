@@ -331,7 +331,7 @@ Anynote Admin Console（左上品牌标识 + 环境徽标 PROD / DEV）
    - 工具栏支持一键「全部折叠/展开轮次」、按关键字过滤事件内容、以及 `@tanstack/vue-virtual` 虚拟滚动。
 4. **右下检查器面板：6 标签页深度透视（`TraceInspector.vue`）**：
    - **概要**：当前选中节点的耗时、Token 明细、状态迁移、错误类别与错误原文（`errorMessage`）。
-   - **上下文输入（原文还原）**：解析 `trace.context` 清单，用运行内收集的 `trace.blob`（按内容哈希索引）将 9 层上下文逐层还原为可读原文，标注每层的来源、版本号、Token 数与权限依据。
+   - **上下文输入（原文还原）**：解析 `trace.context` 清单，用整场运行各 `trace.context` 事件携带的 `attributes.blobs`（按内容哈希索引，同一哈希整场只写一次）将上下文逐层还原为可读原文，标注每层的来源、版本号、Token 数与权限依据。
    - **模型输出**：完整展示本轮 `思考全文（reasoning）`、`正文草稿/过程说明（draft）` 与发起的 `tool_calls` 结构。
    - **工具与检索诊断**：展示完整调用参数、未截断前的原始返回结果（超出 `trace-result-max-chars` 时显示后端截断标记）、登记的 `evidenceIds`；当工具为 `kb_search` 时，以专门的子表格展示 `diagnostics.top`（第二段权限复核前的 Top-20 RRF 融合候选、通道分数与被权限复核丢弃的条目高亮），辅助排查「搜不到是因为召回差还是因为无权限」。
    - **原始 JSON**：带语法高亮、层级折叠与一键复制的原始事件 JSON 树。
@@ -528,7 +528,7 @@ server {
 | 被测层级 | 必测用例与边界场景 |
 |---|---|
 | **Nitro BFF（`server/**`）** | 1. `ADMIN_X` 正常登录写 `manage_at`/`manage_rt` 且响应不含明文 token<br/>2. 普通角色登录返回 `403/A0301`、无 `Set-Cookie`、且断言已调用后端 `/logout` 销票<br/>3. 写请求 `Origin` 不匹配返回 `403`<br/>4. `refreshWithLock` 10 个并发失效请求只触发 1 次后端 `/refresh`<br/>5. `/api/auth/me` 检测到角色降权或停用时主动销票并清 Cookie<br/>6. `/api/proxy/[...path]` 拦截非白名单路径（如 `/note/notes`、`/ai/internal/v1/runs`）与 `..` 路径穿越 |
-| **Schema 与纯函数（`app/lib/**`）** | 1. 模型供应商与逻辑模型校验（URL 合法性、思考截断字数 `500..200000`、向量维度 `1..2048`、`dataEgressAllowed` 出境阻断、供应商被引用检测）<br/>2. 24 项检索参数的上下界校验、交叉约束（`default <= max`）与默认值 diff 计算<br/>3. `buildTraceTimeline`：乱序/跨轮事件归并、TTFT 与生成阶段切分、`trace.blob` 哈希池上下文还原、缺省/截断容错 |
+| **Schema 与纯函数（`app/lib/**`）** | 1. 模型供应商与逻辑模型校验（URL 合法性、思考截断字数 `500..200000`、向量维度 `1..2048`、`dataEgressAllowed` 出境阻断、供应商被引用检测）<br/>2. 24 项检索参数的上下界校验、交叉约束（`default <= max`）与默认值 diff 计算<br/>3. `buildTraceTimeline`：乱序/跨轮事件归并、TTFT 与生成阶段切分、`trace.context.attributes.blobs` 哈希池上下文还原、缺省/截断容错 |
 | **Composables（`app/composables/**`）** | 打桩 `openapi-fetch` 客户端，验证各 Query / Mutation 成功拆包、业务错误码（如 `A0160`、`A0301`）异常映射、保存成功后对应 Query Key 精确失效 |
 | **关键 UI 组件** | 供应商抽屉表单、逻辑模型卡片、检索参数分组卡、Trace 检查器 Tab 切换与用户可见视图对比；**所有 `USelect` / `USelectMenu` 使用真实指针序列验证弹层开启与深浅色语义背景/前景类** |
 

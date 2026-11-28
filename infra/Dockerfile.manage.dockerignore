@@ -1,0 +1,7 @@
+**/node_modules
+**/.nuxt
+**/.output
+**/.next
+**/.git
+infra/.env*
+.env*

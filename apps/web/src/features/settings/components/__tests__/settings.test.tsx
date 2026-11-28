@@ -8,12 +8,6 @@ vi.mock("@/features/auth/use-me", () => ({
 		isPending: me.isPending,
 	}),
 }));
-vi.mock(
-	"@/features/model-providers/components/model-provider-settings",
-	() => ({
-		ModelProviderSettings: () => <div data-testid="model-provider-settings" />,
-	}),
-);
 
 const setTheme = vi.hoisted(() => vi.fn());
 /** 可取值的当前主题：说明文案要按 theme 与系统色的组合分别断言。 */
@@ -216,23 +210,5 @@ describe("SettingsPage", () => {
 		expect(screen.queryByTestId("settings-appearance")).toBeNull();
 	});
 
-	it("非管理员看不到供应商入口，直接访问显示拒绝文案", () => {
-		renderWithProviders(<SettingsPage section="providers" />);
-		expect(screen.queryByTestId("settings-nav-providers")).toBeNull();
-		expect(
-			screen.getByText("只有系统管理员可以管理模型供应商"),
-		).toBeInTheDocument();
-	});
 
-	it("管理员可以进入供应商分区", async () => {
-		me.roleKey = "ADMIN_X";
-		renderWithProviders(<SettingsPage section="providers" />);
-		expect(screen.getByTestId("settings-nav-providers")).toHaveAttribute(
-			"aria-current",
-			"page",
-		);
-		expect(
-			await screen.findByTestId("model-provider-settings"),
-		).toBeInTheDocument();
-	});
 });

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class SystemAdminGuard {
 
-    public static final String ADMIN_ONLY_MESSAGE = "只有系统管理员可以管理模型供应商";
+    public static final String ADMIN_ONLY_MESSAGE = "只有系统管理员可以访问管理接口";
 
     private final TokenUtil tokenUtil;
 

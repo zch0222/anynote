@@ -15,15 +15,13 @@ export type SettingsSection =
 	| "profile"
 	| "appearance"
 	| "ai"
-	| "integrations"
-	| "providers";
+	| "integrations";
 
 export const SETTINGS_SECTIONS: { key: SettingsSection; label: string }[] = [
 	{ key: "profile", label: "账号" },
 	{ key: "appearance", label: "外观" },
 	{ key: "ai", label: "AI" },
 	{ key: "integrations", label: "集成" },
-	{ key: "providers", label: "模型供应商" },
 ];
 
 /** 是否是合法的分节段（`/settings/<section>` 的解析与校验共用）。 */

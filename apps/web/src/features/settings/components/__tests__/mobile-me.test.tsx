@@ -37,35 +37,7 @@ describe("MobileMePage", () => {
 		expect(screen.getByText("@tester")).toBeInTheDocument();
 	});
 
-	it("普通用户的设置分区不包含供应商管理", () => {
-		renderWithProviders(<MobileMePage />);
-		expect(screen.getByTestId("me-settings-profile")).toHaveAttribute(
-			"href",
-			"/m/settings/profile",
-		);
-		expect(screen.getByTestId("me-settings-appearance")).toHaveAttribute(
-			"href",
-			"/m/settings/appearance",
-		);
-		expect(screen.getByTestId("me-settings-ai")).toHaveAttribute(
-			"href",
-			"/m/settings/ai",
-		);
-		expect(screen.getByTestId("me-settings-integrations")).toHaveAttribute(
-			"href",
-			"/m/settings/integrations",
-		);
-		expect(screen.queryByTestId("me-settings-providers")).toBeNull();
-	});
 
-	it("管理员可以看到移动端供应商管理入口", () => {
-		me.roleKey = "ADMIN_X";
-		renderWithProviders(<MobileMePage />);
-		expect(screen.getByTestId("me-settings-providers")).toHaveAttribute(
-			"href",
-			"/m/settings/providers",
-		);
-	});
 
 	it("「更多」只剩 PDF 问答（任务、慕课已随 12.0.4 移除，协同文档随 /docs 退役）", () => {
 		renderWithProviders(<MobileMePage />);

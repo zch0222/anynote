@@ -1,9 +1,6 @@
 "use client";
 
 import { PanelSkeleton } from "@/components/loading/skeletons";
-import { useMe } from "@/features/auth/use-me";
-import { ModelProviderAdminOnly } from "@/features/model-providers/components/model-provider-admin-only";
-import { isSystemAdmin } from "@/features/model-providers/permissions";
 import {
 	SETTINGS_SECTIONS,
 	type SettingsSection,
@@ -40,13 +37,6 @@ const IntegrationsSettings = dynamic(
 		import("./integrations-settings").then((mod) => mod.IntegrationsSettings),
 	{ ssr: false, loading: () => <SettingsSectionSkeleton /> },
 );
-const ModelProviderSettings = dynamic(
-	() =>
-		import(
-			"@/features/model-providers/components/model-provider-settings"
-		).then((mod) => mod.ModelProviderSettings),
-	{ ssr: false, loading: () => <SettingsSectionSkeleton /> },
-);
 
 /** 分区块的骨架：形状对齐设置卡（标题 + 若干行），避免加载完成时整页跳一下。 */
 function SettingsSectionSkeleton() {
@@ -65,11 +55,6 @@ export type SettingsPageProps = {
  * 用下划线高亮当前分区。
  */
 export function SettingsPage({ section }: SettingsPageProps) {
-	const me = useMe();
-	const admin = isSystemAdmin(me.data);
-	const visibleSections = SETTINGS_SECTIONS.filter(
-		(item) => item.key !== "providers" || admin,
-	);
 	return (
 		<section
 			className="mx-auto w-full max-w-6xl space-y-6"
@@ -87,7 +72,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
 				className="flex flex-wrap gap-1 border-b border-separator"
 				data-testid="settings-nav"
 			>
-				{visibleSections.map(({ key, label }) => {
+				{SETTINGS_SECTIONS.map(({ key, label }) => {
 					const active = key === section;
 					return (
 						<Link
@@ -115,15 +100,6 @@ export function SettingsPage({ section }: SettingsPageProps) {
 			{section === "appearance" ? <AppearanceSettings /> : null}
 			{section === "ai" ? <AiSettings /> : null}
 			{section === "integrations" ? <IntegrationsSettings /> : null}
-			{section === "providers" ? (
-				me.isPending ? (
-					<SettingsSectionSkeleton />
-				) : admin ? (
-					<ModelProviderSettings />
-				) : (
-					<ModelProviderAdminOnly />
-				)
-			) : null}
 		</section>
 	);
 }

@@ -37,4 +37,15 @@ public interface AgentRunMapper extends BaseMapper<AgentRunPO> {
                                                @Param("outcome") String outcome,
                                                @Param("startedFrom") java.util.Date startedFrom,
                                                @Param("startedTo") java.util.Date startedTo);
+
+    /**
+     * 查询管理端统计所需的运行字段。
+     *
+     * @param startedFrom 开始时间下界
+     * @param startedTo 开始时间上界
+     * @return 统计查询行
+     */
+    java.util.List<com.anynote.ai.model.bo.AgentRunStatsRowBO> selectAdminStatsRows(
+            @Param("startedFrom") java.util.Date startedFrom,
+            @Param("startedTo") java.util.Date startedTo);
 }

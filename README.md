@@ -398,6 +398,7 @@ docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docke
 | `/api/*` | `127.0.0.1:3000` | BFF 登录、Cookie、代理及 SSE；关闭缓冲 |
 | `/collab/*` | `127.0.0.1:1234` | 去掉 `/collab/` 前缀并保留 Upgrade；不记录含令牌的请求 URL |
 | `api.你的域名` 的 `/api/*`、`/actuator/health` | `127.0.0.1:8080` | Gateway 直连入口，**只给 CLI 用** |
+| `manage.你的域名` 全站 | `127.0.0.1:3080` | 管理后台（apps/manage），仅超级管理员 |
 
 `/api/` 不能转发到 8080：新前端需要先经过 BFF，内部才请求 `http://anynote-gateway:8080`。使用 HTTPS 保持 Secure Cookie；请求 Host/Origin 必须与配置的站点来源一致。Next 自己设置静态缓存头，不对错误响应强加长期缓存。
 
@@ -411,6 +412,8 @@ anynote doctor                                     # gateway 应为 "UP"
 ```
 
 若把 `api-url` 误设成站点域（Web 前端），`doctor` 会明确报"被重定向，这个地址不是网关"，而不是误报 `UP`。
+
+**管理后台 `manage.` 子域**：`apps/manage` 是独立的 Nuxt 管理控制台（仅超级管理员），与主站完全隔离——独立域名便于单独做访问控制，也避免与主站 Cookie 作用域互相影响。部署时把 `MANAGE_PUBLIC_APP_URL` 设为 `https://manage.你的域名` 并重建 `anynote-manage-web`，模板 `infra/nginx/nginx.conf` 已含 `manage.YOUR_DOMAIN` server 块。
 
 默认 Nginx 与 Docker 同机，各入口默认只绑定回环。如 Nginx 在另一台内网主机，将 `WEB_BIND_IP` / `COLLAB_BIND_IP` / `GATEWAY_BIND_IP` 改成 **Docker 主机的私网 IP**，upstream 同步修改，防火墙只允许 Nginx 来源访问 3000/1234/8080，TLS 仍在 Nginx 终止。只有 Nginx 对客户端暴露 80/443。
 
@@ -452,8 +455,9 @@ MySQL、Redis、MinIO、Elasticsearch、RocketMQ、协同服务均保留命名�
 | `COLLAB_ALLOWED_ORIGINS` | `http://localhost:3000` | 协同服务允许的握手来源，必须与 `NEXT_PUBLIC_APP_URL` 同源（精确匹配，写错一位即 403） |
 | `COLLAB_TOKEN_SECRET` | 开发密钥 | 生产必须独立生成至少 32 字符，web/collab 共用 |
 | `ANYNOTE_INTERNAL_SECRET` | 开发密钥（随仓库公开） | 服务间内部调用签名密钥，生产必须独立生成至少 32 字符，Java 服务与 collab 共用 |
-| `WEB_BIND_IP` / `COLLAB_BIND_IP` / `GATEWAY_BIND_IP` | `127.0.0.1` | 只发布外部 Nginx 所需入口 |
-| `WEB_PORT` / `COLLAB_PORT` / `GATEWAY_PORT` | `3000` / `1234` / `8080` | 改动后同步 Nginx upstream |
+| `WEB_BIND_IP` / `COLLAB_BIND_IP` / `GATEWAY_BIND_IP` / `MANAGE_BIND_IP` | `127.0.0.1` | 只发布外部 Nginx 所需入口 |
+| `WEB_PORT` / `COLLAB_PORT` / `GATEWAY_PORT` / `MANAGE_PORT` | `3000` / `1234` / `8080` / `3080` | 改动后同步 Nginx upstream |
+| `MANAGE_PUBLIC_APP_URL` | `http://localhost:3080` | 管理后台（apps/manage）公开来源；生产必须显式改为 `https://manage.域名`，须与 Nginx `manage.YOUR_DOMAIN` 一致（BFF 精确比对写请求 Origin） |
 | `APP_DOCKERFILE` | `infra/Dockerfile.local` | 构建用 Dockerfile 路径 |
 
 ### 数据库（MySQL）
