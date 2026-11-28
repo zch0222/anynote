@@ -148,7 +148,7 @@ flowchart LR
 
 - [x] 实现 Trace 归并纯函数库 `app/lib/trace/`：
   - [x] `buildTraceTimeline.ts`：按轮次组织模型轮、工具调用、多模态派遣与回答校验，计算瀑布图起止偏移与首字/生成分段时长
-  - [x] `resolveContextBlobs.ts`：聚合 `trace.blob` 事件按哈希解引用还原 `trace.context` 各层原文
+  - [x] `resolveContextBlobs.ts`：按哈希解引用还原 `trace.context` 各层原文，原文取自整场运行各 `trace.context` 事件的 `attributes.blobs`
 - [x] 实现 `/ai/traces` 列表页（URL Query 同步的多维筛选栏、分页 `UTable`、状态与耗时标识）
 - [x] 实现 `/ai/traces/[runId]` 详情工作台：
   - [x] `afterSeq` 自动循环拉齐整次运行事件流 composable（带上限保护与加载进度）
@@ -199,3 +199,51 @@ flowchart LR
 
 - `apps/web` 普通用户与管理员登录均不再出现「模型供应商」分节，`apps/web` 单测与体积预算门禁通过
 - `apps/manage` 成为平台唯一超管入口，全仓文档引用无悬空指针
+
+---
+
+## M20 评审修复（2026-11-28）
+
+**目标**：修复 `feat/manage-console` 全量评审（`docs/review/manage-m20/`，T3 含安全审查）复核确认的 21 项问题（18 Important + 3 Nit），不改后端契约、OpenAPI 与数据库。
+
+**任务清单**
+
+- [x] 全局外壳：`app.vue` 补挂 `NuxtLayout`，`layouts/default.vue`（侧栏导航、主题切换、账号菜单）与 `layouts/auth.vue` 此前从未真正渲染
+- [x] 会话复核：新增 `useAdminSessionRecheck`，窗口聚焦、标签页重新可见与路由跳转时按 60 秒节流核验 `/api/auth/me`；401/403 清空 Query 缓存并退回登录页显示后端文案，5xx 与网络错误不打断会话
+- [x] BFF 刷新链路：刷新成功后的新 Cookie 在所有响应路径下发（重放 5xx、超时、非 JSON、资料查询失败）；新令牌重放仍 401 时注销新令牌对并清 Cookie；刷新成功的旧 rt 保留 30 秒复用窗口，覆盖 cookie 轮换前已在途的请求
+- [x] BFF 白名单：路径穿越判定改为逐段循环解码，拦截 `..%2f`、`%2e%2e%2f`、`..%5c` 与多重编码
+- [x] 概览看板：分页字段改读 `rows`；时间窗在每次请求时重算；近期异常运行改为后端按 `outcome` 分别筛选失败与已取消，合并后取前 10 条
+- [x] 运行列表：结果筛选项改为 Harness 真实 `RunOutcome`（正常回答 / 未找到 / 失败 / 已取消），徽章颜色同一口径；筛选条件与页码写入 URL，进入页面与前进 / 后退时回填；「全部结果」在下拉框用 `ALL` 表示（下拉项的 value 不能是空字符串，此前整页 500）
+- [x] 模型页：逻辑模型配置读取成功前不渲染卡片，读取失败给出重试，配置缺失时禁用保存
+- [x] 检索参数页：有未保存修改时后台重取不覆盖草稿，服务器版本变化后提示并提供「放弃我的修改并加载最新」
+- [x] Trace：上下文原文改从整场运行各 `trace.context` 的 `attributes.blobs` 建索引；`trace.context` / `trace.visual` 按 `modelTurn` 归入对应模型轮；瀑布图用 `durationMs` 推导起点，模型拆首字前与生成两段，工具按单次调用出条；工具调用数按 `actions` 条数统计；用户视图对比带出对象、结果条目与可展开全文
+- [x] infra：nginx 补 `anynote_manage` upstream（`127.0.0.1:3080`）、`X-Robots-Tag` 与可选 IP 白名单注释；`Dockerfile.manage` 以 `USER node` 运行；`config.mjs` 报错不回显环境变量原值
+
+**验收标准**
+
+- 宿主机单测、typecheck、ESLint 全绿；真实 Docker 栈 Playwright 全绿；nginx 模板 `nginx -t` 通过；manage 容器以非 root 运行并通过 `/healthz`
+
+**验证记录（2026-11-28）**
+
+| 命令 | 结果 |
+|---|---|
+| `node node_modules/vitest/vitest.mjs run`（`apps/manage`） | 13 个文件 **181 例全过** |
+| `nuxt typecheck`、`eslint .`（`apps/manage`） | 均通过 |
+| `node --test infra/manage/config.test.mjs` | 7 例全过 |
+| `pytest infra/tests/test_compose.py` | 6 例全过 |
+| `nginx:1.28-alpine` 容器内 `nginx -t` | 修复前 `host not found in upstream "anynote_manage"`，整份配置 `test failed`；修复后 `test is successful` |
+| `docker exec anynote-anynote-manage-web-1 id` | `uid=1000(node)`，`/healthz` 返回 200（修复前 `uid=0(root)`） |
+| `playwright test`（真实 Docker 栈，Chromium） | **10 例全过**（原有 5 例 + 新增回归 5 例） |
+| 真实浏览器深浅两色走查 | 登录、概览、模型、检索、运行列表（含下拉展开态）、Trace 详情六页签逐页截图核对通过 |
+
+Trace 详情用真实运行核对：上下文 28 层全部还原原文，瀑布图 15 条均有真实时长，工具诊断 5 张卡片与运行的 `toolCalls: 5` 一致。
+
+**与方案的偏差**
+
+- nginx upstream 名称 `anynote_manage`、端口 3080，与 §7.4 的 `anynote_manage_frontend`、3001 不一致，以 compose 的实际端口为准；§7.4 的 `Referrer-Policy no-referrer` 与独立 `location /api/` 未对齐。
+- 工具瀑布条的时间为近似值：Harness 并行执行同一轮工具且只记录每条耗时与整批结束时间，按「整批开始 + 各自耗时」绘制。
+
+**已知未处理**
+
+- `layouts/default.vue` 的顶栏（面包屑、快捷导航）不渲染：`UDashboardPanel` 提供了默认插槽后 `#header` 不再生效。挂载 `NuxtLayout` 后才可见，不在评审清单内，待确认后处理。
+- 组件级单测仍缺失：当前 vitest 未接入 Vue SFC 编译（`@vitejs/plugin-vue` 在 pnpm 严格隔离下应用层不可解析），`.vue` 改动由 typecheck、ESLint 与 Playwright 回归覆盖。
