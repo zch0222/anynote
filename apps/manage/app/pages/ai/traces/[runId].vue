@@ -8,6 +8,7 @@ import TraceRoundList from '~/components/ai/traces/TraceRoundList.vue'
 import TraceWaterfall from '~/components/ai/traces/TraceWaterfall.vue'
 import { useAgentRunDetail, useAgentRunEvents } from '~/composables/ai/useAgentRuns'
 import { buildTraceTimeline } from '~/lib/trace/buildTraceTimeline'
+import { runOutcomeColor } from '~/lib/schemas/agent-trace'
 
 const route = useRoute()
 const runId = computed(() => String(route.params.runId))
@@ -49,7 +50,7 @@ function formatMs(ms?: number | null) {
         <div>
           <p class="text-xs text-muted">结果</p>
           <UBadge
-            :color="run.outcome === 'SUCCESS' ? 'success' : run.outcome === 'FAILED' ? 'error' : 'neutral'"
+            :color="runOutcomeColor(run.outcome)"
             variant="subtle"
             size="xs"
           >
