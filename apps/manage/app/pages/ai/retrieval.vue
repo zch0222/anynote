@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 知识检索 24 项参数配置页：五分组卡片、默认值差异徽章、单字段还原、
- * 重置全部为推荐默认值、未保存修改离开守卫。
+ * 重置全部为推荐默认值、未保存修改离开守卫；有未保存修改时后台重取不覆盖草稿。
  */
 import { onBeforeRouteLeave } from 'vue-router'
 import QueryErrorState from '~/components/shared/QueryErrorState.vue'
@@ -9,9 +9,11 @@ import { useRetrievalSettings, useSaveRetrievalSettings } from '~/composables/ai
 import {
   defaultRetrievalValues,
   diffFromDefaults,
+  resolveSettingsSync,
   toRetrievalValues,
   validateRetrievalValues,
   RETRIEVAL_GROUPS,
+  type RetrievalSettingVO,
   type RetrievalValues,
 } from '~/lib/schemas/retrieval-setting'
 
@@ -23,15 +25,28 @@ const form = reactive<RetrievalValues>(defaultRetrievalValues())
 const validationError = ref('')
 const resetNotice = ref(false)
 const dirty = ref(false)
+/** 表单当前承载的服务器版本，首次读取前为 null */
+const loadedVersion = ref<number | null>(null)
+/** 有未保存修改期间服务器上的配置被更新 */
+const remoteUpdated = ref(false)
+
+/** 用服务器配置覆盖表单并清除本地修改状态 */
+function applySettings(vo: RetrievalSettingVO) {
+  Object.assign(form, toRetrievalValues(vo))
+  loadedVersion.value = vo.version ?? null
+  dirty.value = false
+  resetNotice.value = false
+  remoteUpdated.value = false
+}
 
 watch(
   () => settingsQuery.data.value,
   (vo) => {
-    if (vo) {
-      Object.assign(form, toRetrievalValues(vo))
-      dirty.value = false
-      resetNotice.value = false
-    }
+    if (!vo) return
+    // 有未保存修改时保留草稿，服务器版本变化后才提示
+    const sync = resolveSettingsSync({ dirty: dirty.value, version: loadedVersion.value }, vo)
+    if (sync.apply) applySettings(vo)
+    else if (sync.remoteUpdated) remoteUpdated.value = true
   },
   { immediate: true },
 )
@@ -64,10 +79,19 @@ async function save() {
     await saveSettings.mutateAsync({ ...form })
     dirty.value = false
     resetNotice.value = false
+    remoteUpdated.value = false
     toast.add({ title: '检索参数已保存', color: 'success' })
   } catch (error) {
     validationError.value = (error as Error).message || '请求失败，请稍后重试'
   }
+}
+
+/** 放弃未保存的修改，加载服务器上的最新参数 */
+function discardDraft() {
+  const vo = settingsQuery.data.value
+  if (!vo) return
+  if (!window.confirm('放弃未保存的修改并加载服务器上的最新参数？')) return
+  applySettings(vo)
 }
 
 onBeforeRouteLeave(() => {
@@ -104,6 +128,20 @@ onBeforeRouteLeave(() => {
         icon="i-lucide-info"
         title="已填入推荐默认值，保存后生效"
       />
+      <UAlert
+        v-if="remoteUpdated"
+        color="warning"
+        variant="subtle"
+        icon="i-lucide-triangle-alert"
+        orientation="horizontal"
+        :title="`服务器上的检索参数已更新为 v${version}，你未保存的修改已保留；继续保存将覆盖该版本。`"
+      >
+        <template #actions>
+          <UButton size="xs" color="neutral" variant="outline" @click="discardDraft">
+            放弃我的修改并加载最新
+          </UButton>
+        </template>
+      </UAlert>
       <UAlert
         v-if="validationError"
         color="error"

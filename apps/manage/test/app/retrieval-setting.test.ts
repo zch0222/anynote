@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   defaultRetrievalValues,
   diffFromDefaults,
+  resolveSettingsSync,
   toRetrievalUpdateBody,
   toRetrievalValues,
   validateRetrievalField,
@@ -84,5 +85,33 @@ describe('toRetrievalValues / toRetrievalUpdateBody', () => {
 
   it('更新请求体含全部 24 键', () => {
     expect(Object.keys(toRetrievalUpdateBody(defaultRetrievalValues()))).toHaveLength(24)
+  })
+})
+
+describe('resolveSettingsSync', () => {
+  const clean = { dirty: false, version: 3 }
+  const dirty = { dirty: true, version: 3 }
+
+  it('没有未保存修改时套用服务器数据', () => {
+    expect(resolveSettingsSync(clean, { version: 4 })).toEqual({ apply: true, remoteUpdated: false })
+    expect(resolveSettingsSync(clean, { version: 3 })).toEqual({ apply: true, remoteUpdated: false })
+  })
+
+  it('有未保存修改且服务器版本变化时保留草稿并提示', () => {
+    expect(resolveSettingsSync(dirty, { version: 4 })).toEqual({ apply: false, remoteUpdated: true })
+  })
+
+  it('有未保存修改但服务器版本未变时不提示', () => {
+    expect(resolveSettingsSync(dirty, { version: 3 })).toEqual({ apply: false, remoteUpdated: false })
+  })
+
+  it('没有服务器数据时不套用', () => {
+    expect(resolveSettingsSync(clean, null)).toEqual({ apply: false, remoteUpdated: false })
+    expect(resolveSettingsSync(dirty, undefined)).toEqual({ apply: false, remoteUpdated: false })
+  })
+
+  it('首次读取（尚未加载版本）视为版本变化', () => {
+    expect(resolveSettingsSync({ dirty: true, version: null }, { version: 1 })).toEqual({ apply: false, remoteUpdated: true })
+    expect(resolveSettingsSync({ dirty: false, version: null }, { version: 0 })).toEqual({ apply: true, remoteUpdated: false })
   })
 })

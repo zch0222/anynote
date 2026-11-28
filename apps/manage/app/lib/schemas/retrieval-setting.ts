@@ -177,3 +177,20 @@ export function toRetrievalUpdateBody(values: RetrievalValues): Record<string, n
   body.rerankEnabled = values.rerankEnabled
   return body
 }
+
+/**
+ * 表单同步判定：有未保存修改时保留草稿，服务器版本变化才提示。
+ * @param loaded 表单当前承载的状态：是否有未保存修改、已加载的服务器版本（首次读取前为 null）
+ * @param incoming 本次取到的服务器配置
+ * @return apply 表示是否套用到表单，remoteUpdated 表示服务器版本已不同于表单承载的版本
+ */
+export function resolveSettingsSync(
+  loaded: { dirty: boolean, version: number | null },
+  incoming: { version?: number | null } | null | undefined,
+): { apply: boolean, remoteUpdated: boolean } {
+  if (!incoming) return { apply: false, remoteUpdated: false }
+  if (loaded.dirty) {
+    return { apply: false, remoteUpdated: (incoming.version ?? null) !== loaded.version }
+  }
+  return { apply: true, remoteUpdated: false }
+}
