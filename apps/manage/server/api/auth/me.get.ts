@@ -8,8 +8,8 @@ import { createBackendClients, type BackendClients } from '../../utils/backend'
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
+  attachTokenCookies,
   buildClearCookieSpecs,
-  buildTokenCookieSpecs,
   type CookieEnv,
   type TokenPair,
 } from '../../utils/cookies'
@@ -23,6 +23,7 @@ import {
   type BffOutcome,
 } from '../../utils/http'
 import { createRefreshFn, refreshWithLock, type RefreshFn } from '../../utils/refresh'
+import { createRevokeFn, revokeTokens, type RevokeFn } from '../../utils/revoke'
 import { adminProfileSchema, isAdminProfile } from './login.post'
 
 export interface MeInput {
@@ -31,11 +32,20 @@ export interface MeInput {
   clients: BackendClients
   env: CookieEnv
   refreshFn: RefreshFn
+  /** 注销实现，缺省经 clients 调认证服务 /auth/logout */
+  revokeFn?: RevokeFn
 }
 
 type MeResult =
   | { ok: true; profile: unknown; rotated?: TokenPair }
-  | { ok: false; outcome: BffOutcome; revoke?: TokenPair }
+  | {
+    ok: false
+    outcome: BffOutcome
+    /** 需要撤销的令牌对（角色失权或账号停用） */
+    revoke?: TokenPair
+    /** 本次已旋转出的新令牌对，响应需带上新 Cookie */
+    rotated?: TokenPair
+  }
 
 async function fetchProfile(clients: BackendClients, accessToken: string) {
   try {
@@ -86,14 +96,23 @@ export async function resolveSession(input: MeInput): Promise<MeResult> {
             : failureOutcome(outcome.failure),
       }
     }
-    result = await fetchProfile(input.clients, outcome.token.accessToken)
     rotated = outcome.token
+    accessToken = outcome.token.accessToken
+    result = await fetchProfile(input.clients, accessToken)
   }
-  if (result.error) return { ok: false, outcome: failureOutcome(result.error) }
+  if (rotated && result.error?.status === 401) {
+    // 新令牌仍被拒绝：会话已失效，注销新令牌对并清 Cookie
+    await revokeTokens(input.revokeFn ?? createRevokeFn(input.clients), rotated)
+    return {
+      ok: false,
+      outcome: { ...sessionExpiredOutcome(), clearCookies: buildClearCookieSpecs(input.env) },
+    }
+  }
+  if (result.error) return { ok: false, outcome: failureOutcome(result.error), rotated }
 
   const parsed = adminProfileSchema.safeParse(result.data)
   if (!parsed.success) {
-    return { ok: false, outcome: failureOutcome(upstreamUnavailableFailure()) }
+    return { ok: false, outcome: failureOutcome(upstreamUnavailableFailure()), rotated }
   }
 
   const loose = result.data as { status?: unknown }
@@ -120,35 +139,14 @@ export async function resolveSession(input: MeInput): Promise<MeResult> {
 export async function executeMe(input: MeInput): Promise<BffOutcome> {
   const session = await resolveSession(input)
   if (!session.ok) {
-    if (session.revoke) {
-      try {
-        await input.clients.authClient.POST('/logout', {
-          body: {
-            ...(session.revoke.accessToken ? { accessToken: session.revoke.accessToken } : {}),
-            ...(session.revoke.refreshToken ? { refreshToken: session.revoke.refreshToken } : {}),
-          },
-          signal: AbortSignal.timeout(10_000),
-        })
-      } catch {
-        // 销票失败不掩盖失权拒绝结果
-      }
-    }
-    return session.outcome
+    await revokeTokens(input.revokeFn ?? createRevokeFn(input.clients), session.revoke)
+    return attachTokenCookies(session.outcome, session.rotated, input.env)
   }
-
-  let cookies
-  if (session.rotated) {
-    try {
-      cookies = buildTokenCookieSpecs(session.rotated, input.env)
-    } catch {
-      return failureOutcome(upstreamUnavailableFailure())
-    }
-  }
-  return {
-    status: 200,
-    body: envelope('00000', MESSAGES.success, session.profile),
-    ...(cookies ? { cookies } : {}),
-  }
+  return attachTokenCookies(
+    { status: 200, body: envelope('00000', MESSAGES.success, session.profile) },
+    session.rotated,
+    input.env,
+  )
 }
 
 export default defineEventHandler(async (event) => {

@@ -5,23 +5,34 @@
 
 const ALLOWED_PREFIXES = [/^\/ai\/v1\/admin(\/|$)/]
 
-/** 逐段解码并检测 . / .. 穿越段（含双重编码与大小写变形） */
-export function hasPathTraversal(path: string): boolean {
-  for (const segment of path.split('/')) {
-    let decoded = segment
+/** 单段最多解码次数，覆盖多重百分号编码 */
+const MAX_DECODE_PASSES = 5
+
+/** 解码后的段为 . / .. 或含路径分隔符即视为穿越 */
+function isTraversalSegment(segment: string): boolean {
+  return segment === '.' || segment === '..' || segment.includes('/') || segment.includes('\\')
+}
+
+/** 单段判定：逐轮解码，任一轮为穿越段即拒绝；解码次数用尽仍在变化或解码失败同样拒绝 */
+function isUnsafeSegment(segment: string): boolean {
+  let decoded = segment
+  for (let pass = 0; pass <= MAX_DECODE_PASSES; pass += 1) {
+    if (isTraversalSegment(decoded)) return true
+    let next: string
     try {
-      // 双重解码：%252e%252e 解码两次后仍是 ..
-      for (let i = 0; i < 2; i += 1) {
-        const next = decodeURIComponent(decoded)
-        if (next === decoded) break
-        decoded = next
-      }
+      next = decodeURIComponent(decoded)
     } catch {
       return true
     }
-    if (decoded === '..' || decoded === '.') return true
+    if (next === decoded) return false
+    decoded = next
   }
-  return false
+  return true
+}
+
+/** 逐段循环解码并检测 . / .. 穿越段与编码分隔符（含多重编码） */
+export function hasPathTraversal(path: string): boolean {
+  return path.split('/').some(isUnsafeSegment)
 }
 
 /** 路径必须以 / 开头、无穿越段、且命中管理域前缀白名单 */

@@ -3,6 +3,7 @@
  * Cookie 键名独立于用户端 at/rt，避免 localhost 多端口互相覆盖。
  */
 import { decodeJwt } from 'jose'
+import { failureOutcome, upstreamUnavailableFailure, type BffOutcome } from './http'
 
 export const ACCESS_COOKIE = 'manage_at'
 export const REFRESH_COOKIE = 'manage_rt'
@@ -67,4 +68,21 @@ export function buildClearCookieSpecs(env: CookieEnv) {
     maxAge: 0,
     ...base,
   }))
+}
+
+/**
+ * 刷新成功后把新令牌对附到响应上：后端已旋转令牌，旧 refreshToken 不可恢复，
+ * 后续无论上游结果如何都不能丢掉新 Cookie。
+ * @param outcome 已经得出的响应
+ * @param token 刷新得到的新令牌对，本次未刷新时为 undefined
+ * @param env Cookie 环境
+ * @return 带写 Cookie 规格的响应；令牌过期时间非法时为上游不可用
+ */
+export function attachTokenCookies(outcome: BffOutcome, token: TokenPair | undefined, env: CookieEnv): BffOutcome {
+  if (!token) return outcome
+  try {
+    return { ...outcome, cookies: buildTokenCookieSpecs(token, env) }
+  } catch {
+    return failureOutcome(upstreamUnavailableFailure())
+  }
 }

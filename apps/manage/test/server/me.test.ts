@@ -150,4 +150,66 @@ describe('executeMe', () => {
     expect(outcome.status).toBe(401)
     expect(outcome.clearCookies?.length).toBe(2)
   })
+
+  it('at 缺失刷新后资料查询失败仍轮换 Cookie', async () => {
+    const { clients, stubs } = stubClients()
+    const newToken = futureTokenPair()
+    const refreshFn = vi.fn().mockResolvedValue({ ok: true, token: newToken })
+    stubs.systemClient.GET.mockRejectedValueOnce(new Error('down'))
+
+    const outcome = await executeMe({
+      refreshToken: futureTokenPair().refreshToken,
+      clients,
+      env: TEST_ENV,
+      refreshFn,
+    })
+
+    expect(outcome.status).toBe(502)
+    expect((outcome.cookies ?? []).map((c) => c.value)).toEqual([newToken.accessToken, newToken.refreshToken])
+  })
+
+  it('at 过期刷新后资料查询返回业务错误仍轮换 Cookie', async () => {
+    const { clients, stubs } = stubClients()
+    const token = futureTokenPair()
+    const newToken = futureTokenPair()
+    const refreshFn = vi.fn().mockResolvedValue({ ok: true, token: newToken })
+    stubs.systemClient.GET
+      .mockResolvedValueOnce(errEnvelope('A0311', 'token expired', 401))
+      .mockResolvedValueOnce(errEnvelope('B0001', '业务异常', 200))
+
+    const outcome = await executeMe({
+      accessToken: token.accessToken,
+      refreshToken: token.refreshToken,
+      clients,
+      env: TEST_ENV,
+      refreshFn,
+    })
+
+    expect(outcome.body.code).toBe('B0001')
+    expect((outcome.cookies ?? []).map((c) => c.value)).toEqual([newToken.accessToken, newToken.refreshToken])
+  })
+
+  it('新令牌查询资料仍 401：注销新令牌并清 Cookie', async () => {
+    const { clients, stubs } = stubClients()
+    const newToken = futureTokenPair()
+    const refreshFn = vi.fn().mockResolvedValue({ ok: true, token: newToken })
+    stubs.systemClient.GET.mockResolvedValue(errEnvelope('A0311', 'token expired', 401))
+
+    const outcome = await executeMe({
+      refreshToken: futureTokenPair().refreshToken,
+      clients,
+      env: TEST_ENV,
+      refreshFn,
+    })
+
+    expect(outcome.status).toBe(401)
+    expect(outcome.cookies).toBeUndefined()
+    expect((outcome.clearCookies ?? []).map((c) => c.name)).toEqual(['manage_at', 'manage_rt'])
+    expect(stubs.authClient.POST).toHaveBeenCalledWith(
+      '/logout',
+      expect.objectContaining({
+        body: { accessToken: newToken.accessToken, refreshToken: newToken.refreshToken },
+      }),
+    )
+  })
 })

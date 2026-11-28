@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { executeProxy } from '~~/server/api/proxy/[...path]'
 import { hasPathTraversal, isAllowedProxyPath } from '~~/server/utils/proxy-allowlist'
-import { refreshWithLock, resetRefreshInflight } from '~~/server/utils/refresh'
+import { ROTATED_REUSE_WINDOW_MS, refreshWithLock, resetRefreshInflight } from '~~/server/utils/refresh'
 import { TEST_ENV, futureTokenPair } from '../helpers'
 
 describe('refreshWithLock', () => {
@@ -43,6 +43,32 @@ describe('refreshWithLock', () => {
     await Promise.all([refreshWithLock('rt-a', backend), refreshWithLock('rt-b', backend)])
     expect(backend).toHaveBeenCalledTimes(2)
   })
+
+  it('成功旋转后复用窗口内的旧 rt 直接返回同一结果，不再调用后端', async () => {
+    const token = futureTokenPair()
+    const first = vi.fn().mockResolvedValue({ ok: true, token })
+    const second = vi.fn()
+    const now = 1_000_000
+    expect(await refreshWithLock('rt-3', first, () => now)).toEqual({ ok: true, token })
+    expect(await refreshWithLock('rt-3', second, () => now + 1000)).toEqual({ ok: true, token })
+    expect(second).not.toHaveBeenCalled()
+  })
+
+  it('复用窗口过期后重新刷新，失败结果不缓存', async () => {
+    const firstToken = futureTokenPair()
+    const nextToken = futureTokenPair()
+    const failure = { code: 'B0400', msg: '认证服务暂时不可用', status: 502 }
+    let now = 1_000_000
+    const backend = vi.fn()
+      .mockResolvedValueOnce({ ok: true, token: firstToken })
+      .mockResolvedValueOnce({ ok: false, failure })
+      .mockResolvedValueOnce({ ok: true, token: nextToken })
+    expect(await refreshWithLock('rt-4', backend, () => now)).toEqual({ ok: true, token: firstToken })
+    now += ROTATED_REUSE_WINDOW_MS
+    expect(await refreshWithLock('rt-4', backend, () => now)).toEqual({ ok: false, failure })
+    expect(await refreshWithLock('rt-4', backend, () => now)).toEqual({ ok: true, token: nextToken })
+    expect(backend).toHaveBeenCalledTimes(3)
+  })
 })
 
 describe('proxy 路径白名单', () => {
@@ -69,6 +95,26 @@ describe('proxy 路径白名单', () => {
     expect(hasPathTraversal('/ai/v1/admin/agent-runs')).toBe(false)
     expect(isAllowedProxyPath('/ai/v1/admin/../v1/chat')).toBe(false)
     expect(isAllowedProxyPath('/ai\\v1\\admin')).toBe(false)
+  })
+
+  it('编码分隔符与 .. 同段、多重编码同样拦截', () => {
+    for (const path of [
+      '/ai/v1/admin/..%2f',
+      '/ai/v1/admin/%2e%2e%2f',
+      '/ai/v1/admin/..%5c..%5c',
+      '/ai/v1/admin/%252e%252e%252f',
+      '/ai/v1/admin/..%2f..%2fauth/refresh',
+      '/ai/v1/admin/%25252e%25252e%25252fchat',
+    ]) {
+      expect(hasPathTraversal(path), path).toBe(true)
+      expect(isAllowedProxyPath(path), path).toBe(false)
+    }
+  })
+
+  it('普通业务路径中的点号与百分号编码文字不被误拦', () => {
+    expect(isAllowedProxyPath('/ai/v1/admin/model-providers/volc.engine')).toBe(true)
+    expect(isAllowedProxyPath('/ai/v1/admin/agent-runs/0b0e-4f2a')).toBe(true)
+    expect(isAllowedProxyPath('/ai/v1/admin/model-providers/a%20b')).toBe(true)
   })
 })
 
@@ -111,6 +157,13 @@ describe('executeProxy', () => {
 
   it('路径穿越直接 403', async () => {
     const input = baseInput({ path: '/ai/v1/admin/../chat' })
+    const outcome = await executeProxy(input)
+    expect(outcome.status).toBe(403)
+    expect(input.fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('编码分隔符的穿越路径同样 403 不转发', async () => {
+    const input = baseInput({ path: '/ai/v1/admin/..%2f..%2fauth/refresh' })
     const outcome = await executeProxy(input)
     expect(outcome.status).toBe(403)
     expect(input.fetchImpl).not.toHaveBeenCalled()
@@ -188,5 +241,95 @@ describe('executeProxy', () => {
     const outcome = await executeProxy(input)
     expect(outcome.status).toBe(502)
     expect(outcome.body.msg).toBe('认证服务暂时不可用')
+  })
+
+  function cookieValues(outcome: Awaited<ReturnType<typeof executeProxy>>) {
+    return (outcome.cookies ?? []).map((c) => c.value)
+  }
+
+  function expiredThen(second: Response) {
+    const input = baseInput()
+    ;(input.fetchImpl as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(jsonResponse({ code: 'A0311', msg: 'x' }, 401))
+      .mockResolvedValueOnce(second)
+    return input
+  }
+
+  it('错峰到达的旧 rt 请求复用已旋转结果，不清 Cookie', async () => {
+    const newToken = futureTokenPair()
+    // 后端已删除旧 rt：再次拿旧 rt 刷新只会 401
+    const refreshFn = vi.fn()
+      .mockResolvedValueOnce({ ok: true, token: newToken })
+      .mockResolvedValue({ ok: false, failure: { code: 'A0311', msg: '登录状态已失效，请重新登录', status: 401 } })
+    const ok = () => jsonResponse({ code: '00000', msg: '操作成功', data: [] })
+
+    const inputA = baseInput({ accessToken: 'expired-at', refreshToken: 'old-rt', refreshFn })
+    ;(inputA.fetchImpl as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(jsonResponse({ code: 'A0311', msg: 'x' }, 401))
+      .mockResolvedValueOnce(ok())
+    const outcomeA = await executeProxy(inputA)
+    expect(cookieValues(outcomeA)).toEqual([newToken.accessToken, newToken.refreshToken])
+
+    const inputB = baseInput({ accessToken: 'expired-at', refreshToken: 'old-rt', refreshFn })
+    ;(inputB.fetchImpl as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(jsonResponse({ code: 'A0311', msg: 'x' }, 401))
+      .mockResolvedValueOnce(ok())
+    const outcomeB = await executeProxy(inputB)
+    expect(outcomeB.clearCookies).toBeUndefined()
+    expect(outcomeB.status).toBe(200)
+    expect(cookieValues(outcomeB)).toEqual([newToken.accessToken, newToken.refreshToken])
+    expect(refreshFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('刷新成功后重放返回 5xx 仍下发新 Cookie', async () => {
+    const newToken = futureTokenPair()
+    const input = expiredThen(jsonResponse({ code: 'B0500', msg: 'internal' }, 500))
+    input.refreshFn = vi.fn().mockResolvedValue({ ok: true, token: newToken })
+    const outcome = await executeProxy(input)
+    expect(outcome.status).toBe(500)
+    expect(cookieValues(outcome)).toEqual([newToken.accessToken, newToken.refreshToken])
+  })
+
+  it('刷新成功后重放抛异常仍下发新 Cookie', async () => {
+    const newToken = futureTokenPair()
+    const input = baseInput({ refreshFn: vi.fn().mockResolvedValue({ ok: true, token: newToken }) })
+    ;(input.fetchImpl as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(jsonResponse({ code: 'A0311', msg: 'x' }, 401))
+      .mockRejectedValueOnce(new Error('down'))
+    const outcome = await executeProxy(input)
+    expect(outcome.status).toBe(502)
+    expect(cookieValues(outcome)).toEqual([newToken.accessToken, newToken.refreshToken])
+  })
+
+  it('刷新成功后重放返回非 JSON 仍下发新 Cookie', async () => {
+    const newToken = futureTokenPair()
+    const input = expiredThen(new Response('<html>bad gateway</html>', { status: 502 }))
+    input.refreshFn = vi.fn().mockResolvedValue({ ok: true, token: newToken })
+    const outcome = await executeProxy(input)
+    expect(outcome.status).toBe(502)
+    expect(cookieValues(outcome)).toEqual([newToken.accessToken, newToken.refreshToken])
+  })
+
+  it('at 缺失先刷新，转发失败仍下发新 Cookie', async () => {
+    const newToken = futureTokenPair()
+    const input = baseInput({ accessToken: undefined, refreshFn: vi.fn().mockResolvedValue({ ok: true, token: newToken }) })
+    ;(input.fetchImpl as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('down'))
+    const outcome = await executeProxy(input)
+    expect(outcome.status).toBe(502)
+    expect(cookieValues(outcome)).toEqual([newToken.accessToken, newToken.refreshToken])
+  })
+
+  it('新令牌重放仍 401：注销新令牌并清 Cookie', async () => {
+    const newToken = futureTokenPair()
+    const revokeFn = vi.fn().mockResolvedValue(undefined)
+    const input = expiredThen(jsonResponse({ code: 'A0350', msg: 'x' }, 401))
+    input.refreshFn = vi.fn().mockResolvedValue({ ok: true, token: newToken })
+    input.revokeFn = revokeFn
+    const outcome = await executeProxy(input)
+    expect(outcome.status).toBe(401)
+    expect(outcome.body.code).toBe('A0311')
+    expect(outcome.cookies).toBeUndefined()
+    expect((outcome.clearCookies ?? []).map((c) => c.name)).toEqual(['manage_at', 'manage_rt'])
+    expect(revokeFn).toHaveBeenCalledWith(newToken)
   })
 })

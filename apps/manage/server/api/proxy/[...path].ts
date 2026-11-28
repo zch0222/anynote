@@ -20,9 +20,10 @@ import { createBackendClients, type BackendClients } from '../../utils/backend'
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
+  attachTokenCookies,
   buildClearCookieSpecs,
-  buildTokenCookieSpecs,
   type CookieEnv,
+  type TokenPair,
 } from '../../utils/cookies'
 import {
   MESSAGES,
@@ -35,6 +36,7 @@ import {
 } from '../../utils/http'
 import { isAllowedProxyPath } from '../../utils/proxy-allowlist'
 import { createRefreshFn, refreshWithLock, type RefreshFn } from '../../utils/refresh'
+import { createRevokeFn, revokeTokens, type RevokeFn } from '../../utils/revoke'
 
 export interface ProxyInput {
   method: string
@@ -50,6 +52,8 @@ export interface ProxyInput {
   internalApiUrl: string
   env: CookieEnv
   refreshFn: RefreshFn
+  /** 新令牌重放仍被拒绝时用于注销新令牌对 */
+  revokeFn?: RevokeFn
   fetchImpl?: typeof fetch
 }
 
@@ -116,7 +120,10 @@ export async function executeProxy(input: ProxyInput): Promise<BffOutcome> {
     }
   }
 
-  let rotated
+  let rotated: TokenPair | undefined
+  /** 刷新成功后，任何后续响应都带上新 Cookie：后端已旋转令牌，旧 refreshToken 不可恢复 */
+  const withRotation = (outcome: BffOutcome) => attachTokenCookies(outcome, rotated, input.env)
+
   if (!accessToken) {
     const outcome = await refreshWithLock(refreshToken, input.refreshFn)
     if (!outcome.ok) {
@@ -132,7 +139,7 @@ export async function executeProxy(input: ProxyInput): Promise<BffOutcome> {
   try {
     response = await forward(fetchImpl, input.internalApiUrl, input, accessToken ?? '')
   } catch {
-    return failureOutcome(upstreamUnavailableFailure())
+    return withRotation(failureOutcome(upstreamUnavailableFailure()))
   }
 
   if (response.status === 401 && refreshToken && !rotated) {
@@ -146,19 +153,17 @@ export async function executeProxy(input: ProxyInput): Promise<BffOutcome> {
     try {
       response = await forward(fetchImpl, input.internalApiUrl, input, outcome.token.accessToken)
     } catch {
-      return failureOutcome(upstreamUnavailableFailure())
+      return withRotation(failureOutcome(upstreamUnavailableFailure()))
     }
   }
 
-  const result = await readJsonResponse(response)
-  if (rotated && result.status < 500) {
-    try {
-      result.cookies = buildTokenCookieSpecs(rotated, input.env)
-    } catch {
-      return failureOutcome(upstreamUnavailableFailure())
-    }
+  if (rotated && response.status === 401) {
+    // 新令牌仍被拒绝：会话已失效，注销新令牌对并清 Cookie
+    await revokeTokens(input.revokeFn, rotated)
+    return { ...sessionExpiredOutcome(), clearCookies: buildClearCookieSpecs(input.env) }
   }
-  return result
+
+  return withRotation(await readJsonResponse(response))
 }
 
 export default defineEventHandler(async (event) => {
@@ -194,6 +199,7 @@ export default defineEventHandler(async (event) => {
     internalApiUrl,
     env,
     refreshFn: createRefreshFn(clients),
+    revokeFn: createRevokeFn(clients),
   })
 
   setResponseStatus(event, outcome.status)
