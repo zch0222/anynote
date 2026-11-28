@@ -21,7 +21,7 @@ COPY packages/api-core ./packages/api-core
 COPY openapi/specs ./openapi/specs
 # 与 Dockerfile.web 同口径：用入库契约 + 锁定版本生成器派生类型
 RUN mkdir -p packages/api-client/src && \
-    for service in auth system note file ai notify; do \
+    for service in auth system note file ai notify manage; do \
       pnpm --filter manage exec openapi-typescript /workspace/openapi/specs/$service.json \
         --output /workspace/packages/api-client/src/$service.ts; \
     done

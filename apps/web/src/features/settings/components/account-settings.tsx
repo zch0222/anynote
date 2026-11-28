@@ -300,8 +300,10 @@ export function AccountSettings() {
         <div className="space-y-4 p-5">
           <div className="space-y-1">
             <h2 className="text-headline text-label">修改密码</h2>
-            {/* 画板实测原文：`8–15 位，需包含大小写字母和数字。` */}
-            <p className="text-footnote text-label-tertiary">8–15 位，需包含大小写字母和数字。</p>
+            {/* 密码规则说明 */}
+            <p className="text-footnote text-label-tertiary">
+              8–15 位，需包含大小写字母和数字，可含特殊字符（不含空格）。
+            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">

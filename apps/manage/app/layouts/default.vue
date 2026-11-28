@@ -12,10 +12,11 @@ const PAGE_TITLES: Record<string, string> = {
   '/ai/models': '模型与供应商',
   '/ai/retrieval': '知识检索参数',
   '/ai/traces': '运行轨迹 (Trace)',
+  '/system/users': '用户管理',
 }
 
 const breadcrumbs = computed(() => {
-  const items = [{ label: 'AI 服务治理' }]
+  const items = [{ label: route.path.startsWith('/system') ? '平台与系统' : 'AI 服务治理' }]
   if (route.path.startsWith('/ai/traces/')) {
     items.push({ label: '运行轨迹 (Trace)', to: '/ai/traces' } as never)
     items.push({ label: `运行 ${route.params.runId?.toString().slice(0, 8) ?? ''}` } as never)
@@ -50,6 +51,17 @@ const paletteGroups = computed(() => [
         label: '运行轨迹 (Trace)',
         icon: 'i-lucide-git-branch',
         onSelect: () => go('/ai/traces'),
+      },
+    ],
+  },
+  {
+    id: 'system',
+    label: '平台与系统',
+    items: [
+      {
+        label: '用户管理',
+        icon: 'i-lucide-users',
+        onSelect: () => go('/system/users'),
       },
     ],
   },

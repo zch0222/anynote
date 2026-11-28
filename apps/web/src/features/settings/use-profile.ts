@@ -91,8 +91,8 @@ const resetPasswordSchema = z.object({
   newPassword: z
     .string()
     .regex(
-      /^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])[a-zA-Z0-9]{8,15}$/,
-      "8-15 位，需包含大小写字母和数字",
+      /^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])[\x21-\x7E]{8,15}$/,
+      "8-15 位，需包含大小写字母和数字，可含特殊字符（不含空格）",
     ),
 });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

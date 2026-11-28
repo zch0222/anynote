@@ -72,10 +72,12 @@ describe('refreshWithLock', () => {
 })
 
 describe('proxy 路径白名单', () => {
-  it('放行 /ai/v1/admin 前缀', () => {
+  it('放行 /ai/v1/admin 与 /manage 前缀', () => {
     expect(isAllowedProxyPath('/ai/v1/admin/agent-runs')).toBe(true)
     expect(isAllowedProxyPath('/ai/v1/admin')).toBe(true)
     expect(isAllowedProxyPath('/ai/v1/admin/model-providers/x')).toBe(true)
+    expect(isAllowedProxyPath('/manage/v1/admin/users')).toBe(true)
+    expect(isAllowedProxyPath('/manage/v1/admin/users/1/ban')).toBe(true)
   })
 
   it('拦截非白名单路径', () => {
@@ -85,6 +87,8 @@ describe('proxy 路径白名单', () => {
     expect(isAllowedProxyPath('/system/user/mine')).toBe(false)
     expect(isAllowedProxyPath('/ai/v1/adminx')).toBe(false)
     expect(isAllowedProxyPath('ai/v1/admin')).toBe(false)
+    expect(isAllowedProxyPath('/managex')).toBe(false)
+    expect(isAllowedProxyPath('/manage')).toBe(true)
   })
 
   it('路径穿越段检测含双重编码', () => {

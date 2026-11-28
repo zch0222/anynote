@@ -8,4 +8,5 @@ export const queryKeys = {
   modelProviders: () => ['model-providers'] as const,
   logicalModel: (name: string) => ['logical-model', name] as const,
   retrievalSettings: () => ['retrieval-settings'] as const,
+  manageUsers: (params: Record<string, unknown>) => ['manage-users', params] as const,
 }

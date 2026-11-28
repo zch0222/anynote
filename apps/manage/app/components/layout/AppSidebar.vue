@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 后台侧边导航：品牌标识 + AI 服务治理菜单 + 底部主题切换与账号卡片。
+ * 后台侧边导航：品牌标识 + AI 服务治理与平台系统菜单 + 底部主题切换与账号卡片。
  */
 import AdminUserMenu from '~/components/layout/AdminUserMenu.vue'
 
@@ -15,6 +15,11 @@ const navigationItems = [
   { label: '模型与供应商', icon: 'i-lucide-cpu', to: '/ai/models' },
   { label: '知识检索参数', icon: 'i-lucide-sliders-horizontal', to: '/ai/retrieval' },
   { label: '运行轨迹 (Trace)', icon: 'i-lucide-git-branch', to: '/ai/traces' },
+  {
+    label: '平台与系统',
+    type: 'label' as const,
+  },
+  { label: '用户管理', icon: 'i-lucide-users', to: '/system/users' },
 ]
 
 const deploymentEnv = computed(() =>

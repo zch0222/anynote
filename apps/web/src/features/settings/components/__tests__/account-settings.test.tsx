@@ -363,6 +363,23 @@ describe("改密码（D-12 图例 23 · 24）", () => {
     expect(screen.getByTestId("settings-new-password")).toHaveValue("");
   });
 
+  it("允许特殊字符并提交", async () => {
+    show();
+    resetMutate.mockResolvedValue(undefined);
+    renderWithProviders(<AccountSettings />);
+
+    fireEvent.change(screen.getByLabelText("原密码"), { target: { value: "OldPass1*" } });
+    setPassword("Abcdef1*");
+    fireEvent.click(screen.getByTestId("settings-change-password"));
+
+    await waitFor(() =>
+      expect(resetMutate).toHaveBeenCalledWith({
+        oldPassword: "OldPass1*",
+        newPassword: "Abcdef1*",
+      }),
+    );
+  });
+
   it("原密码错误落到原密码字段下方，而不是只弹 toast", async () => {
     show();
     resetMutate.mockRejectedValue(new Error("重置密码失败，旧密码错误"));

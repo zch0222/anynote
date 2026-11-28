@@ -1,9 +1,9 @@
 /**
  * BFF 代理最小权限白名单与路径段穿越拦截。
- * 第一阶段仅放行 /ai/v1/admin/**；任何不在白名单内的请求在 Nitro 层直接 403。
+ * 放行 /ai/v1/admin/** 与 /manage/**；任何不在白名单内的请求在 Nitro 层直接 403。
  */
 
-const ALLOWED_PREFIXES = [/^\/ai\/v1\/admin(\/|$)/]
+const ALLOWED_PREFIXES = [/^\/ai\/v1\/admin(\/|$)/, /^\/manage(\/|$)/]
 
 /** 单段最多解码次数，覆盖多重百分号编码 */
 const MAX_DECODE_PASSES = 5

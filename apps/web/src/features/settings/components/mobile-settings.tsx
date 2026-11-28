@@ -322,6 +322,9 @@ function MobileAccountSettings() {
 					testId="settings-new-password"
 				/>
 				<div className="px-4 py-3">
+					<p className="pb-2 text-xs text-label-tertiary">
+						8–15 位，需包含大小写字母和数字，可含特殊字符（不含空格）。
+					</p>
 					{/*
             H-3(b)：画板是**一行四个 chip**（`⊘ 8–15 位 ⊘ 含大写字母 ⊘ 含小写字母 ⊘ 含数字`），
             原实现是 `space-y-1` 的纵向四行——多占三行，把「修改密码」卡撑高一截。

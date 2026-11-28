@@ -7,12 +7,15 @@ import com.anynote.core.web.model.bo.ResData;
 import com.anynote.system.api.factory.RemoteUserFallbackFactory;
 import com.anynote.system.api.model.bo.KnowledgeBaseImportUser;
 import com.anynote.system.api.model.bo.LoginUser;
+import com.anynote.system.api.model.dto.AdminResetPasswordDTO;
 import com.anynote.system.api.model.dto.BanUserDTO;
 import com.anynote.system.api.model.dto.CreateUserDTO;
 import com.anynote.system.api.model.dto.KnowledgeBaseUserImportDTO;
 import com.anynote.system.api.model.dto.UnBanUserDTO;
+import com.anynote.system.api.model.dto.UpdateSuperAdminDTO;
 import com.anynote.system.api.model.po.SysUser;
 import com.anynote.system.api.model.vo.KnowledgeBaseUserVO;
+import com.anynote.system.api.model.vo.ManageUserVO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -57,14 +60,43 @@ public interface RemoteUserService {
 
     /**
      * 超级管理员获取用户列表
-     * @param page 页码
+     * @param pageNum 页码
      * @param pageSize 页面容量
-     * @return
+     * @param username 用户名关键字
+     * @return 用户分页数据
      */
     @GetMapping("user/list")
-    public ResData<PageBean<SysUser>> getManageUserList(@RequestParam("page") Integer page,
-                                                        @RequestParam("pageSize") Integer pageSize,
-                                                        @RequestParam("username") String username);
+    public ResData<PageBean<ManageUserVO>> getManageUserList(@RequestParam("pageNum") Integer pageNum,
+                                                             @RequestParam("pageSize") Integer pageSize,
+                                                             @RequestParam(value = "username", required = false) String username);
+
+    /**
+     * 超级管理员获取用户详情
+     * @param userId 用户id
+     * @return 用户详情
+     */
+    @GetMapping("user/{userId}/manage")
+    public ResData<ManageUserVO> getManageUserById(@PathVariable("userId") Long userId);
+
+    /**
+     * 超级管理员重置用户密码
+     * @param userId 用户id
+     * @param adminResetPasswordDTO 新密码
+     * @return 操作结果
+     */
+    @PutMapping("user/{userId}/password")
+    public ResData<String> resetPasswordByAdmin(@PathVariable("userId") Long userId,
+                                                @RequestBody @Valid AdminResetPasswordDTO adminResetPasswordDTO);
+
+    /**
+     * 超级管理员设置或取消用户超级管理员身份
+     * @param userId 用户id
+     * @param updateSuperAdminDTO 超级管理员状态
+     * @return 操作结果
+     */
+    @PutMapping("user/{userId}/super-admin")
+    public ResData<String> updateSuperAdmin(@PathVariable("userId") Long userId,
+                                            @RequestBody @Valid UpdateSuperAdminDTO updateSuperAdminDTO);
 
     @PostMapping("user")
     public ResData<CreateResEntity> createUser(@RequestBody @Valid CreateUserDTO createUserDTO);

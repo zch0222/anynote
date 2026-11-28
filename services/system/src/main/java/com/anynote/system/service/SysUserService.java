@@ -6,7 +6,10 @@ import com.anynote.system.api.model.dto.KnowledgeBaseUserImportDTO;
 import com.anynote.system.api.model.po.SysUser;
 import com.anynote.system.api.model.vo.KnowledgeBaseUserVO;
 import com.anynote.system.api.model.bo.SysUserQueryParam;
+import com.anynote.system.api.model.dto.AdminResetPasswordDTO;
 import com.anynote.system.api.model.dto.CreateUserDTO;
+import com.anynote.system.api.model.dto.UpdateSuperAdminDTO;
+import com.anynote.system.api.model.vo.ManageUserVO;
 import com.anynote.system.model.dto.ResetPasswordDTO;
 import com.anynote.system.model.dto.UpdateMyProfileDTO;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -68,10 +71,35 @@ public interface SysUserService extends IService<SysUser> {
 
     /**
      * 超级管理员获取用户列表
-     * @param queryParam
-     * @return
+     * @param pageNum 页码
+     * @param pageSize 页面容量
+     * @param username 用户名关键字
+     * @return 用户分页数据
      */
-    public PageBean<SysUser> getManageUserList(SysUserQueryParam queryParam);
+    public PageBean<ManageUserVO> getManageUserList(Integer pageNum, Integer pageSize, String username);
+
+    /**
+     * 超级管理员获取用户详情
+     * @param userId 用户id
+     * @return 用户详情
+     */
+    public ManageUserVO getManageUserById(Long userId);
+
+    /**
+     * 超级管理员重置用户密码
+     * @param userId 用户id
+     * @param adminResetPasswordDTO 新密码
+     * @return 操作结果
+     */
+    public String resetPasswordByAdmin(Long userId, AdminResetPasswordDTO adminResetPasswordDTO);
+
+    /**
+     * 超级管理员设置或取消用户超级管理员身份
+     * @param userId 用户id
+     * @param updateSuperAdminDTO 超级管理员状态
+     * @return 操作结果
+     */
+    public String updateSuperAdmin(Long userId, UpdateSuperAdminDTO updateSuperAdminDTO);
 
     public SysUser getSysUserInfoById(Long userId);
 

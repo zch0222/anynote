@@ -3,6 +3,8 @@ package com.anynote.system.service.impl;
 import com.anynote.common.security.token.TokenUtil;
 import com.anynote.common.security.utils.SecurityUtils;
 import com.anynote.core.constant.Constants;
+import com.anynote.core.constant.SecurityConstants;
+import com.anynote.core.enums.Role;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.StringUtils;
 import com.anynote.core.web.enums.ResCode;
@@ -10,10 +12,14 @@ import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.system.api.enums.KnowledgeBaseUserImportErrorType;
 import com.anynote.system.api.model.bo.KnowledgeBaseImportUser;
 import com.anynote.system.api.model.bo.LoginUser;
+import com.anynote.system.api.model.dto.AdminResetPasswordDTO;
 import com.anynote.system.api.model.dto.ImportFailUser;
 import com.anynote.system.api.model.dto.KnowledgeBaseUserImportDTO;
+import com.anynote.system.api.model.dto.UpdateSuperAdminDTO;
+import com.anynote.system.api.model.po.SysRole;
 import com.anynote.system.api.model.po.SysUser;
 import com.anynote.system.api.model.vo.KnowledgeBaseUserVO;
+import com.anynote.system.api.model.vo.ManageUserVO;
 import com.anynote.system.mapper.SysUserMapper;
 import com.anynote.system.api.model.bo.SysUserQueryParam;
 import com.anynote.system.api.model.dto.CreateUserDTO;
@@ -198,20 +204,75 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     }
 
     @Override
-    public PageBean<SysUser> getManageUserList(SysUserQueryParam queryParam) {
-        LambdaQueryWrapper<SysUser> sysUserLambdaQueryWrapper = new LambdaQueryWrapper<>();
-        sysUserLambdaQueryWrapper
-                        .eq(StringUtils.isNotNull(queryParam.getUserId()), SysUser::getId, queryParam.getUserId())
-                        .eq(StringUtils.isNotEmpty(queryParam.getUsername()), SysUser::getUsername, queryParam.getUsername());
-        PageHelper.startPage(queryParam.getPage(), queryParam.getPageSize(), "id DESC");
-        List<SysUser> rows = this.baseMapper.selectList(sysUserLambdaQueryWrapper);
-        PageInfo<SysUser> pageInfo = new PageInfo<>(rows);
-        return PageBean.<SysUser>builder()
+    public PageBean<ManageUserVO> getManageUserList(Integer pageNum, Integer pageSize, String username) {
+        PageHelper.startPage(pageNum, pageSize);
+        List<ManageUserVO> rows = this.baseMapper.selectManageUserList(null, username);
+        PageInfo<ManageUserVO> pageInfo = new PageInfo<>(rows);
+        return PageBean.<ManageUserVO>builder()
                 .rows(rows)
-                .current(queryParam.getPage())
+                .current(pageNum)
                 .pages(pageInfo.getPages())
                 .total(pageInfo.getTotal())
                 .build();
+    }
+
+    @Override
+    public ManageUserVO getManageUserById(Long userId) {
+        List<ManageUserVO> rows = this.baseMapper.selectManageUserList(userId, null);
+        if (rows.isEmpty()) {
+            throw new BusinessException("用户不存在");
+        }
+        return rows.get(0);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String resetPasswordByAdmin(Long userId, AdminResetPasswordDTO adminResetPasswordDTO) {
+        SysUser sysUser = this.baseMapper.selectById(userId);
+        if (StringUtils.isNull(sysUser) || Integer.valueOf(1).equals(sysUser.getDeleted())) {
+            throw new BusinessException("用户不存在");
+        }
+        SysUser update = new SysUser();
+        update.setId(userId);
+        update.setPassword(SecurityUtils.encryptPassword(adminResetPasswordDTO.getNewPassword()));
+        int count = this.baseMapper.updateById(update);
+        if (1 != count) {
+            throw new BusinessException("重置密码失败");
+        }
+        tokenUtil.removeTokens(sysUser.getUsername());
+        return Constants.SUCCESS_RES;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String updateSuperAdmin(Long userId, UpdateSuperAdminDTO updateSuperAdminDTO) {
+        SysUser sysUser = this.baseMapper.selectById(userId);
+        if (StringUtils.isNull(sysUser) || Integer.valueOf(1).equals(sysUser.getDeleted())) {
+            throw new BusinessException("用户不存在");
+        }
+        SysRole adminRole = sysRoleService.getOne(new LambdaQueryWrapper<SysRole>()
+                .eq(SysRole::getRoleKey, SecurityConstants.ADMIN_X));
+        if (StringUtils.isNull(adminRole)) {
+            throw new BusinessException("角色不存在");
+        }
+        if (Boolean.TRUE.equals(updateSuperAdminDTO.getEnabled())) {
+            this.baseMapper.deleteUserRolesByUserId(userId);
+            this.baseMapper.insertUserRole(userId, adminRole.getId());
+        } else {
+            String roleKey = sysRoleService.selectRoleKeysByUserId(userId);
+            if (!SecurityConstants.ADMIN_X.equals(roleKey)) {
+                throw new BusinessException("该用户不是超级管理员");
+            }
+            SysRole memberRole = sysRoleService.getOne(new LambdaQueryWrapper<SysRole>()
+                    .eq(SysRole::getRoleKey, Role.MEMBER.getValue()));
+            if (StringUtils.isNull(memberRole)) {
+                throw new BusinessException("角色不存在");
+            }
+            this.baseMapper.deleteUserRolesByUserId(userId);
+            this.baseMapper.insertUserRole(userId, memberRole.getId());
+        }
+        tokenUtil.removeTokens(sysUser.getUsername());
+        return Constants.SUCCESS_RES;
     }
 
 

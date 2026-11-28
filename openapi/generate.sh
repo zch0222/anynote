@@ -14,7 +14,7 @@ echo "Fetching OpenAPI specs from $GATEWAY_URL ..."
 # 不能写成 `curl ... > "$SPECS_DIR/$svc.json"`：shell 会在 exec curl 之前就以
 # O_TRUNC 打开目标文件，服务没起来时原 baseline 当场被清空。详见
 # docs/refactor/FRONTEND_MILESTONES.md §6。
-services=("auth" "system" "note" "file" "ai" "notify")
+services=("auth" "system" "note" "file" "ai" "notify" "manage")
 failed=()
 
 for svc in "${services[@]}"; do

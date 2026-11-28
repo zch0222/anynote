@@ -78,7 +78,9 @@ export function RegisterForm() {
             aria-describedby="password-help password-error"
             {...register("password")}
           />
-          <FieldDescription id="password-help">8–15 位，包含大小写字母和数字</FieldDescription>
+          <FieldDescription id="password-help">
+            8–15 位，包含大小写字母和数字，可含特殊字符（不含空格）
+          </FieldDescription>
           <FieldError id="password-error" errors={[errors.password]} />
         </Field>
         <Field>

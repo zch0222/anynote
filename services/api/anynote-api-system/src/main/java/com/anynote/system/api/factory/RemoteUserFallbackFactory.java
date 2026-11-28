@@ -8,10 +8,13 @@ import com.anynote.core.web.model.bo.ResData;
 import com.anynote.system.api.RemoteUserService;
 import com.anynote.system.api.model.bo.KnowledgeBaseImportUser;
 import com.anynote.system.api.model.bo.LoginUser;
+import com.anynote.system.api.model.dto.AdminResetPasswordDTO;
 import com.anynote.system.api.model.dto.CreateUserDTO;
 import com.anynote.system.api.model.dto.KnowledgeBaseUserImportDTO;
+import com.anynote.system.api.model.dto.UpdateSuperAdminDTO;
 import com.anynote.system.api.model.po.SysUser;
 import com.anynote.system.api.model.vo.KnowledgeBaseUserVO;
+import com.anynote.system.api.model.vo.ManageUserVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.openfeign.FallbackFactory;
 import org.springframework.stereotype.Component;
@@ -61,7 +64,22 @@ public class RemoteUserFallbackFactory implements FallbackFactory<RemoteUserServ
             }
 
             @Override
-            public ResData<PageBean<SysUser>> getManageUserList(Integer page, Integer pageSize, String username) {
+            public ResData<PageBean<ManageUserVO>> getManageUserList(Integer pageNum, Integer pageSize, String username) {
+                return ResData.error(ResCode.INNER_SYSTEM_SERVICE_ERROR);
+            }
+
+            @Override
+            public ResData<ManageUserVO> getManageUserById(Long userId) {
+                return ResData.error(ResCode.INNER_SYSTEM_SERVICE_ERROR);
+            }
+
+            @Override
+            public ResData<String> resetPasswordByAdmin(Long userId, AdminResetPasswordDTO adminResetPasswordDTO) {
+                return ResData.error(ResCode.INNER_SYSTEM_SERVICE_ERROR);
+            }
+
+            @Override
+            public ResData<String> updateSuperAdmin(Long userId, UpdateSuperAdminDTO updateSuperAdminDTO) {
                 return ResData.error(ResCode.INNER_SYSTEM_SERVICE_ERROR);
             }
 

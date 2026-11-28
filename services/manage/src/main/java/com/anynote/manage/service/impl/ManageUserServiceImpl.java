@@ -1,24 +1,23 @@
 package com.anynote.manage.service.impl;
 
-import com.alibaba.nacos.shaded.com.google.gson.Gson;
-import com.anynote.common.security.utils.SecurityUtils;
+import com.anynote.common.security.token.TokenUtil;
 import com.anynote.core.exception.BusinessException;
 import com.anynote.core.utils.RemoteResDataUtil;
-import com.anynote.core.utils.StringUtils;
 import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.manage.service.ManageUserService;
 import com.anynote.system.api.RemoteUserService;
-import com.anynote.system.api.model.bo.SysUserUpdateParam;
-import com.anynote.system.api.model.dto.BanUserDTO;
-import com.anynote.system.api.model.dto.UnBanUserDTO;
-import com.anynote.system.api.model.po.SysUser;
+import com.anynote.system.api.model.dto.AdminResetPasswordDTO;
+import com.anynote.system.api.model.dto.UpdateSuperAdminDTO;
+import com.anynote.system.api.model.vo.ManageUserVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.Resource;
 
 /**
+ * 管理端用户服务实现
+ *
  * @author 称霸幼儿园
  */
 @Slf4j
@@ -28,39 +27,62 @@ public class ManageUserServiceImpl implements ManageUserService {
     @Resource
     private RemoteUserService remoteUserService;
 
+    @Resource
+    private TokenUtil tokenUtil;
+
     @Override
-    public PageBean<SysUser> getUserList(Integer page, Integer pageSize, String username) {
-        ResData<PageBean<SysUser>> resData = remoteUserService.getManageUserList(page, pageSize, username);
+    public PageBean<ManageUserVO> getUserList(Integer pageNum, Integer pageSize, String username) {
+        ResData<PageBean<ManageUserVO>> resData =
+                remoteUserService.getManageUserList(pageNum, pageSize, username);
         return RemoteResDataUtil.getResData(resData, "获取用户列表失败");
     }
 
-
     @Override
-    public SysUser getSysUserInfoById(Long userId) {
-        ResData<SysUser> resData = remoteUserService.getSysUserInfoById(userId);
+    public ManageUserVO getSysUserInfoById(Long userId) {
+        ResData<ManageUserVO> resData = remoteUserService.getManageUserById(userId);
         return RemoteResDataUtil.getResData(resData, "获取用户信息失败");
     }
 
     @Override
-    public Integer updateSysUser(SysUserUpdateParam updateParam) {
-        SysUser sysUser = new SysUser();
-        sysUser.setId(updateParam.getUserId());
-        sysUser.setPassword(SecurityUtils.encryptPassword(updateParam.getPassword()));
-        ResData<Integer> resData = remoteUserService.updateSysUser(updateParam.getUserId(), sysUser);
-        Integer count = RemoteResDataUtil.getResData(resData, "修改密码失败");
-        if (1 != count) {
-            throw new BusinessException("未知异常，请联系管理员");
+    public String resetPassword(Long userId, AdminResetPasswordDTO adminResetPasswordDTO) {
+        checkNotSelf(userId, "不能重置自己的密码");
+        ResData<String> resData = remoteUserService.resetPasswordByAdmin(userId, adminResetPasswordDTO);
+        return RemoteResDataUtil.getResData(resData, "重置密码失败，请稍后重试");
+    }
+
+    @Override
+    public String updateSuperAdmin(Long userId, UpdateSuperAdminDTO updateSuperAdminDTO) {
+        if (!Boolean.TRUE.equals(updateSuperAdminDTO.getEnabled())) {
+            checkNotSelf(userId, "不能取消自己的超级管理员身份");
         }
-        return count;
+        ResData<String> resData = remoteUserService.updateSuperAdmin(userId, updateSuperAdminDTO);
+        String errorMessage = Boolean.TRUE.equals(updateSuperAdminDTO.getEnabled())
+                ? "设置超级管理员失败，请稍后重试"
+                : "取消超级管理员失败，请稍后重试";
+        return RemoteResDataUtil.getResData(resData, errorMessage);
     }
 
     @Override
-    public void banUser(BanUserDTO banUserDTO) {
-        RemoteResDataUtil.getResData(remoteUserService.banUser(banUserDTO.getUserId()));
+    public void banUser(Long userId) {
+        checkNotSelf(userId, "不能停用自己的账号");
+        RemoteResDataUtil.getResData(remoteUserService.banUser(userId), "停用账号失败，请稍后重试");
     }
 
     @Override
-    public void unBanUser(UnBanUserDTO unBanUserDTO) {
-        RemoteResDataUtil.getResData(remoteUserService.unBanUser(unBanUserDTO.getUserId()));
+    public void unBanUser(Long userId) {
+        RemoteResDataUtil.getResData(remoteUserService.unBanUser(userId), "启用账号失败，请稍后重试");
+    }
+
+    /**
+     * 校验目标用户不是当前登录用户
+     *
+     * @param userId 目标用户id
+     * @param message 命中时的业务错误文案
+     */
+    private void checkNotSelf(Long userId, String message) {
+        Long currentUserId = tokenUtil.getLoginUser().getUserId();
+        if (currentUserId.equals(userId)) {
+            throw new BusinessException(message);
+        }
     }
 }

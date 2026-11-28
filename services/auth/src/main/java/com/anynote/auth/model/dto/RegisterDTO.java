@@ -7,6 +7,11 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
+/**
+ * 注册请求
+ *
+ * @author 称霸幼儿园
+ */
 @Data
 public class RegisterDTO {
 
@@ -19,8 +24,8 @@ public class RegisterDTO {
     private String username;
 
     @NotNull(message = "密码不能为空")
-    @Pattern(regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])[a-zA-Z0-9]{8,15}$",
-            message = "密码必须是8到15位，且包含大写字母、小写字母和数字")
+    @Pattern(regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])[\\x21-\\x7E]{8,15}$",
+            message = "密码必须是8到15位，且包含大写字母、小写字母和数字，可包含特殊字符（不含空格）")
     private String password;
 
     @Pattern(regexp = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,6}$|^$",

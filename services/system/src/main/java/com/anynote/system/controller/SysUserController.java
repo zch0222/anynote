@@ -11,12 +11,12 @@ import com.anynote.core.web.model.bo.CreateResEntity;
 import com.anynote.core.web.model.bo.PageBean;
 import com.anynote.core.web.model.bo.ResData;
 import com.anynote.system.api.model.bo.LoginUser;
-import com.anynote.system.api.model.dto.BanUserDTO;
+import com.anynote.system.api.model.dto.AdminResetPasswordDTO;
 import com.anynote.system.api.model.dto.KnowledgeBaseUserImportDTO;
-import com.anynote.system.api.model.dto.UnBanUserDTO;
+import com.anynote.system.api.model.dto.UpdateSuperAdminDTO;
 import com.anynote.system.api.model.po.SysUser;
 import com.anynote.system.api.model.vo.KnowledgeBaseUserVO;
-import com.anynote.system.api.model.bo.SysUserQueryParam;
+import com.anynote.system.api.model.vo.ManageUserVO;
 import com.anynote.system.api.model.dto.CreateUserDTO;
 import com.anynote.system.model.dto.ResetPasswordDTO;
 import com.anynote.system.model.dto.UpdateMyProfileDTO;
@@ -46,15 +46,35 @@ public class SysUserController {
     private SysUserService sysUserService;
 
     @InnerAuth
+    @Operation(summary = "管理端查询用户列表", description = "按用户名关键字模糊查询，仅内部调用")
     @GetMapping("list")
-    public ResData<PageBean<SysUser>> getManageUserList(@NotNull(message = "页码不能为空") Integer page,
-                                                        @NotNull(message = "页面大小不能为空") Integer pageSize,
-                                                        String username) {
-        return ResUtil.success(sysUserService.getManageUserList(SysUserQueryParam.builder()
-                        .page(page)
-                        .pageSize(pageSize)
-                        .username(username)
-                .build()));
+    public ResData<PageBean<ManageUserVO>> getManageUserList(@NotNull(message = "页码不能为空") Integer pageNum,
+                                                             @NotNull(message = "页面大小不能为空") Integer pageSize,
+                                                             String username) {
+        return ResUtil.success(sysUserService.getManageUserList(pageNum, pageSize, username));
+    }
+
+    @InnerAuth
+    @Operation(summary = "管理端查询用户详情", description = "仅内部调用")
+    @GetMapping("{userId}/manage")
+    public ResData<ManageUserVO> getManageUserById(@PathVariable("userId") @NotNull(message = "用户id不能为空") Long userId) {
+        return ResUtil.success(sysUserService.getManageUserById(userId));
+    }
+
+    @InnerAuth
+    @Operation(summary = "管理端重置用户密码", description = "重置后该用户全部登录会话失效，仅内部调用")
+    @PutMapping("{userId}/password")
+    public ResData<String> resetPasswordByAdmin(@PathVariable("userId") @NotNull(message = "用户id不能为空") Long userId,
+                                                @Valid @RequestBody AdminResetPasswordDTO adminResetPasswordDTO) {
+        return ResUtil.success(sysUserService.resetPasswordByAdmin(userId, adminResetPasswordDTO));
+    }
+
+    @InnerAuth
+    @Operation(summary = "管理端设置或取消超级管理员", description = "取消后回退为普通成员，仅内部调用")
+    @PutMapping("{userId}/super-admin")
+    public ResData<String> updateSuperAdmin(@PathVariable("userId") @NotNull(message = "用户id不能为空") Long userId,
+                                            @Valid @RequestBody UpdateSuperAdminDTO updateSuperAdminDTO) {
+        return ResUtil.success(sysUserService.updateSuperAdmin(userId, updateSuperAdminDTO));
     }
 
     /**
