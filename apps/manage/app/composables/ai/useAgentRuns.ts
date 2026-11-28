@@ -6,6 +6,7 @@ import { unwrapEnvelope } from '@anynote/api-core'
 import { z } from 'zod'
 import { aiClient } from '~/lib/api/client'
 import { queryKeys } from '~/lib/api/query-keys'
+import { agentRunPageSchema } from '~/lib/schemas/agent-stats'
 import { agentRunDetailSchema, agentRunEventSchema, parseTraceEvent, type ParsedTraceEvent } from '~/lib/schemas/agent-trace'
 
 export const EVENT_HARD_LIMIT = 5000
@@ -17,22 +18,6 @@ export interface RunListFilters {
   page?: number
   pageSize?: number
 }
-
-const runListSchema = z.looseObject({
-  total: z.number().nullish(),
-  rows: z.array(z.looseObject({
-    runId: z.string().nullish(),
-    userId: z.number().nullish(),
-    conversationId: z.number().nullish(),
-    model: z.string().nullish(),
-    state: z.string().nullish(),
-    outcome: z.string().nullish(),
-    startedAt: z.string().nullish(),
-    durationMs: z.number().nullish(),
-    toolCalls: z.number().nullish(),
-    tokenUsage: z.looseObject({ totalTokens: z.number().nullish() }).nullish(),
-  })).nullish(),
-})
 
 export function useAgentRuns(filters: MaybeRefOrGetter<RunListFilters>) {
   return useQuery({
@@ -50,7 +35,7 @@ export function useAgentRuns(filters: MaybeRefOrGetter<RunListFilters>) {
         parseAs: 'stream',
         signal,
       })
-      return unwrapEnvelope(response, runListSchema.parse)
+      return unwrapEnvelope(response, agentRunPageSchema.parse)
     },
   })
 }

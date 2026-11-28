@@ -104,9 +104,10 @@ export const agentRunListItemSchema = z.object({
 })
 export type AgentRunListItem = z.infer<typeof agentRunListItemSchema>
 
-/** 运行列表分页 */
+/** 运行列表分页（后端 PageBean：rows / total / current / pages） */
 export const agentRunPageSchema = z.object({
-  list: z.array(agentRunListItemSchema).nullish(),
-  total: z.number().nullish(),
+  current: z.number().nullish(),
   pages: z.number().nullish(),
+  total: z.number().nullish(),
+  rows: z.array(agentRunListItemSchema).nullish(),
 })
