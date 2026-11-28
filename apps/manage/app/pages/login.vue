@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 超管登录页：UForm + Zod 校验，A0301 专有高亮警告，同源 redirect 安全回跳。
+ * 超管登录页：UForm + Zod 校验，A0301 专有高亮警告，同源 redirect 安全回跳，
+ * 会话失效被退回时显示后端给出的提示。
  */
 import { useAdminSession } from '~/composables/auth/useAdminSession'
 import { loginFormSchema, safeRedirect } from '~/lib/schemas/auth'
@@ -16,6 +17,9 @@ const state = reactive<LoginForm>({ username: '', password: '' })
 const submitting = ref(false)
 const errorMsg = ref('')
 const nonAdminBlocked = ref(false)
+// 会话失效被退回登录页时只提示一次，取用后清空
+const sessionNotice = ref(session.notice.value)
+session.notice.value = ''
 
 async function onSubmit() {
   if (submitting.value) return
@@ -79,6 +83,14 @@ async function onSubmit() {
       variant="subtle"
       icon="i-lucide-circle-alert"
       :title="errorMsg"
+      class="mb-4"
+    />
+    <UAlert
+      v-else-if="sessionNotice"
+      color="warning"
+      variant="subtle"
+      icon="i-lucide-shield-alert"
+      :title="sessionNotice"
       class="mb-4"
     />
 
