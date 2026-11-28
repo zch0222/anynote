@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
  * 模型供应商目录 CRUD + 三大逻辑模型运行时绑定页。
+ * 逻辑模型配置读取成功前不渲染卡片，读取失败给出重试。
  */
 import LogicalModelCard from '~/components/ai/models/LogicalModelCard.vue'
 import ProviderFormSlideover from '~/components/ai/models/ProviderFormSlideover.vue'
@@ -125,7 +126,15 @@ async function onSaveLogical(logicalName: string, value: LogicalFormValue) {
       <h2 class="text-base font-medium text-default">
         运行时逻辑模型绑定
       </h2>
-      <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <!-- 逻辑模型配置读取成功前不渲染卡片：后端保存是整体覆盖，空表单会抹掉现有配置 -->
+      <QueryErrorState
+        v-if="logicalQuery.isError.value && !logicalQuery.data.value"
+        @retry="logicalQuery.refetch()"
+      />
+      <div v-else-if="!logicalQuery.data.value" class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <USkeleton v-for="card in LOGICAL_MODEL_CARDS" :key="card.logicalName" class="h-80 rounded-lg" />
+      </div>
+      <div v-else class="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <LogicalModelCard
           v-for="card in LOGICAL_MODEL_CARDS"
           :key="card.logicalName"

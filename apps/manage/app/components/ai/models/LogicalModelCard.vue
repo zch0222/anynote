@@ -157,7 +157,8 @@ function submit() {
 
     <template #footer>
       <div class="flex justify-end">
-        <UButton size="sm" :loading="saving" :disabled="egressBlocked" @click="submit">
+        <!-- 配置未加载成功时禁止保存：后端保存是整体覆盖，空表单会抹掉现有配置 -->
+        <UButton size="sm" :loading="saving" :disabled="egressBlocked || props.config == null" @click="submit">
           保存配置
         </UButton>
       </div>
