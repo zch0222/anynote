@@ -1,18 +1,22 @@
 /**
- * 上下文 blob 还原：trace.context 的 manifest 条目若以哈希引用原文，
- * 由同场运行的 trace.blob 事件按哈希查表还原；缺失时标记缺省原因。
- * 纯函数，供检查器与单测复用。
+ * 上下文 blob 还原：trace.context 的 manifest 条目以哈希引用原文，
+ * 由同场运行各 trace.context 事件的 blobs 按哈希查表还原（同一哈希整场只写一次，索引需覆盖整场运行）；
+ * 缺失时标记缺省原因。纯函数，供检查器与单测复用。
  */
 import type { ParsedTraceEvent } from '~/lib/schemas/agent-trace'
 
 export interface ContextEntry {
   scope?: string
-  version?: string
   sourceId?: string
   sourceType?: string
+  version?: string
   transform?: string
   contentHash?: string
-  charCount?: number
+  /** 清单登记的 Token 数 */
+  tokenCount?: number
+  trustLevel?: string
+  permissionBasis?: string
+  selectedReason?: string
 }
 
 export interface ResolvedContextEntry extends ContextEntry {
@@ -24,19 +28,39 @@ export interface ResolvedContextEntry extends ContextEntry {
 
 interface ContextManifest {
   runId?: string
+  modelTurn?: number
   entries?: ContextEntry[]
 }
 
-/** 从 trace.blob 事件构建哈希→原文映射 */
+/** 一条哈希对应的原文 */
+interface ContextBlob {
+  hash?: unknown
+  content?: unknown
+}
+
+/** 读取一条 blob 的哈希与原文，形状不符时为 null */
+function readBlob(blob: unknown): { hash: string, content: string } | null {
+  if (!blob || typeof blob !== 'object') return null
+  const { hash, content } = blob as ContextBlob
+  return typeof hash === 'string' && hash && typeof content === 'string' ? { hash, content } : null
+}
+
+/** 从各 trace.context 事件的 attributes.blobs 构建哈希→原文映射，兼容历史的 trace.blob 事件 */
 export function buildBlobIndex(events: ParsedTraceEvent[]): Map<string, string> {
   const index = new Map<string, string>()
   for (const event of events) {
-    if (event.type !== 'trace.blob') continue
     const attrs = event.span.attributes ?? {}
-    const hash = typeof attrs.contentHash === 'string' ? attrs.contentHash
-      : typeof attrs.hash === 'string' ? attrs.hash : null
-    const content = typeof attrs.content === 'string' ? attrs.content : null
-    if (hash && content != null) index.set(hash, content)
+    if (event.type === 'trace.context' && Array.isArray(attrs.blobs)) {
+      for (const blob of attrs.blobs) {
+        const entry = readBlob(blob)
+        if (entry) index.set(entry.hash, entry.content)
+      }
+      continue
+    }
+    if (event.type !== 'trace.blob') continue
+    const hash = typeof attrs.contentHash === 'string' ? attrs.contentHash : attrs.hash
+    const blob = readBlob({ hash, content: attrs.content })
+    if (blob) index.set(blob.hash, blob.content)
   }
   return index
 }
